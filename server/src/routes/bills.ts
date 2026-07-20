@@ -337,6 +337,26 @@ billsRouter.put("/:id", async (req, res, next) => {
   }
 });
 
+billsRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const existing = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, invoiceNumber: true },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+
+    await prisma.bill.delete({ where: { id: existing.id } });
+    res.json({
+      data: { id: existing.id, invoiceNumber: existing.invoiceNumber },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 billsRouter.get("/:id/pdf", async (req, res, next) => {
   try {
     const bill = await prisma.bill.findUnique({

@@ -98,6 +98,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  deleteBill: (id: string) =>
+    request<{ data: { id: string; invoiceNumber: string } }>(`/bills/${id}`, {
+      method: "DELETE",
+    }),
   analytics: (period: string = "today") =>
     request<{ data: AnalyticsSummary }>(
       `/analytics/summary?period=${encodeURIComponent(period)}`,
