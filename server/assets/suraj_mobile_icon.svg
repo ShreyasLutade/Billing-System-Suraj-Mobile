@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="280 35 120 190" width="240" height="380">
+  <rect x="288" y="40" width="104" height="176" rx="18" fill="none" stroke="#F5F7FA" stroke-width="3"/>
+  <line x1="326" y1="60" x2="354" y2="60" stroke="#F5F7FA" stroke-width="3" stroke-linecap="round"/>
+  <clipPath id="phoneClip">
+    <rect x="291" y="43" width="98" height="170" rx="15"/>
+  </clipPath>
+  <g clip-path="url(#phoneClip)">
+    <line x1="300" y1="150" x2="380" y2="150" stroke="#E8A317" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="340" cy="150" r="20" fill="#F2A900"/>
+    <g stroke="#E8A317" stroke-width="2.5" stroke-linecap="round">
+      <line x1="340" y1="112" x2="340" y2="122"/>
+      <line x1="313" y1="123" x2="320" y2="130"/>
+      <line x1="367" y1="123" x2="360" y2="130"/>
+      <line x1="302" y1="150" x2="312" y2="150"/>
+      <line x1="368" y1="150" x2="378" y2="150"/>
+    </g>
+  </g>
+</svg>

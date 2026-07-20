@@ -1,0 +1,144 @@
+export type BillItem = {
+  id?: string;
+  productName: string;
+  quantity: number;
+  rate: number;
+  gstPercent: number;
+  amount?: number;
+  imei1?: string | null;
+  imei2?: string | null;
+  serialNumber?: string | null;
+  warrantyMonths?: number | null;
+};
+
+export type Bill = {
+  id: string;
+  invoiceNumber: string;
+  billDate: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress?: string | null;
+  notes?: string | null;
+  subtotal: number;
+  gstAmount: number;
+  grandTotal: number;
+  payableAmount: number;
+  cashAmount: number;
+  onlineAmount: number;
+  financeAmount: number;
+  financeCompanyId?: string | null;
+  financeCompanyName?: string | null;
+  isExchange: boolean;
+  exchangeModel?: string | null;
+  exchangeImei1?: string | null;
+  exchangeImei2?: string | null;
+  exchangeSerial?: string | null;
+  exchangeValue?: number | null;
+  exchangeNotes?: string | null;
+  dueAmount: number;
+  dueDate?: string | null;
+  dueSettled: boolean;
+  isPartialPaid?: boolean;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
+  createdByRole?: "ADMIN" | "STAFF" | string | null;
+  items: BillItem[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AnalyticsSummary = {
+  period: "today" | "yesterday" | "week" | "month" | "all";
+  periodLabel: string;
+  from: string | null;
+  to: string | null;
+  summary: {
+    sales: number;
+    payable: number;
+    cash: number;
+    online: number;
+    finance: number;
+    due: number;
+    bills: number;
+  };
+  today: {
+    sales: number;
+    cash: number;
+    online: number;
+    finance: number;
+    due: number;
+    bills: number;
+  };
+  outstandingDue: {
+    amount: number;
+    count: number;
+  };
+  upcomingDues: Array<{
+    id: string;
+    invoiceNumber: string;
+    customerName: string;
+    customerPhone: string;
+    dueAmount: number;
+    dueDate: string | null;
+    billDate: string;
+  }>;
+};
+
+export type FinanceCompany = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
+export type DueItem = {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  dueAmount: number;
+  dueDate: string | null;
+  billDate: string;
+  grandTotal?: number;
+  payableAmount?: number;
+  isPartialPaid?: boolean;
+};
+
+export type DuesSummary = {
+  period: "today" | "tomorrow" | "yesterday" | "past_due" | "future_due" | "all";
+  periodLabel: string;
+  totalDue: number;
+  count: number;
+  dues: DueItem[];
+};
+
+export type CreateBillPayload = {
+  customerName: string;
+  customerPhone: string;
+  customerAddress?: string | null;
+  notes?: string | null;
+  items: BillItem[];
+  useCash: boolean;
+  useOnline: boolean;
+  useFinance: boolean;
+  cashAmount: number;
+  onlineAmount: number;
+  financeAmount: number;
+  financeCompanyId?: string | null;
+  financeCompanyName?: string | null;
+  isExchange?: boolean;
+  exchangeModel?: string | null;
+  exchangeImei1?: string | null;
+  exchangeImei2?: string | null;
+  exchangeSerial?: string | null;
+  exchangeValue?: number | null;
+  exchangeNotes?: string | null;
+  dueDate?: string | null;
+};
+
+export type AuthUser = {
+  id: string;
+  phone: string;
+  name: string;
+  role: "ADMIN" | "STAFF";
+};
+

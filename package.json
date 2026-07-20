@@ -1,0 +1,18 @@
+{
+  "name": "billing-system-suraj-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Suraj Mobile Shop billing system",
+  "scripts": {
+    "dev": "npm run dev --prefix server & npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "db:push": "npm run db:push --prefix server",
+    "build:prod": "npm ci --prefix server && npm ci --prefix client && npm run db:generate --prefix server && npm run build --prefix server && VITE_API_URL=/api npm run build --prefix client && rm -rf server/public && mkdir -p server/public && cp -R client/dist/. server/public/",
+    "start:prod": "cd server && npx prisma db push && NODE_ENV=production node dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
