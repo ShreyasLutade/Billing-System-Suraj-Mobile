@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+**/.env
+**/*.db
+**/*.db-journal
+**/dist
+server/public
+.DS_Store
+.vscode
+.idea
+client/tsconfig*.tsbuildinfo
+README.md
+nixpacks.toml

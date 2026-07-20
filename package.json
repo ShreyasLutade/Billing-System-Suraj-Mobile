@@ -13,6 +13,6 @@
     "start:prod": "cd server && npx prisma db push && NODE_ENV=production node dist/index.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }
