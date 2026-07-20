@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img">
+  <title>Suraj Mobile</title>
+  <!-- Phone outline only — no dark background -->
+  <g transform="translate(31.5 8) scale(0.636) translate(-288 -40)">
+    <rect x="288" y="40" width="104" height="176" rx="18" fill="none" stroke="#2b2b30" stroke-width="5"/>
+    <line x1="326" y1="60" x2="354" y2="60" stroke="#2b2b30" stroke-width="5" stroke-linecap="round"/>
+    <clipPath id="phoneClip">
+      <rect x="291" y="43" width="98" height="170" rx="15"/>
+    </clipPath>
+    <g clip-path="url(#phoneClip)">
+      <line x1="300" y1="150" x2="380" y2="150" stroke="#E8A317" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="340" cy="150" r="22" fill="#F2A900"/>
+      <g stroke="#E8A317" stroke-width="4" stroke-linecap="round">
+        <line x1="340" y1="108" x2="340" y2="120"/>
+        <line x1="310" y1="120" x2="319" y2="129"/>
+        <line x1="370" y1="120" x2="361" y2="129"/>
+        <line x1="298" y1="150" x2="310" y2="150"/>
+        <line x1="382" y1="150" x2="370" y2="150"/>
+      </g>
+    </g>
+  </g>
+</svg>

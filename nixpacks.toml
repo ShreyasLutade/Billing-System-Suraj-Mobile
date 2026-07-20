@@ -1,0 +1,11 @@
+# Railway / Nixpacks
+nodejs-18_x
+
+[phases.setup]
+nixPkgs = ["nodejs_18", "openssl"]
+
+[phases.install]
+cmds = ["npm --version"]
+
+[start]
+cmd = "npm run start:prod"

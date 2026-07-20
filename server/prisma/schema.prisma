@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  phone        String
+  passwordHash String
+  name         String
+  /// ADMIN | STAFF
+  role         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([phone])
+  @@unique([phone, role])
+}
+
+model Bill {
+  id                String           @id @default(cuid())
+  invoiceNumber     String           @unique
+  billDate          DateTime         @default(now())
+  customerName      String
+  customerPhone     String
+  customerAddress   String?
+  notes             String?
+  subtotal          Float
+  gstAmount         Float
+  grandTotal        Float
+  payableAmount     Float            @default(0)
+  cashAmount        Float            @default(0)
+  onlineAmount      Float            @default(0)
+  financeAmount     Float            @default(0)
+  financeCompanyId  String?
+  financeCompanyName String?
+  isExchange         Boolean          @default(false)
+  exchangeModel      String?
+  exchangeImei1      String?
+  exchangeImei2      String?
+  exchangeSerial     String?
+  exchangeValue      Float?
+  exchangeNotes      String?
+  dueAmount          Float            @default(0)
+  dueDate           DateTime?
+  dueSettled        Boolean          @default(false)
+  dueSettledMethod  String?
+  dueSettledAt      DateTime?
+  isPartialPaid     Boolean          @default(false)
+  createdByUserId   String?
+  createdByName     String?
+  /// ADMIN | STAFF
+  createdByRole     String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  items             BillItem[]
+  financeCompany    FinanceCompany?  @relation(fields: [financeCompanyId], references: [id])
+
+  @@index([billDate])
+  @@index([customerPhone])
+  @@index([dueAmount])
+  @@index([financeCompanyId])
+  @@index([createdByUserId])
+}
+
+model BillItem {
+  id             String  @id @default(cuid())
+  billId         String
+  productName    String
+  quantity       Int     @default(1)
+  rate           Float
+  gstPercent     Float   @default(18)
+  amount         Float
+  imei1          String?
+  imei2          String?
+  serialNumber   String?
+  warrantyMonths Int?
+  bill           Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+}
+
+model FinanceCompany {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  bills     Bill[]
+}
+
+model InvoiceSequence {
+  id      Int @id @default(1)
+  counter Int @default(0)
+}

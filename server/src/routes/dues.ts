@@ -1,0 +1,190 @@
+import { Router } from "express";
+import type { Prisma } from "@prisma/client";
+import { z } from "zod";
+import { prisma } from "../lib/prisma";
+import {
+  getPeriodRange,
+  isDuePeriod,
+  periodLabel,
+  toDateFilter,
+} from "../lib/period";
+
+export const duesRouter = Router();
+
+function parseDateInput(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0);
+  }
+  return new Date(value);
+}
+
+duesRouter.get("/", async (req, res, next) => {
+  try {
+    const period = isDuePeriod(req.query.period) ? req.query.period : "all";
+    const dateFilter = toDateFilter(getPeriodRange(period));
+
+    const where: Prisma.BillWhereInput = {
+      dueAmount: { gt: 0 },
+      dueSettled: false,
+      ...(dateFilter
+        ? {
+            OR: [
+              { dueDate: dateFilter },
+              { AND: [{ dueDate: null }, { billDate: dateFilter }] },
+            ],
+          }
+        : {}),
+    };
+
+    const dues = await prisma.bill.findMany({
+      where,
+      orderBy: [{ dueDate: "asc" }, { billDate: "desc" }],
+      select: {
+        id: true,
+        invoiceNumber: true,
+        customerName: true,
+        customerPhone: true,
+        dueAmount: true,
+        dueDate: true,
+        billDate: true,
+        grandTotal: true,
+        payableAmount: true,
+        isPartialPaid: true,
+      },
+    });
+
+    const totalDue = dues.reduce((sum, bill) => sum + bill.dueAmount, 0);
+
+    res.json({
+      data: {
+        period,
+        periodLabel: periodLabel(period),
+        totalDue: Number(totalDue.toFixed(2)),
+        count: dues.length,
+        dues: dues.map((bill) => ({
+          ...bill,
+          dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
+          billDate: bill.billDate.toISOString(),
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const settleSchema = z
+  .object({
+    mode: z.enum(["full", "custom"]).default("full"),
+    method: z.enum(["cash", "online", "na"]),
+    amount: z.number().positive().optional(),
+    nextDueDate: z.string().optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.mode === "custom") {
+      if (data.amount == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Enter the amount collected",
+          path: ["amount"],
+        });
+      }
+    }
+  });
+
+duesRouter.patch("/:id/settle", async (req, res, next) => {
+  try {
+    const parsed = settleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid settlement details",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const bill = await prisma.bill.findUnique({ where: { id: req.params.id } });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    if (bill.dueAmount <= 0 || bill.dueSettled) {
+      res.status(400).json({ error: "This bill has no pending due" });
+      return;
+    }
+
+    const { mode, method } = parsed.data;
+    const currentDue = bill.dueAmount;
+    let paidAmount =
+      mode === "full"
+        ? currentDue
+        : Number((parsed.data.amount || 0).toFixed(2));
+
+    if (paidAmount <= 0) {
+      res.status(400).json({ error: "Paid amount must be greater than 0" });
+      return;
+    }
+    if (paidAmount > currentDue) {
+      res.status(400).json({
+        error: "Paid amount cannot exceed the pending due",
+      });
+      return;
+    }
+
+    // Treat exact/full payment as fully settled
+    const isFull = mode === "full" || paidAmount >= currentDue;
+    if (isFull) {
+      paidAmount = currentDue;
+    }
+
+    const remaining = Number((currentDue - paidAmount).toFixed(2));
+
+    if (!isFull) {
+      if (!parsed.data.nextDueDate) {
+        res.status(400).json({
+          error: "Select next due date for the remaining amount",
+        });
+        return;
+      }
+    }
+
+    const updated = await prisma.bill.update({
+      where: { id: bill.id },
+      data: {
+        dueAmount: isFull ? 0 : remaining,
+        dueSettled: isFull,
+        dueSettledMethod: method,
+        dueSettledAt: new Date(),
+        isPartialPaid: isFull ? false : true,
+        dueDate: isFull
+          ? bill.dueDate
+          : parseDateInput(parsed.data.nextDueDate as string),
+        cashAmount:
+          method === "cash"
+            ? Number((bill.cashAmount + paidAmount).toFixed(2))
+            : bill.cashAmount,
+        onlineAmount:
+          method === "online"
+            ? Number((bill.onlineAmount + paidAmount).toFixed(2))
+            : bill.onlineAmount,
+      },
+      include: { items: true },
+    });
+
+    res.json({
+      data: {
+        ...updated,
+        billDate: updated.billDate.toISOString(),
+        dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+        dueSettledAt: updated.dueSettledAt
+          ? updated.dueSettledAt.toISOString()
+          : null,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});

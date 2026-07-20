@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #0b1f33;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Google Sans", system-ui, sans-serif;
+  background-image: radial-gradient(
+      1200px 600px at 10% -10%,
+      rgba(45, 212, 191, 0.18),
+      transparent 55%
+    ),
+    radial-gradient(
+      900px 500px at 100% 0%,
+      rgba(14, 116, 144, 0.14),
+      transparent 50%
+    ),
+    linear-gradient(180deg, #f4f7fb 0%, #eef3f8 45%, #f7f4ef 100%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-3xl border border-white/70 bg-white/75 shadow-soft backdrop-blur-xl;
+  }
+
+  .field {
+    @apply w-full rounded-2xl border border-ink-100 bg-white/90 px-4 py-3 text-base text-ink-900 outline-none transition focus:border-tide-500 focus:ring-4 focus:ring-tide-400/20 sm:text-sm;
+  }
+
+  .field-select {
+    @apply field appearance-none bg-[length:1rem] bg-[right_1rem_center] bg-no-repeat pr-11;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234A657A'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-[0.14em] text-ink-500;
+  }
+
+  .label.required::after {
+    content: " *";
+    @apply font-semibold text-ember-500;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-ink-900 px-5 py-3 text-sm font-semibold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-ink-800 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-ink-100 bg-white/80 px-5 py-3 text-sm font-semibold text-ink-800 transition hover:border-ink-300 hover:bg-white;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c5d0db;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* ============================================================
+   Login ambient background — light theme (matches app)
+   ============================================================ */
+
+.login-aurora {
+  background:
+    radial-gradient(ellipse 85% 65% at 18% 18%, rgba(45, 212, 191, 0.2), transparent 58%),
+    radial-gradient(ellipse 75% 55% at 82% 28%, rgba(14, 116, 144, 0.14), transparent 55%),
+    radial-gradient(ellipse 65% 45% at 50% 92%, rgba(232, 163, 23, 0.1), transparent 58%);
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  animation: loginAurora 22s ease-in-out infinite alternate;
+}
+
+.login-grid {
+  overflow: hidden;
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 45%, black 15%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 45%, black 15%, transparent 80%);
+  opacity: 0.35;
+}
+.login-grid::before {
+  content: "";
+  position: absolute;
+  inset: -60px;
+  background-image:
+    linear-gradient(rgba(11, 31, 51, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 31, 51, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  will-change: transform;
+  animation: loginGridDrift 36s linear infinite;
+}
+
+.login-orb {
+  filter: blur(42px);
+  will-change: transform;
+  transform: translateZ(0);
+}
+.login-orb-a {
+  background: rgba(45, 212, 191, 0.28);
+  animation: loginOrbA 24s ease-in-out infinite;
+}
+.login-orb-b {
+  background: rgba(14, 116, 144, 0.18);
+  animation: loginOrbB 28s ease-in-out infinite;
+}
+.login-orb-c {
+  background: rgba(232, 163, 23, 0.14);
+  animation: loginOrbC 20s ease-in-out infinite;
+}
+
+.login-ring {
+  will-change: transform;
+}
+.login-ring-a {
+  animation: loginSpin 60s linear infinite;
+}
+
+.login-speck {
+  background: rgba(14, 116, 144, 0.45);
+  box-shadow: 0 0 6px rgba(45, 212, 191, 0.35);
+  will-change: transform, opacity;
+  animation-name: loginSpeck;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.login-card {
+  box-shadow: 0 24px 60px rgba(11, 31, 51, 0.1);
+}
+
+@keyframes loginAurora {
+  0% { transform: scale(1) translate3d(0, 0, 0); opacity: 0.9; }
+  100% { transform: scale(1.04) translate3d(-1%, 1%, 0); opacity: 1; }
+}
+@keyframes loginGridDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(48px, 48px, 0); }
+}
+@keyframes loginOrbA {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(36px, 28px, 0); }
+}
+@keyframes loginOrbB {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-40px, -32px, 0); }
+}
+@keyframes loginOrbC {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.55; }
+  50% { transform: translate3d(24px, -18px, 0); opacity: 0.85; }
+}
+@keyframes loginSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes loginSpeck {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.15; }
+  50% { transform: translate3d(0, -10px, 0); opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-aurora,
+  .login-grid::before,
+  .login-orb,
+  .login-ring,
+  .login-speck {
+    animation: none !important;
+  }
+}
