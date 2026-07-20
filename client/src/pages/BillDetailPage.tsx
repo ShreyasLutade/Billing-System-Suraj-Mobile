@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
 import {
   ArrowLeft,
@@ -7,7 +8,9 @@ import {
   Download,
   Pencil,
   Phone,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
@@ -16,10 +19,14 @@ import type { Bill } from "../types";
 
 export function BillDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [bill, setBill] = useState<Bill | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSettle, setShowSettle] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadBill = useCallback(async () => {
     if (!id) return;
@@ -39,6 +46,22 @@ export function BillDetailPage() {
   useEffect(() => {
     void loadBill();
   }, [loadBill]);
+
+  async function confirmDelete() {
+    if (!bill) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteBill(bill.id);
+      navigate("/bills", { replace: true });
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete bill",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (loading) {
     return <LoadingBlock label="Loading bill…" />;
@@ -92,6 +115,17 @@ export function BillDetailPage() {
               <Download className="h-4 w-4" />
               Download PDF
             </a>
+            <button
+              type="button"
+              className="btn-danger"
+              onClick={() => {
+                setDeleteError(null);
+                setShowDeleteConfirm(true);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </button>
             {hasDue ? (
               <button
                 type="button"
@@ -296,6 +330,89 @@ export function BillDetailPage() {
           onSettled={loadBill}
         />
       ) : null}
+
+      <AnimatePresence>
+        {showDeleteConfirm ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => !deleting && setShowDeleteConfirm(false)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-bill-title"
+              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift"
+              initial={{ opacity: 0, y: 24, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember-500">
+                    Danger
+                  </p>
+                  <h2
+                    id="delete-bill-title"
+                    className="mt-1 font-display text-xl font-semibold text-ink-900"
+                  >
+                    Delete this bill?
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
+                  onClick={() => !deleting && setShowDeleteConfirm(false)}
+                  aria-label="Close"
+                  disabled={deleting}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
+                <p>
+                  This will permanently delete{" "}
+                  <span className="font-semibold text-ink-900">
+                    {bill.invoiceNumber}
+                  </span>{" "}
+                  for {bill.customerName}.
+                </p>
+                <p>This action cannot be undone.</p>
+              </div>
+
+              {deleteError ? (
+                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
+                  {deleteError}
+                </p>
+              ) : null}
+
+              <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() => void confirmDelete()}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleting ? "Deleting…" : "Delete bill"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

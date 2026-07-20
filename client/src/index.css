@@ -68,6 +68,10 @@ body {
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-ink-100 bg-white/80 px-5 py-3 text-sm font-semibold text-ink-800 transition hover:border-ink-300 hover:bg-white;
   }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-rose-500 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0;
+  }
 }
 
 ::-webkit-scrollbar {
