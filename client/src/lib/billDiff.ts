@@ -36,6 +36,9 @@ export type BillSnapshot = {
   grandTotal: number;
   items: Array<{
     productName: string;
+    color: string;
+    storage: string;
+    ram: string;
     quantity: number;
     rate: number;
     gstPercent: number;
@@ -133,6 +136,9 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     grandTotal: bill.grandTotal,
     items: bill.items.map((item) => ({
       productName: item.productName,
+      color: item.color || "",
+      storage: item.storage || "",
+      ram: item.ram || "",
       quantity: item.quantity,
       rate: item.rate,
       gstPercent: item.gstPercent,
@@ -178,6 +184,9 @@ export function payloadToSnapshot(
     grandTotal: totals.grandTotal,
     items: payload.items.map((item, index) => ({
       productName: item.productName,
+      color: item.color || "",
+      storage: item.storage || "",
+      ram: item.ram || "",
       quantity: item.quantity,
       rate: item.rate,
       gstPercent: item.gstPercent,
@@ -302,6 +311,9 @@ export function diffBillSnapshots(
 
     const beforeText = [
       prev.productName,
+      prev.color || null,
+      prev.storage || null,
+      prev.ram || null,
       `Qty ${prev.quantity}`,
       `Rate ${money(prev.rate)}`,
       `GST ${prev.gstPercent}%`,
@@ -315,6 +327,9 @@ export function diffBillSnapshots(
 
     const afterText = [
       next.productName,
+      next.color || null,
+      next.storage || null,
+      next.ram || null,
       `Qty ${next.quantity}`,
       `Rate ${money(next.rate)}`,
       `GST ${next.gstPercent}%`,

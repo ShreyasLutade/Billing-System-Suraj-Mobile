@@ -456,7 +456,12 @@ export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
 
     for (const item of bill.items) {
       const rows = [
-        { label: "Model", value: item.productName },
+        {
+          label: "Model",
+          value: [item.productName, item.color, item.storage, item.ram]
+            .filter(Boolean)
+            .join(" · "),
+        },
         {
           label: "IMEI Number",
           value: item.imei1 || "—",

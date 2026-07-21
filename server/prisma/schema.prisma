@@ -38,6 +38,8 @@ model Bill {
   financeAmount     Float            @default(0)
   financeCompanyId  String?
   financeCompanyName String?
+  financeReceived   Boolean          @default(false)
+  financeReceivedAt DateTime?
   isExchange         Boolean          @default(false)
   exchangeModel      String?
   exchangeImei1      String?
@@ -71,6 +73,11 @@ model BillItem {
   id             String  @id @default(cuid())
   billId         String
   productName    String
+  mobileCatalogId String?
+  platform       String?
+  color          String?
+  storage        String?
+  ram            String?
   quantity       Int     @default(1)
   rate           Float
   gstPercent     Float   @default(18)
@@ -80,8 +87,24 @@ model BillItem {
   serialNumber   String?
   warrantyMonths Int?
   bill           Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  mobileCatalog  MobileCatalog? @relation(fields: [mobileCatalogId], references: [id])
 
   @@index([billId])
+  @@index([mobileCatalogId])
+}
+
+model MobileCatalog {
+  id        String   @id @default(cuid())
+  name      String
+  platform  String
+  color     String
+  storage   String
+  ram       String   @default("")
+  createdAt DateTime @default(now())
+  billItems BillItem[]
+
+  @@unique([name, platform, color, storage, ram])
+  @@index([name])
 }
 
 model FinanceCompany {

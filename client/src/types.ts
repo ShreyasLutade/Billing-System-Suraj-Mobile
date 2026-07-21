@@ -1,6 +1,11 @@
 export type BillItem = {
   id?: string;
   productName: string;
+  mobileCatalogId?: string | null;
+  platform?: "IOS" | "ANDROID" | null;
+  color?: string | null;
+  storage?: string | null;
+  ram?: string | null;
   quantity: number;
   rate: number;
   gstPercent: number;
@@ -28,6 +33,8 @@ export type Bill = {
   financeAmount: number;
   financeCompanyId?: string | null;
   financeCompanyName?: string | null;
+  financeReceived: boolean;
+  financeReceivedAt?: string | null;
   isExchange: boolean;
   exchangeModel?: string | null;
   exchangeImei1?: string | null;
@@ -90,6 +97,16 @@ export type FinanceCompany = {
   createdAt: string;
 };
 
+export type MobileCatalog = {
+  id: string;
+  name: string;
+  platform: "IOS" | "ANDROID";
+  color: string;
+  storage: string;
+  ram: string;
+  createdAt: string;
+};
+
 export type DueItem = {
   id: string;
   invoiceNumber: string;
@@ -101,6 +118,7 @@ export type DueItem = {
   grandTotal?: number;
   payableAmount?: number;
   isPartialPaid?: boolean;
+  imeiNumbers?: string[];
 };
 
 export type DuesSummary = {
@@ -109,6 +127,25 @@ export type DuesSummary = {
   totalDue: number;
   count: number;
   dues: DueItem[];
+};
+
+export type FinanceDueItem = {
+  id: string;
+  invoiceNumber: string;
+  billDate: string;
+  customerName: string;
+  customerPhone: string;
+  financeAmount: number;
+  financeCompanyName?: string | null;
+  financeReceived: boolean;
+  financeReceivedAt?: string | null;
+  imeiNumbers?: string[];
+};
+
+export type FinanceDuesSummary = {
+  totalFinanceDue: number;
+  count: number;
+  dues: FinanceDueItem[];
 };
 
 export type CreateBillPayload = {

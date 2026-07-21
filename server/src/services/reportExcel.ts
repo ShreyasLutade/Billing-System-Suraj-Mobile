@@ -43,6 +43,8 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "Online", key: "onlineAmount", width: 10 },
     { header: "Finance", key: "financeAmount", width: 10 },
     { header: "Finance Co.", key: "financeCompanyName", width: 18 },
+    { header: "Finance Received", key: "financeReceived", width: 16 },
+    { header: "Finance Received At", key: "financeReceivedAt", width: 20 },
     { header: "Due", key: "dueAmount", width: 10 },
     { header: "Due Date", key: "dueDate", width: 12 },
     { header: "Due Settled", key: "dueSettled", width: 12 },
@@ -70,6 +72,8 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
       onlineAmount: money(bill.onlineAmount),
       financeAmount: money(bill.financeAmount),
       financeCompanyName: bill.financeCompanyName || "",
+      financeReceived: bill.financeReceived ? "Yes" : "No",
+      financeReceivedAt: formatISTDateTime(bill.financeReceivedAt),
       dueAmount: money(bill.dueAmount),
       dueDate: formatISTDate(bill.dueDate),
       dueSettled: bill.dueSettled ? "Yes" : "No",
@@ -92,6 +96,10 @@ function addItemsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "Bill Date", key: "billDate", width: 12 },
     { header: "Customer", key: "customerName", width: 22 },
     { header: "Product", key: "productName", width: 28 },
+    { header: "OS", key: "platform", width: 10 },
+    { header: "Color", key: "color", width: 14 },
+    { header: "Storage", key: "storage", width: 12 },
+    { header: "RAM", key: "ram", width: 10 },
     { header: "Qty", key: "quantity", width: 8 },
     { header: "Rate", key: "rate", width: 10 },
     { header: "GST %", key: "gstPercent", width: 8 },
@@ -110,6 +118,10 @@ function addItemsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
         billDate: formatISTDate(bill.billDate),
         customerName: bill.customerName,
         productName: item.productName,
+        platform: item.platform || "",
+        color: item.color || "",
+        storage: item.storage || "",
+        ram: item.ram || "",
         quantity: item.quantity,
         rate: money(item.rate),
         gstPercent: money(item.gstPercent),
@@ -199,6 +211,38 @@ async function addOutstandingDuesSheet(wb: ExcelJS.Workbook) {
   }
 }
 
+async function addFinanceDuesSheet(wb: ExcelJS.Workbook) {
+  const dues = await prisma.bill.findMany({
+    where: {
+      financeAmount: { gt: 0 },
+      financeReceived: false,
+    },
+    orderBy: { billDate: "asc" },
+  });
+
+  const sheet = wb.addWorksheet("Finance Dues");
+  sheet.columns = [
+    { header: "Invoice", key: "invoiceNumber", width: 16 },
+    { header: "Bill Date", key: "billDate", width: 12 },
+    { header: "Finance Company", key: "financeCompanyName", width: 22 },
+    { header: "Customer", key: "customerName", width: 22 },
+    { header: "Phone", key: "customerPhone", width: 14 },
+    { header: "Amount Pending", key: "financeAmount", width: 16 },
+  ];
+  sheet.getRow(1).font = { bold: true };
+
+  for (const bill of dues) {
+    sheet.addRow({
+      invoiceNumber: bill.invoiceNumber,
+      billDate: formatISTDate(bill.billDate),
+      financeCompanyName: bill.financeCompanyName || "",
+      customerName: bill.customerName,
+      customerPhone: bill.customerPhone,
+      financeAmount: money(bill.financeAmount),
+    });
+  }
+}
+
 export async function buildReportWorkbook(scope: ReportScope, now = new Date()) {
   const bills = await fetchBills(scope, now);
   const wb = new ExcelJS.Workbook();
@@ -210,6 +254,7 @@ export async function buildReportWorkbook(scope: ReportScope, now = new Date()) 
   addItemsSheet(wb, bills);
   if (scope === "all") {
     await addOutstandingDuesSheet(wb);
+    await addFinanceDuesSheet(wb);
   }
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());

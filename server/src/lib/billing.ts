@@ -17,16 +17,47 @@ export function lineGstBreakdown(
   return { amount, base, gstAmount };
 }
 
-export const billItemSchema = z.object({
-  productName: z.string().trim().min(1, "Product name is required"),
-  quantity: z.number().int().positive().default(1),
-  rate: z.number().nonnegative("Rate must be 0 or more"),
-  gstPercent: z.number().min(0).max(100).default(0),
-  imei1: z.string().trim().optional().nullable(),
-  imei2: z.string().trim().optional().nullable(),
-  serialNumber: z.string().trim().optional().nullable(),
-  warrantyMonths: z.number().int().positive().optional().nullable(),
-});
+export const billItemSchema = z
+  .object({
+    productName: z.string().trim().min(1, "Product name is required"),
+    mobileCatalogId: z.string().trim().optional().nullable(),
+    platform: z.enum(["IOS", "ANDROID"]).optional().nullable(),
+    color: z.string().trim().optional().nullable(),
+    storage: z.string().trim().optional().nullable(),
+    ram: z.string().trim().optional().nullable(),
+    quantity: z.number().int().positive().default(1),
+    rate: z.number().nonnegative("Rate must be 0 or more"),
+    gstPercent: z.number().min(0).max(100).default(0),
+    imei1: z.string().trim().optional().nullable(),
+    imei2: z.string().trim().optional().nullable(),
+    serialNumber: z.string().trim().optional().nullable(),
+    warrantyMonths: z.number().int().positive().optional().nullable(),
+  })
+  .superRefine((item, ctx) => {
+    if (!item.platform) return;
+
+    if (!item.color) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Mobile color is required",
+        path: ["color"],
+      });
+    }
+    if (!item.storage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Mobile storage is required",
+        path: ["storage"],
+      });
+    }
+    if (item.platform === "ANDROID" && !item.ram) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "RAM is required for Android mobiles",
+        path: ["ram"],
+      });
+    }
+  });
 
 export const createBillSchema = z
   .object({

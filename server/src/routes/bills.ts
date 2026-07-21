@@ -36,6 +36,7 @@ function serializeBill<
     createdAt: Date;
     updatedAt: Date;
     dueSettledAt?: Date | null;
+    financeReceivedAt?: Date | null;
   },
 >(bill: T) {
   return {
@@ -43,6 +44,9 @@ function serializeBill<
     billDate: bill.billDate.toISOString(),
     dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
     dueSettledAt: bill.dueSettledAt ? bill.dueSettledAt.toISOString() : null,
+    financeReceivedAt: bill.financeReceivedAt
+      ? bill.financeReceivedAt.toISOString()
+      : null,
     createdAt: bill.createdAt.toISOString(),
     updatedAt: bill.updatedAt.toISOString(),
   };
@@ -180,6 +184,11 @@ billsRouter.post("/", async (req, res, next) => {
           items: {
             create: totals.items.map((item) => ({
               productName: item.productName,
+              mobileCatalogId: item.mobileCatalogId,
+              platform: item.platform,
+              color: item.color,
+              storage: item.storage,
+              ram: item.ram,
               quantity: item.quantity,
               rate: item.rate,
               gstPercent: item.gstPercent,
@@ -255,6 +264,10 @@ billsRouter.put("/:id", async (req, res, next) => {
       }
 
       await tx.billItem.deleteMany({ where: { billId: existing.id } });
+      const financeDetailsUnchanged =
+        input.useFinance &&
+        existing.financeAmount === totals.financeAmount &&
+        existing.financeCompanyId === financeCompanyId;
 
       return tx.bill.update({
         where: { id: existing.id },
@@ -279,6 +292,12 @@ billsRouter.put("/:id", async (req, res, next) => {
                 financeCompany: { disconnect: true },
                 financeCompanyName: null,
               }),
+          financeReceived:
+            financeDetailsUnchanged && existing.financeReceived,
+          financeReceivedAt:
+            financeDetailsUnchanged && existing.financeReceived
+              ? existing.financeReceivedAt
+              : null,
           isExchange: Boolean(input.isExchange),
           exchangeModel: input.isExchange
             ? input.exchangeModel?.trim() || null
@@ -313,6 +332,11 @@ billsRouter.put("/:id", async (req, res, next) => {
           items: {
             create: totals.items.map((item) => ({
               productName: item.productName,
+              mobileCatalogId: item.mobileCatalogId,
+              platform: item.platform,
+              color: item.color,
+              storage: item.storage,
+              ram: item.ram,
               quantity: item.quantity,
               rate: item.rate,
               gstPercent: item.gstPercent,
