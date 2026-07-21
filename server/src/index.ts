@@ -12,6 +12,7 @@ import {
 import { duesRouter } from "./routes/dues";
 import { authRouter, seedUsers } from "./routes/auth";
 import { reportsRouter } from "./routes/reports";
+import { mobileCatalogRouter } from "./routes/mobileCatalog";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 
@@ -59,6 +60,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/bills", requireAuth, billsRouter);
 app.use("/api/analytics", requireAuth, requireAdmin, analyticsRouter);
 app.use("/api/finance-companies", requireAuth, financeCompaniesRouter);
+app.use("/api/mobile-catalog", requireAuth, mobileCatalogRouter);
 app.use("/api/dues", requireAuth, duesRouter);
 app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 

@@ -108,7 +108,8 @@ export function BillsPage() {
                       : "shrink-0 rounded-full bg-tide-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-tide-600"
                   }
                 >
-                  {bill.createdByRole === "ADMIN" ? "Suraj" : "Staff"}
+                  {bill.createdByName ||
+                    (bill.createdByRole === "ADMIN" ? "Admin" : "Staff")}
                 </span>
               ) : null}
             </div>

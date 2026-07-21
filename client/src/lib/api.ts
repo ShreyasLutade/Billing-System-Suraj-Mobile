@@ -4,7 +4,9 @@ import type {
   Bill,
   CreateBillPayload,
   DuesSummary,
+  FinanceDuesSummary,
   FinanceCompany,
+  MobileCatalog,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -113,10 +115,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  listMobileCatalog: () =>
+    request<{ data: MobileCatalog[] }>("/mobile-catalog"),
+  createMobile: (payload: {
+    name: string;
+    platform: "IOS" | "ANDROID";
+    color: string;
+    storage: string;
+    ram?: string;
+  }) =>
+    request<{ data: MobileCatalog; created: boolean }>("/mobile-catalog", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   listDues: (period: string = "all") =>
     request<{ data: DuesSummary }>(
       `/dues?period=${encodeURIComponent(period)}`,
     ),
+  listFinanceDues: () =>
+    request<{ data: FinanceDuesSummary }>("/dues/finance"),
+  markFinanceReceived: (id: string) =>
+    request<{ data: Bill }>(`/dues/finance/${id}/receive`, {
+      method: "PATCH",
+    }),
   settleDue: (
     id: string,
     payload: {

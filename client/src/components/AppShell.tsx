@@ -54,7 +54,8 @@ export function AppShell() {
                 Suraj Mobile
               </p>
               <p className="text-xs text-ink-500">
-                {user?.role === "ADMIN" ? "Admin" : "Staff"} · Balaghat
+                {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·
+                Balaghat
               </p>
             </div>
           </Link>

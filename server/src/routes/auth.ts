@@ -94,9 +94,21 @@ const SEED_USERS: Array<{
     role: "ADMIN",
   },
   {
-    phone: "9302222585",
-    password: "Mobile@123",
-    name: "Suraj Staff",
+    phone: "6265086510",
+    password: "Shop@123",
+    name: "Anuj",
+    role: "STAFF",
+  },
+  {
+    phone: "8989192440",
+    password: "Shop@123",
+    name: "Chhatresh",
+    role: "STAFF",
+  },
+  {
+    phone: "8962948807",
+    password: "Shop@123",
+    name: "Mayank",
     role: "STAFF",
   },
 ];
@@ -119,12 +131,40 @@ export async function seedUsers() {
       continue;
     }
 
-    const ok = await bcrypt.compare(seed.password, existing.passwordHash);
-    if (!ok) {
+    const passwordOk = await bcrypt.compare(
+      seed.password,
+      existing.passwordHash,
+    );
+    const needsUpdate =
+      !passwordOk || existing.name !== seed.name || existing.phone !== seed.phone;
+
+    if (needsUpdate) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: { passwordHash: await bcrypt.hash(seed.password, 10) },
+        data: {
+          name: seed.name,
+          phone: seed.phone,
+          passwordHash: passwordOk
+            ? existing.passwordHash
+            : await bcrypt.hash(seed.password, 10),
+        },
       });
     }
+  }
+
+  // Remove accounts that are no longer part of the official seed list
+  // (e.g. old shared staff login with Mobile@123).
+  const keepKeys = new Set(
+    SEED_USERS.map((seed) => `${seed.phone}:${seed.role}`),
+  );
+  const allUsers = await prisma.user.findMany({
+    select: { id: true, phone: true, role: true },
+  });
+  const obsoleteIds = allUsers
+    .filter((user) => !keepKeys.has(`${user.phone}:${user.role}`))
+    .map((user) => user.id);
+
+  if (obsoleteIds.length) {
+    await prisma.user.deleteMany({ where: { id: { in: obsoleteIds } } });
   }
 }

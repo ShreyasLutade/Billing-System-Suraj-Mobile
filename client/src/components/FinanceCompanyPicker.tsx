@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import clsx from "clsx";
 import type { FinanceCompany } from "../types";
@@ -93,15 +92,10 @@ export function FinanceCompanyPicker({
         />
       </button>
 
-      <AnimatePresence>
-        {open ? (
-          <motion.div
+      {open ? (
+          <div
             id={listId}
             role="listbox"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.18 }}
             className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
           >
             <div className="max-h-56 overflow-y-auto overscroll-contain p-1.5 sm:max-h-64">
@@ -136,9 +130,8 @@ export function FinanceCompanyPicker({
                 }}
               />
             </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+          </div>
+      ) : null}
     </div>
   );
 }

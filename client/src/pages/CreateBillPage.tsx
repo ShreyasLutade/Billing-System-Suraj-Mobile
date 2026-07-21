@@ -15,6 +15,8 @@ import {
   type SaveBillSummary,
 } from "../components/SaveBillConfirmModal";
 import { PageHeader, LoadingBlock } from "../components/ui";
+import { AddMobileModal } from "../components/AddMobileModal";
+import { FieldPicker } from "../components/FieldPicker";
 import {
   ADD_NEW_FINANCE,
   FinanceCompanyPicker,
@@ -26,13 +28,28 @@ import {
   type DiffLine,
 } from "../lib/billDiff";
 import { api, formatINR, round2 } from "../lib/api";
-import type { Bill, BillItem, CreateBillPayload, FinanceCompany } from "../types";
+import type {
+  Bill,
+  BillItem,
+  CreateBillPayload,
+  FinanceCompany,
+  MobileCatalog,
+} from "../types";
 
-type DraftItem = BillItem & { key: string };
+type DraftItem = BillItem & {
+  key: string;
+  catalogMode: "mobile" | "other";
+};
 
 const blankItem = (): DraftItem => ({
   key: crypto.randomUUID(),
+  catalogMode: "mobile",
   productName: "",
+  mobileCatalogId: null,
+  platform: null,
+  color: "",
+  storage: "",
+  ram: "",
   quantity: 1,
   rate: 0,
   gstPercent: 0,
@@ -89,6 +106,8 @@ export function CreateBillPage() {
   const [onlineAmount, setOnlineAmount] = useState(0);
   const [financeAmount, setFinanceAmount] = useState(0);
   const [financeCompanies, setFinanceCompanies] = useState<FinanceCompany[]>([]);
+  const [mobileCatalog, setMobileCatalog] = useState<MobileCatalog[]>([]);
+  const [addMobileForItem, setAddMobileForItem] = useState<string | null>(null);
   const [financeCompanyId, setFinanceCompanyId] = useState("");
   const [financeSelect, setFinanceSelect] = useState("");
   const [newFinanceName, setNewFinanceName] = useState("");
@@ -119,6 +138,7 @@ export function CreateBillPage() {
     setCustomerAddress("");
     setNotes("");
     setItems([blankItem()]);
+    setAddMobileForItem(null);
     setIsExchange(false);
     setExchangeModel("");
     setExchangeImei1("");
@@ -152,7 +172,14 @@ export function CreateBillPage() {
       bill.items.length
         ? bill.items.map((item) => ({
             key: crypto.randomUUID(),
+            catalogMode:
+              item.mobileCatalogId || item.platform ? "mobile" : "other",
             productName: item.productName,
+            mobileCatalogId: item.mobileCatalogId || null,
+            platform: item.platform || null,
+            color: item.color || "",
+            storage: item.storage || "",
+            ram: item.ram || "",
             quantity: item.quantity,
             rate: item.rate,
             gstPercent: item.gstPercent,
@@ -225,6 +252,29 @@ export function CreateBillPage() {
     financeAmount,
   ]);
 
+  const mobileOptions = useMemo(
+    () => [
+      ...mobileCatalog.map((mobile) => {
+        const ramLabel = (() => {
+          if (!mobile.ram) return null;
+          const capacity = mobile.ram.replace(/\s*gb\s*$/i, "").trim();
+          return /^\d+$/.test(capacity)
+            ? `${capacity} GB RAM`
+            : `${mobile.ram} RAM`;
+        })();
+
+        return {
+          value: mobile.id,
+          label: [mobile.name, mobile.color, mobile.storage, ramLabel]
+            .filter(Boolean)
+            .join(" • "),
+        };
+      }),
+      { value: "__other__", label: "Other product / accessory" },
+    ],
+    [mobileCatalog],
+  );
+
   useEffect(() => {
     if (!hasDue || totals.dueAmount <= 0) setDueDate("");
   }, [hasDue, totals.dueAmount]);
@@ -232,11 +282,16 @@ export function CreateBillPage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        const { data } = await api.listFinanceCompanies();
-        if (active) setFinanceCompanies(data);
-      } catch {
-        // keep empty; user can still add new
+      const [financeResult, mobileResult] = await Promise.allSettled([
+        api.listFinanceCompanies(),
+        api.listMobileCatalog(),
+      ]);
+      if (!active) return;
+      if (financeResult.status === "fulfilled") {
+        setFinanceCompanies(financeResult.value.data);
+      }
+      if (mobileResult.status === "fulfilled") {
+        setMobileCatalog(mobileResult.value.data);
       }
     })();
     return () => {
@@ -352,6 +407,37 @@ export function CreateBillPage() {
     );
   }
 
+  function applyCatalogMobile(key: string, mobile: MobileCatalog) {
+    updateItem(key, {
+      catalogMode: "mobile",
+      productName: mobile.name,
+      mobileCatalogId: mobile.id,
+      platform: mobile.platform,
+      color: mobile.color,
+      storage: mobile.storage,
+      ram: mobile.platform === "ANDROID" ? mobile.ram : "",
+    });
+  }
+
+  function selectMobile(key: string, value: string) {
+    if (value === "__other__") {
+      updateItem(key, {
+        catalogMode: "other",
+        productName: "",
+        mobileCatalogId: null,
+        platform: null,
+        color: "",
+        storage: "",
+        ram: "",
+      });
+      return;
+    }
+
+    const mobile = mobileCatalog.find((entry) => entry.id === value);
+    if (!mobile) return;
+    applyCatalogMobile(key, mobile);
+  }
+
   async function buildPayload(): Promise<CreateBillPayload | null> {
     let resolvedCompanyId = financeCompanyId || null;
     let resolvedCompanyName: string | null = null;
@@ -395,6 +481,15 @@ export function CreateBillPage() {
       dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
       items: items.map((item) => ({
         productName: item.productName,
+        mobileCatalogId:
+          item.catalogMode === "mobile" ? item.mobileCatalogId || null : null,
+        platform: item.catalogMode === "mobile" ? item.platform || null : null,
+        color: item.catalogMode === "mobile" ? item.color || null : null,
+        storage: item.catalogMode === "mobile" ? item.storage || null : null,
+        ram:
+          item.catalogMode === "mobile" && item.platform === "ANDROID"
+            ? item.ram || null
+            : null,
         quantity: item.quantity,
         rate: item.rate,
         gstPercent: item.gstPercent,
@@ -414,6 +509,22 @@ export function CreateBillPage() {
     if (phoneIssue) {
       setPhoneError(phoneIssue);
       document.getElementById("customerPhone")?.focus();
+      return;
+    }
+
+    const incompleteMobile = items.find(
+      (item) =>
+        item.catalogMode === "mobile" &&
+        (!item.productName ||
+          !item.platform ||
+          !item.color ||
+          !item.storage ||
+          (item.platform === "ANDROID" && !item.ram)),
+    );
+    if (incompleteMobile) {
+      setError(
+        "Select a complete mobile variant with name, color, storage, and RAM for Android.",
+      );
       return;
     }
 
@@ -717,18 +828,57 @@ export function CreateBillPage() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="sm:col-span-2 lg:col-span-2">
-                    <label className="label required">Product name</label>
-                    <input
-                      className="field"
-                      value={item.productName}
-                      onChange={(e) =>
-                        updateItem(item.key, { productName: e.target.value })
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <label className="label required mb-0">Phone</label>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-tide-600 hover:text-tide-700"
+                        onClick={() => setAddMobileForItem(item.key)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add new mobile
+                      </button>
+                    </div>
+                    <FieldPicker
+                      value={
+                        item.catalogMode === "other"
+                          ? "__other__"
+                          : item.mobileCatalogId ||
+                            mobileCatalog.find(
+                              (mobile) =>
+                                mobile.name === item.productName &&
+                                mobile.color === item.color &&
+                                mobile.storage === item.storage &&
+                                (mobile.ram || "") === (item.ram || ""),
+                            )?.id ||
+                            ""
                       }
-                      placeholder="e.g. iPhone 15 / Charger"
+                      onChange={(value) => selectMobile(item.key, value)}
+                      placeholder="Select phone"
+                      searchable
+                      searchPlaceholder="Search phone…"
                       required
+                      options={mobileOptions}
                     />
                   </div>
+
+                  {item.catalogMode === "other" ? (
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <label className="label required">Product name</label>
+                      <input
+                        className="field"
+                        value={item.productName}
+                        onChange={(event) =>
+                          updateItem(item.key, {
+                            productName: event.target.value,
+                          })
+                        }
+                        placeholder="e.g. Charger / Earphones"
+                        required
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="label required">Qty</label>
                     <input
@@ -1190,6 +1340,25 @@ export function CreateBillPage() {
           </div>
         </section>
       </form>
+
+      <AnimatePresence>
+        {addMobileForItem ? (
+          <AddMobileModal
+            onClose={() => setAddMobileForItem(null)}
+            onCreated={(mobile) => {
+              setMobileCatalog((previous) =>
+                previous.some((entry) => entry.id === mobile.id)
+                  ? previous
+                  : [...previous, mobile].sort((a, b) =>
+                      a.name.localeCompare(b.name),
+                    ),
+              );
+              applyCatalogMobile(addMobileForItem, mobile);
+              setAddMobileForItem(null);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       {showSaveConfirm && saveSummary ? (
         <SaveBillConfirmModal

@@ -51,6 +51,12 @@ duesRouter.get("/", async (req, res, next) => {
         grandTotal: true,
         payableAmount: true,
         isPartialPaid: true,
+        items: {
+          select: {
+            imei1: true,
+            imei2: true,
+          },
+        },
       },
     });
 
@@ -62,11 +68,118 @@ duesRouter.get("/", async (req, res, next) => {
         periodLabel: periodLabel(period),
         totalDue: Number(totalDue.toFixed(2)),
         count: dues.length,
-        dues: dues.map((bill) => ({
+        dues: dues.map(({ items, ...bill }) => ({
           ...bill,
           dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
           billDate: bill.billDate.toISOString(),
+          imeiNumbers: items.flatMap((item) =>
+            [item.imei1, item.imei2].filter(
+              (imei): imei is string => Boolean(imei),
+            ),
+          ),
         })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+duesRouter.get("/finance", async (_req, res, next) => {
+  try {
+    const dues = await prisma.bill.findMany({
+      where: {
+        financeAmount: { gt: 0 },
+        financeReceived: false,
+      },
+      orderBy: [{ billDate: "asc" }],
+      select: {
+        id: true,
+        invoiceNumber: true,
+        billDate: true,
+        customerName: true,
+        customerPhone: true,
+        financeAmount: true,
+        financeCompanyName: true,
+        financeReceived: true,
+        financeReceivedAt: true,
+        items: {
+          select: {
+            imei1: true,
+            imei2: true,
+          },
+        },
+      },
+    });
+
+    const totalFinanceDue = dues.reduce(
+      (sum, bill) => sum + bill.financeAmount,
+      0,
+    );
+
+    res.json({
+      data: {
+        totalFinanceDue: Number(totalFinanceDue.toFixed(2)),
+        count: dues.length,
+        dues: dues.map(({ items, ...bill }) => ({
+          ...bill,
+          billDate: bill.billDate.toISOString(),
+          financeReceivedAt: bill.financeReceivedAt?.toISOString() ?? null,
+          imeiNumbers: items.flatMap((item) =>
+            [item.imei1, item.imei2].filter(
+              (imei): imei is string => Boolean(imei),
+            ),
+          ),
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+duesRouter.patch("/finance/:id/receive", async (req, res, next) => {
+  try {
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        financeAmount: true,
+        financeReceived: true,
+      },
+    });
+
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    if (bill.financeAmount <= 0) {
+      res.status(400).json({ error: "This bill has no finance amount" });
+      return;
+    }
+    if (bill.financeReceived) {
+      res.status(400).json({ error: "Finance amount is already received" });
+      return;
+    }
+
+    const updated = await prisma.bill.update({
+      where: { id: bill.id },
+      data: {
+        financeReceived: true,
+        financeReceivedAt: new Date(),
+      },
+      include: { items: true },
+    });
+
+    res.json({
+      data: {
+        ...updated,
+        billDate: updated.billDate.toISOString(),
+        dueDate: updated.dueDate?.toISOString() ?? null,
+        dueSettledAt: updated.dueSettledAt?.toISOString() ?? null,
+        financeReceivedAt: updated.financeReceivedAt?.toISOString() ?? null,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
       },
     });
   } catch (error) {

@@ -1,23 +1,37 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowLeft, Check, Search } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { ArrowLeft, Building2, Check, Search, UserRound } from "lucide-react";
 import {
   PeriodFilter,
   type DuePeriodValue,
 } from "../components/PeriodFilter";
 import { SettleDueModal } from "../components/SettleDueModal";
+import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from "../components/ui";
 import { api, formatINR } from "../lib/api";
-import type { DueItem, DuesSummary } from "../types";
+import type {
+  DueItem,
+  DuesSummary,
+  FinanceDueItem,
+  FinanceDuesSummary,
+} from "../types";
 
 export function DuesPage() {
+  const [tab, setTab] = useState<"customer" | "finance">("customer");
   const [period, setPeriod] = useState<DuePeriodValue>("all");
   const [data, setData] = useState<DuesSummary | null>(null);
+  const [financeData, setFinanceData] = useState<FinanceDuesSummary | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDue, setSelectedDue] = useState<DueItem | null>(null);
   const [query, setQuery] = useState("");
+  const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [selectedFinanceDue, setSelectedFinanceDue] =
+    useState<FinanceDueItem | null>(null);
 
   async function loadDues(activePeriod: DuePeriodValue) {
     setLoading(true);
@@ -32,9 +46,28 @@ export function DuesPage() {
     }
   }
 
+  async function loadFinanceDues() {
+    setLoading(true);
+    try {
+      const response = await api.listFinanceDues();
+      setFinanceData(response.data);
+      setError(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load finance dues",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    void loadDues(period);
-  }, [period]);
+    if (tab === "customer") {
+      void loadDues(period);
+    } else {
+      void loadFinanceDues();
+    }
+  }, [period, tab]);
 
   const filteredDues =
     data?.dues.filter((due) => {
@@ -43,18 +76,53 @@ export function DuesPage() {
       return (
         due.invoiceNumber.toLowerCase().includes(q) ||
         due.customerName.toLowerCase().includes(q) ||
-        due.customerPhone.includes(q)
+        due.customerPhone.includes(q) ||
+        due.imeiNumbers?.some((imei) => imei.toLowerCase().includes(q))
       );
     }) || [];
 
   const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
+  const filteredFinanceDues =
+    financeData?.dues.filter((due) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        due.invoiceNumber.toLowerCase().includes(q) ||
+        due.customerName.toLowerCase().includes(q) ||
+        due.customerPhone.includes(q) ||
+        due.financeCompanyName?.toLowerCase().includes(q) ||
+        due.imeiNumbers?.some((imei) => imei.toLowerCase().includes(q))
+      );
+    }) || [];
+  const filteredFinanceTotal = filteredFinanceDues.reduce(
+    (sum, due) => sum + due.financeAmount,
+    0,
+  );
+
+  async function markFinanceReceived(due: FinanceDueItem) {
+    setReceivingId(due.id);
+    setError(null);
+    try {
+      await api.markFinanceReceived(due.id);
+      setSelectedFinanceDue(null);
+      await loadFinanceDues();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to mark finance amount as received",
+      );
+    } finally {
+      setReceivingId(null);
+    }
+  }
 
   return (
     <div>
       <PageHeader
         eyebrow="Collections"
         title="Due details"
-        description="Filter by period and search by invoice, customer, or phone."
+        description="Track pending customer payments and finance-company settlements."
         action={
               <Link to="/" className="btn-secondary">
                 <ArrowLeft className="h-4 w-4" />
@@ -64,12 +132,53 @@ export function DuesPage() {
       />
 
       <div className="mb-6 space-y-3">
-        <PeriodFilter variant="dues" value={period} onChange={setPeriod} />
+        <div
+          className="grid grid-cols-2 gap-1 rounded-2xl border border-ink-100 bg-white/70 p-1"
+          role="tablist"
+          aria-label="Due type"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "customer"}
+            className={
+              tab === "customer"
+                ? "flex items-center justify-center gap-2 rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white shadow-soft"
+                : "flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-ink-500 transition hover:bg-white hover:text-ink-900"
+            }
+            onClick={() => setTab("customer")}
+          >
+            <UserRound className="h-4 w-4" />
+            Dues
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "finance"}
+            className={
+              tab === "finance"
+                ? "flex items-center justify-center gap-2 rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white shadow-soft"
+                : "flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-ink-500 transition hover:bg-white hover:text-ink-900"
+            }
+            onClick={() => setTab("finance")}
+          >
+            <Building2 className="h-4 w-4" />
+            Finance dues
+          </button>
+        </div>
+
+        {tab === "customer" ? (
+          <PeriodFilter variant="dues" value={period} onChange={setPeriod} />
+        ) : null}
         <div className="relative">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
           <input
             className="field pl-11"
-            placeholder="Search dues…"
+            placeholder={
+              tab === "customer"
+                ? "Search invoice, customer, phone, or IMEI…"
+                : "Search finance, customer, phone, or IMEI…"
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -83,7 +192,7 @@ export function DuesPage() {
         </div>
       ) : null}
 
-      {data && !loading ? (
+      {tab === "customer" && data && !loading ? (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <StatCard
@@ -158,6 +267,91 @@ export function DuesPage() {
         </>
       ) : null}
 
+      {tab === "finance" && financeData && !loading ? (
+        <>
+          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+            <StatCard
+              label="Finance amount pending"
+              value={formatINR(
+                query.trim()
+                  ? filteredFinanceTotal
+                  : financeData.totalFinanceDue,
+              )}
+              hint={`${query.trim() ? filteredFinanceDues.length : financeData.count} pending finance bill${(query.trim() ? filteredFinanceDues.length : financeData.count) === 1 ? "" : "s"}`}
+              tone="ember"
+            />
+            <StatCard
+              label="Finance settlements"
+              value={String(
+                query.trim() ? filteredFinanceDues.length : financeData.count,
+              )}
+              hint="Waiting to receive"
+              tone="ink"
+              delay={0.05}
+            />
+          </div>
+
+          {filteredFinanceDues.length === 0 ? (
+            <EmptyState
+              title={
+                query.trim()
+                  ? "No matching finance dues"
+                  : "No finance dues pending"
+              }
+              description={
+                query.trim()
+                  ? "Try another search, or clear the search box."
+                  : "All finance-company amounts have been received."
+              }
+            />
+          ) : (
+            <div className="space-y-3">
+              {filteredFinanceDues.map((due) => (
+                <article key={due.id} className="glass-panel p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <Link
+                        to={`/bills/${due.id}`}
+                        className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-tide-600 hover:underline"
+                      >
+                        {due.invoiceNumber}
+                      </Link>
+                      <h3 className="mt-1 font-display text-xl font-semibold text-ink-900">
+                        {due.financeCompanyName || "Finance company"}
+                      </h3>
+                      <p className="mt-1 text-sm text-ink-500">
+                        {due.customerName} · {due.customerPhone}
+                      </p>
+                      <p className="mt-1 text-xs text-ink-400">
+                        Bill {format(new Date(due.billDate), "dd MMM yyyy")}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 sm:items-end">
+                      <p className="font-display text-2xl font-semibold text-ember-500">
+                        {formatINR(due.financeAmount)}
+                      </p>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={receivingId === due.id}
+                        onClick={() => {
+                          setError(null);
+                          setSelectedFinanceDue(due);
+                        }}
+                        aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
+                      >
+                        <Check className="h-4 w-4" />
+                        {receivingId === due.id ? "Saving…" : "Received"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </>
+      ) : null}
+
       {selectedDue ? (
         <SettleDueModal
           bill={selectedDue}
@@ -165,6 +359,24 @@ export function DuesPage() {
           onSettled={() => loadDues(period)}
         />
       ) : null}
+
+      <AnimatePresence>
+        {selectedFinanceDue ? (
+          <FinanceReceivedConfirmModal
+            invoiceNumber={selectedFinanceDue.invoiceNumber}
+            financeCompanyName={selectedFinanceDue.financeCompanyName}
+            amount={selectedFinanceDue.financeAmount}
+            saving={receivingId === selectedFinanceDue.id}
+            error={error}
+            onCancel={() => {
+              if (receivingId) return;
+              setSelectedFinanceDue(null);
+              setError(null);
+            }}
+            onConfirm={() => void markFinanceReceived(selectedFinanceDue)}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

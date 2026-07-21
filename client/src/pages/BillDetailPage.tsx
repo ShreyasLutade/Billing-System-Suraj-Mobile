@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { SettleDueModal } from "../components/SettleDueModal";
+import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import type { Bill } from "../types";
@@ -29,6 +30,9 @@ export function BillDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [markingFinance, setMarkingFinance] = useState(false);
+  const [financeError, setFinanceError] = useState<string | null>(null);
+  const [showFinanceConfirm, setShowFinanceConfirm] = useState(false);
 
   const loadBill = useCallback(async () => {
     if (!id) return;
@@ -65,6 +69,25 @@ export function BillDetailPage() {
     }
   }
 
+  async function markFinanceReceived() {
+    if (!bill || bill.financeAmount <= 0 || bill.financeReceived) return;
+    setMarkingFinance(true);
+    setFinanceError(null);
+    try {
+      const { data } = await api.markFinanceReceived(bill.id);
+      setBill(data);
+      setShowFinanceConfirm(false);
+    } catch (err) {
+      setFinanceError(
+        err instanceof Error
+          ? err.message
+          : "Failed to mark finance amount as received",
+      );
+    } finally {
+      setMarkingFinance(false);
+    }
+  }
+
   if (loading) {
     return <LoadingBlock label="Loading bill…" />;
   }
@@ -94,7 +117,8 @@ export function BillDetailPage() {
         description={
           bill.createdByRole
             ? `Created ${format(new Date(bill.billDate), "dd MMM yyyy")} · ${
-                bill.createdByRole === "ADMIN" ? "Suraj" : "Staff"
+                bill.createdByName ||
+                (bill.createdByRole === "ADMIN" ? "Admin" : "Staff")
               }`
             : `Created ${format(new Date(bill.billDate), "dd MMM yyyy")}`
         }
@@ -181,6 +205,13 @@ export function BillDetailPage() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="font-semibold text-ink-900">{item.productName}</p>
+                      {item.color || item.storage || item.ram ? (
+                        <p className="mt-1 text-sm font-medium text-tide-600">
+                          {[item.color, item.storage, item.ram]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-sm text-ink-500">
                         Qty {item.quantity} · Rate {formatINR(item.rate)} · GST{" "}
                         {item.gstPercent}%
@@ -275,12 +306,45 @@ export function BillDetailPage() {
                 }
                 value={formatINR(bill.financeAmount)}
               />
+              {bill.financeAmount > 0 ? (
+                <Row
+                  label="Finance status"
+                  value={bill.financeReceived ? "Received" : "Pending"}
+                  accent={!bill.financeReceived}
+                />
+              ) : null}
               <Row
                 label="Due"
                 value={formatINR(bill.dueAmount)}
                 accent={bill.dueAmount > 0}
               />
             </dl>
+            {bill.financeAmount > 0 && !bill.financeReceived ? (
+              <button
+                type="button"
+                className="btn-primary mt-5 w-full"
+                disabled={markingFinance}
+                onClick={() => {
+                  setFinanceError(null);
+                  setShowFinanceConfirm(true);
+                }}
+              >
+                <Check className="h-4 w-4" />
+                {markingFinance ? "Saving…" : "Mark finance as received"}
+              </button>
+            ) : null}
+            {bill.financeAmount > 0 && bill.financeReceivedAt ? (
+              <p className="mt-3 text-xs font-medium text-tide-600">
+                <Check className="mr-1 inline h-3.5 w-3.5" />
+                Received{" "}
+                {format(new Date(bill.financeReceivedAt), "dd MMM yyyy")}
+              </p>
+            ) : null}
+            {financeError ? (
+              <p className="mt-3 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-ember-500">
+                {financeError}
+              </p>
+            ) : null}
           </div>
 
           {hasDue ? (
@@ -334,6 +398,24 @@ export function BillDetailPage() {
           onSettled={loadBill}
         />
       ) : null}
+
+      <AnimatePresence>
+        {showFinanceConfirm && bill.financeAmount > 0 ? (
+          <FinanceReceivedConfirmModal
+            invoiceNumber={bill.invoiceNumber}
+            financeCompanyName={bill.financeCompanyName}
+            amount={bill.financeAmount}
+            saving={markingFinance}
+            error={financeError}
+            onCancel={() => {
+              if (markingFinance) return;
+              setShowFinanceConfirm(false);
+              setFinanceError(null);
+            }}
+            onConfirm={() => void markFinanceReceived()}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isAdmin && showDeleteConfirm ? (
