@@ -11,7 +11,9 @@ import {
 } from "./routes/financeCompanies";
 import { duesRouter } from "./routes/dues";
 import { authRouter, seedUsers } from "./routes/auth";
+import { reportsRouter } from "./routes/reports";
 import { requireAuth, requireAdmin } from "./middleware/auth";
+import { startDailyReportScheduler } from "./services/dailyReports";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -58,6 +60,7 @@ app.use("/api/bills", requireAuth, billsRouter);
 app.use("/api/analytics", requireAuth, requireAdmin, analyticsRouter);
 app.use("/api/finance-companies", requireAuth, financeCompaniesRouter);
 app.use("/api/dues", requireAuth, duesRouter);
+app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 
 if (!serveClient) {
   app.get("/", (_req, res) => {
@@ -112,6 +115,7 @@ if (serveClient) {
 async function start() {
   await seedFinanceCompanies();
   await seedUsers();
+  startDailyReportScheduler();
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`Suraj Billing API running on http://localhost:${port}`);
     if (serveClient) {

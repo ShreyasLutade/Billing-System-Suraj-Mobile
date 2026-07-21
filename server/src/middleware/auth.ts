@@ -84,7 +84,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return;
   }
   if (req.user.role !== "ADMIN") {
-    res.status(403).json({ error: "Analytics is available for admin only" });
+    res.status(403).json({ error: "Admin access required" });
     return;
   }
   next();
