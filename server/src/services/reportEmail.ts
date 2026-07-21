@@ -27,15 +27,78 @@ export function getReportMailConfig() {
   return { user, pass, to, from, configured: smtpConfigured() };
 }
 
-function createTransport() {
-  const { user, pass, configured } = getReportMailConfig();
+function envPort() {
+  const raw = Number(process.env.SMTP_PORT);
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+function createTransportForPort(port: number) {
+  const { user, pass } = getReportMailConfig();
+  const host = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
+  return nodemailer.createTransport({
+    host,
+    port,
+    // 465 uses implicit TLS; 587 upgrades via STARTTLS.
+    secure: port === 465,
+    requireTLS: port !== 465,
+    auth: { user, pass },
+    // Cloud hosts can be slow to open the socket; fail fast enough to retry
+    // the alternate port instead of hanging the whole job.
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 30000,
+  });
+}
+
+function isConnectionError(error: unknown) {
+  const code = (error as { code?: string } | null)?.code;
+  return (
+    code === "ETIMEDOUT" ||
+    code === "ECONNECTION" ||
+    code === "ESOCKET" ||
+    code === "ECONNREFUSED"
+  );
+}
+
+function candidatePorts() {
+  const configured = envPort();
+  // Try the configured/default port first, then fall back to the other common
+  // Gmail submission port (some hosts block 465, others block 587).
+  const order = configured ? [configured] : [465, 587];
+  for (const port of [465, 587]) {
+    if (!order.includes(port)) order.push(port);
+  }
+  return order;
+}
+
+async function sendWithFallback(
+  message: Parameters<nodemailer.Transporter["sendMail"]>[0],
+) {
+  const { configured } = getReportMailConfig();
   if (!configured) {
     throw new Error("SMTP is not configured");
   }
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
+
+  let lastError: unknown = null;
+  for (const port of candidatePorts()) {
+    try {
+      const transporter = createTransportForPort(port);
+      return await transporter.sendMail(message);
+    } catch (error) {
+      lastError = error;
+      if (isConnectionError(error)) {
+        console.warn(
+          `[reports] SMTP port ${port} failed (${(error as { code?: string }).code}); trying next port…`,
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to connect to SMTP server");
 }
 
 export async function sendReportEmail(report: ReportMailAttachment) {
@@ -67,8 +130,7 @@ export async function sendReportEmail(report: ReportMailAttachment) {
     `— ${shop} Billing System`,
   ].join("\n");
 
-  const transporter = createTransport();
-  const info = await transporter.sendMail({
+  const info = await sendWithFallback({
     from,
     to,
     subject,
