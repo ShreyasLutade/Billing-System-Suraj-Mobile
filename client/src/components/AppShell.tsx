@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -15,6 +15,19 @@ import { useAuth } from "../auth/AuthContext";
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => {
+    const markOnline = () => setIsOnline(true);
+    const markOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", markOnline);
+    window.addEventListener("offline", markOffline);
+    return () => {
+      window.removeEventListener("online", markOnline);
+      window.removeEventListener("offline", markOffline);
+    };
+  }, []);
 
   const links = [
     { to: "/", label: "New Bill", icon: FilePlus2 },
@@ -91,9 +104,27 @@ export function AppShell() {
           <LogOut className="h-4 w-4" />
           <span className="hidden sm:inline">Logout</span>
         </button>
+
+        {!isOnline ? (
+          <div
+            role="status"
+            aria-label="No internet connection"
+            className="absolute inset-x-0 top-full flex h-8 items-center justify-center bg-rose-600 px-4 text-center text-sm font-semibold text-white shadow-sm"
+            title="No internet connection"
+          >
+            Offline
+          </div>
+        ) : null}
       </header>
 
-      <main className="relative mx-auto max-w-6xl px-4 pb-6 pt-[5.5rem] sm:px-6 sm:pb-8 sm:pt-[5.75rem]">
+      <main
+        className={clsx(
+          "relative mx-auto max-w-6xl px-4 pb-6 sm:px-6 sm:pb-8",
+          isOnline
+            ? "pt-[5.5rem] sm:pt-[5.75rem]"
+            : "pt-[7.5rem] sm:pt-[7.75rem]",
+        )}
+      >
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
