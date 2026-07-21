@@ -83,3 +83,22 @@ Edit in `server/.env`:
 - `SHOP_ADDRESS`
 - `SHOP_PHONE`
 - `SHOP_GSTIN`
+
+## Automatic Excel email (Gmail SMTP)
+
+Every day at **11:00 PM IST** the server emails an Excel file:
+
+- **Daily:** today's bills only
+- **Sunday:** today's file + full backup (all bills up to date)
+
+Set these on Railway (and local `.env`):
+
+```
+SMTP_USER=surajmobilereports@gmail.com
+SMTP_PASS=your-gmail-app-password
+REPORT_EMAIL_TO=surajmobile33556@gmail.com
+REPORT_CRON=0 23 * * *
+REPORT_CRON_ENABLED=true
+```
+
+Admin can also trigger manually: `POST /api/reports/send` with `{ "scope": "today" }` or `{ "scope": "all" }`.

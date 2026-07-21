@@ -16,10 +16,12 @@ import { SettleDueModal } from "../components/SettleDueModal";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import type { Bill } from "../types";
+import { useAuth } from "../auth/AuthContext";
 
 export function BillDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [bill, setBill] = useState<Bill | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function BillDetailPage() {
   }, [loadBill]);
 
   async function confirmDelete() {
-    if (!bill) return;
+    if (!bill || !isAdmin) return;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -115,17 +117,19 @@ export function BillDetailPage() {
               <Download className="h-4 w-4" />
               Download PDF
             </a>
-            <button
-              type="button"
-              className="btn-danger"
-              onClick={() => {
-                setDeleteError(null);
-                setShowDeleteConfirm(true);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </button>
+            {isAdmin ? (
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={() => {
+                  setDeleteError(null);
+                  setShowDeleteConfirm(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            ) : null}
             {hasDue ? (
               <button
                 type="button"
@@ -332,7 +336,7 @@ export function BillDetailPage() {
       ) : null}
 
       <AnimatePresence>
-        {showDeleteConfirm ? (
+        {isAdmin && showDeleteConfirm ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}

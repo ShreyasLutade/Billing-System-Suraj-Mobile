@@ -84,6 +84,7 @@ export function CreateBillPage() {
   const [useCash, setUseCash] = useState(false);
   const [useOnline, setUseOnline] = useState(false);
   const [useFinance, setUseFinance] = useState(false);
+  const [hasDue, setHasDue] = useState(false);
   const [cashAmount, setCashAmount] = useState(0);
   const [onlineAmount, setOnlineAmount] = useState(0);
   const [financeAmount, setFinanceAmount] = useState(0);
@@ -127,6 +128,7 @@ export function CreateBillPage() {
     setUseCash(false);
     setUseOnline(false);
     setUseFinance(false);
+    setHasDue(false);
     setCashAmount(0);
     setOnlineAmount(0);
     setFinanceAmount(0);
@@ -169,6 +171,7 @@ export function CreateBillPage() {
     setUseCash(bill.cashAmount > 0);
     setUseOnline(bill.onlineAmount > 0);
     setUseFinance(bill.financeAmount > 0);
+    setHasDue(bill.dueAmount > 0);
     setCashAmount(bill.cashAmount);
     setOnlineAmount(bill.onlineAmount);
     setFinanceAmount(bill.financeAmount);
@@ -223,8 +226,8 @@ export function CreateBillPage() {
   ]);
 
   useEffect(() => {
-    if (totals.dueAmount <= 0) setDueDate("");
-  }, [totals.dueAmount]);
+    if (!hasDue || totals.dueAmount <= 0) setDueDate("");
+  }, [hasDue, totals.dueAmount]);
 
   useEffect(() => {
     let active = true;
@@ -329,8 +332,16 @@ export function CreateBillPage() {
       if (!checked) {
         setFinanceAmount(0);
         resetFinanceCompany();
-      } else if (defaultAmount !== undefined) {
-        setFinanceAmount(defaultAmount);
+      } else {
+        const remainingAfterCashAndOnline = round2(
+          Math.max(
+            totals.payableAmount -
+              (useCash ? cashAmount : 0) -
+              (useOnline ? onlineAmount : 0),
+            0,
+          ),
+        );
+        setFinanceAmount(remainingAfterCashAndOnline);
       }
     }
   }
@@ -381,9 +392,12 @@ export function CreateBillPage() {
       exchangeValue:
         isExchange && exchangeValue !== "" ? Number(exchangeValue) : null,
       exchangeNotes: isExchange ? exchangeNotes.trim() || null : null,
-      dueDate: totals.dueAmount > 0 ? dueDate.trim() : null,
-      items: items.map(({ key: _key, ...item }) => ({
-        ...item,
+      dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
+      items: items.map((item) => ({
+        productName: item.productName,
+        quantity: item.quantity,
+        rate: item.rate,
+        gstPercent: item.gstPercent,
         imei1: item.imei1 || null,
         imei2: null,
         serialNumber: item.serialNumber || null,
@@ -403,7 +417,15 @@ export function CreateBillPage() {
       return;
     }
 
-    if (totals.dueAmount > 0 && !dueDate.trim()) {
+    if (!hasDue && totals.dueAmount > 0) {
+      setError(
+        `Payment is short by ${formatINR(totals.dueAmount)}. Complete the payment split or turn on "This bill has due".`,
+      );
+      document.getElementById("hasDue")?.focus();
+      return;
+    }
+
+    if (hasDue && totals.dueAmount > 0 && !dueDate.trim()) {
       setError("Select expected collection date for the pending due amount");
       document.getElementById("dueDate")?.focus();
       return;
@@ -927,10 +949,31 @@ export function CreateBillPage() {
               </h2>
             </div>
             <p className="mb-5 text-sm text-ink-500">
-              Tick each mode you received and enter the amount. Leftover goes to due.
+              Tick each mode received and enter its amount.
             </p>
 
             <div className="space-y-3">
+              <label
+                htmlFor="hasDue"
+                className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-orange-200 bg-orange-50/70 p-4"
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-ink-800">
+                    This bill has due
+                  </span>
+                  <span className="mt-1 block text-xs text-ink-500">
+                    Turn on to record any amount the customer will pay later.
+                  </span>
+                </span>
+                <input
+                  id="hasDue"
+                  type="checkbox"
+                  checked={hasDue}
+                  onChange={(event) => setHasDue(event.target.checked)}
+                  className="h-5 w-5 shrink-0 rounded border-ink-300 text-ember-500 focus:ring-orange-300"
+                />
+              </label>
+
               <PaymentToggle
                 label="Cash"
                 checked={useCash}
@@ -951,9 +994,6 @@ export function CreateBillPage() {
                 amount={financeAmount}
                 onChecked={(checked) => togglePayment("finance", checked)}
                 onAmount={setFinanceAmount}
-                showAmount={
-                  Boolean(financeSelect) && financeSelect !== ADD_NEW_FINANCE
-                }
               >
                 <div className="space-y-3">
                   <div>
@@ -1016,7 +1056,7 @@ export function CreateBillPage() {
             </div>
 
             <AnimatePresence>
-              {totals.dueAmount > 0 ? (
+              {hasDue ? (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1024,28 +1064,39 @@ export function CreateBillPage() {
                   className="mt-5 rounded-2xl border border-orange-200 bg-orange-50/80 p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-ember-500">Due</p>
+                    <p className="text-sm font-semibold text-ember-500">
+                      Remaining due
+                    </p>
                     <p className="font-display text-xl font-semibold text-ember-500">
                       {formatINR(totals.dueAmount)}
                     </p>
                   </div>
-                  <label className="label required mt-4" htmlFor="dueDate">
-                    Expected collection date
-                  </label>
-                  <input
-                    id="dueDate"
-                    className="field"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    required
-                    aria-required="true"
-                  />
-                  {!dueDate ? (
-                    <p className="mt-2 text-xs font-medium text-ember-500">
-                      Required when due amount is pending
+                  {totals.dueAmount > 0 ? (
+                    <>
+                      <label className="label required mt-4" htmlFor="dueDate">
+                        Expected collection date
+                      </label>
+                      <input
+                        id="dueDate"
+                        className="field"
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        required
+                        aria-required="true"
+                      />
+                      {!dueDate ? (
+                        <p className="mt-2 text-xs font-medium text-ember-500">
+                          Required when due amount is pending
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="mt-2 text-xs text-ink-500">
+                      The selected payments currently cover the full payable
+                      amount.
                     </p>
-                  ) : null}
+                  )}
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -1097,11 +1148,13 @@ export function CreateBillPage() {
                 }
                 value={formatINR(totals.finance)}
               />
-              <SummaryRow
-                label="Due"
-                value={formatINR(totals.dueAmount)}
-                accent={totals.dueAmount > 0}
-              />
+              {hasDue ? (
+                <SummaryRow
+                  label="Due"
+                  value={formatINR(totals.dueAmount)}
+                  accent={totals.dueAmount > 0}
+                />
+              ) : null}
             </dl>
 
             <div className="mt-5">

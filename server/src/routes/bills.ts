@@ -7,6 +7,7 @@ import {
 } from "../lib/billing";
 import { getPeriodRange, isActivityPeriod, toDateFilter } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
+import { requireAdmin } from "../middleware/auth";
 
 export const billsRouter = Router();
 
@@ -337,7 +338,7 @@ billsRouter.put("/:id", async (req, res, next) => {
   }
 });
 
-billsRouter.delete("/:id", async (req, res, next) => {
+billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
     const existing = await prisma.bill.findUnique({
       where: { id: req.params.id },
