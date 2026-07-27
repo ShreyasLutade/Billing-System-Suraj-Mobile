@@ -78,6 +78,9 @@ export const createBillSchema = z
     financeAmount: z.number().nonnegative().default(0),
     financeCompanyId: z.string().trim().optional().nullable(),
     financeCompanyName: z.string().trim().optional().nullable(),
+    financeAmount2: z.number().nonnegative().default(0),
+    financeCompanyId2: z.string().trim().optional().nullable(),
+    financeCompanyName2: z.string().trim().optional().nullable(),
     isExchange: z.boolean().default(false),
     exchangeModel: z.string().trim().optional().nullable(),
     exchangeImei1: z.string().trim().optional().nullable(),
@@ -90,7 +93,12 @@ export const createBillSchema = z
   .superRefine((data, ctx) => {
     const cash = data.useCash ? money(data.cashAmount) : money(0);
     const online = data.useOnline ? money(data.onlineAmount) : money(0);
-    const finance = data.useFinance ? money(data.financeAmount) : money(0);
+    const finance1 = data.useFinance ? money(data.financeAmount) : money(0);
+    const finance2 =
+      data.useFinance && money(data.financeAmount2).gt(0)
+        ? money(data.financeAmount2)
+        : money(0);
+    const finance = finance1.plus(finance2);
 
     if (data.isExchange && !data.exchangeModel?.trim()) {
       ctx.addIssue({
@@ -125,7 +133,7 @@ export const createBillSchema = z
         path: ["onlineAmount"],
       });
     }
-    if (data.useFinance && finance.lte(0)) {
+    if (data.useFinance && finance1.lte(0)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Enter finance amount",
@@ -142,6 +150,32 @@ export const createBillSchema = z
         message: "Select a finance company",
         path: ["financeCompanyId"],
       });
+    }
+    if (data.useFinance && finance2.gt(0)) {
+      if (
+        !data.financeCompanyId2 &&
+        !data.financeCompanyName2?.trim()
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Select a second finance company",
+          path: ["financeCompanyId2"],
+        });
+      }
+      const firstId = data.financeCompanyId?.trim() || "";
+      const secondId = data.financeCompanyId2?.trim() || "";
+      const firstName = data.financeCompanyName?.trim().toLowerCase() || "";
+      const secondName = data.financeCompanyName2?.trim().toLowerCase() || "";
+      if (
+        (firstId && secondId && firstId === secondId) ||
+        (firstName && secondName && firstName === secondName)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Choose two different finance companies",
+          path: ["financeCompanyId2"],
+        });
+      }
     }
 
     const lineTotals = data.items.map((item) =>
@@ -217,8 +251,13 @@ export function computeBillTotals(input: CreateBillInput) {
 
   const cashAmount = input.useCash ? money(input.cashAmount) : money(0);
   const onlineAmount = input.useOnline ? money(input.onlineAmount) : money(0);
-  const financeAmount = input.useFinance ? money(input.financeAmount) : money(0);
-  const paid = cashAmount.plus(onlineAmount).plus(financeAmount);
+  const financeAmount1 = input.useFinance ? money(input.financeAmount) : money(0);
+  const financeAmount2 =
+    input.useFinance && money(input.financeAmount2 || 0).gt(0)
+      ? money(input.financeAmount2 || 0)
+      : money(0);
+  const financeTotal = financeAmount1.plus(financeAmount2);
+  const paid = cashAmount.plus(onlineAmount).plus(financeTotal);
   const dueAmount = Decimal.max(payableAmount.minus(paid), 0);
 
   return {
@@ -230,7 +269,10 @@ export function computeBillTotals(input: CreateBillInput) {
     payableAmount: payableAmount.toNumber(),
     cashAmount: cashAmount.toNumber(),
     onlineAmount: onlineAmount.toNumber(),
-    financeAmount: financeAmount.toNumber(),
+    /** Total finance (company 1 + company 2) — stored on Bill.financeAmount */
+    financeAmount: financeTotal.toNumber(),
+    /** Second company amount only — stored on Bill.financeAmount2 */
+    financeAmount2: financeAmount2.toNumber(),
     dueAmount: dueAmount.toNumber(),
   };
 }

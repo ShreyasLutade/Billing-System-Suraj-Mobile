@@ -11,7 +11,7 @@ import {
 } from "./routes/financeCompanies";
 import { duesRouter } from "./routes/dues";
 import { authRouter, seedUsers } from "./routes/auth";
-import { reportsRouter } from "./routes/reports";
+import { reportsRouter, reportsCronRouter } from "./routes/reports";
 import { mobileCatalogRouter } from "./routes/mobileCatalog";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
@@ -55,6 +55,9 @@ app.get("/api/health", (_req, res) => {
     time: new Date().toISOString(),
   });
 });
+
+// Railway Cron Jobs can hit this without a user JWT (uses REPORT_CRON_SECRET).
+app.use("/api/reports/cron", reportsCronRouter);
 
 app.use("/api/auth", authRouter);
 app.use("/api/bills", requireAuth, billsRouter);

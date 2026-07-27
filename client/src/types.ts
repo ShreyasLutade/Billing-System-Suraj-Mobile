@@ -16,6 +16,15 @@ export type BillItem = {
   warrantyMonths?: number | null;
 };
 
+export type DuePayment = {
+  id: string;
+  amount: number;
+  method: string;
+  kind: string;
+  paidAt: string;
+  note?: string | null;
+};
+
 export type Bill = {
   id: string;
   invoiceNumber: string;
@@ -33,6 +42,9 @@ export type Bill = {
   financeAmount: number;
   financeCompanyId?: string | null;
   financeCompanyName?: string | null;
+  financeAmount2?: number;
+  financeCompanyId2?: string | null;
+  financeCompanyName2?: string | null;
   financeReceived: boolean;
   financeReceivedAt?: string | null;
   isExchange: boolean;
@@ -45,11 +57,14 @@ export type Bill = {
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;
+  dueSettledMethod?: string | null;
+  dueSettledAt?: string | null;
   isPartialPaid?: boolean;
   createdByUserId?: string | null;
   createdByName?: string | null;
   createdByRole?: "ADMIN" | "STAFF" | string | null;
   items: BillItem[];
+  duePayments?: DuePayment[];
   createdAt: string;
   updatedAt: string;
 };
@@ -137,6 +152,8 @@ export type FinanceDueItem = {
   customerPhone: string;
   financeAmount: number;
   financeCompanyName?: string | null;
+  financeAmount2?: number;
+  financeCompanyName2?: string | null;
   financeReceived: boolean;
   financeReceivedAt?: string | null;
   imeiNumbers?: string[];
@@ -162,6 +179,9 @@ export type CreateBillPayload = {
   financeAmount: number;
   financeCompanyId?: string | null;
   financeCompanyName?: string | null;
+  financeAmount2?: number;
+  financeCompanyId2?: string | null;
+  financeCompanyName2?: string | null;
   isExchange?: boolean;
   exchangeModel?: string | null;
   exchangeImei1?: string | null;

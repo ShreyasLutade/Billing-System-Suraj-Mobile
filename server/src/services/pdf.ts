@@ -517,13 +517,28 @@ export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
     const payments: Array<{ label: string; amount: number; note?: string }> = [
       { label: "Cash Amount", amount: bill.cashAmount },
       { label: "Online Amount", amount: bill.onlineAmount },
-      {
+    ];
+
+    if (bill.financeAmount2 && bill.financeAmount2 > 0) {
+      payments.push({
+        label: "Finance Amount",
+        amount: Math.max(bill.financeAmount - bill.financeAmount2, 0),
+        note: bill.financeCompanyName || undefined,
+      });
+      payments.push({
+        label: "Finance Amount",
+        amount: bill.financeAmount2,
+        note: bill.financeCompanyName2 || undefined,
+      });
+    } else {
+      payments.push({
         label: "Finance Amount",
         amount: bill.financeAmount,
         note: bill.financeCompanyName || undefined,
-      },
-      { label: "Pending Amount", amount: bill.dueAmount },
-    ];
+      });
+    }
+
+    payments.push({ label: "Pending Amount", amount: bill.dueAmount });
 
     payments.forEach((p, i) => {
       const rowY = payY + i * 15;

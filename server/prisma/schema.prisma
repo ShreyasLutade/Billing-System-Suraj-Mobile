@@ -35,11 +35,14 @@ model Bill {
   payableAmount     Float            @default(0)
   cashAmount        Float            @default(0)
   onlineAmount      Float            @default(0)
-  financeAmount     Float            @default(0)
-  financeCompanyId  String?
+  financeAmount      Float            @default(0)
+  financeCompanyId   String?
   financeCompanyName String?
-  financeReceived   Boolean          @default(false)
-  financeReceivedAt DateTime?
+  financeAmount2     Float            @default(0)
+  financeCompanyId2  String?
+  financeCompanyName2 String?
+  financeReceived    Boolean          @default(false)
+  financeReceivedAt  DateTime?
   isExchange         Boolean          @default(false)
   exchangeModel      String?
   exchangeImei1      String?
@@ -60,6 +63,7 @@ model Bill {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   items             BillItem[]
+  duePayments       DuePayment[]
   financeCompany    FinanceCompany?  @relation(fields: [financeCompanyId], references: [id])
 
   @@index([billDate])
@@ -67,6 +71,22 @@ model Bill {
   @@index([dueAmount])
   @@index([financeCompanyId])
   @@index([createdByUserId])
+}
+
+model DuePayment {
+  id        String   @id @default(cuid())
+  billId    String
+  amount    Float
+  /// cash | online | na
+  method    String
+  /// partial | full
+  kind      String   @default("partial")
+  paidAt    DateTime @default(now())
+  note      String?
+  bill      Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@index([paidAt])
 }
 
 model BillItem {
@@ -117,4 +137,18 @@ model FinanceCompany {
 model InvoiceSequence {
   id      Int @id @default(1)
   counter Int @default(0)
+}
+
+/// Tracks automated / manual Excel report emails to avoid duplicates.
+model ReportSendLog {
+  id        String   @id @default(cuid())
+  scope     String
+  /// IST calendar day the report was for (YYYY-MM-DD)
+  dateKey   String
+  sentAt    DateTime @default(now())
+  messageId String?
+  toEmail   String?
+
+  @@unique([scope, dateKey])
+  @@index([dateKey])
 }

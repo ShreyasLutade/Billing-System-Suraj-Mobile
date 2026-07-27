@@ -7,7 +7,7 @@ import {
   type ActivityPeriodValue,
 } from "../components/PeriodFilter";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
-import { api, formatINR } from "../lib/api";
+import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import type { Bill } from "../types";
 
 export function BillsPage() {
@@ -43,10 +43,20 @@ export function BillsPage() {
   const filtered = bills.filter((bill) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
+    const imeiMatch = bill.items.some(
+      (item) =>
+        item.imei1?.toLowerCase().includes(q) ||
+        item.imei2?.toLowerCase().includes(q),
+    );
+    const exchangeImeiMatch =
+      bill.exchangeImei1?.toLowerCase().includes(q) ||
+      bill.exchangeImei2?.toLowerCase().includes(q);
     return (
       bill.invoiceNumber.toLowerCase().includes(q) ||
       bill.customerName.toLowerCase().includes(q) ||
-      bill.customerPhone.includes(q)
+      bill.customerPhone.includes(q) ||
+      imeiMatch ||
+      Boolean(exchangeImeiMatch)
     );
   });
 
@@ -55,7 +65,7 @@ export function BillsPage() {
       <PageHeader
         eyebrow="History"
         title="Bills"
-        description="Filter by period and search by invoice, customer, or phone."
+        description="Filter by period and search by invoice, customer, phone, or IMEI."
         action={
           <Link to="/" className="btn-primary">
             New bill
@@ -69,7 +79,7 @@ export function BillsPage() {
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
           <input
             className="field pl-11"
-            placeholder="Search invoices…"
+            placeholder="Search invoice, customer, phone, or IMEI…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -128,9 +138,13 @@ export function BillsPage() {
                   <Pill label={`Online ${formatINR(bill.onlineAmount)}`} />
                   <Pill
                     label={`Finance ${formatINR(bill.financeAmount)}${
-                      bill.financeCompanyName
-                        ? ` · ${bill.financeCompanyName}`
-                        : ""
+                      (() => {
+                        const names = formatFinanceCompanies(
+                          bill.financeCompanyName,
+                          bill.financeCompanyName2,
+                        );
+                        return names ? ` · ${names}` : "";
+                      })()
                     }`}
                   />
                   {bill.isExchange ? (

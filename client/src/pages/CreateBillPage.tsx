@@ -27,7 +27,7 @@ import {
   payloadToSnapshot,
   type DiffLine,
 } from "../lib/billDiff";
-import { api, formatINR, round2 } from "../lib/api";
+import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import type {
   Bill,
   BillItem,
@@ -58,6 +58,23 @@ const blankItem = (): DraftItem => ({
   warrantyMonths: undefined,
 });
 
+type FinanceDraft = {
+  key: string;
+  select: string;
+  companyId: string;
+  newName: string;
+  amount: number;
+};
+
+const blankFinanceEntry = (amount = 0): FinanceDraft => ({
+  key: crypto.randomUUID(),
+  select: "",
+  companyId: "",
+  newName: "",
+  amount,
+});
+
+const MAX_FINANCE_ENTRIES = 2;
 /** Rate is GST-inclusive — line total does not grow when GST % is set. */
 function lineBreakdown(item: DraftItem) {
   const amount = round2(item.rate * item.quantity);
@@ -104,14 +121,13 @@ export function CreateBillPage() {
   const [hasDue, setHasDue] = useState(false);
   const [cashAmount, setCashAmount] = useState(0);
   const [onlineAmount, setOnlineAmount] = useState(0);
-  const [financeAmount, setFinanceAmount] = useState(0);
+  const [financeEntries, setFinanceEntries] = useState<FinanceDraft[]>([
+    blankFinanceEntry(),
+  ]);
   const [financeCompanies, setFinanceCompanies] = useState<FinanceCompany[]>([]);
   const [mobileCatalog, setMobileCatalog] = useState<MobileCatalog[]>([]);
   const [addMobileForItem, setAddMobileForItem] = useState<string | null>(null);
-  const [financeCompanyId, setFinanceCompanyId] = useState("");
-  const [financeSelect, setFinanceSelect] = useState("");
-  const [newFinanceName, setNewFinanceName] = useState("");
-  const [savingFinance, setSavingFinance] = useState(false);
+  const [savingFinanceKey, setSavingFinanceKey] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,10 +167,7 @@ export function CreateBillPage() {
     setHasDue(false);
     setCashAmount(0);
     setOnlineAmount(0);
-    setFinanceAmount(0);
-    setFinanceSelect("");
-    setFinanceCompanyId("");
-    setNewFinanceName("");
+    setFinanceEntries([blankFinanceEntry()]);
     setDueDate("");
     setSaving(false);
     setError(null);
@@ -201,9 +214,29 @@ export function CreateBillPage() {
     setHasDue(bill.dueAmount > 0);
     setCashAmount(bill.cashAmount);
     setOnlineAmount(bill.onlineAmount);
-    setFinanceAmount(bill.financeAmount);
-    setFinanceCompanyId(bill.financeCompanyId || "");
-    setFinanceSelect(bill.financeCompanyId || "");
+    {
+      const secondAmount = bill.financeAmount2 || 0;
+      const firstAmount = round2(Math.max(bill.financeAmount - secondAmount, 0));
+      const entries: FinanceDraft[] = [
+        {
+          key: crypto.randomUUID(),
+          select: bill.financeCompanyId || "",
+          companyId: bill.financeCompanyId || "",
+          newName: "",
+          amount: firstAmount,
+        },
+      ];
+      if (secondAmount > 0 || bill.financeCompanyId2 || bill.financeCompanyName2) {
+        entries.push({
+          key: crypto.randomUUID(),
+          select: bill.financeCompanyId2 || "",
+          companyId: bill.financeCompanyId2 || "",
+          newName: "",
+          amount: secondAmount,
+        });
+      }
+      setFinanceEntries(entries);
+    }
     setDueDate(bill.dueDate ? bill.dueDate.slice(0, 10) : "");
     setSuccessId(null);
     setError(null);
@@ -225,7 +258,9 @@ export function CreateBillPage() {
     const payableAmount = round2(Math.max(grandTotal - exchangeDeduction, 0));
     const cash = useCash ? cashAmount : 0;
     const online = useOnline ? onlineAmount : 0;
-    const finance = useFinance ? financeAmount : 0;
+    const finance = useFinance
+      ? round2(financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0))
+      : 0;
     const paid = round2(cash + online + finance);
     const dueAmount = round2(Math.max(payableAmount - paid, 0));
     return {
@@ -249,7 +284,7 @@ export function CreateBillPage() {
     useFinance,
     cashAmount,
     onlineAmount,
-    financeAmount,
+    financeEntries,
   ]);
 
   const mobileOptions = useMemo(
@@ -327,20 +362,25 @@ export function CreateBillPage() {
     };
   }, [editId]);
 
-  function resetFinanceCompany() {
-    setFinanceSelect("");
-    setFinanceCompanyId("");
-    setNewFinanceName("");
+  function resetFinanceEntries() {
+    setFinanceEntries([blankFinanceEntry()]);
   }
 
-  async function saveNewFinanceCompany() {
-    const name = newFinanceName.trim();
+  function updateFinanceEntry(key: string, patch: Partial<FinanceDraft>) {
+    setFinanceEntries((prev) =>
+      prev.map((entry) => (entry.key === key ? { ...entry, ...patch } : entry)),
+    );
+  }
+
+  async function saveNewFinanceCompany(entryKey: string) {
+    const entry = financeEntries.find((e) => e.key === entryKey);
+    const name = entry?.newName.trim() || "";
     if (!name) {
       setError("Enter a finance company name");
       return null;
     }
 
-    setSavingFinance(true);
+    setSavingFinanceKey(entryKey);
     setError(null);
     try {
       const { data } = await api.createFinanceCompany(name);
@@ -349,9 +389,11 @@ export function CreateBillPage() {
           ? prev
           : [...prev, data].sort((a, b) => a.name.localeCompare(b.name)),
       );
-      setFinanceSelect(data.id);
-      setFinanceCompanyId(data.id);
-      setNewFinanceName("");
+      updateFinanceEntry(entryKey, {
+        select: data.id,
+        companyId: data.id,
+        newName: "",
+      });
       return data;
     } catch (err) {
       setError(
@@ -359,8 +401,37 @@ export function CreateBillPage() {
       );
       return null;
     } finally {
-      setSavingFinance(false);
+      setSavingFinanceKey(null);
     }
+  }
+
+  function remainingAfterPayments(financeSoFar = 0) {
+    return round2(
+      Math.max(
+        totals.payableAmount -
+          (useCash ? cashAmount : 0) -
+          (useOnline ? onlineAmount : 0) -
+          financeSoFar,
+        0,
+      ),
+    );
+  }
+
+  function addFinanceEntry() {
+    setFinanceEntries((prev) => {
+      if (prev.length >= MAX_FINANCE_ENTRIES) return prev;
+      const used = prev.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const remaining = remainingAfterPayments(used);
+      if (remaining <= 0) return prev;
+      return [...prev, blankFinanceEntry(remaining)];
+    });
+  }
+
+  function removeFinanceEntry(key: string) {
+    setFinanceEntries((prev) => {
+      const next = prev.filter((entry) => entry.key !== key);
+      return next.length ? next : [blankFinanceEntry()];
+    });
   }
 
   function togglePayment(
@@ -385,8 +456,7 @@ export function CreateBillPage() {
     if (mode === "finance") {
       setUseFinance(checked);
       if (!checked) {
-        setFinanceAmount(0);
-        resetFinanceCompany();
+        resetFinanceEntries();
       } else {
         const remainingAfterCashAndOnline = round2(
           Math.max(
@@ -396,7 +466,7 @@ export function CreateBillPage() {
             0,
           ),
         );
-        setFinanceAmount(remainingAfterCashAndOnline);
+        setFinanceEntries([blankFinanceEntry(remainingAfterCashAndOnline)]);
       }
     }
   }
@@ -439,21 +509,61 @@ export function CreateBillPage() {
   }
 
   async function buildPayload(): Promise<CreateBillPayload | null> {
-    let resolvedCompanyId = financeCompanyId || null;
+    let resolvedCompanyId: string | null = null;
     let resolvedCompanyName: string | null = null;
+    let resolvedCompanyId2: string | null = null;
+    let resolvedCompanyName2: string | null = null;
+    let financeAmount = 0;
+    let financeAmount2 = 0;
 
     if (useFinance) {
-      if (financeSelect === ADD_NEW_FINANCE) {
-        const created = await saveNewFinanceCompany();
-        if (!created) return null;
-        resolvedCompanyId = created.id;
-        resolvedCompanyName = created.name;
-      } else if (financeCompanyId) {
-        resolvedCompanyId = financeCompanyId;
-        resolvedCompanyName =
-          financeCompanies.find((c) => c.id === financeCompanyId)?.name || null;
-      } else {
+      const activeEntries = financeEntries.filter(
+        (entry) =>
+          entry.select || entry.companyId || entry.newName.trim() || entry.amount > 0,
+      );
+      if (!activeEntries.length) {
         throw new Error("Select a finance company");
+      }
+
+      const resolved: Array<{ id: string | null; name: string | null; amount: number }> =
+        [];
+
+      for (const entry of activeEntries) {
+        if (entry.amount <= 0) {
+          throw new Error("Enter finance amount for each company");
+        }
+        if (entry.select === ADD_NEW_FINANCE) {
+          const created = await saveNewFinanceCompany(entry.key);
+          if (!created) return null;
+          resolved.push({ id: created.id, name: created.name, amount: entry.amount });
+        } else if (entry.companyId) {
+          resolved.push({
+            id: entry.companyId,
+            name:
+              financeCompanies.find((c) => c.id === entry.companyId)?.name || null,
+            amount: entry.amount,
+          });
+        } else {
+          throw new Error("Select a finance company");
+        }
+      }
+
+      if (resolved.length > MAX_FINANCE_ENTRIES) {
+        throw new Error("Maximum two finance companies allowed");
+      }
+
+      const ids = resolved.map((r) => r.id).filter(Boolean);
+      if (new Set(ids).size !== ids.length) {
+        throw new Error("Choose two different finance companies");
+      }
+
+      resolvedCompanyId = resolved[0]?.id || null;
+      resolvedCompanyName = resolved[0]?.name || null;
+      financeAmount = resolved[0]?.amount || 0;
+      if (resolved[1]) {
+        resolvedCompanyId2 = resolved[1].id;
+        resolvedCompanyName2 = resolved[1].name;
+        financeAmount2 = resolved[1].amount;
       }
     }
 
@@ -470,6 +580,9 @@ export function CreateBillPage() {
       financeAmount: useFinance ? financeAmount : 0,
       financeCompanyId: useFinance ? resolvedCompanyId : null,
       financeCompanyName: useFinance ? resolvedCompanyName : null,
+      financeAmount2: useFinance ? financeAmount2 : 0,
+      financeCompanyId2: useFinance ? resolvedCompanyId2 : null,
+      financeCompanyName2: useFinance ? resolvedCompanyName2 : null,
       isExchange,
       exchangeModel: isExchange ? exchangeModel.trim() : null,
       exchangeImei1: isExchange ? exchangeImei1.trim() || null : null,
@@ -573,8 +686,15 @@ export function CreateBillPage() {
         payableAmount: totals.payableAmount,
         cashAmount: payload.useCash ? payload.cashAmount : 0,
         onlineAmount: payload.useOnline ? payload.onlineAmount : 0,
-        financeAmount: payload.useFinance ? payload.financeAmount : 0,
-        financeCompanyName: payload.financeCompanyName,
+        financeAmount: payload.useFinance
+          ? round2(
+              (payload.financeAmount || 0) + (payload.financeAmount2 || 0),
+            )
+          : 0,
+        financeCompanyName: formatFinanceCompanies(
+          payload.financeCompanyName,
+          payload.financeCompanyName2,
+        ),
         dueAmount: totals.dueAmount,
         dueDate:
           payload.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)
@@ -1141,66 +1261,147 @@ export function CreateBillPage() {
               <PaymentToggle
                 label="Finance"
                 checked={useFinance}
-                amount={financeAmount}
+                amount={totals.finance}
                 onChecked={(checked) => togglePayment("finance", checked)}
-                onAmount={setFinanceAmount}
+                onAmount={() => {}}
+                showAmount={false}
               >
-                <div className="space-y-3">
-                  <div>
-                    <label className="label required" htmlFor="financeCompany">
-                      Finance company
-                    </label>
-                    <FinanceCompanyPicker
-                      companies={financeCompanies}
-                      value={financeSelect}
-                      required={useFinance}
-                      onChange={(value) => {
-                        setFinanceSelect(value);
-                        if (value === ADD_NEW_FINANCE) {
-                          setFinanceCompanyId("");
-                        } else {
-                          setFinanceCompanyId(value);
-                          setNewFinanceName("");
+                <div className="space-y-4">
+                  {financeEntries.map((entry, index) => {
+                    const excludeIds = financeEntries
+                      .filter((e) => e.key !== entry.key && e.companyId)
+                      .map((e) => e.companyId);
+                    const financeUsed = financeEntries.reduce(
+                      (sum, e) => sum + (e.amount || 0),
+                      0,
+                    );
+                    const remainingForNext = remainingAfterPayments(financeUsed);
+                    const canAddAnother =
+                      index === financeEntries.length - 1 &&
+                      financeEntries.length < MAX_FINANCE_ENTRIES &&
+                      Boolean(entry.select) &&
+                      entry.amount > 0 &&
+                      remainingForNext > 0;
+
+                    return (
+                      <div
+                        key={entry.key}
+                        className={
+                          index > 0
+                            ? "space-y-3 border-t border-ink-100 pt-4"
+                            : "space-y-3"
                         }
-                      }}
-                    />
-                  </div>
-                  {financeSelect === ADD_NEW_FINANCE ? (
-                    <div>
-                      <label className="label required" htmlFor="newFinanceName">
-                        New finance company
-                      </label>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                          id="newFinanceName"
-                          className="field"
-                          value={newFinanceName}
-                          onChange={(e) => setNewFinanceName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              void saveNewFinanceCompany();
-                            }
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="label required mb-0">
+                            {financeEntries.length > 1
+                              ? `Finance company ${index + 1}`
+                              : "Finance company"}
+                          </label>
+                          {index > 0 ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-ember-500 hover:underline"
+                              onClick={() => removeFinanceEntry(entry.key)}
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                        <FinanceCompanyPicker
+                          companies={financeCompanies}
+                          value={entry.select}
+                          required={useFinance}
+                          excludeIds={excludeIds}
+                          onChange={(value) => {
+                            updateFinanceEntry(entry.key, {
+                              select: value,
+                              companyId: value === ADD_NEW_FINANCE ? "" : value,
+                              newName:
+                                value === ADD_NEW_FINANCE ? entry.newName : "",
+                            });
                           }}
-                          placeholder="e.g. HDFC Finance"
-                          required={
-                            useFinance && financeSelect === ADD_NEW_FINANCE
-                          }
                         />
-                        <button
-                          type="button"
-                          className="btn-secondary shrink-0"
-                          disabled={savingFinance || !newFinanceName.trim()}
-                          onClick={() => void saveNewFinanceCompany()}
-                        >
-                          {savingFinance ? "Saving…" : "Save for later"}
-                        </button>
+                        {entry.select === ADD_NEW_FINANCE ? (
+                          <div>
+                            <label
+                              className="label required"
+                              htmlFor={`newFinanceName-${entry.key}`}
+                            >
+                              New finance company
+                            </label>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <input
+                                id={`newFinanceName-${entry.key}`}
+                                className="field"
+                                value={entry.newName}
+                                onChange={(e) =>
+                                  updateFinanceEntry(entry.key, {
+                                    newName: e.target.value,
+                                  })
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void saveNewFinanceCompany(entry.key);
+                                  }
+                                }}
+                                placeholder="e.g. HDFC Finance"
+                                required={
+                                  useFinance && entry.select === ADD_NEW_FINANCE
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="btn-secondary shrink-0"
+                                disabled={
+                                  savingFinanceKey === entry.key ||
+                                  !entry.newName.trim()
+                                }
+                                onClick={() =>
+                                  void saveNewFinanceCompany(entry.key)
+                                }
+                              >
+                                {savingFinanceKey === entry.key
+                                  ? "Saving…"
+                                  : "Save for later"}
+                              </button>
+                            </div>
+                            <p className="mt-2 text-xs text-ink-500">
+                              Saved names stay in the list for all future bills.
+                            </p>
+                          </div>
+                        ) : null}
+                        <div>
+                          <label className="label required">Amount</label>
+                          <input
+                            className="field"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={entry.amount || ""}
+                            onChange={(e) =>
+                              updateFinanceEntry(entry.key, {
+                                amount: Number(e.target.value) || 0,
+                              })
+                            }
+                            placeholder="Amount paid by finance"
+                            required={useFinance}
+                          />
+                        </div>
+                        {canAddAnother ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
+                            onClick={addFinanceEntry}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add another finance company · {formatINR(remainingForNext)} left
+                          </button>
+                        ) : null}
                       </div>
-                      <p className="mt-2 text-xs text-ink-500">
-                        Saved names stay in the list for all future bills.
-                      </p>
-                    </div>
-                  ) : null}
+                    );
+                  })}
                 </div>
               </PaymentToggle>
             </div>
@@ -1286,14 +1487,21 @@ export function CreateBillPage() {
               <SummaryRow label="Online" value={formatINR(totals.online)} />
               <SummaryRow
                 label={
-                  useFinance &&
-                  (financeCompanies.find((c) => c.id === financeCompanyId)
-                    ?.name ||
-                    newFinanceName.trim())
-                    ? `Finance · ${
-                        financeCompanies.find((c) => c.id === financeCompanyId)
-                          ?.name || newFinanceName.trim()
-                      }`
+                  useFinance
+                    ? (() => {
+                        const names = financeEntries
+                          .map((entry) =>
+                            entry.select === ADD_NEW_FINANCE
+                              ? entry.newName.trim()
+                              : financeCompanies.find(
+                                  (c) => c.id === entry.companyId,
+                                )?.name || "",
+                          )
+                          .filter(Boolean);
+                        return names.length
+                          ? `Finance · ${names.join(" + ")}`
+                          : "Finance";
+                      })()
                     : "Finance"
                 }
                 value={formatINR(totals.finance)}

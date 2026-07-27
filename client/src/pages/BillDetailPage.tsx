@@ -15,8 +15,8 @@ import {
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
-import { api, formatINR } from "../lib/api";
-import type { Bill } from "../types";
+import { api, formatFinanceCompanies, formatINR } from "../lib/api";
+import type { Bill, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
 
 export function BillDetailPage() {
@@ -298,14 +298,37 @@ export function BillDetailPage() {
             <dl className="mt-4 space-y-3 text-sm">
               <Row label="Cash" value={formatINR(bill.cashAmount)} />
               <Row label="Online" value={formatINR(bill.onlineAmount)} />
-              <Row
-                label={
-                  bill.financeCompanyName
-                    ? `Finance · ${bill.financeCompanyName}`
-                    : "Finance"
-                }
-                value={formatINR(bill.financeAmount)}
-              />
+              {bill.financeAmount2 && bill.financeAmount2 > 0 ? (
+                <>
+                  <Row
+                    label={
+                      bill.financeCompanyName
+                        ? `Finance · ${bill.financeCompanyName}`
+                        : "Finance 1"
+                    }
+                    value={formatINR(
+                      Math.max(bill.financeAmount - bill.financeAmount2, 0),
+                    )}
+                  />
+                  <Row
+                    label={
+                      bill.financeCompanyName2
+                        ? `Finance · ${bill.financeCompanyName2}`
+                        : "Finance 2"
+                    }
+                    value={formatINR(bill.financeAmount2)}
+                  />
+                </>
+              ) : (
+                <Row
+                  label={
+                    bill.financeCompanyName
+                      ? `Finance · ${bill.financeCompanyName}`
+                      : "Finance"
+                  }
+                  value={formatINR(bill.financeAmount)}
+                />
+              )}
               {bill.financeAmount > 0 ? (
                 <Row
                   label="Finance status"
@@ -350,7 +373,9 @@ export function BillDetailPage() {
           {hasDue ? (
             <div className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-5 shadow-soft sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember-500">
-                {bill.isPartialPaid ? "Partial paid" : "Pending due"}
+                {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
+                  ? "Partial paid"
+                  : "Pending due"}
               </p>
               <p className="mt-2 font-display text-3xl font-semibold text-ember-500">
                 {formatINR(bill.dueAmount)}
@@ -361,6 +386,12 @@ export function BillDetailPage() {
                   ? format(new Date(bill.dueDate), "dd MMM yyyy")
                   : "Not set"}
               </p>
+              {(bill.duePayments?.length ?? 0) > 0 ? (
+                <DuePaymentHistory
+                  payments={bill.duePayments!}
+                  borderClass="border-orange-100"
+                />
+              ) : null}
               <button
                 type="button"
                 className="btn-primary mt-5 w-full"
@@ -379,8 +410,16 @@ export function BillDetailPage() {
                 Fully paid
               </p>
               <p className="mt-2 text-sm text-ink-500">
-                No pending amount on this invoice.
+                {bill.dueSettledAt
+                  ? `Settled on ${format(new Date(bill.dueSettledAt), "dd MMM yyyy")}`
+                  : "No pending amount on this invoice."}
               </p>
+              {(bill.duePayments?.length ?? 0) > 0 ? (
+                <DuePaymentHistory
+                  payments={bill.duePayments!}
+                  borderClass="border-tide-100"
+                />
+              ) : null}
             </div>
           )}
         </aside>
@@ -403,7 +442,10 @@ export function BillDetailPage() {
         {showFinanceConfirm && bill.financeAmount > 0 ? (
           <FinanceReceivedConfirmModal
             invoiceNumber={bill.invoiceNumber}
-            financeCompanyName={bill.financeCompanyName}
+            financeCompanyName={formatFinanceCompanies(
+              bill.financeCompanyName,
+              bill.financeCompanyName2,
+            )}
             amount={bill.financeAmount}
             saving={markingFinance}
             error={financeError}
@@ -499,6 +541,40 @@ export function BillDetailPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function DuePaymentHistory({
+  payments,
+  borderClass,
+}: {
+  payments: DuePayment[];
+  borderClass: string;
+}) {
+  return (
+    <div className={`mt-4 space-y-2 border-t pt-3 ${borderClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+        Payment history
+      </p>
+      <ul className="space-y-2">
+        {payments.map((payment) => (
+          <li key={payment.id} className="text-sm">
+            <p className="font-medium text-ink-800">
+              {formatINR(payment.amount)}
+              <span className="ml-1.5 text-xs font-normal text-ink-400">
+                {payment.kind === "full" ? "Full" : "Partial"}
+                {payment.method && payment.method !== "na"
+                  ? ` · ${payment.method === "cash" ? "Cash" : "Online"}`
+                  : ""}
+              </span>
+            </p>
+            <p className="text-xs text-ink-500">
+              {format(new Date(payment.paidAt), "dd MMM yyyy")}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
