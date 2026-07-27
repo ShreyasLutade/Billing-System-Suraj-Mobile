@@ -1,5 +1,11 @@
+import dns from "dns";
+import { lookup } from "dns/promises";
 import nodemailer from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import type { ReportScope } from "./reportExcel";
+
+// Prefer A records globally — Railway often cannot route to Gmail AAAA.
+dns.setDefaultResultOrder("ipv4first");
 
 export type ReportMailAttachment = {
   filename: string;
@@ -43,30 +49,39 @@ function envPort() {
   return Number.isFinite(raw) && raw > 0 ? raw : null;
 }
 
-function createTransportForPort(port: number) {
+async function resolveSmtpIpv4(hostname: string) {
+  const result = await lookup(hostname, { family: 4 });
+  return result.address;
+}
+
+async function createTransportForPort(port: number) {
   const { user, pass } = getReportMailConfig();
-  const host = cleanEnv(process.env.SMTP_HOST) || "smtp.gmail.com";
-  return nodemailer.createTransport({
-    host,
+  const hostname = cleanEnv(process.env.SMTP_HOST) || "smtp.gmail.com";
+  // Connect by IPv4 address so nodemailer cannot pick an unreachable AAAA.
+  const ipv4 = await resolveSmtpIpv4(hostname);
+  console.log(`[reports] SMTP DNS ${hostname} → ${ipv4} (IPv4)`);
+
+  const options: SMTPTransport.Options = {
+    host: ipv4,
     port,
     // 465 uses implicit TLS; 587 upgrades via STARTTLS.
     secure: port === 465,
     requireTLS: port !== 465,
     auth: { user, pass },
-    // Railway/containers often have broken or unreachable IPv6 routes.
-    // Gmail AAAA records then fail with ENETUNREACH — force IPv4.
-    family: 4,
     // Cloud hosts can be slow to open the socket; fail fast enough to retry
     // the alternate port instead of hanging the whole job.
     connectionTimeout: 20000,
     greetingTimeout: 20000,
     socketTimeout: 30000,
+    // Keep Gmail's hostname for EHLO + TLS cert verification.
+    name: hostname,
     tls: {
-      // Some PaaS middleboxes renegotiate TLS oddly; still verify certs.
       minVersion: "TLSv1.2",
-      servername: host,
+      servername: hostname,
     },
-  });
+  };
+
+  return nodemailer.createTransport(options);
 }
 
 function isConnectionError(error: unknown) {
@@ -83,6 +98,7 @@ function isConnectionError(error: unknown) {
     code === "EHOSTUNREACH" ||
     code === "ETLS" ||
     code === "EDNS" ||
+    code === "ENOTFOUND" ||
     message.includes("timeout") ||
     message.includes("timed out") ||
     message.includes("socket hang up") ||
@@ -121,7 +137,7 @@ async function sendWithFallback(
   let lastError: unknown = null;
   for (const port of candidatePorts()) {
     try {
-      const transporter = createTransportForPort(port);
+      const transporter = await createTransportForPort(port);
       const info = await transporter.sendMail(message);
       console.log(`[reports] SMTP OK on port ${port}`);
       return info;
@@ -158,7 +174,7 @@ export async function verifyReportSmtp() {
   let lastError: unknown = null;
   for (const port of candidatePorts()) {
     try {
-      const transporter = createTransportForPort(port);
+      const transporter = await createTransportForPort(port);
       await transporter.verify();
       console.log(
         `[reports] SMTP verified — ${user} → ${to} via port ${port}`,
