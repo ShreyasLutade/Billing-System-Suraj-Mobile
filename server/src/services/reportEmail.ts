@@ -53,6 +53,9 @@ function createTransportForPort(port: number) {
     secure: port === 465,
     requireTLS: port !== 465,
     auth: { user, pass },
+    // Railway/containers often have broken or unreachable IPv6 routes.
+    // Gmail AAAA records then fail with ENETUNREACH — force IPv4.
+    family: 4,
     // Cloud hosts can be slow to open the socket; fail fast enough to retry
     // the alternate port instead of hanging the whole job.
     connectionTimeout: 20000,
@@ -76,12 +79,15 @@ function isConnectionError(error: unknown) {
     code === "ESOCKET" ||
     code === "ECONNREFUSED" ||
     code === "ECONNRESET" ||
+    code === "ENETUNREACH" ||
+    code === "EHOSTUNREACH" ||
     code === "ETLS" ||
     code === "EDNS" ||
     message.includes("timeout") ||
     message.includes("timed out") ||
     message.includes("socket hang up") ||
-    message.includes("connection closed")
+    message.includes("connection closed") ||
+    message.includes("network is unreachable")
   );
 }
 
