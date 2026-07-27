@@ -144,7 +144,7 @@ export function startDailyReportScheduler() {
 
   const enabled =
     (process.env.REPORT_CRON_ENABLED || "true").toLowerCase() !== "false";
-  const { configured, to, user } = getReportMailConfig();
+  const { configured, to, user, provider, from } = getReportMailConfig();
 
   if (!enabled) {
     console.log("[reports] Cron disabled (REPORT_CRON_ENABLED=false)");
@@ -153,7 +153,7 @@ export function startDailyReportScheduler() {
 
   if (!configured) {
     console.warn(
-      "[reports] Cron not started — set SMTP_USER, SMTP_PASS, REPORT_EMAIL_TO on Railway Variables",
+      "[reports] Cron not started — set REPORT_EMAIL_TO and RESEND_API_KEY (Railway) or SMTP_USER + SMTP_PASS",
     );
     return;
   }
@@ -175,7 +175,10 @@ export function startDailyReportScheduler() {
   );
 
   console.log(
-    `[reports] Scheduler active — ${expression} (${IST_TIMEZONE}) → ${to} (from ${user})`,
+    `[reports] Scheduler active — ${expression} (${IST_TIMEZONE}) → ${to} via ${provider}`,
+  );
+  console.log(
+    `[reports] From ${from}${provider === "smtp" ? ` (SMTP user ${user})` : ""}`,
   );
   console.log(
     "[reports] Daily: today's bills · Sunday: today's bills + full backup",

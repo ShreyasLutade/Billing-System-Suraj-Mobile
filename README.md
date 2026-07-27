@@ -84,35 +84,44 @@ Edit in `server/.env`:
 - `SHOP_PHONE`
 - `SHOP_GSTIN`
 
-## Automatic Excel email (Gmail SMTP)
+## Automatic Excel email
 
 Nightly Excel reports are emailed at **11:00 PM IST** (`REPORT_CRON`). Sundays also send a full backup.
+
+### Railway (recommended): Resend HTTPS
+
+Railway typically **blocks outbound SMTP** (ports 465/587 time out). Use [Resend](https://resend.com) over HTTPS instead:
+
+1. Create a free account at https://resend.com  
+2. Create an API key  
+3. Set Railway variables:
+
+```env
+REPORT_EMAIL_TO=surajmobile33556@gmail.com
+RESEND_API_KEY=re_xxxxxxxx
+REPORT_CRON=0 23 * * *
+REPORT_CRON_ENABLED=true
+REPORT_CRON_SECRET=long-random-cron-secret
+```
+
+Optional: `RESEND_FROM="Suraj Mobile Reports <onboarding@resend.dev>"`  
+(After you verify your own domain in Resend, use that address as `RESEND_FROM`.)
+
+### Local: Gmail SMTP
+
+On your PC, Gmail SMTP still works:
 
 ```env
 SMTP_USER=surajmobilereports@gmail.com
 SMTP_PASS=your-gmail-app-password
 REPORT_EMAIL_TO=surajmobile33556@gmail.com
 SMTP_PORT=587
-REPORT_CRON=0 23 * * *
-REPORT_CRON_ENABLED=true
-REPORT_CRON_SECRET=long-random-cron-secret
 ```
 
-Admin can also trigger manually: `POST /api/reports/send` with `{ "scope": "today" }` or `{ "scope": "all" }` (add `"force": true` to resend the same day).
+Admin can trigger manually: `POST /api/reports/send` with `{ "scope": "today" }` or `{ "scope": "all" }` (add `"force": true` to resend).
 
-### Railway notes
+### Railway Cron Job (optional but reliable)
 
-In-process `node-cron` can miss the window if the service restarts around 11 PM. The app also:
-
-1. Prefers **SMTP port 587** in production (Railway often blocks 465)
-2. Verifies SMTP on boot (check deploy logs for `[reports] SMTP verified`)
-3. Catches up the same IST day if the cron time already passed and mail was not sent
-4. Exposes `POST /api/reports/cron/run` for a **Railway Cron Job** (recommended)
-
-Railway Variables to set: `SMTP_USER`, `SMTP_PASS`, `REPORT_EMAIL_TO`, `SMTP_PORT=587`, `REPORT_CRON_SECRET`.
-
-Railway Cron Job example:
-
-- Schedule: `30 17 * * *` (17:30 UTC ≈ 23:00 IST) — or use Asia/Kolkata if your cron UI supports timezones
-- Request: `POST https://YOUR_APP.up.railway.app/api/reports/cron/run`
+- Schedule: `30 17 * * *` UTC (≈ 11:00 PM IST) or Asia/Kolkata if supported  
+- `POST https://YOUR_APP.up.railway.app/api/reports/cron/run`  
 - Header: `Authorization: Bearer <REPORT_CRON_SECRET>`

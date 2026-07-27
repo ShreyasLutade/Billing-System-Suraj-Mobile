@@ -15,6 +15,8 @@ export type ReportMailAttachment = {
   dateLabel: string;
 };
 
+type MailProvider = "resend" | "smtp";
+
 /** Strip accidental wrapping quotes from Railway / copied env values. */
 function cleanEnv(value: string | undefined) {
   const trimmed = (value || "").trim();
@@ -27,7 +29,11 @@ function cleanEnv(value: string | undefined) {
   return trimmed;
 }
 
-function smtpConfigured() {
+function resendApiKey() {
+  return cleanEnv(process.env.RESEND_API_KEY);
+}
+
+function smtpReady() {
   return Boolean(
     cleanEnv(process.env.SMTP_USER) &&
       cleanEnv(process.env.SMTP_PASS) &&
@@ -35,13 +41,36 @@ function smtpConfigured() {
   );
 }
 
+function emailProvider(): MailProvider | null {
+  const to = cleanEnv(process.env.REPORT_EMAIL_TO);
+  if (!to) return null;
+  // Prefer Resend on Railway — outbound SMTP (465/587) is often firewalled.
+  if (resendApiKey()) return "resend";
+  if (smtpReady()) return "smtp";
+  return null;
+}
+
 export function getReportMailConfig() {
   const user = cleanEnv(process.env.SMTP_USER);
   const pass = cleanEnv(process.env.SMTP_PASS).replace(/\s+/g, "");
   const to = cleanEnv(process.env.REPORT_EMAIL_TO);
+  const provider = emailProvider();
+  const shop = process.env.SHOP_NAME || "Suraj Mobile";
   const from =
-    cleanEnv(process.env.SMTP_FROM) || `"Suraj Mobile Reports" <${user}>`;
-  return { user, pass, to, from, configured: smtpConfigured() };
+    cleanEnv(process.env.RESEND_FROM) ||
+    cleanEnv(process.env.SMTP_FROM) ||
+    (provider === "resend"
+      ? `${shop} Reports <onboarding@resend.dev>`
+      : `"${shop} Reports" <${user}>`);
+
+  return {
+    user,
+    pass,
+    to,
+    from,
+    provider,
+    configured: provider !== null,
+  };
 }
 
 function envPort() {
@@ -68,12 +97,9 @@ async function createTransportForPort(port: number) {
     secure: port === 465,
     requireTLS: port !== 465,
     auth: { user, pass },
-    // Cloud hosts can be slow to open the socket; fail fast enough to retry
-    // the alternate port instead of hanging the whole job.
     connectionTimeout: 20000,
     greetingTimeout: 20000,
     socketTimeout: 30000,
-    // Keep Gmail's hostname for EHLO + TLS cert verification.
     name: hostname,
     tls: {
       minVersion: "TLSv1.2",
@@ -109,8 +135,6 @@ function isConnectionError(error: unknown) {
 
 function candidatePorts() {
   const configured = envPort();
-  // Railway / many PaaS hosts block outbound 465. Prefer 587 in production
-  // unless SMTP_PORT is explicitly set.
   const prefer587 =
     !configured &&
     (process.env.NODE_ENV === "production" ||
@@ -126,14 +150,9 @@ function candidatePorts() {
   return order;
 }
 
-async function sendWithFallback(
+async function sendWithSmtp(
   message: Parameters<nodemailer.Transporter["sendMail"]>[0],
 ) {
-  const { configured } = getReportMailConfig();
-  if (!configured) {
-    throw new Error("SMTP is not configured");
-  }
-
   let lastError: unknown = null;
   for (const port of candidatePorts()) {
     try {
@@ -156,19 +175,81 @@ async function sendWithFallback(
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Failed to connect to SMTP server");
+  const hint =
+    " Railway often blocks outbound SMTP. Set RESEND_API_KEY and send via HTTPS instead (see README).";
+  const base =
+    lastError instanceof Error
+      ? lastError
+      : new Error("Failed to connect to SMTP server");
+  throw new Error(`${base.message}.${hint}`);
 }
 
-/** Probe SMTP at boot so Railway logs show clear config/auth status. */
+async function sendWithResend(input: {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  filename: string;
+  buffer: Buffer;
+}) {
+  const apiKey = resendApiKey();
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is not set");
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: input.from,
+      to: [input.to],
+      subject: input.subject,
+      text: input.text,
+      attachments: [
+        {
+          filename: input.filename,
+          content: input.buffer.toString("base64"),
+        },
+      ],
+    }),
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    id?: string;
+    message?: string;
+    name?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(
+      payload.message ||
+        payload.name ||
+        `Resend API failed with status ${response.status}`,
+    );
+  }
+
+  console.log(`[reports] Resend OK — id ${payload.id || "unknown"}`);
+  return { messageId: payload.id || `resend-${Date.now()}` };
+}
+
+/** Probe mail provider at boot so Railway logs show clear status. */
 export async function verifyReportSmtp() {
-  const { configured, user, to } = getReportMailConfig();
+  const { configured, provider, user, to, from } = getReportMailConfig();
   if (!configured) {
     console.warn(
-      "[reports] SMTP not configured — set SMTP_USER, SMTP_PASS, REPORT_EMAIL_TO",
+      "[reports] Email not configured — set REPORT_EMAIL_TO and either RESEND_API_KEY (recommended on Railway) or SMTP_USER + SMTP_PASS",
     );
     return false;
+  }
+
+  if (provider === "resend") {
+    console.log(
+      `[reports] Using Resend HTTPS API → ${to} (from ${from})`,
+    );
+    return true;
   }
 
   let lastError: unknown = null;
@@ -201,14 +282,17 @@ export async function verifyReportSmtp() {
     "[reports] SMTP verify failed on all ports:",
     lastError instanceof Error ? lastError.message : lastError,
   );
+  console.error(
+    "[reports] Tip: Railway blocks SMTP. Create a free Resend key at https://resend.com and set RESEND_API_KEY.",
+  );
   return false;
 }
 
 export async function sendReportEmail(report: ReportMailAttachment) {
-  const { to, from, configured } = getReportMailConfig();
-  if (!configured) {
+  const { to, from, configured, provider } = getReportMailConfig();
+  if (!configured || !provider) {
     throw new Error(
-      "Email reports are not configured. Set SMTP_USER, SMTP_PASS, REPORT_EMAIL_TO.",
+      "Email reports are not configured. Set REPORT_EMAIL_TO and either RESEND_API_KEY or SMTP_USER/SMTP_PASS.",
     );
   }
 
@@ -233,7 +317,19 @@ export async function sendReportEmail(report: ReportMailAttachment) {
     `— ${shop} Billing System`,
   ].join("\n");
 
-  const info = await sendWithFallback({
+  if (provider === "resend") {
+    const info = await sendWithResend({
+      from,
+      to,
+      subject,
+      text: body,
+      filename: report.filename,
+      buffer: report.buffer,
+    });
+    return { messageId: info.messageId, to, subject };
+  }
+
+  const info = await sendWithSmtp({
     from,
     to,
     subject,
