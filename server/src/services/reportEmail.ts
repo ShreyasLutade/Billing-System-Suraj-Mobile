@@ -224,11 +224,16 @@ async function sendWithResend(input: {
   };
 
   if (!response.ok) {
-    throw new Error(
+    const apiMessage =
       payload.message ||
-        payload.name ||
-        `Resend API failed with status ${response.status}`,
-    );
+      payload.name ||
+      `Resend API failed with status ${response.status}`;
+    if (apiMessage.includes("only send testing emails")) {
+      throw new Error(
+        `${apiMessage} — Set REPORT_EMAIL_TO on Railway to the same email as your Resend account (currently sending to "${input.to}").`,
+      );
+    }
+    throw new Error(apiMessage);
   }
 
   console.log(`[reports] Resend OK — id ${payload.id || "unknown"}`);
@@ -247,7 +252,10 @@ export async function verifyReportSmtp() {
 
   if (provider === "resend") {
     console.log(
-      `[reports] Using Resend HTTPS API → ${to} (from ${from})`,
+      `[reports] Using Resend HTTPS API — recipient: ${to} (from ${from})`,
+    );
+    console.log(
+      "[reports] Resend testing mode: REPORT_EMAIL_TO must match your Resend signup email exactly.",
     );
     return true;
   }
