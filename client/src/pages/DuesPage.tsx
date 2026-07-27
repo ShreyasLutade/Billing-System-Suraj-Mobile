@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { AnimatePresence } from "framer-motion";
@@ -10,13 +10,41 @@ import {
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from "../components/ui";
-import { api, formatINR } from "../lib/api";
+import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import type {
   DueItem,
   DuesSummary,
   FinanceDueItem,
   FinanceDuesSummary,
 } from "../types";
+
+function financeTotalsByCompany(dues: FinanceDueItem[]) {
+  const totals = new Map<string, number>();
+
+  for (const due of dues) {
+    const amount2 = due.financeAmount2 || 0;
+    const amount1 = round2(Math.max((due.financeAmount || 0) - amount2, 0));
+    const name1 = due.financeCompanyName?.trim();
+    const name2 = due.financeCompanyName2?.trim();
+
+    if (name1 && amount1 > 0) {
+      totals.set(name1, round2((totals.get(name1) || 0) + amount1));
+    }
+    if (name2 && amount2 > 0) {
+      totals.set(name2, round2((totals.get(name2) || 0) + amount2));
+    }
+    if (!name1 && !name2 && due.financeAmount > 0) {
+      totals.set(
+        "Unknown company",
+        round2((totals.get("Unknown company") || 0) + due.financeAmount),
+      );
+    }
+  }
+
+  return [...totals.entries()]
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+}
 
 export function DuesPage() {
   const [tab, setTab] = useState<"customer" | "finance">("customer");
@@ -91,12 +119,17 @@ export function DuesPage() {
         due.customerName.toLowerCase().includes(q) ||
         due.customerPhone.includes(q) ||
         due.financeCompanyName?.toLowerCase().includes(q) ||
+        due.financeCompanyName2?.toLowerCase().includes(q) ||
         due.imeiNumbers?.some((imei) => imei.toLowerCase().includes(q))
       );
     }) || [];
   const filteredFinanceTotal = filteredFinanceDues.reduce(
     (sum, due) => sum + due.financeAmount,
     0,
+  );
+  const financeCompanyTotals = useMemo(
+    () => financeTotalsByCompany(filteredFinanceDues),
+    [filteredFinanceDues],
   );
 
   async function markFinanceReceived(due: FinanceDueItem) {
@@ -291,6 +324,29 @@ export function DuesPage() {
             />
           </div>
 
+          {financeCompanyTotals.length > 0 ? (
+            <div className="mb-6">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
+                Remaining by company
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {financeCompanyTotals.map((company) => (
+                  <div
+                    key={company.name}
+                    className="rounded-2xl border border-ink-100 bg-white/80 px-4 py-3"
+                  >
+                    <p className="truncate text-sm font-medium text-ink-700">
+                      {company.name}
+                    </p>
+                    <p className="mt-1 font-display text-xl font-semibold text-ember-500">
+                      {formatINR(company.amount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {filteredFinanceDues.length === 0 ? (
             <EmptyState
               title={
@@ -317,7 +373,10 @@ export function DuesPage() {
                         {due.invoiceNumber}
                       </Link>
                       <h3 className="mt-1 font-display text-xl font-semibold text-ink-900">
-                        {due.financeCompanyName || "Finance company"}
+                        {formatFinanceCompanies(
+                          due.financeCompanyName,
+                          due.financeCompanyName2,
+                        ) || "Finance company"}
                       </h3>
                       <p className="mt-1 text-sm text-ink-500">
                         {due.customerName} · {due.customerPhone}
@@ -364,7 +423,12 @@ export function DuesPage() {
         {selectedFinanceDue ? (
           <FinanceReceivedConfirmModal
             invoiceNumber={selectedFinanceDue.invoiceNumber}
-            financeCompanyName={selectedFinanceDue.financeCompanyName}
+            financeCompanyName={
+              formatFinanceCompanies(
+                selectedFinanceDue.financeCompanyName,
+                selectedFinanceDue.financeCompanyName2,
+              ) || selectedFinanceDue.financeCompanyName
+            }
             amount={selectedFinanceDue.financeAmount}
             saving={receivingId === selectedFinanceDue.id}
             error={error}

@@ -10,6 +10,7 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   required?: boolean;
+  excludeIds?: string[];
 };
 
 export function FinanceCompanyPicker({
@@ -17,10 +18,15 @@ export function FinanceCompanyPicker({
   value,
   onChange,
   required,
+  excludeIds = [],
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+
+  const visibleCompanies = companies.filter(
+    (company) => !excludeIds.includes(company.id) || company.id === value,
+  );
 
   const selectedLabel =
     value === ADD_NEW_FINANCE
@@ -63,7 +69,7 @@ export function FinanceCompanyPicker({
         onChange={(e) => onChange(e.target.value)}
       >
         <option value="">Select finance company</option>
-        {companies.map((company) => (
+        {visibleCompanies.map((company) => (
           <option key={company.id} value={company.id}>
             {company.name}
           </option>
@@ -108,7 +114,7 @@ export function FinanceCompanyPicker({
                   setOpen(false);
                 }}
               />
-              {companies.map((company) => (
+              {visibleCompanies.map((company) => (
                 <PickerOption
                   key={company.id}
                   active={value === company.id}

@@ -9,32 +9,43 @@ export type ReportMailAttachment = {
   dateLabel: string;
 };
 
+/** Strip accidental wrapping quotes from Railway / copied env values. */
+function cleanEnv(value: string | undefined) {
+  const trimmed = (value || "").trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 function smtpConfigured() {
   return Boolean(
-    process.env.SMTP_USER?.trim() &&
-      process.env.SMTP_PASS?.trim() &&
-      process.env.REPORT_EMAIL_TO?.trim(),
+    cleanEnv(process.env.SMTP_USER) &&
+      cleanEnv(process.env.SMTP_PASS) &&
+      cleanEnv(process.env.REPORT_EMAIL_TO),
   );
 }
 
 export function getReportMailConfig() {
-  const user = process.env.SMTP_USER?.trim() || "";
-  const pass = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
-  const to = process.env.REPORT_EMAIL_TO?.trim() || "";
+  const user = cleanEnv(process.env.SMTP_USER);
+  const pass = cleanEnv(process.env.SMTP_PASS).replace(/\s+/g, "");
+  const to = cleanEnv(process.env.REPORT_EMAIL_TO);
   const from =
-    process.env.SMTP_FROM?.trim() ||
-    `"Suraj Mobile Reports" <${user}>`;
+    cleanEnv(process.env.SMTP_FROM) || `"Suraj Mobile Reports" <${user}>`;
   return { user, pass, to, from, configured: smtpConfigured() };
 }
 
 function envPort() {
-  const raw = Number(process.env.SMTP_PORT);
+  const raw = Number(cleanEnv(process.env.SMTP_PORT));
   return Number.isFinite(raw) && raw > 0 ? raw : null;
 }
 
 function createTransportForPort(port: number) {
   const { user, pass } = getReportMailConfig();
-  const host = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
+  const host = cleanEnv(process.env.SMTP_HOST) || "smtp.gmail.com";
   return nodemailer.createTransport({
     host,
     port,
@@ -47,24 +58,46 @@ function createTransportForPort(port: number) {
     connectionTimeout: 20000,
     greetingTimeout: 20000,
     socketTimeout: 30000,
+    tls: {
+      // Some PaaS middleboxes renegotiate TLS oddly; still verify certs.
+      minVersion: "TLSv1.2",
+      servername: host,
+    },
   });
 }
 
 function isConnectionError(error: unknown) {
-  const code = (error as { code?: string } | null)?.code;
+  const err = error as { code?: string; message?: string } | null;
+  const code = err?.code || "";
+  const message = (err?.message || "").toLowerCase();
   return (
     code === "ETIMEDOUT" ||
     code === "ECONNECTION" ||
     code === "ESOCKET" ||
-    code === "ECONNREFUSED"
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ETLS" ||
+    code === "EDNS" ||
+    message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("socket hang up") ||
+    message.includes("connection closed")
   );
 }
 
 function candidatePorts() {
   const configured = envPort();
-  // Try the configured/default port first, then fall back to the other common
-  // Gmail submission port (some hosts block 465, others block 587).
-  const order = configured ? [configured] : [465, 587];
+  // Railway / many PaaS hosts block outbound 465. Prefer 587 in production
+  // unless SMTP_PORT is explicitly set.
+  const prefer587 =
+    !configured &&
+    (process.env.NODE_ENV === "production" ||
+      Boolean(process.env.RAILWAY_ENVIRONMENT));
+  const order = configured
+    ? [configured]
+    : prefer587
+      ? [587, 465]
+      : [465, 587];
   for (const port of [465, 587]) {
     if (!order.includes(port)) order.push(port);
   }
@@ -83,15 +116,20 @@ async function sendWithFallback(
   for (const port of candidatePorts()) {
     try {
       const transporter = createTransportForPort(port);
-      return await transporter.sendMail(message);
+      const info = await transporter.sendMail(message);
+      console.log(`[reports] SMTP OK on port ${port}`);
+      return info;
     } catch (error) {
       lastError = error;
+      const code = (error as { code?: string } | null)?.code || "unknown";
+      const msg = error instanceof Error ? error.message : String(error);
       if (isConnectionError(error)) {
         console.warn(
-          `[reports] SMTP port ${port} failed (${(error as { code?: string }).code}); trying next port…`,
+          `[reports] SMTP port ${port} failed (${code}: ${msg}); trying next port…`,
         );
         continue;
       }
+      console.error(`[reports] SMTP port ${port} rejected mail (${code}): ${msg}`);
       throw error;
     }
   }
@@ -99,6 +137,49 @@ async function sendWithFallback(
   throw lastError instanceof Error
     ? lastError
     : new Error("Failed to connect to SMTP server");
+}
+
+/** Probe SMTP at boot so Railway logs show clear config/auth status. */
+export async function verifyReportSmtp() {
+  const { configured, user, to } = getReportMailConfig();
+  if (!configured) {
+    console.warn(
+      "[reports] SMTP not configured — set SMTP_USER, SMTP_PASS, REPORT_EMAIL_TO",
+    );
+    return false;
+  }
+
+  let lastError: unknown = null;
+  for (const port of candidatePorts()) {
+    try {
+      const transporter = createTransportForPort(port);
+      await transporter.verify();
+      console.log(
+        `[reports] SMTP verified — ${user} → ${to} via port ${port}`,
+      );
+      return true;
+    } catch (error) {
+      lastError = error;
+      const code = (error as { code?: string } | null)?.code || "unknown";
+      const msg = error instanceof Error ? error.message : String(error);
+      if (isConnectionError(error)) {
+        console.warn(
+          `[reports] SMTP verify port ${port} failed (${code}); trying next…`,
+        );
+        continue;
+      }
+      console.error(
+        `[reports] SMTP verify failed on port ${port} (${code}): ${msg}`,
+      );
+      return false;
+    }
+  }
+
+  console.error(
+    "[reports] SMTP verify failed on all ports:",
+    lastError instanceof Error ? lastError.message : lastError,
+  );
+  return false;
 }
 
 export async function sendReportEmail(report: ReportMailAttachment) {

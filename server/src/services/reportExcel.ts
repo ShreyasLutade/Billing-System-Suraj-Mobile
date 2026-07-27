@@ -71,7 +71,9 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
       cashAmount: money(bill.cashAmount),
       onlineAmount: money(bill.onlineAmount),
       financeAmount: money(bill.financeAmount),
-      financeCompanyName: bill.financeCompanyName || "",
+      financeCompanyName: [bill.financeCompanyName, bill.financeCompanyName2]
+        .filter(Boolean)
+        .join(" + "),
       financeReceived: bill.financeReceived ? "Yes" : "No",
       financeReceivedAt: formatISTDateTime(bill.financeReceivedAt),
       dueAmount: money(bill.dueAmount),
@@ -235,7 +237,9 @@ async function addFinanceDuesSheet(wb: ExcelJS.Workbook) {
     sheet.addRow({
       invoiceNumber: bill.invoiceNumber,
       billDate: formatISTDate(bill.billDate),
-      financeCompanyName: bill.financeCompanyName || "",
+      financeCompanyName: [bill.financeCompanyName, bill.financeCompanyName2]
+        .filter(Boolean)
+        .join(" + "),
       customerName: bill.customerName,
       customerPhone: bill.customerPhone,
       financeAmount: money(bill.financeAmount),

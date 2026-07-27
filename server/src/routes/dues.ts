@@ -101,6 +101,8 @@ duesRouter.get("/finance", async (_req, res, next) => {
         customerPhone: true,
         financeAmount: true,
         financeCompanyName: true,
+        financeAmount2: true,
+        financeCompanyName2: true,
         financeReceived: true,
         financeReceivedAt: true,
         items: {
@@ -262,13 +264,14 @@ duesRouter.patch("/:id/settle", async (req, res, next) => {
       }
     }
 
+    const paidAt = new Date();
     const updated = await prisma.bill.update({
       where: { id: bill.id },
       data: {
         dueAmount: isFull ? 0 : remaining,
         dueSettled: isFull,
         dueSettledMethod: method,
-        dueSettledAt: new Date(),
+        dueSettledAt: paidAt,
         isPartialPaid: isFull ? false : true,
         dueDate: isFull
           ? bill.dueDate
@@ -281,8 +284,19 @@ duesRouter.patch("/:id/settle", async (req, res, next) => {
           method === "online"
             ? Number((bill.onlineAmount + paidAmount).toFixed(2))
             : bill.onlineAmount,
+        duePayments: {
+          create: {
+            amount: paidAmount,
+            method,
+            kind: isFull ? "full" : "partial",
+            paidAt,
+          },
+        },
       },
-      include: { items: true },
+      include: {
+        items: true,
+        duePayments: { orderBy: { paidAt: "asc" } },
+      },
     });
 
     res.json({
@@ -295,6 +309,10 @@ duesRouter.patch("/:id/settle", async (req, res, next) => {
           : null,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
+        duePayments: updated.duePayments.map((payment) => ({
+          ...payment,
+          paidAt: payment.paidAt.toISOString(),
+        })),
       },
     });
   } catch (error) {

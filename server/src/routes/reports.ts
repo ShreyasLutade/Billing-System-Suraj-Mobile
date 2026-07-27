@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { runBillingReport } from "../services/dailyReports";
+import { runBillingReport, runScheduledReports } from "../services/dailyReports";
+import { getReportMailConfig } from "../services/reportEmail";
 
 export const reportsRouter = Router();
 
 const sendSchema = z.object({
   scope: z.enum(["today", "all"]).default("today"),
+  force: z.boolean().optional().default(false),
 });
 
 reportsRouter.post("/send", async (req, res, next) => {
@@ -19,9 +21,26 @@ reportsRouter.post("/send", async (req, res, next) => {
       return;
     }
 
-    const { report, mail } = await runBillingReport(parsed.data.scope);
+    const { report, mail, skipped, dateKey } = await runBillingReport(
+      parsed.data.scope,
+      { force: parsed.data.force },
+    );
+
+    if (skipped || !report || !mail) {
+      res.json({
+        data: {
+          skipped: true,
+          scope: parsed.data.scope,
+          dateKey,
+          message: `Report already sent for ${dateKey} (IST). Pass force:true to resend.`,
+        },
+      });
+      return;
+    }
+
     res.json({
       data: {
+        skipped: false,
         scope: report.scope,
         filename: report.filename,
         billCount: report.billCount,
@@ -29,6 +48,81 @@ reportsRouter.post("/send", async (req, res, next) => {
         emailedTo: mail.to,
         subject: mail.subject,
         messageId: mail.messageId,
+        dateKey,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Railway Cron / external scheduler endpoint.
+ * Auth: Authorization: Bearer <REPORT_CRON_SECRET> or x-cron-secret header.
+ * Mounted without JWT so Railway Cron Jobs can call it.
+ */
+export const reportsCronRouter = Router();
+
+function cronSecretOk(req: { headers: Record<string, unknown> }) {
+  const expected = (process.env.REPORT_CRON_SECRET || "").trim();
+  if (!expected) return false;
+  const header =
+    (typeof req.headers["x-cron-secret"] === "string"
+      ? req.headers["x-cron-secret"]
+      : "") || "";
+  const auth =
+    typeof req.headers.authorization === "string"
+      ? req.headers.authorization
+      : "";
+  const bearer = auth.toLowerCase().startsWith("bearer ")
+    ? auth.slice(7).trim()
+    : "";
+  return header === expected || bearer === expected;
+}
+
+reportsCronRouter.post("/run", async (req, res, next) => {
+  try {
+    if (!cronSecretOk(req)) {
+      res.status(401).json({
+        error:
+          "Unauthorized. Set REPORT_CRON_SECRET and pass it as Bearer token or x-cron-secret header.",
+      });
+      return;
+    }
+
+    const { configured } = getReportMailConfig();
+    if (!configured) {
+      res.status(503).json({
+        error: "SMTP is not configured on this deployment",
+      });
+      return;
+    }
+
+    const force =
+      req.body?.force === true ||
+      req.query.force === "1" ||
+      req.query.force === "true";
+
+    const results = await runScheduledReports({ force });
+    res.json({
+      data: {
+        ok: true,
+        today: results.today
+          ? {
+              skipped: results.today.skipped,
+              dateKey: results.today.dateKey,
+              billCount: results.today.report?.billCount ?? null,
+              emailedTo: results.today.mail?.to ?? null,
+            }
+          : null,
+        sundayFull: results.all
+          ? {
+              skipped: results.all.skipped,
+              dateKey: results.all.dateKey,
+              billCount: results.all.report?.billCount ?? null,
+              emailedTo: results.all.mail?.to ?? null,
+            }
+          : null,
       },
     });
   } catch (error) {

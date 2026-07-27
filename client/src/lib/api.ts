@@ -166,6 +166,13 @@ export function formatINR(amount: number) {
   }).format(amount || 0);
 }
 
+export function formatFinanceCompanies(
+  name1?: string | null,
+  name2?: string | null,
+) {
+  return [name1, name2].map((n) => n?.trim()).filter(Boolean).join(" + ");
+}
+
 export function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }

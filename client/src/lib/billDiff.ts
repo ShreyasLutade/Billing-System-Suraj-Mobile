@@ -24,6 +24,9 @@ export type BillSnapshot = {
   financeAmount: number;
   financeCompanyId: string;
   financeCompanyName: string;
+  financeAmount2: number;
+  financeCompanyId2: string;
+  financeCompanyName2: string;
   isExchange: boolean;
   exchangeModel: string;
   exchangeImei1: string;
@@ -124,6 +127,9 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     financeAmount: bill.financeAmount,
     financeCompanyId: bill.financeCompanyId || "",
     financeCompanyName: bill.financeCompanyName || "",
+    financeAmount2: bill.financeAmount2 || 0,
+    financeCompanyId2: bill.financeCompanyId2 || "",
+    financeCompanyName2: bill.financeCompanyName2 || "",
     isExchange: bill.isExchange,
     exchangeModel: bill.exchangeModel || "",
     exchangeImei1: bill.exchangeImei1 || "",
@@ -169,9 +175,14 @@ export function payloadToSnapshot(
     useFinance: payload.useFinance,
     cashAmount: payload.useCash ? payload.cashAmount : 0,
     onlineAmount: payload.useOnline ? payload.onlineAmount : 0,
-    financeAmount: payload.useFinance ? payload.financeAmount : 0,
+    financeAmount: payload.useFinance
+      ? (payload.financeAmount || 0) + (payload.financeAmount2 || 0)
+      : 0,
     financeCompanyId: payload.financeCompanyId || "",
     financeCompanyName: payload.financeCompanyName || "",
+    financeAmount2: payload.useFinance ? payload.financeAmount2 || 0 : 0,
+    financeCompanyId2: payload.financeCompanyId2 || "",
+    financeCompanyName2: payload.financeCompanyName2 || "",
     isExchange: Boolean(payload.isExchange),
     exchangeModel: payload.exchangeModel || "",
     exchangeImei1: payload.exchangeImei1 || "",
@@ -235,6 +246,18 @@ export function diffBillSnapshots(
     "Finance company",
     display(before.financeCompanyName),
     display(after.financeCompanyName),
+  );
+  pushChange(
+    lines,
+    "Finance 2",
+    money(before.financeAmount2),
+    money(after.financeAmount2),
+  );
+  pushChange(
+    lines,
+    "Finance company 2",
+    display(before.financeCompanyName2),
+    display(after.financeCompanyName2),
   );
   pushChange(lines, "Due amount", money(before.dueAmount), money(after.dueAmount));
   pushChange(

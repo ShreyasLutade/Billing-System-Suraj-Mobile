@@ -37,10 +37,19 @@ function serializeBill<
     updatedAt: Date;
     dueSettledAt?: Date | null;
     financeReceivedAt?: Date | null;
+    duePayments?: Array<{
+      id: string;
+      amount: number;
+      method: string;
+      kind: string;
+      paidAt: Date;
+      note?: string | null;
+    }>;
   },
 >(bill: T) {
+  const { duePayments, ...rest } = bill;
   return {
-    ...bill,
+    ...rest,
     billDate: bill.billDate.toISOString(),
     dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
     dueSettledAt: bill.dueSettledAt ? bill.dueSettledAt.toISOString() : null,
@@ -49,8 +58,21 @@ function serializeBill<
       : null,
     createdAt: bill.createdAt.toISOString(),
     updatedAt: bill.updatedAt.toISOString(),
+    duePayments: (duePayments || []).map((payment) => ({
+      id: payment.id,
+      amount: payment.amount,
+      method: payment.method,
+      kind: payment.kind,
+      paidAt: payment.paidAt.toISOString(),
+      note: payment.note ?? null,
+    })),
   };
 }
+
+const billDetailInclude = {
+  items: true,
+  duePayments: { orderBy: { paidAt: "asc" as const } },
+} satisfies Prisma.BillInclude;
 
 billsRouter.get("/", async (req, res, next) => {
   try {
@@ -77,7 +99,7 @@ billsRouter.get("/:id", async (req, res, next) => {
   try {
     const bill = await prisma.bill.findUnique({
       where: { id: req.params.id },
-      include: { items: true },
+      include: billDetailInclude,
     });
     if (!bill) {
       res.status(404).json({ error: "Bill not found" });
@@ -108,6 +130,8 @@ billsRouter.post("/", async (req, res, next) => {
 
       let financeCompanyId: string | null = null;
       let financeCompanyName: string | null = null;
+      let financeCompanyId2: string | null = null;
+      let financeCompanyName2: string | null = null;
 
       if (input.useFinance) {
         if (input.financeCompanyId) {
@@ -129,6 +153,28 @@ billsRouter.post("/", async (req, res, next) => {
           financeCompanyId = company.id;
           financeCompanyName = company.name;
         }
+
+        if (totals.financeAmount2 > 0) {
+          if (input.financeCompanyId2) {
+            const company = await tx.financeCompany.findUnique({
+              where: { id: input.financeCompanyId2 },
+            });
+            if (!company) {
+              throw new Error("FINANCE_COMPANY_NOT_FOUND");
+            }
+            financeCompanyId2 = company.id;
+            financeCompanyName2 = company.name;
+          } else if (input.financeCompanyName2?.trim()) {
+            const name = input.financeCompanyName2.trim().replace(/\s+/g, " ");
+            const company = await tx.financeCompany.upsert({
+              where: { name },
+              create: { name },
+              update: {},
+            });
+            financeCompanyId2 = company.id;
+            financeCompanyName2 = company.name;
+          }
+        }
       }
 
       return tx.bill.create({
@@ -146,6 +192,7 @@ billsRouter.post("/", async (req, res, next) => {
           cashAmount: totals.cashAmount,
           onlineAmount: totals.onlineAmount,
           financeAmount: totals.financeAmount,
+          financeAmount2: totals.financeAmount2,
           // Use relation connect — avoids Prisma validation errors when the
           // generated client is briefly out of sync with scalar FK fields.
           ...(financeCompanyId
@@ -154,6 +201,8 @@ billsRouter.post("/", async (req, res, next) => {
                 financeCompanyName,
               }
             : { financeCompanyName: null }),
+          financeCompanyId2,
+          financeCompanyName2,
           isExchange: Boolean(input.isExchange),
           exchangeModel: input.isExchange
             ? input.exchangeModel?.trim() || null
@@ -240,6 +289,8 @@ billsRouter.put("/:id", async (req, res, next) => {
     const bill = await prisma.$transaction(async (tx) => {
       let financeCompanyId: string | null = null;
       let financeCompanyName: string | null = null;
+      let financeCompanyId2: string | null = null;
+      let financeCompanyName2: string | null = null;
 
       if (input.useFinance) {
         if (input.financeCompanyId) {
@@ -261,13 +312,37 @@ billsRouter.put("/:id", async (req, res, next) => {
           financeCompanyId = company.id;
           financeCompanyName = company.name;
         }
+
+        if (totals.financeAmount2 > 0) {
+          if (input.financeCompanyId2) {
+            const company = await tx.financeCompany.findUnique({
+              where: { id: input.financeCompanyId2 },
+            });
+            if (!company) {
+              throw new Error("FINANCE_COMPANY_NOT_FOUND");
+            }
+            financeCompanyId2 = company.id;
+            financeCompanyName2 = company.name;
+          } else if (input.financeCompanyName2?.trim()) {
+            const name = input.financeCompanyName2.trim().replace(/\s+/g, " ");
+            const company = await tx.financeCompany.upsert({
+              where: { name },
+              create: { name },
+              update: {},
+            });
+            financeCompanyId2 = company.id;
+            financeCompanyName2 = company.name;
+          }
+        }
       }
 
       await tx.billItem.deleteMany({ where: { billId: existing.id } });
       const financeDetailsUnchanged =
         input.useFinance &&
         existing.financeAmount === totals.financeAmount &&
-        existing.financeCompanyId === financeCompanyId;
+        existing.financeAmount2 === totals.financeAmount2 &&
+        existing.financeCompanyId === financeCompanyId &&
+        existing.financeCompanyId2 === financeCompanyId2;
 
       return tx.bill.update({
         where: { id: existing.id },
@@ -283,6 +358,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           cashAmount: totals.cashAmount,
           onlineAmount: totals.onlineAmount,
           financeAmount: totals.financeAmount,
+          financeAmount2: totals.financeAmount2,
           ...(financeCompanyId
             ? {
                 financeCompany: { connect: { id: financeCompanyId } },
@@ -292,6 +368,8 @@ billsRouter.put("/:id", async (req, res, next) => {
                 financeCompany: { disconnect: true },
                 financeCompanyName: null,
               }),
+          financeCompanyId2,
+          financeCompanyName2,
           financeReceived:
             financeDetailsUnchanged && existing.financeReceived,
           financeReceivedAt:
@@ -425,13 +503,15 @@ billsRouter.patch("/:id/settle-due", async (req, res, next) => {
     }
 
     const due = bill.dueAmount;
+    const paidAt = new Date();
     const updated = await prisma.bill.update({
       where: { id: bill.id },
       data: {
         dueSettled: true,
         dueAmount: 0,
         dueSettledMethod: method,
-        dueSettledAt: new Date(),
+        dueSettledAt: paidAt,
+        isPartialPaid: false,
         cashAmount:
           method === "cash"
             ? Number((bill.cashAmount + due).toFixed(2))
@@ -440,8 +520,16 @@ billsRouter.patch("/:id/settle-due", async (req, res, next) => {
           method === "online"
             ? Number((bill.onlineAmount + due).toFixed(2))
             : bill.onlineAmount,
+        duePayments: {
+          create: {
+            amount: due,
+            method,
+            kind: "full",
+            paidAt,
+          },
+        },
       },
-      include: { items: true },
+      include: billDetailInclude,
     });
 
     res.json({ data: serializeBill(updated) });
