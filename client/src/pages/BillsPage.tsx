@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Search } from "lucide-react";
+import { Download, Search, Share2 } from "lucide-react";
 import {
   PeriodFilter,
   type ActivityPeriodValue,
 } from "../components/PeriodFilter";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
+import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill } from "../types";
 
 export function BillsPage() {
@@ -16,6 +17,8 @@ export function BillsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState<ActivityPeriodValue>("today");
+  const [sharingId, setSharingId] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -89,6 +92,11 @@ export function BillsPage() {
       {loading ? <LoadingBlock label="Fetching bills…" /> : null}
       {error ? (
         <div className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</div>
+      ) : null}
+      {shareError ? (
+        <div className="glass-panel mb-3 px-5 py-4 text-sm text-ember-500">
+          {shareError}
+        </div>
       ) : null}
 
       {!loading && !error && filtered.length === 0 ? (
@@ -197,18 +205,49 @@ export function BillsPage() {
                     View details →
                   </p>
                 </div>
-                <span
-                  className="btn-secondary mt-auto self-start sm:self-end"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.open(api.pdfUrl(bill.id), "_blank", "noopener,noreferrer");
-                  }}
-                  role="link"
-                >
-                  <Download className="h-4 w-4" />
-                  PDF
-                </span>
+                <div className="mt-auto flex flex-wrap gap-2 self-start sm:self-end">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={sharingId === bill.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShareError(null);
+                      setSharingId(bill.id);
+                      void shareInvoicePdf(bill.id, bill.invoiceNumber)
+                        .catch((err) => {
+                          if (!isShareAbort(err)) {
+                            setShareError(
+                              err instanceof Error
+                                ? err.message
+                                : "Could not open share sheet",
+                            );
+                          }
+                        })
+                        .finally(() => setSharingId(null));
+                    }}
+                  >
+                    <Share2 className="h-4 w-4" />
+                    {sharingId === bill.id ? "…" : "Share"}
+                  </button>
+                  <span
+                    className="btn-secondary"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.open(
+                        api.pdfUrl(bill.id),
+                        "_blank",
+                        "noopener,noreferrer",
+                      );
+                    }}
+                    role="link"
+                  >
+                    <Download className="h-4 w-4" />
+                    PDF
+                  </span>
+                </div>
               </div>
             </div>
           </div>
