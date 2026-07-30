@@ -8,6 +8,7 @@ import {
   Download,
   Pencil,
   Phone,
+  Share2,
   Trash2,
   UserRound,
   X,
@@ -16,6 +17,7 @@ import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
+import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
 
@@ -33,6 +35,8 @@ export function BillDetailPage() {
   const [markingFinance, setMarkingFinance] = useState(false);
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [showFinanceConfirm, setShowFinanceConfirm] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const loadBill = useCallback(async () => {
     if (!id) return;
@@ -133,6 +137,29 @@ export function BillDetailPage() {
               <Pencil className="h-4 w-4" />
               Edit
             </Link>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={sharing}
+              onClick={() => {
+                setShareError(null);
+                setSharing(true);
+                void shareInvoicePdf(bill.id, bill.invoiceNumber)
+                  .catch((err) => {
+                    if (!isShareAbort(err)) {
+                      setShareError(
+                        err instanceof Error
+                          ? err.message
+                          : "Could not open share sheet",
+                      );
+                    }
+                  })
+                  .finally(() => setSharing(false));
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+              {sharing ? "Preparing…" : "Share"}
+            </button>
             <a
               className="btn-secondary"
               href={api.pdfUrl(bill.id)}
@@ -168,6 +195,12 @@ export function BillDetailPage() {
           </div>
         }
       />
+
+      {shareError ? (
+        <div className="mb-4 glass-panel px-5 py-4 text-sm text-ember-500">
+          {shareError}
+        </div>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
         <section className="space-y-5">
