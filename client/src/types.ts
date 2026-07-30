@@ -6,6 +6,7 @@ export type BillItem = {
   color?: string | null;
   storage?: string | null;
   ram?: string | null;
+  condition?: "NEW" | "USED" | null;
   quantity: number;
   rate: number;
   gstPercent: number;
@@ -116,6 +117,7 @@ export type MobileCatalog = {
   id: string;
   name: string;
   platform: "IOS" | "ANDROID";
+  condition: "NEW" | "USED";
   color: string;
   storage: string;
   ram: string;
@@ -170,6 +172,7 @@ export type CreateBillPayload = {
   customerPhone: string;
   customerAddress?: string | null;
   notes?: string | null;
+  billDate?: string | null;
   items: BillItem[];
   useCash: boolean;
   useOnline: boolean;

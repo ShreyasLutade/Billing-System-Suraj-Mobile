@@ -180,7 +180,9 @@ billsRouter.post("/", async (req, res, next) => {
       return tx.bill.create({
         data: {
           invoiceNumber,
-          billDate: input.billDate ? new Date(input.billDate) : new Date(),
+          billDate: input.billDate
+            ? parseDateInput(input.billDate)
+            : new Date(),
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           customerAddress: input.customerAddress || null,
@@ -238,6 +240,7 @@ billsRouter.post("/", async (req, res, next) => {
               color: item.color,
               storage: item.storage,
               ram: item.ram,
+              condition: item.condition,
               quantity: item.quantity,
               rate: item.rate,
               gstPercent: item.gstPercent,
@@ -351,6 +354,9 @@ billsRouter.put("/:id", async (req, res, next) => {
           customerPhone: input.customerPhone,
           customerAddress: input.customerAddress || null,
           notes: input.notes || null,
+          ...(input.billDate
+            ? { billDate: parseDateInput(input.billDate) }
+            : {}),
           subtotal: totals.subtotal,
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
@@ -415,6 +421,7 @@ billsRouter.put("/:id", async (req, res, next) => {
               color: item.color,
               storage: item.storage,
               ram: item.ram,
+              condition: item.condition,
               quantity: item.quantity,
               rate: item.rate,
               gstPercent: item.gstPercent,
@@ -483,7 +490,7 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
   }
 });
 
-billsRouter.patch("/:id/settle-due", async (req, res, next) => {
+billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
   try {
     const method =
       typeof req.body?.method === "string" ? req.body.method : "na";

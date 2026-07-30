@@ -10,6 +10,7 @@ import {
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from "../components/ui";
+import { useAuth } from "../auth/AuthContext";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import type {
   DueItem,
@@ -47,6 +48,7 @@ function financeTotalsByCompany(dues: FinanceDueItem[]) {
 }
 
 export function DuesPage() {
+  const { isAdmin } = useAuth();
   const [tab, setTab] = useState<"customer" | "finance">("customer");
   const [period, setPeriod] = useState<DuePeriodValue>("all");
   const [data, setData] = useState<DuesSummary | null>(null);
@@ -283,14 +285,16 @@ export function DuesPage() {
                       <p className="font-display text-2xl font-semibold text-ember-500">
                         {formatINR(due.dueAmount)}
                       </p>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={() => setSelectedDue(due)}
-                      >
-                        <Check className="h-4 w-4" />
-                        Paid
-                      </button>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => setSelectedDue(due)}
+                        >
+                          <Check className="h-4 w-4" />
+                          Paid
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -389,19 +393,21 @@ export function DuesPage() {
                       <p className="font-display text-2xl font-semibold text-ember-500">
                         {formatINR(due.financeAmount)}
                       </p>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        disabled={receivingId === due.id}
-                        onClick={() => {
-                          setError(null);
-                          setSelectedFinanceDue(due);
-                        }}
-                        aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
-                      >
-                        <Check className="h-4 w-4" />
-                        {receivingId === due.id ? "Saving…" : "Received"}
-                      </button>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={receivingId === due.id}
+                          onClick={() => {
+                            setError(null);
+                            setSelectedFinanceDue(due);
+                          }}
+                          aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
+                        >
+                          <Check className="h-4 w-4" />
+                          {receivingId === due.id ? "Saving…" : "Received"}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -411,7 +417,7 @@ export function DuesPage() {
         </>
       ) : null}
 
-      {selectedDue ? (
+      {selectedDue && isAdmin ? (
         <SettleDueModal
           bill={selectedDue}
           onClose={() => setSelectedDue(null)}
@@ -420,7 +426,7 @@ export function DuesPage() {
       ) : null}
 
       <AnimatePresence>
-        {selectedFinanceDue ? (
+        {selectedFinanceDue && isAdmin ? (
           <FinanceReceivedConfirmModal
             invoiceNumber={selectedFinanceDue.invoiceNumber}
             financeCompanyName={

@@ -70,7 +70,8 @@ export function BillDetailPage() {
   }
 
   async function markFinanceReceived() {
-    if (!bill || bill.financeAmount <= 0 || bill.financeReceived) return;
+    if (!isAdmin || !bill || bill.financeAmount <= 0 || bill.financeReceived)
+      return;
     setMarkingFinance(true);
     setFinanceError(null);
     try {
@@ -204,7 +205,22 @@ export function BillDetailPage() {
                 <div key={item.id || item.productName} className="px-5 py-4 sm:px-6">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="font-semibold text-ink-900">{item.productName}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-ink-900">
+                          {item.productName}
+                        </p>
+                        {item.condition ? (
+                          <span
+                            className={
+                              item.condition === "USED"
+                                ? "rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-ember-500"
+                                : "rounded-full bg-tide-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-tide-700"
+                            }
+                          >
+                            {item.condition === "USED" ? "Old" : "New"}
+                          </span>
+                        ) : null}
+                      </div>
                       {item.color || item.storage || item.ram ? (
                         <p className="mt-1 text-sm font-medium text-tide-600">
                           {[item.color, item.storage, item.ram]
@@ -342,7 +358,7 @@ export function BillDetailPage() {
                 accent={bill.dueAmount > 0}
               />
             </dl>
-            {bill.financeAmount > 0 && !bill.financeReceived ? (
+            {bill.financeAmount > 0 && !bill.financeReceived && isAdmin ? (
               <button
                 type="button"
                 className="btn-primary mt-5 w-full"
@@ -392,14 +408,16 @@ export function BillDetailPage() {
                   borderClass="border-orange-100"
                 />
               ) : null}
-              <button
-                type="button"
-                className="btn-primary mt-5 w-full"
-                onClick={() => setShowSettle(true)}
-              >
-                <Check className="h-4 w-4" />
-                Collect due
-              </button>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="btn-primary mt-5 w-full"
+                  onClick={() => setShowSettle(true)}
+                >
+                  <Check className="h-4 w-4" />
+                  Collect due
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-3xl border border-tide-100 bg-gradient-to-br from-tide-100/70 to-white p-5 shadow-soft sm:p-6">
@@ -425,7 +443,7 @@ export function BillDetailPage() {
         </aside>
       </div>
 
-      {showSettle && hasDue ? (
+      {isAdmin && showSettle && hasDue ? (
         <SettleDueModal
           bill={{
             id: bill.id,

@@ -98,6 +98,8 @@ model BillItem {
   color          String?
   storage        String?
   ram            String?
+  /// NEW | USED — copied from catalog when the bill is saved
+  condition      String?
   quantity       Int     @default(1)
   rate           Float
   gstPercent     Float   @default(18)
@@ -120,11 +122,14 @@ model MobileCatalog {
   color     String
   storage   String
   ram       String   @default("")
+  /// NEW | USED
+  condition String   @default("NEW")
   createdAt DateTime @default(now())
   billItems BillItem[]
 
-  @@unique([name, platform, color, storage, ram])
+  @@unique([name, platform, color, storage, ram, condition])
   @@index([name])
+  @@index([condition])
 }
 
 model FinanceCompany {

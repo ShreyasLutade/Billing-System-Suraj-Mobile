@@ -120,6 +120,7 @@ export const api = {
   createMobile: (payload: {
     name: string;
     platform: "IOS" | "ANDROID";
+    condition: "NEW" | "USED";
     color: string;
     storage: string;
     ram?: string;
