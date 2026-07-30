@@ -107,15 +107,8 @@ reportsCronRouter.post("/run", async (req, res, next) => {
     res.json({
       data: {
         ok: true,
-        today: results.today
-          ? {
-              skipped: results.today.skipped,
-              dateKey: results.today.dateKey,
-              billCount: results.today.report?.billCount ?? null,
-              emailedTo: results.today.mail?.to ?? null,
-            }
-          : null,
-        sundayFull: results.all
+        skippedDay: Boolean(results.skippedDay),
+        fullDump: results.all
           ? {
               skipped: results.all.skipped,
               dateKey: results.all.dateKey,

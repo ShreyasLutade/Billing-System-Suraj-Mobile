@@ -63,3 +63,16 @@ export function isSundayIST(date = new Date()) {
   }).format(date);
   return weekday === "Sun";
 }
+
+export function isWednesdayIST(date = new Date()) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIMEZONE,
+    weekday: "short",
+  }).format(date);
+  return weekday === "Wed";
+}
+
+/** Full Excel dump days: Wednesday and Sunday (IST). */
+export function isReportDayIST(date = new Date()) {
+  return isWednesdayIST(date) || isSundayIST(date);
+}
