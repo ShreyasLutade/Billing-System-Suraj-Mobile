@@ -29,6 +29,7 @@ import {
   type DiffLine,
 } from "../lib/billDiff";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type {
   Bill,
   BillItem,
@@ -828,41 +829,9 @@ export function CreateBillPage() {
       setSharing(true);
       setShareError(null);
       try {
-        const response = await fetch(api.pdfUrl(savedBillId));
-        if (!response.ok) {
-          throw new Error("Could not load invoice PDF");
-        }
-        const blob = await response.blob();
-        const file = new File([blob], `${invoiceLabel}.pdf`, {
-          type: "application/pdf",
-        });
-
-        if (typeof navigator.share !== "function") {
-          throw new Error(
-            "Sharing isn’t supported in this browser. Use Download PDF instead.",
-          );
-        }
-
-        const withFile: ShareData = {
-          title: `Invoice ${invoiceLabel}`,
-          text: `Invoice ${invoiceLabel} — Suraj Mobile`,
-          files: [file],
-        };
-
-        if (
-          typeof navigator.canShare === "function" &&
-          !navigator.canShare(withFile)
-        ) {
-          throw new Error(
-            "This device can’t share PDF files from the browser. Download the PDF, then share it from WhatsApp.",
-          );
-        }
-
-        await navigator.share(withFile);
+        await shareInvoicePdf(savedBillId, invoiceLabel);
       } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          return;
-        }
+        if (isShareAbort(err)) return;
         setShareError(
           err instanceof Error ? err.message : "Could not open share sheet",
         );
