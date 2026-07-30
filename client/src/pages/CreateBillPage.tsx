@@ -6,6 +6,7 @@ import {
   Check,
   Download,
   Plus,
+  Share2,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -155,6 +156,9 @@ export function CreateBillPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [successInvoice, setSuccessInvoice] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   function validatePhone(value: string) {
     const digits = value.replace(/\D/g, "");
@@ -197,6 +201,9 @@ export function CreateBillPage() {
     setSaving(false);
     setError(null);
     setSuccessId(null);
+    setSuccessInvoice(null);
+    setShareError(null);
+    setSharing(false);
     setLoadingBill(false);
   }
 
@@ -267,6 +274,8 @@ export function CreateBillPage() {
     }
     setDueDate(bill.dueDate ? bill.dueDate.slice(0, 10) : "");
     setSuccessId(null);
+    setSuccessInvoice(null);
+    setShareError(null);
     setError(null);
     setPhoneError(null);
     setShowConfirm(false);
@@ -764,6 +773,8 @@ export function CreateBillPage() {
       setPendingPayload(null);
       setSaveSummary(null);
       setSuccessId(data.id);
+      setSuccessInvoice(data.invoiceNumber);
+      setShareError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save bill");
     } finally {
@@ -781,6 +792,8 @@ export function CreateBillPage() {
       setPendingPayload(null);
       setPendingDiff([]);
       setSuccessId(data.id);
+      setSuccessInvoice(data.invoiceNumber);
+      setShareError(null);
       setOriginalBill(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update bill");
@@ -808,6 +821,56 @@ export function CreateBillPage() {
   }
 
   if (successId) {
+    const savedBillId = successId;
+    const invoiceLabel = successInvoice || "Invoice";
+
+    async function shareOnWhatsApp() {
+      setSharing(true);
+      setShareError(null);
+      try {
+        const response = await fetch(api.pdfUrl(savedBillId));
+        if (!response.ok) {
+          throw new Error("Could not load invoice PDF");
+        }
+        const blob = await response.blob();
+        const file = new File([blob], `${invoiceLabel}.pdf`, {
+          type: "application/pdf",
+        });
+
+        if (typeof navigator.share !== "function") {
+          throw new Error(
+            "Sharing isn’t supported in this browser. Use Download PDF instead.",
+          );
+        }
+
+        const withFile: ShareData = {
+          title: `Invoice ${invoiceLabel}`,
+          text: `Invoice ${invoiceLabel} — Suraj Mobile`,
+          files: [file],
+        };
+
+        if (
+          typeof navigator.canShare === "function" &&
+          !navigator.canShare(withFile)
+        ) {
+          throw new Error(
+            "This device can’t share PDF files from the browser. Download the PDF, then share it from WhatsApp.",
+          );
+        }
+
+        await navigator.share(withFile);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+        setShareError(
+          err instanceof Error ? err.message : "Could not open share sheet",
+        );
+      } finally {
+        setSharing(false);
+      }
+    }
+
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
@@ -825,10 +888,27 @@ export function CreateBillPage() {
             ? "Changes are saved and the PDF will use the latest details."
             : "Invoice is stored on the server and synced across devices."}
         </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <a
+        {successInvoice ? (
+          <p className="mt-1 text-sm font-medium text-ink-700">
+            {successInvoice}
+          </p>
+        ) : null}
+        {shareError ? (
+          <p className="mt-3 text-sm text-ember-500">{shareError}</p>
+        ) : null}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+          <button
             className="btn-primary"
-            href={api.pdfUrl(successId)}
+            type="button"
+            disabled={sharing}
+            onClick={() => void shareOnWhatsApp()}
+          >
+            <Share2 className="h-4 w-4" />
+            {sharing ? "Preparing…" : "Share"}
+          </button>
+          <a
+            className="btn-secondary"
+            href={api.pdfUrl(savedBillId)}
             target="_blank"
             rel="noreferrer"
           >
@@ -838,7 +918,7 @@ export function CreateBillPage() {
           <button
             className="btn-secondary"
             type="button"
-            onClick={() => navigate(`/bills/${successId}`)}
+            onClick={() => navigate(`/bills/${savedBillId}`)}
           >
             View bill
           </button>
@@ -850,13 +930,13 @@ export function CreateBillPage() {
             View all bills
           </button>
           {!isEdit ? (
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() => resetBlankForm()}
-          >
-            Create another
-          </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => resetBlankForm()}
+            >
+              Create another
+            </button>
           ) : null}
         </div>
       </motion.div>
