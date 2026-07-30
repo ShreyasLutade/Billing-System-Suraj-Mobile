@@ -7,17 +7,14 @@ import { format } from "date-fns";
 
 type BillWithItems = Bill & { items: BillItem[] };
 
+/** Logo palette: charcoal + gold (exact Suraj Mobile wordmark colors) */
 const COLORS = {
-  navy: "#0C2A4A",
-  navyDeep: "#081E36",
-  gold: "#E8A317",
-  goldSoft: "#F2C14E",
-  ink: "#1A2433",
-  muted: "#5B6B7C",
-  line: "#C9D2DE",
-  soft: "#F5F7FA",
+  charcoal: "#494D53",
+  gold: "#C49333",
+  goldSoft: "#F5EDD8",
+  ink: "#1A1A1A",
+  muted: "#555555",
   white: "#FFFFFF",
-  danger: "#B91C1C",
 };
 
 const shop = {
@@ -29,49 +26,126 @@ const shop = {
     "Near Jain Mandir, Beside Arihant Institute Main Road Balaghat (M.P) 481001",
   phone: process.env.SHOP_PHONE || "9516533556",
   instagram: process.env.SHOP_INSTAGRAM || "@surajmobileofficial",
-  gstin: process.env.SHOP_GSTIN || "",
+  gstin: process.env.SHOP_GSTIN || "23FAAPB2709A1ZP",
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 28;
 const CONTENT_WIDTH = PAGE.width - MARGIN * 2;
-const ICON_PATH = path.join(__dirname, "../../assets/suraj_mobile_icon.png");
 const LOGO_PATH = path.join(__dirname, "../../assets/suraj_mobile_logo.png");
+const ICON_PATH = path.join(__dirname, "../../assets/suraj_mobile_icon.png");
+const FONTS_DIR = path.join(__dirname, "../../assets/fonts");
+const FONT = {
+  regular: "Manrope",
+  medium: "Manrope-Medium",
+  semibold: "Manrope-SemiBold",
+  bold: "Manrope-Bold",
+} as const;
+const FOOTER_BLOCK_H = 78;
 
-/** Helvetica has no ₹ glyph — use ASCII-safe Rs. prefix */
-function inr(amount: number) {
-  return `Rs. ${new Intl.NumberFormat("en-IN", {
+function registerFonts(doc: PDFKit.PDFDocument) {
+  doc.registerFont(FONT.regular, path.join(FONTS_DIR, "Manrope-Regular.ttf"));
+  doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
+  doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
+  doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
+}
+
+function money(amount: number) {
+  return new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
-  }).format(amount)}`;
+  }).format(amount || 0);
 }
 
-function inrSlash(amount: number) {
-  return `Rs. ${new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
-  }).format(Math.round(amount))}/-`;
+function inr(amount: number) {
+  return `Rs. ${money(amount)}`;
 }
 
-function drawCheckbox(
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function lineTaxable(item: BillItem) {
+  const amount = item.amount || round2(item.rate * item.quantity);
+  if (!item.gstPercent) return amount;
+  return round2((amount * 100) / (100 + item.gstPercent));
+}
+
+function lineGst(item: BillItem) {
+  const amount = item.amount || round2(item.rate * item.quantity);
+  return round2(amount - lineTaxable(item));
+}
+
+const ONES = [
+  "",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+  "Seventeen",
+  "Eighteen",
+  "Nineteen",
+];
+const TENS = [
+  "",
+  "",
+  "Twenty",
+  "Thirty",
+  "Forty",
+  "Fifty",
+  "Sixty",
+  "Seventy",
+  "Eighty",
+  "Ninety",
+];
+
+function twoDigits(n: number) {
+  if (n < 20) return ONES[n];
+  const ten = Math.floor(n / 10);
+  const one = n % 10;
+  return `${TENS[ten]}${one ? ` ${ONES[one]}` : ""}`.trim();
+}
+
+function amountInWords(amount: number) {
+  const whole = Math.floor(Math.abs(amount));
+  if (whole === 0) return "Zero Rupees Only";
+
+  const crore = Math.floor(whole / 1_00_00_000);
+  const lakh = Math.floor((whole % 1_00_00_000) / 1_00_000);
+  const thousand = Math.floor((whole % 1_00_000) / 1000);
+  const hundred = Math.floor((whole % 1000) / 100);
+  const rest = whole % 100;
+
+  const parts: string[] = [];
+  if (crore) parts.push(`${twoDigits(crore)} Crore`);
+  if (lakh) parts.push(`${twoDigits(lakh)} Lakh`);
+  if (thousand) parts.push(`${twoDigits(thousand)} Thousand`);
+  if (hundred) parts.push(`${ONES[hundred]} Hundred`);
+  if (rest) parts.push(twoDigits(rest));
+
+  return `${parts.join(" ")} Rupees Only`.toUpperCase();
+}
+
+function strokeBox(
   doc: PDFKit.PDFDocument,
   x: number,
   y: number,
-  checked: boolean,
+  w: number,
+  h: number,
 ) {
-  doc
-    .roundedRect(x, y, 9, 9, 1.5)
-    .strokeColor(COLORS.navy)
-    .lineWidth(1)
-    .stroke();
-  if (checked) {
-    doc
-      .moveTo(x + 2, y + 4.5)
-      .lineTo(x + 3.8, y + 6.5)
-      .lineTo(x + 7, y + 2.5)
-      .strokeColor(COLORS.navy)
-      .lineWidth(1.3)
-      .stroke();
-  }
+  doc.rect(x, y, w, h).strokeColor(COLORS.charcoal).lineWidth(0.9).stroke();
 }
 
 function drawInstagramIcon(
@@ -79,7 +153,7 @@ function drawInstagramIcon(
   x: number,
   y: number,
   size = 8,
-  color = "#B8C9DB",
+  color = COLORS.ink,
 ) {
   const r = size * 0.22;
   doc
@@ -98,265 +172,612 @@ function drawInstagramIcon(
     .fill();
 }
 
-function drawPhoneIcon(
-  doc: PDFKit.PDFDocument,
-  x: number,
-  y: number,
-  size = 8,
-  color = "#B8C9DB",
-) {
-  // Simple upright phone outline
-  doc
-    .roundedRect(x + size * 0.22, y, size * 0.56, size, size * 0.12)
-    .strokeColor(color)
-    .lineWidth(0.9)
-    .stroke();
-  doc
-    .moveTo(x + size * 0.38, y + size * 0.12)
-    .lineTo(x + size * 0.62, y + size * 0.12)
-    .strokeColor(color)
-    .lineWidth(0.85)
-    .stroke();
-  doc
-    .circle(x + size / 2, y + size * 0.82, size * 0.07)
-    .fillColor(color)
-    .fill();
-}
-
 function drawHeader(doc: PDFKit.PDFDocument) {
-  const headerH = 92;
-  const logoBox = 72;
-  const logoY = (headerH - logoBox) / 2;
-
-  doc.rect(0, 0, PAGE.width, headerH).fill(COLORS.navy);
-  doc
-    .save()
-    .opacity(0.08)
-    .circle(PAGE.width - 30, 10, 60)
-    .fill(COLORS.white)
-    .restore();
-
-  const logoFile = fs.existsSync(ICON_PATH)
-    ? ICON_PATH
-    : fs.existsSync(LOGO_PATH)
-      ? LOGO_PATH
+  const logoFile = fs.existsSync(LOGO_PATH)
+    ? LOGO_PATH
+    : fs.existsSync(ICON_PATH)
+      ? ICON_PATH
       : null;
 
+  const logoW = 58;
+  const logoH = 72;
+  const logoY = 10;
   if (logoFile) {
     doc.image(logoFile, MARGIN, logoY, {
-      fit: [logoBox, logoBox],
+      fit: [logoW, logoH],
       align: "center",
       valign: "center",
     });
   }
 
-  const textX = MARGIN + logoBox + 12;
+  const textX = MARGIN + logoW + 14;
+  const textW = CONTENT_WIDTH - logoW - 14;
+
+  // Distinct display font — match logo: SURAJ charcoal, MOBILE gold
+  const title = shop.name.toUpperCase();
+  const parts = title.split(/\s+/);
+  const first = parts[0] || title;
+  const rest = parts.slice(1).join(" ");
+  doc.font(FONT.bold).fontSize(24);
+  const firstW = doc.widthOfString(first + (rest ? " " : ""));
   doc
-    .fillColor(COLORS.white)
-    .font("Helvetica-Bold")
-    .fontSize(20)
-    .text(shop.name.toUpperCase(), textX, 16, {
-      width: PAGE.width - textX - MARGIN,
+    .fillColor(COLORS.charcoal)
+    .text(first + (rest ? " " : ""), textX, 16, {
+      lineBreak: false,
     });
-
-  doc
-    .fillColor(COLORS.goldSoft)
-    .font("Helvetica")
-    .fontSize(8.5)
-    .text(shop.tagline, textX, 40, {
-      width: PAGE.width - textX - MARGIN,
-    });
-
-  doc
-    .fillColor("#D7E3F0")
-    .fontSize(7.5)
-    .text(shop.address, textX, 54, {
-      width: PAGE.width - textX - MARGIN,
-    });
-
-  // Contact row with Instagram + phone icons
-  let cx = textX;
-  const cy = 69;
-  const iconColor = "#B8C9DB";
-  doc.fillColor(iconColor).font("Helvetica").fontSize(7.5);
-
-  if (shop.instagram) {
-    drawInstagramIcon(doc, cx, cy, 8, iconColor);
-    cx += 11;
-    doc.text(shop.instagram, cx, cy, { lineBreak: false });
-    cx += doc.widthOfString(shop.instagram) + 10;
-  }
-
-  if (shop.phone) {
-    if (shop.instagram) {
-      doc
-        .fillColor(iconColor)
-        .fontSize(7.5)
-        .text("·", cx, cy, { lineBreak: false });
-      cx += 8;
-    }
-    drawPhoneIcon(doc, cx, cy, 8, iconColor);
-    cx += 11;
+  if (rest) {
     doc
-      .fillColor(iconColor)
-      .font("Helvetica")
-      .fontSize(7.5)
-      .text(shop.phone, cx, cy, { lineBreak: false });
-    cx += doc.widthOfString(shop.phone) + 10;
+      .fillColor(COLORS.gold)
+      .text(rest, textX + firstW, 16, {
+        lineBreak: false,
+      });
   }
-
-  if (shop.gstin) {
-    if (shop.instagram || shop.phone) {
-      doc.text("·", cx, cy, { lineBreak: false });
-      cx += 8;
-    }
-    doc.text(`GSTIN ${shop.gstin}`, cx, cy, { lineBreak: false });
-  }
-
-  doc.rect(0, headerH, PAGE.width, 3).fill(COLORS.gold);
-  return headerH + 3;
-}
-
-function drawFooter(doc: PDFKit.PDFDocument, y: number) {
-  doc
-    .moveTo(MARGIN, y)
-    .lineTo(PAGE.width - MARGIN, y)
-    .strokeColor(COLORS.gold)
-    .lineWidth(2)
-    .stroke();
-
-  y += 8;
 
   doc
     .fillColor(COLORS.ink)
-    .font("Helvetica-Bold")
-    .fontSize(7.5)
-    .text("Terms & Conditions", MARGIN, y);
+    .font(FONT.regular)
+    .fontSize(8)
+    .text(shop.address, textX, 44, {
+      width: textW,
+      align: "left",
+    });
 
-  const terms = [
-    "1. Goods Once Sold Shall Not be taken back, Exchanged or Refunded.",
-    "2. Term & Condition of Warranty & Insurance will be provided to you by the company.",
-    "3. To Get Warranty Cover, Customer will have to take the Mobile to Service Center.",
-    "4. The Customer has inspected the mobile device at the time of purchase. The shopkeeper will not be held responsible for any issues thereafter.",
-  ];
+  const afterAddress = doc.y + 4;
+  // Phone + Instagram on one left-aligned contact row
+  doc.font(FONT.bold).fontSize(8.5);
+  const phoneText = `Ph: ${shop.phone}`;
+  const instaText = shop.instagram || "";
+  const phoneW = doc.widthOfString(phoneText);
+  const iconSize = 8;
+  const gap = 10;
+  let cx = textX;
 
-  y += 10;
-  doc.fillColor(COLORS.muted).font("Helvetica").fontSize(6.5);
-  for (const term of terms) {
-    doc.text(term, MARGIN, y, { width: CONTENT_WIDTH, lineBreak: false });
-    y += 9;
+  doc
+    .fillColor(COLORS.ink)
+    .text(phoneText, cx, afterAddress, { lineBreak: false });
+  cx += phoneW;
+
+  if (instaText) {
+    cx += gap;
+    drawInstagramIcon(doc, cx, afterAddress + 0.5, iconSize, COLORS.ink);
+    cx += iconSize + 4;
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.bold)
+      .fontSize(8.5)
+      .text(instaText, cx, afterAddress, { lineBreak: false });
   }
 
-  const barY = PAGE.height - 16;
-  doc.rect(0, barY, PAGE.width, 16).fill(COLORS.navyDeep);
-  doc.rect(0, barY - 2, PAGE.width, 2).fill(COLORS.gold);
+  // Keep space between logo bottom and the first horizontal rule
+  let y = Math.max(logoY + logoH + 10, afterAddress + 16);
+
   doc
-    .fillColor("#D7E3F0")
-    .fontSize(6.5)
-    .text("Thank you for shopping with Suraj Mobile", 0, barY + 4, {
-      width: PAGE.width,
+    .moveTo(MARGIN, y)
+    .lineTo(PAGE.width - MARGIN, y)
+    .strokeColor(COLORS.charcoal)
+    .lineWidth(1.1)
+    .stroke();
+
+  y += 5;
+  doc
+    .fillColor(COLORS.gold)
+    .font(FONT.medium)
+    .fontSize(8)
+    .text(shop.tagline, MARGIN, y, {
+      width: CONTENT_WIDTH,
       align: "center",
       lineBreak: false,
     });
+  y += 14;
+
+  doc
+    .moveTo(MARGIN, y)
+    .lineTo(PAGE.width - MARGIN, y)
+    .strokeColor(COLORS.charcoal)
+    .lineWidth(1.1)
+    .stroke();
+
+  return y + 8;
 }
 
-function drawDetailTable(
-  doc: PDFKit.PDFDocument,
-  y: number,
-  title: string,
-  rows: Array<{ label: string; value: string }>,
-  qty: string,
-  amount: string,
-) {
-  const colQty = MARGIN + 350;
-  const colAmt = MARGIN + 415;
-  const tableW = CONTENT_WIDTH;
-  const detailW = 350;
-  const qtyW = 65;
-  const amtW = tableW - detailW - qtyW;
-  const headerH = 18;
-  const rowH = 15;
+function drawInvoiceBar(doc: PDFKit.PDFDocument, y: number) {
+  const h = 22;
+  doc.rect(MARGIN, y, CONTENT_WIDTH, h).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
 
-  doc.rect(MARGIN, y, tableW, headerH).fill(COLORS.navy);
   doc
-    .fillColor(COLORS.white)
-    .font("Helvetica-Bold")
+    .fillColor(COLORS.ink)
+    .font(FONT.regular)
     .fontSize(8)
-    .text(title, MARGIN + 6, y + 5, {
-      width: detailW - 10,
+    .text(shop.gstin ? `GSTIN: ${shop.gstin}` : "GSTIN: —", MARGIN + 8, y + 7, {
       lineBreak: false,
-    })
-    .text("Qty", colQty, y + 5, {
-      width: qtyW,
+    });
+
+  doc
+    .fillColor(COLORS.gold)
+    .font(FONT.bold)
+    .fontSize(11)
+    .text("TAX INVOICE", MARGIN, y + 5, {
+      width: CONTENT_WIDTH,
       align: "center",
       lineBreak: false,
-    })
-    .text("Amount", colAmt, y + 5, {
-      width: amtW - 6,
+    });
+
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.regular)
+    .fontSize(7)
+    .text("ORIGINAL FOR RECIPIENT", MARGIN, y + 8, {
+      width: CONTENT_WIDTH - 8,
       align: "right",
       lineBreak: false,
     });
 
-  y += headerH;
-  const bodyH = rows.length * rowH;
+  return y + h;
+}
 
+function drawCustomerMeta(
+  doc: PDFKit.PDFDocument,
+  bill: BillWithItems,
+  y: number,
+) {
+  const h = 62;
+  const leftW = CONTENT_WIDTH * 0.62;
+  const rightW = CONTENT_WIDTH - leftW;
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
   doc
-    .rect(MARGIN, y, tableW, bodyH)
-    .strokeColor(COLORS.line)
-    .lineWidth(0.8)
-    .stroke();
-  doc
-    .moveTo(colQty, y)
-    .lineTo(colQty, y + bodyH)
-    .moveTo(colAmt, y)
-    .lineTo(colAmt, y + bodyH)
+    .moveTo(MARGIN + leftW, y)
+    .lineTo(MARGIN + leftW, y + h)
+    .strokeColor(COLORS.charcoal)
+    .lineWidth(0.9)
     .stroke();
 
-  rows.forEach((row, index) => {
-    const rowY = y + index * rowH;
-    if (index > 0) {
-      doc
-        .moveTo(MARGIN, rowY)
-        .lineTo(MARGIN + tableW, rowY)
-        .strokeColor(COLORS.line)
-        .stroke();
-    }
-
-    doc
-      .fillColor(COLORS.muted)
-      .font("Helvetica-Bold")
-      .fontSize(7.5)
-      .text(row.label, MARGIN + 6, rowY + 4, {
-        width: 72,
-        lineBreak: false,
-      });
-
+  const row = (
+    label: string,
+    value: string,
+    x: number,
+    ry: number,
+    labelW = 62,
+    valueW = leftW - 78,
+  ) => {
     doc
       .fillColor(COLORS.ink)
-      .font("Helvetica")
+      .font(FONT.bold)
       .fontSize(8)
-      .text(row.value || "—", MARGIN + 80, rowY + 3.5, {
-        width: detailW - 88,
+      .text(label, x, ry, { width: labelW, lineBreak: false });
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.regular)
+      .fontSize(8)
+      .text(value || "—", x + labelW, ry, {
+        width: valueW,
         lineBreak: false,
       });
+  };
 
-    if (index === 0) {
-      doc
-        .font("Helvetica-Bold")
-        .text(qty, colQty, rowY + 3.5, {
-          width: qtyW,
-          align: "center",
-          lineBreak: false,
-        })
-        .text(amount, colAmt, rowY + 3.5, {
-          width: amtW - 6,
-          align: "right",
-          lineBreak: false,
-        });
-    }
+  row("Name", bill.customerName, MARGIN + 8, y + 10);
+  row("Address", bill.customerAddress || "—", MARGIN + 8, y + 28);
+  row("Phone", bill.customerPhone, MARGIN + 8, y + 46);
+
+  const rx = MARGIN + leftW + 8;
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Invoice No.", rx, y + 16, { lineBreak: false });
+  doc.font(FONT.regular).text(bill.invoiceNumber, rx + 70, y + 16, {
+    width: rightW - 84,
+    lineBreak: false,
   });
 
-  return y + bodyH + 8;
+  doc.font(FONT.bold).text("Invoice Date", rx, y + 38, {
+    lineBreak: false,
+  });
+  doc
+    .font(FONT.regular)
+    .text(format(bill.billDate, "dd-MMM-yyyy"), rx + 70, y + 38, {
+      width: rightW - 84,
+      lineBreak: false,
+    });
+
+  return y + h;
+}
+
+function drawColumnLines(
+  doc: PDFKit.PDFDocument,
+  cols: readonly { w: number }[],
+  y: number,
+  h: number,
+) {
+  let x = MARGIN;
+  for (let i = 0; i < cols.length - 1; i++) {
+    x += cols[i].w;
+    doc
+      .moveTo(x, y)
+      .lineTo(x, y + h)
+      .strokeColor(COLORS.charcoal)
+      .lineWidth(0.7)
+      .stroke();
+  }
+}
+
+function drawItemsTable(
+  doc: PDFKit.PDFDocument,
+  bill: BillWithItems,
+  y: number,
+) {
+  // No HSN column — widths sum to CONTENT_WIDTH (~539)
+  const cols = [
+    { key: "sr", label: "Sr.", w: 28 },
+    { key: "name", label: "Name of Product / Service", w: 190 },
+    { key: "qty", label: "Qty", w: 32 },
+    { key: "rate", label: "Rate", w: 64 },
+    { key: "taxable", label: "Taxable Value", w: 78 },
+    { key: "gstp", label: "GST %", w: 40 },
+    { key: "gsta", label: "GST Amt", w: 52 },
+    { key: "total", label: "Total", w: 55 },
+  ] as const;
+
+  // Reserve room below the table for totals + declaration + terms footer
+  // (matches sample invoice: tall blank body, totals near bottom)
+  const footH = 18;
+  const upperBoxH = 58;
+  const totalBarH = 26;
+  const declH = 48;
+  const totalsBlockH = 4 + upperBoxH + totalBarH + 8 + declH;
+  const tableBodyBottom =
+    PAGE.height - MARGIN - FOOTER_BLOCK_H - 8 - totalsBlockH - footH;
+
+  const headerH = 20;
+  let x = MARGIN;
+  doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, headerH);
+
+  for (const col of cols) {
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.bold)
+      .fontSize(7)
+      .text(col.label, x + 2, y + 6, {
+        width: col.w - 4,
+        align: "center",
+        lineBreak: false,
+      });
+    x += col.w;
+  }
+
+  drawColumnLines(doc, cols, y, headerH);
+  y += headerH;
+
+  let taxableSum = 0;
+  let gstSum = 0;
+  let qtySum = 0;
+  let totalSum = 0;
+
+  bill.items.forEach((item, index) => {
+    const amount = item.amount || round2(item.rate * item.quantity);
+    const taxable = lineTaxable(item);
+    const gst = lineGst(item);
+    taxableSum += taxable;
+    gstSum += gst;
+    qtySum += item.quantity;
+    totalSum += amount;
+
+    const specs = [item.color, item.storage, item.ram]
+      .filter(Boolean)
+      .join(" · ");
+    const condition =
+      item.condition === "USED"
+        ? "Old"
+        : item.condition === "NEW"
+          ? "New"
+          : "";
+    const nameLines = [item.productName];
+    if (specs) nameLines.push(specs);
+    if (condition) nameLines.push(condition);
+    if (item.imei1) nameLines.push(`IMEI: ${item.imei1}`);
+    if (item.serialNumber) nameLines.push(`S/N: ${item.serialNumber}`);
+
+    const rowH = Math.max(28, nameLines.length * 10 + 4);
+
+    strokeBox(doc, MARGIN, y, CONTENT_WIDTH, rowH);
+    drawColumnLines(doc, cols, y, rowH);
+
+    const values: Record<(typeof cols)[number]["key"], string> = {
+      sr: String(index + 1),
+      name: "",
+      qty: String(item.quantity),
+      rate: money(item.rate),
+      taxable: money(taxable),
+      gstp: item.gstPercent ? `${item.gstPercent}%` : "—",
+      gsta: money(gst),
+      total: money(amount),
+    };
+
+    x = MARGIN;
+    for (const col of cols) {
+      if (col.key === "name") {
+        let ty = y + 4;
+        doc
+          .fillColor(COLORS.ink)
+          .font(FONT.bold)
+          .fontSize(8)
+          .text(item.productName, x + 3, ty, {
+            width: col.w - 6,
+            lineBreak: false,
+          });
+        ty += 11;
+        if (specs || condition) {
+          doc
+            .fillColor(COLORS.muted)
+            .font(FONT.regular)
+            .fontSize(7)
+            .text([specs, condition].filter(Boolean).join(" · "), x + 3, ty, {
+              width: col.w - 6,
+              lineBreak: false,
+            });
+          ty += 10;
+        }
+        if (item.imei1) {
+          doc
+            .fillColor(COLORS.muted)
+            .font(FONT.medium)
+            .fontSize(6.5)
+            .text(`IMEI: ${item.imei1}`, x + 3, ty, {
+              width: col.w - 6,
+              lineBreak: false,
+            });
+          ty += 9;
+        }
+        if (item.serialNumber) {
+          doc
+            .fillColor(COLORS.muted)
+            .font(FONT.medium)
+            .fontSize(6.5)
+            .text(`S/N: ${item.serialNumber}`, x + 3, ty, {
+              width: col.w - 6,
+              lineBreak: false,
+            });
+        }
+      } else {
+        doc
+          .fillColor(COLORS.ink)
+          .font(FONT.regular)
+          .fontSize(7.5)
+          .text(values[col.key], x + 2, y + rowH / 2 - 4, {
+            width: col.w - 4,
+            align: col.key === "sr" || col.key === "qty" ? "center" : "right",
+            lineBreak: false,
+          });
+      }
+      x += col.w;
+    }
+
+    y += rowH;
+  });
+
+  if (bill.isExchange && bill.exchangeValue) {
+    const rowH = 26;
+    strokeBox(doc, MARGIN, y, CONTENT_WIDTH, rowH);
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.bold)
+      .fontSize(8)
+      .text(
+        `Less: Exchange (${bill.exchangeModel || "Old phone"}${
+          bill.exchangeImei1 ? ` · IMEI ${bill.exchangeImei1}` : ""
+        })`,
+        MARGIN + 6,
+        y + 8,
+        { width: 360, lineBreak: false },
+      );
+    doc
+      .font(FONT.bold)
+      .text(
+        `- ${money(bill.exchangeValue)}`,
+        MARGIN + CONTENT_WIDTH - 61,
+        y + 8,
+        { width: 55, align: "right", lineBreak: false },
+      );
+    y += rowH;
+  }
+
+  // Blank filler so the item grid stretches down the page (like sample invoice)
+  if (y < tableBodyBottom) {
+    const fillerH = tableBodyBottom - y;
+    strokeBox(doc, MARGIN, y, CONTENT_WIDTH, fillerH);
+    drawColumnLines(doc, cols, y, fillerH);
+    y = tableBodyBottom;
+  }
+
+  const qtyX = MARGIN + 28 + 190;
+  const taxableX = qtyX + 32 + 64;
+  const gstAmtX = taxableX + 78 + 40;
+  doc.rect(MARGIN, y, CONTENT_WIDTH, footH).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, footH);
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Total", MARGIN + 28, y + 5, { width: 160, lineBreak: false })
+    .text(String(qtySum), qtyX, y + 5, {
+      width: 32,
+      align: "center",
+      lineBreak: false,
+    })
+    .text(money(taxableSum), taxableX, y + 5, {
+      width: 78,
+      align: "right",
+      lineBreak: false,
+    })
+    .text(money(gstSum), gstAmtX, y + 5, {
+      width: 52,
+      align: "right",
+      lineBreak: false,
+    })
+    .text(money(totalSum), MARGIN + CONTENT_WIDTH - 55, y + 5, {
+      width: 55,
+      align: "right",
+      lineBreak: false,
+    });
+
+  return {
+    y: y + footH,
+    taxableSum,
+    gstSum,
+    totalSum,
+  };
+}
+
+function drawTotalsSection(
+  doc: PDFKit.PDFDocument,
+  bill: BillWithItems,
+  y: number,
+  totals: { taxableSum: number; gstSum: number; totalSum: number },
+) {
+  const payable = bill.payableAmount ?? bill.grandTotal;
+  const leftW = Math.round(CONTENT_WIDTH * 0.55);
+  const rightW = CONTENT_WIDTH - leftW;
+  const upperBoxH = 58;
+  const totalBarH = 26;
+  const rx = MARGIN + leftW;
+
+  // Upper band: amount in words (left) + tax breakdown (right)
+  strokeBox(doc, MARGIN, y, leftW, upperBoxH);
+  strokeBox(doc, rx, y, rightW, upperBoxH);
+  doc
+    .moveTo(rx, y)
+    .lineTo(rx, y + upperBoxH)
+    .strokeColor(COLORS.charcoal)
+    .lineWidth(0.9)
+    .stroke();
+
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(7)
+    .text("Total Invoice Amount in Words", MARGIN + 8, y + 10, {
+      width: leftW - 16,
+      align: "center",
+      lineBreak: false,
+    });
+  doc
+    .font(FONT.regular)
+    .fontSize(7.5)
+    .text(amountInWords(payable), MARGIN + 8, y + 24, {
+      width: leftW - 16,
+      align: "center",
+    });
+
+  const rows = [
+    ["Taxable Amount", money(totals.taxableSum || bill.subtotal)],
+    ["Add: GST", money(totals.gstSum || bill.gstAmount)],
+    ["Total Tax", money(totals.gstSum || bill.gstAmount)],
+    [
+      bill.exchangeValue ? "Less: Exchange" : null,
+      bill.exchangeValue ? `- ${money(bill.exchangeValue)}` : null,
+    ],
+  ].filter((r): r is [string, string] => Boolean(r[0] && r[1]));
+
+  let ry = y + 10;
+  for (const [label, value] of rows) {
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.regular)
+      .fontSize(8)
+      .text(label, rx + 8, ry, { width: rightW * 0.55, lineBreak: false });
+    doc.text(value, rx + 8, ry, {
+      width: rightW - 16,
+      align: "right",
+      lineBreak: false,
+    });
+    ry += 12;
+  }
+
+  // Full-width total after tax
+  const barY = y + upperBoxH;
+  doc.rect(MARGIN, barY, CONTENT_WIDTH, totalBarH).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, barY, CONTENT_WIDTH, totalBarH);
+  doc
+    .fillColor(COLORS.gold)
+    .font(FONT.bold)
+    .fontSize(10)
+    .text("Total Amount After Tax", MARGIN + 10, barY + 8, {
+      lineBreak: false,
+    });
+  doc.text(inr(payable), MARGIN + 10, barY + 8, {
+    width: CONTENT_WIDTH - 20,
+    align: "right",
+    lineBreak: false,
+  });
+
+  // Declaration / signatory
+  const declY = barY + totalBarH + 8;
+  const declH = 48;
+  strokeBox(doc, MARGIN, declY, CONTENT_WIDTH, declH);
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.regular)
+    .fontSize(7)
+    .text(
+      `Certified that the particulars given above are true and correct. For ${shop.name}`,
+      MARGIN + 8,
+      declY + 8,
+      { width: CONTENT_WIDTH * 0.62 },
+    );
+  doc
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Authorised Signatory", MARGIN + 8, declY + declH - 16, {
+      width: CONTENT_WIDTH - 16,
+      align: "right",
+      lineBreak: false,
+    });
+
+  return declY + declH;
+}
+
+function drawFooter(doc: PDFKit.PDFDocument) {
+  const y = PAGE.height - MARGIN - FOOTER_BLOCK_H + 4;
+
+  doc
+    .moveTo(MARGIN, y - 6)
+    .lineTo(PAGE.width - MARGIN, y - 6)
+    .strokeColor(COLORS.charcoal)
+    .lineWidth(0.8)
+    .stroke();
+
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Terms and Conditions", MARGIN, y, { lineBreak: false });
+
+  const terms = [
+    "1. Goods once sold will not be taken back, exchanged or refunded.",
+    "2. Warranty & insurance terms are as provided by the company / service centre.",
+    "3. Customer has inspected the device at purchase; shop is not responsible thereafter.",
+    "4. Subject to Balaghat jurisdiction.",
+  ];
+  let ty = y + 12;
+  doc.fillColor(COLORS.muted).font(FONT.regular).fontSize(6.5);
+  for (const term of terms) {
+    doc.text(term, MARGIN, ty, {
+      width: CONTENT_WIDTH,
+      lineBreak: false,
+    });
+    ty += 9;
+  }
+
+  doc
+    .fillColor(COLORS.gold)
+    .font(FONT.regular)
+    .fontSize(11)
+    .text(`Thank you for shopping with ${shop.name}`, MARGIN, PAGE.height - 20, {
+      width: CONTENT_WIDTH,
+      align: "center",
+      lineBreak: false,
+    });
 }
 
 export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
@@ -377,259 +798,28 @@ export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    let y = drawHeader(doc) + 10;
+    registerFonts(doc);
+    let y = drawHeader(doc);
+    y = drawInvoiceBar(doc, y);
+    y = drawCustomerMeta(doc, bill, y);
 
-    const metaW = 124;
-    const metaX = PAGE.width - MARGIN - metaW;
-    const customerW = CONTENT_WIDTH - metaW - 12;
-
-    doc
-      .roundedRect(metaX, y, metaW, 46, 5)
-      .strokeColor(COLORS.navy)
-      .lineWidth(1)
-      .stroke();
-
-    doc
-      .fillColor(COLORS.muted)
-      .font("Helvetica")
-      .fontSize(7)
-      .text("Sr. No.", metaX + 6, y + 4, { lineBreak: false });
-
-    doc
-      .fillColor(COLORS.danger)
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .text(bill.invoiceNumber, metaX + 6, y + 14, {
-        width: metaW - 12,
-        lineBreak: false,
-      });
-
-    doc
-      .moveTo(metaX, y + 26)
-      .lineTo(metaX + metaW, y + 26)
-      .strokeColor(COLORS.line)
-      .lineWidth(0.8)
-      .stroke();
-
-    doc
-      .fillColor(COLORS.muted)
-      .font("Helvetica")
-      .fontSize(7)
-      .text("Date", metaX + 6, y + 29, { lineBreak: false });
-
-    doc
-      .fillColor(COLORS.ink)
-      .font("Helvetica-Bold")
-      .fontSize(8)
-      .text(format(bill.billDate, "dd MMM yyyy"), metaX + 6, y + 37, {
-        width: metaW - 12,
-        lineBreak: false,
-      });
-
-    const field = (label: string, value: string, fy: number) => {
-      doc
-        .fillColor(COLORS.muted)
-        .font("Helvetica-Bold")
-        .fontSize(7.5)
-        .text(label, MARGIN, fy, { width: 68, lineBreak: false });
-      doc
-        .fillColor(COLORS.ink)
-        .font("Helvetica")
-        .fontSize(9)
-        .text(value, MARGIN + 70, fy - 1, {
-          width: customerW - 70,
-          lineBreak: false,
-        });
-      doc
-        .moveTo(MARGIN + 70, fy + 10)
-        .lineTo(MARGIN + customerW, fy + 10)
-        .strokeColor(COLORS.line)
-        .lineWidth(0.7)
-        .stroke();
-    };
-
-    field("Name", bill.customerName, y + 1);
-    field("Contact No.", bill.customerPhone, y + 18);
-    field("Address", bill.customerAddress || "—", y + 35);
-
-    y += 56;
-
-    for (const item of bill.items) {
-      const rows = [
-        {
-          label: "Model",
-          value: [item.productName, item.color, item.storage, item.ram]
-            .filter(Boolean)
-            .join(" · "),
-        },
-        {
-          label: "IMEI Number",
-          value: item.imei1 || "—",
-        },
-      ];
-      if (item.serialNumber) {
-        rows.push({ label: "Serial", value: item.serialNumber });
-      }
-      if (item.gstPercent > 0) {
-        rows.push({
-          label: "GST",
-          value: `${item.gstPercent}% (incl.)`,
-        });
-      }
-
-      y = drawDetailTable(
-        doc,
-        y,
-        "Phone Detail (Sale)",
-        rows,
-        String(item.quantity),
-        inrSlash(item.amount),
-      );
-    }
-
-    if (bill.isExchange) {
-      const exchangeRows = [
-        { label: "Model", value: bill.exchangeModel || "—" },
-        {
-          label: "IMEI Number",
-          value: bill.exchangeImei1 || "—",
-        },
-      ];
-      if (bill.exchangeSerial) {
-        exchangeRows.push({ label: "Serial", value: bill.exchangeSerial });
-      }
-
-      y = drawDetailTable(
-        doc,
-        y,
-        "Exchange",
-        exchangeRows,
-        bill.exchangeModel ? "1" : "—",
-        bill.exchangeValue != null ? `− ${inrSlash(bill.exchangeValue)}` : "—",
-      );
-    }
-
-    const payY = y;
-    const payW = 290;
-    const totalBoxX = MARGIN + payW + 14;
-    const totalBoxW = CONTENT_WIDTH - payW - 14;
-
-    const payments: Array<{ label: string; amount: number; note?: string }> = [
-      { label: "Cash Amount", amount: bill.cashAmount },
-      { label: "Online Amount", amount: bill.onlineAmount },
-    ];
-
-    if (bill.financeAmount2 && bill.financeAmount2 > 0) {
-      payments.push({
-        label: "Finance Amount",
-        amount: Math.max(bill.financeAmount - bill.financeAmount2, 0),
-        note: bill.financeCompanyName || undefined,
-      });
-      payments.push({
-        label: "Finance Amount",
-        amount: bill.financeAmount2,
-        note: bill.financeCompanyName2 || undefined,
-      });
-    } else {
-      payments.push({
-        label: "Finance Amount",
-        amount: bill.financeAmount,
-        note: bill.financeCompanyName || undefined,
-      });
-    }
-
-    payments.push({ label: "Pending Amount", amount: bill.dueAmount });
-
-    payments.forEach((p, i) => {
-      const rowY = payY + i * 15;
-      drawCheckbox(doc, MARGIN, rowY + 1, p.amount > 0);
-      doc
-        .fillColor(COLORS.ink)
-        .font("Helvetica")
-        .fontSize(8)
-        .text(p.label, MARGIN + 14, rowY, { width: 100, lineBreak: false });
-
-      const detail =
-        p.amount > 0
-          ? `${inr(p.amount)}${p.note ? ` (${p.note})` : ""}`
-          : "—";
-      doc
-        .fillColor(p.amount > 0 ? COLORS.ink : COLORS.muted)
-        .font(p.amount > 0 ? "Helvetica-Bold" : "Helvetica")
-        .text(detail, MARGIN + 116, rowY, {
-          width: payW - 116,
-          lineBreak: false,
-        });
-    });
-
-    let afterPayY = payY + payments.length * 15;
-    if (bill.dueAmount > 0 && bill.dueDate) {
-      doc
-        .fillColor(COLORS.muted)
-        .font("Helvetica")
-        .fontSize(7)
-        .text(
-          `Expected by ${format(bill.dueDate, "dd MMM yyyy")}`,
-          MARGIN + 14,
-          afterPayY + 1,
-          { lineBreak: false },
-        );
-      afterPayY += 12;
-    }
-
-    doc.rect(totalBoxX, payY, totalBoxW, 18).fill(COLORS.navy);
-    doc
-      .fillColor(COLORS.white)
-      .font("Helvetica-Bold")
-      .fontSize(8)
-      .text("Total Amount In Rupees", totalBoxX, payY + 5, {
-        width: totalBoxW,
-        align: "center",
-        lineBreak: false,
-      });
-
-    doc
-      .rect(totalBoxX, payY + 18, totalBoxW, 40)
-      .strokeColor(COLORS.navy)
-      .lineWidth(1)
-      .stroke();
-
-    const payable = bill.payableAmount ?? bill.grandTotal;
-    doc
-      .fillColor(COLORS.navy)
-      .font("Helvetica-Bold")
-      .fontSize(15)
-      .text(inr(payable), totalBoxX + 6, payY + 28, {
-        width: totalBoxW - 12,
-        align: "center",
-        lineBreak: false,
-      });
-
-    let summaryY = Math.max(afterPayY, payY + 64) + 6;
-    doc.fillColor(COLORS.muted).font("Helvetica").fontSize(7);
-    doc.text(
-      `Taxable ${inr(bill.subtotal)}  ·  GST ${inr(bill.gstAmount)}  ·  Gross ${inr(bill.grandTotal)}`,
-      MARGIN,
-      summaryY,
-      { width: CONTENT_WIDTH, align: "left", lineBreak: false },
-    );
-    summaryY += 12;
+    const table = drawItemsTable(doc, bill, y);
+    y = drawTotalsSection(doc, bill, table.y + 4, table);
 
     if (bill.notes) {
       doc
         .fillColor(COLORS.ink)
-        .font("Helvetica-Bold")
+        .font(FONT.bold)
         .fontSize(7.5)
-        .text(`Notes: `, MARGIN, summaryY, { continued: true, lineBreak: false });
+        .text("Notes: ", MARGIN, y + 6, { continued: true, lineBreak: false });
       doc
+        .font(FONT.regular)
         .fillColor(COLORS.muted)
-        .font("Helvetica")
-        .text(bill.notes, { width: CONTENT_WIDTH - 40, lineBreak: false });
-      summaryY += 12;
+        .text(bill.notes, { width: CONTENT_WIDTH - 40 });
     }
 
-    drawFooter(doc, summaryY + 6);
-
+    // Terms stay pinned to the bottom of the page
+    drawFooter(doc);
     doc.end();
   });
 }
