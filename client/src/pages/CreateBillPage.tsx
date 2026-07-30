@@ -50,6 +50,7 @@ const blankItem = (): DraftItem => ({
   color: "",
   storage: "",
   ram: "",
+  condition: null,
   quantity: 1,
   rate: 0,
   gstPercent: 0,
@@ -87,6 +88,26 @@ function lineAmount(item: DraftItem) {
   return lineBreakdown(item).amount;
 }
 
+function todayDateInput() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function toDateInputValue(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return todayDateInput();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 export function CreateBillPage() {
   const navigate = useNavigate();
   const { id: editId } = useParams<{ id?: string }>();
@@ -108,6 +129,8 @@ export function CreateBillPage() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [useCustomBillDate, setUseCustomBillDate] = useState(false);
+  const [customBillDate, setCustomBillDate] = useState(todayDateInput());
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
   const [isExchange, setIsExchange] = useState(false);
   const [exchangeModel, setExchangeModel] = useState("");
@@ -153,6 +176,8 @@ export function CreateBillPage() {
     setPhoneError(null);
     setCustomerAddress("");
     setNotes("");
+    setUseCustomBillDate(false);
+    setCustomBillDate(todayDateInput());
     setItems([blankItem()]);
     setAddMobileForItem(null);
     setIsExchange(false);
@@ -181,6 +206,8 @@ export function CreateBillPage() {
     setCustomerPhone(bill.customerPhone.replace(/\D/g, "").slice(0, 10));
     setCustomerAddress(bill.customerAddress || "");
     setNotes(bill.notes || "");
+    setUseCustomBillDate(true);
+    setCustomBillDate(toDateInputValue(bill.billDate));
     setItems(
       bill.items.length
         ? bill.items.map((item) => ({
@@ -193,6 +220,7 @@ export function CreateBillPage() {
             color: item.color || "",
             storage: item.storage || "",
             ram: item.ram || "",
+            condition: item.condition || null,
             quantity: item.quantity,
             rate: item.rate,
             gstPercent: item.gstPercent,
@@ -290,6 +318,7 @@ export function CreateBillPage() {
   const mobileOptions = useMemo(
     () => [
       ...mobileCatalog.map((mobile) => {
+        const isUsed = (mobile.condition || "NEW") === "USED";
         const ramLabel = (() => {
           if (!mobile.ram) return null;
           const capacity = mobile.ram.replace(/\s*gb\s*$/i, "").trim();
@@ -303,6 +332,9 @@ export function CreateBillPage() {
           label: [mobile.name, mobile.color, mobile.storage, ramLabel]
             .filter(Boolean)
             .join(" • "),
+          badge: isUsed ? "Old" : "New",
+          badgeTone: (isUsed ? "old" : "new") as "old" | "new",
+          condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
         };
       }),
       { value: "__other__", label: "Other product / accessory" },
@@ -486,6 +518,7 @@ export function CreateBillPage() {
       color: mobile.color,
       storage: mobile.storage,
       ram: mobile.platform === "ANDROID" ? mobile.ram : "",
+      condition: mobile.condition || "NEW",
     });
   }
 
@@ -499,6 +532,7 @@ export function CreateBillPage() {
         color: "",
         storage: "",
         ram: "",
+        condition: null,
       });
       return;
     }
@@ -534,7 +568,7 @@ export function CreateBillPage() {
         }
         if (entry.select === ADD_NEW_FINANCE) {
           const created = await saveNewFinanceCompany(entry.key);
-          if (!created) return null;
+        if (!created) return null;
           resolved.push({ id: created.id, name: created.name, amount: entry.amount });
         } else if (entry.companyId) {
           resolved.push({
@@ -543,8 +577,8 @@ export function CreateBillPage() {
               financeCompanies.find((c) => c.id === entry.companyId)?.name || null,
             amount: entry.amount,
           });
-        } else {
-          throw new Error("Select a finance company");
+      } else {
+        throw new Error("Select a finance company");
         }
       }
 
@@ -572,6 +606,7 @@ export function CreateBillPage() {
       customerPhone,
       customerAddress: customerAddress || null,
       notes: notes || null,
+      billDate: useCustomBillDate ? customBillDate.trim() : null,
       useCash,
       useOnline,
       useFinance,
@@ -603,6 +638,8 @@ export function CreateBillPage() {
           item.catalogMode === "mobile" && item.platform === "ANDROID"
             ? item.ram || null
             : null,
+        condition:
+          item.catalogMode === "mobile" ? item.condition || null : null,
         quantity: item.quantity,
         rate: item.rate,
         gstPercent: item.gstPercent,
@@ -622,6 +659,12 @@ export function CreateBillPage() {
     if (phoneIssue) {
       setPhoneError(phoneIssue);
       document.getElementById("customerPhone")?.focus();
+      return;
+    }
+
+    if (useCustomBillDate && !customBillDate.trim()) {
+      setError("Select a custom bill date");
+      document.getElementById("customBillDate")?.focus();
       return;
     }
 
@@ -845,7 +888,52 @@ export function CreateBillPage() {
           <h2 className="font-display text-lg font-semibold text-ink-900">
             Customer
           </h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 space-y-4">
+            <label
+              htmlFor="useCustomBillDate"
+              className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-ink-100 bg-ink-50/70 p-4"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-ink-800">
+                  Use custom bill date
+                </span>
+                <span className="mt-1 block text-xs text-ink-500">
+                  Turn on to enter an older bill date instead of today.
+                </span>
+              </span>
+              <input
+                id="useCustomBillDate"
+                type="checkbox"
+                checked={useCustomBillDate}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setUseCustomBillDate(enabled);
+                  if (enabled && !customBillDate) {
+                    setCustomBillDate(todayDateInput());
+                  }
+                }}
+                className="h-5 w-5 shrink-0 rounded border-ink-300 text-tide-600 focus:ring-tide-300"
+              />
+            </label>
+
+            {useCustomBillDate ? (
+              <div>
+                <label className="label required" htmlFor="customBillDate">
+                  Bill date
+                </label>
+                <input
+                  id="customBillDate"
+                  className="field"
+                  type="date"
+                  value={customBillDate}
+                  max={todayDateInput()}
+                  onChange={(event) => setCustomBillDate(event.target.value)}
+                  required
+                />
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label required" htmlFor="customerName">
                 Name
@@ -901,6 +989,7 @@ export function CreateBillPage() {
                 onChange={(e) => setCustomerAddress(e.target.value)}
                 placeholder="Village / city"
               />
+            </div>
             </div>
           </div>
         </section>
@@ -979,25 +1068,26 @@ export function CreateBillPage() {
                       searchable
                       searchPlaceholder="Search phone…"
                       required
+                      conditionFilters
                       options={mobileOptions}
                     />
                   </div>
 
                   {item.catalogMode === "other" ? (
                     <div className="sm:col-span-2 lg:col-span-4">
-                      <label className="label required">Product name</label>
-                      <input
-                        className="field"
-                        value={item.productName}
+                    <label className="label required">Product name</label>
+                    <input
+                      className="field"
+                      value={item.productName}
                         onChange={(event) =>
                           updateItem(item.key, {
                             productName: event.target.value,
                           })
                         }
                         placeholder="e.g. Charger / Earphones"
-                        required
-                      />
-                    </div>
+                      required
+                    />
+                  </div>
                   ) : null}
                   <div>
                     <label className="label required">Qty</label>
@@ -1297,7 +1387,7 @@ export function CreateBillPage() {
                             {financeEntries.length > 1
                               ? `Finance company ${index + 1}`
                               : "Finance company"}
-                          </label>
+                    </label>
                           {index > 0 ? (
                             <button
                               type="button"
@@ -1308,12 +1398,12 @@ export function CreateBillPage() {
                             </button>
                           ) : null}
                         </div>
-                        <FinanceCompanyPicker
-                          companies={financeCompanies}
+                    <FinanceCompanyPicker
+                      companies={financeCompanies}
                           value={entry.select}
-                          required={useFinance}
+                      required={useFinance}
                           excludeIds={excludeIds}
-                          onChange={(value) => {
+                      onChange={(value) => {
                             updateFinanceEntry(entry.key, {
                               select: value,
                               companyId: value === ADD_NEW_FINANCE ? "" : value,
@@ -1323,37 +1413,37 @@ export function CreateBillPage() {
                           }}
                         />
                         {entry.select === ADD_NEW_FINANCE ? (
-                          <div>
+                    <div>
                             <label
                               className="label required"
                               htmlFor={`newFinanceName-${entry.key}`}
                             >
-                              New finance company
-                            </label>
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              <input
+                        New finance company
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
                                 id={`newFinanceName-${entry.key}`}
-                                className="field"
+                          className="field"
                                 value={entry.newName}
                                 onChange={(e) =>
                                   updateFinanceEntry(entry.key, {
                                     newName: e.target.value,
                                   })
                                 }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
                                     void saveNewFinanceCompany(entry.key);
-                                  }
-                                }}
-                                placeholder="e.g. HDFC Finance"
-                                required={
+                            }
+                          }}
+                          placeholder="e.g. HDFC Finance"
+                          required={
                                   useFinance && entry.select === ADD_NEW_FINANCE
-                                }
-                              />
-                              <button
-                                type="button"
-                                className="btn-secondary shrink-0"
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary shrink-0"
                                 disabled={
                                   savingFinanceKey === entry.key ||
                                   !entry.newName.trim()
@@ -1365,13 +1455,13 @@ export function CreateBillPage() {
                                 {savingFinanceKey === entry.key
                                   ? "Saving…"
                                   : "Save for later"}
-                              </button>
-                            </div>
-                            <p className="mt-2 text-xs text-ink-500">
-                              Saved names stay in the list for all future bills.
-                            </p>
-                          </div>
-                        ) : null}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-ink-500">
+                        Saved names stay in the list for all future bills.
+                      </p>
+                    </div>
+                  ) : null}
                         <div>
                           <label className="label required">Amount</label>
                           <input
@@ -1424,23 +1514,23 @@ export function CreateBillPage() {
                   </div>
                   {totals.dueAmount > 0 ? (
                     <>
-                      <label className="label required mt-4" htmlFor="dueDate">
-                        Expected collection date
-                      </label>
-                      <input
-                        id="dueDate"
-                        className="field"
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        required
-                        aria-required="true"
-                      />
-                      {!dueDate ? (
-                        <p className="mt-2 text-xs font-medium text-ember-500">
-                          Required when due amount is pending
-                        </p>
-                      ) : null}
+                  <label className="label required mt-4" htmlFor="dueDate">
+                    Expected collection date
+                  </label>
+                  <input
+                    id="dueDate"
+                    className="field"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    required
+                    aria-required="true"
+                  />
+                  {!dueDate ? (
+                    <p className="mt-2 text-xs font-medium text-ember-500">
+                      Required when due amount is pending
+                    </p>
+                  ) : null}
                     </>
                   ) : (
                     <p className="mt-2 text-xs text-ink-500">
@@ -1507,11 +1597,11 @@ export function CreateBillPage() {
                 value={formatINR(totals.finance)}
               />
               {hasDue ? (
-                <SummaryRow
-                  label="Due"
-                  value={formatINR(totals.dueAmount)}
-                  accent={totals.dueAmount > 0}
-                />
+              <SummaryRow
+                label="Due"
+                value={formatINR(totals.dueAmount)}
+                accent={totals.dueAmount > 0}
+              />
               ) : null}
             </dl>
 

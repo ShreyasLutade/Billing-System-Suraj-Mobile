@@ -11,6 +11,7 @@ export function AddMobileModal({
   onClose: () => void;
   onCreated: (mobile: MobileCatalog) => void;
 }) {
+  const [condition, setCondition] = useState<"NEW" | "USED">("NEW");
   const [platform, setPlatform] = useState<"IOS" | "ANDROID">("IOS");
   const [name, setName] = useState("");
   const [color, setColor] = useState("");
@@ -27,6 +28,7 @@ export function AddMobileModal({
       const { data } = await api.createMobile({
         name,
         platform,
+        condition,
         color,
         storage,
         ram: platform === "ANDROID" ? ram : "",
@@ -86,6 +88,32 @@ export function AddMobileModal({
         </div>
 
         <div className="space-y-4 px-5 py-5">
+          <div>
+            <span className="label required">Condition</span>
+            <div className="grid grid-cols-2 gap-1 rounded-2xl border border-ink-100 bg-ink-50/70 p-1">
+              {(
+                [
+                  { value: "NEW", label: "New Mobile" },
+                  { value: "USED", label: "Second Hand" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={
+                    condition === option.value
+                      ? "rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
+                      : "rounded-xl px-4 py-2.5 text-sm font-semibold text-ink-500 transition hover:bg-white"
+                  }
+                  aria-pressed={condition === option.value}
+                  onClick={() => setCondition(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <span className="label required">Operating system</span>
             <div className="grid grid-cols-2 gap-1 rounded-2xl border border-ink-100 bg-ink-50/70 p-1">
@@ -188,11 +216,7 @@ export function AddMobileModal({
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={saving}
-          >
+          <button type="submit" className="btn-primary" disabled={saving}>
             <Plus className="h-4 w-4" />
             {saving ? "Adding…" : "Add mobile"}
           </button>

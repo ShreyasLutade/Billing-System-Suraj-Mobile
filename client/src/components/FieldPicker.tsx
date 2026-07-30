@@ -15,7 +15,13 @@ export type FieldPickerOption = {
   label: string;
   description?: string;
   icon?: ReactNode;
+  badge?: string;
+  badgeTone?: "new" | "old";
+  /** Used by in-dropdown New/Old circle filters */
+  condition?: "NEW" | "USED";
 };
+
+type ConditionFilter = "ALL" | "NEW" | "USED";
 
 type Props = {
   options: FieldPickerOption[];
@@ -26,6 +32,8 @@ type Props = {
   disabled?: boolean;
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Show All / New / Old circle filters inside the open dropdown */
+  conditionFilters?: boolean;
 };
 
 export function FieldPicker({
@@ -37,22 +45,35 @@ export function FieldPicker({
   disabled,
   searchable = false,
   searchPlaceholder = "Search…",
+  conditionFilters = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [conditionFilter, setConditionFilter] =
+    useState<ConditionFilter>("ALL");
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
   const selectedLabel =
     options.find((option) => option.value === value)?.label || placeholder;
+
   const filteredOptions = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((option) =>
-      `${option.label} ${option.description || ""}`.toLowerCase().includes(q),
-    );
-  }, [options, query]);
+    return options.filter((option) => {
+      if (
+        conditionFilter !== "ALL" &&
+        option.condition &&
+        option.condition !== conditionFilter
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return `${option.label} ${option.description || ""} ${option.badge || ""}`
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [options, query, conditionFilter]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -166,6 +187,38 @@ export function FieldPicker({
           role="listbox"
           className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
         >
+          {conditionFilters ? (
+            <div
+              className="flex items-center gap-4 border-b border-ink-100 px-3 py-2.5"
+              role="radiogroup"
+              aria-label="Filter by condition"
+            >
+              {(
+                [
+                  { value: "ALL", label: "All" },
+                  { value: "NEW", label: "New" },
+                  { value: "USED", label: "Old" },
+                ] as const
+              ).map((option) => (
+                <FilterCircle
+                  key={option.value}
+                  label={option.label}
+                  selected={conditionFilter === option.value}
+                  onSelect={() => {
+                    // Clicking the active New/Old again returns to All
+                    if (
+                      option.value !== "ALL" &&
+                      conditionFilter === option.value
+                    ) {
+                      setConditionFilter("ALL");
+                      return;
+                    }
+                    setConditionFilter(option.value);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
           <div className="max-h-56 overflow-y-auto overscroll-contain p-1.5 sm:max-h-64">
             <PickerOption
               active={!value}
@@ -183,6 +236,8 @@ export function FieldPicker({
                 label={option.label}
                 description={option.description}
                 icon={option.icon}
+                badge={option.badge}
+                badgeTone={option.badgeTone}
                 onSelect={() => {
                   onChange(option.value);
                   close();
@@ -201,12 +256,49 @@ export function FieldPicker({
   );
 }
 
+function FilterCircle({
+  label,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      className="inline-flex items-center gap-2 text-sm font-medium text-ink-700"
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+    >
+      <span
+        className={clsx(
+          "flex h-4 w-4 items-center justify-center rounded-full border-2",
+          selected ? "border-ink-900 bg-ink-900" : "border-ink-300 bg-white",
+        )}
+      >
+        {selected ? (
+          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+        ) : null}
+      </span>
+      {label}
+    </button>
+  );
+}
+
 function PickerOption({
   label,
   description,
   active,
   muted,
   icon,
+  badge,
+  badgeTone,
   onSelect,
 }: {
   label: string;
@@ -214,6 +306,8 @@ function PickerOption({
   active?: boolean;
   muted?: boolean;
   icon?: ReactNode;
+  badge?: string;
+  badgeTone?: "new" | "old";
   onSelect: () => void;
 }) {
   return (
@@ -244,6 +338,20 @@ function PickerOption({
           </span>
         ) : null}
       </span>
+      {badge ? (
+        <span
+          className={clsx(
+            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide",
+            active
+              ? "bg-white/15 text-white"
+              : badgeTone === "old"
+                ? "bg-orange-100 text-ember-500"
+                : "bg-tide-100 text-tide-700",
+          )}
+        >
+          {badge}
+        </span>
+      ) : null}
       {active ? <Check className="h-4 w-4 shrink-0" /> : null}
     </button>
   );

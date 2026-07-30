@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { requireAdmin } from "../middleware/auth";
 import {
   getPeriodRange,
   isDuePeriod,
@@ -140,7 +141,7 @@ duesRouter.get("/finance", async (_req, res, next) => {
   }
 });
 
-duesRouter.patch("/finance/:id/receive", async (req, res, next) => {
+duesRouter.patch("/finance/:id/receive", requireAdmin, async (req, res, next) => {
   try {
     const bill = await prisma.bill.findUnique({
       where: { id: req.params.id },
@@ -208,7 +209,7 @@ const settleSchema = z
     }
   });
 
-duesRouter.patch("/:id/settle", async (req, res, next) => {
+duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
   try {
     const parsed = settleSchema.safeParse(req.body);
     if (!parsed.success) {

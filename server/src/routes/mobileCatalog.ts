@@ -8,6 +8,7 @@ const createMobileSchema = z
   .object({
     name: z.string().trim().min(2, "Phone name is required").max(100),
     platform: z.enum(["IOS", "ANDROID"]),
+    condition: z.enum(["NEW", "USED"]).default("NEW"),
     color: z.string().trim().min(1, "Color is required").max(50),
     storage: z.string().trim().min(1, "Storage is required").max(30),
     ram: z.string().trim().max(30).optional().default(""),
@@ -40,7 +41,12 @@ function normalizeCapacity(value: string) {
 mobileCatalogRouter.get("/", async (_req, res, next) => {
   try {
     const mobiles = await prisma.mobileCatalog.findMany({
-      orderBy: [{ name: "asc" }, { storage: "asc" }, { color: "asc" }],
+      orderBy: [
+        { name: "asc" },
+        { condition: "asc" },
+        { storage: "asc" },
+        { color: "asc" },
+      ],
     });
     res.json({ data: mobiles });
   } catch (error) {
@@ -63,6 +69,7 @@ mobileCatalogRouter.post("/", async (req, res, next) => {
     const values = {
       name: capitalizeFirst(input.name),
       platform: input.platform,
+      condition: input.condition,
       color: capitalizeFirst(input.color),
       storage: normalizeCapacity(input.storage),
       ram: input.platform === "ANDROID" ? normalizeCapacity(input.ram) : "",

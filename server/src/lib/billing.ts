@@ -25,6 +25,7 @@ export const billItemSchema = z
     color: z.string().trim().optional().nullable(),
     storage: z.string().trim().optional().nullable(),
     ram: z.string().trim().optional().nullable(),
+    condition: z.enum(["NEW", "USED"]).optional().nullable(),
     quantity: z.number().int().positive().default(1),
     rate: z.number().nonnegative("Rate must be 0 or more"),
     gstPercent: z.number().min(0).max(100).default(0),
@@ -68,7 +69,18 @@ export const createBillSchema = z
       .regex(/^\d{10}$/, "Phone number must be 10 digits"),
     customerAddress: z.string().trim().optional().nullable(),
     notes: z.string().trim().optional().nullable(),
-    billDate: z.string().datetime().optional(),
+    billDate: z
+      .string()
+      .trim()
+      .optional()
+      .nullable()
+      .refine(
+        (value) =>
+          !value ||
+          /^\d{4}-\d{2}-\d{2}$/.test(value) ||
+          !Number.isNaN(Date.parse(value)),
+        "Invalid bill date",
+      ),
     items: z.array(billItemSchema).min(1, "Add at least one product"),
     useCash: z.boolean().default(false),
     useOnline: z.boolean().default(false),
