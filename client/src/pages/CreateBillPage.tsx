@@ -751,6 +751,19 @@ export function CreateBillPage() {
       return;
     }
 
+    if (withGst) {
+      const missingGst = items.find(
+        (item) => !item.gstPercent || item.gstPercent <= 0,
+      );
+      if (missingGst) {
+        setError("Enter GST % for every item when generating a GST bill.");
+        const field = document.getElementById(`gstPercent-${missingGst.key}`);
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        field?.focus();
+        return;
+      }
+    }
+
     if (!hasDue && totals.dueAmount > 0) {
       setError(
         `Payment is short by ${formatINR(totals.dueAmount)}. Complete the payment split or turn on "This bill has due".`,
@@ -1294,19 +1307,27 @@ export function CreateBillPage() {
                     />
                   </div>
                   <div>
-                    <label className="label">GST % (incl.)</label>
+                    <label
+                      className={withGst ? "label required" : "label"}
+                      htmlFor={`gstPercent-${item.key}`}
+                    >
+                      GST % (incl.)
+                    </label>
                     <input
+                      id={`gstPercent-${item.key}`}
                       className="field"
                       type="number"
-                      min={0}
+                      min={withGst ? 0.01 : 0}
                       max={100}
                       step="0.01"
-                      value={item.gstPercent}
+                      value={item.gstPercent || ""}
                       onChange={(e) =>
                         updateItem(item.key, {
                           gstPercent: Number(e.target.value) || 0,
                         })
                       }
+                      required={withGst}
+                      placeholder={withGst ? "e.g. 18" : "0"}
                     />
                   </div>
                   <div>
