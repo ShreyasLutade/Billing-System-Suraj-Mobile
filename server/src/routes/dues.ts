@@ -55,6 +55,10 @@ duesRouter.get("/", async (req, res, next) => {
         isPartialPaid: true,
         items: {
           select: {
+            productName: true,
+            color: true,
+            storage: true,
+            ram: true,
             imei1: true,
             imei2: true,
           },
@@ -74,6 +78,13 @@ duesRouter.get("/", async (req, res, next) => {
           ...bill,
           dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
           billDate: bill.billDate.toISOString(),
+          productLabels: items
+            .map((item) =>
+              [item.productName, item.color, item.storage, item.ram]
+                .filter(Boolean)
+                .join(" "),
+            )
+            .filter(Boolean),
           imeiNumbers: items.flatMap((item) =>
             [item.imei1, item.imei2].filter(
               (imei): imei is string => Boolean(imei),
@@ -110,6 +121,10 @@ duesRouter.get("/finance", async (_req, res, next) => {
         financeReceivedAt: true,
         items: {
           select: {
+            productName: true,
+            color: true,
+            storage: true,
+            ram: true,
             imei1: true,
             imei2: true,
           },
@@ -130,6 +145,13 @@ duesRouter.get("/finance", async (_req, res, next) => {
           ...bill,
           billDate: bill.billDate.toISOString(),
           financeReceivedAt: bill.financeReceivedAt?.toISOString() ?? null,
+          productLabels: items
+            .map((item) =>
+              [item.productName, item.color, item.storage, item.ram]
+                .filter(Boolean)
+                .join(" "),
+            )
+            .filter(Boolean),
           imeiNumbers: items.flatMap((item) =>
             [item.imei1, item.imei2].filter(
               (imei): imei is string => Boolean(imei),

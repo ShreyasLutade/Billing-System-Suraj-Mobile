@@ -8,6 +8,7 @@ import {
 } from "../components/PeriodFilter";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
+import { matchesBillSearch } from "../lib/billSearch";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill } from "../types";
 
@@ -24,15 +25,13 @@ export function BillsPage() {
   const [shareError, setShareError] = useState<string | null>(null);
 
   const searchQuery = query.trim();
-  // Search by name / phone / IMEI should look across all dates (same for shop + GST).
-  const listPeriod = searchQuery ? "all" : period;
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     (async () => {
       try {
-        const { data } = await api.listBills(listPeriod, {
+        const { data } = await api.listBills(period, {
           withGst: tab === "gst",
         });
         if (active) {
@@ -50,68 +49,10 @@ export function BillsPage() {
     return () => {
       active = false;
     };
-  }, [listPeriod, tab]);
+  }, [period, tab]);
 
-  const filtered = bills.filter((bill) => {
-    const q = searchQuery.toLowerCase();
-    if (!q) return true;
-    const qDigits = searchQuery.replace(/\D/g, "");
-    const phoneDigits = bill.customerPhone.replace(/\D/g, "");
-    const phoneMatch =
-      qDigits.length > 0 && phoneDigits.includes(qDigits);
-
-    const productMatch = (bill.items || []).some((item) => {
-      const haystack = [
-        item.productName,
-        item.color,
-        item.storage,
-        item.ram,
-        item.imei1,
-        item.imei2,
-        item.serialNumber,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const imeiDigits = `${item.imei1 || ""}${item.imei2 || ""}`.replace(
-        /\D/g,
-        "",
-      );
-      return (
-        haystack.includes(q) ||
-        (qDigits.length > 0 && imeiDigits.includes(qDigits))
-      );
-    });
-
-    const exchangeHaystack = [
-      bill.exchangeModel,
-      bill.exchangeColor,
-      bill.exchangeStorage,
-      bill.exchangeRam,
-      bill.exchangeImei1,
-      bill.exchangeImei2,
-      bill.exchangeSerial,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const exchangeImeiDigits =
-      `${bill.exchangeImei1 || ""}${bill.exchangeImei2 || ""}`.replace(
-        /\D/g,
-        "",
-      );
-    const exchangeMatch =
-      exchangeHaystack.includes(q) ||
-      (qDigits.length > 0 && exchangeImeiDigits.includes(qDigits));
-
-    return (
-      bill.invoiceNumber.toLowerCase().includes(q) ||
-      bill.customerName.toLowerCase().includes(q) ||
-      phoneMatch ||
-      productMatch ||
-      exchangeMatch
-    );
-  });
+  // Period filter + search apply together (shop bills and GST bills).
+  const filtered = bills.filter((bill) => matchesBillSearch(bill, searchQuery));
 
   const isGstTab = tab === "gst";
 
@@ -122,8 +63,8 @@ export function BillsPage() {
         title="Bills"
         description={
           isGstTab
-            ? "GST tax invoices for submission. Search by invoice, customer, phone, product, or IMEI — not counted in shop sales."
-            : "Shop bills with payment modes. Filter by period and search invoice, customer, phone, product, or IMEI."
+            ? "GST tax invoices for submission. Period and search (name, phone, product, IMEI) work together — not counted in shop sales."
+            : "Shop bills with payment modes. Period and search (name, phone, product, IMEI) work together."
         }
         action={
           <Link to="/" className="btn-primary">
