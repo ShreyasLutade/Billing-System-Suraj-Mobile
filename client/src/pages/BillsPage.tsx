@@ -126,7 +126,7 @@ export function BillsPage() {
                 searchScope === "name"
                   ? "Search by customer name…"
                   : searchScope === "phone"
-                    ? "Search by phone…"
+                    ? "Search by number…"
                     : searchScope === "imei"
                       ? "Search by IMEI…"
                       : searchScope === "product"
