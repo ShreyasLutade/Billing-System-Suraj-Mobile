@@ -58,34 +58,58 @@ export function BillsPage() {
     const qDigits = searchQuery.replace(/\D/g, "");
     const phoneDigits = bill.customerPhone.replace(/\D/g, "");
     const phoneMatch =
-      bill.customerPhone.includes(searchQuery) ||
-      (qDigits.length > 0 && phoneDigits.includes(qDigits));
-    const imeiMatch = (bill.items || []).some((item) => {
-      const imei1 = item.imei1?.toLowerCase() || "";
-      const imei2 = item.imei2?.toLowerCase() || "";
-      const imei1Digits = (item.imei1 || "").replace(/\D/g, "");
-      const imei2Digits = (item.imei2 || "").replace(/\D/g, "");
+      qDigits.length > 0 && phoneDigits.includes(qDigits);
+
+    const productMatch = (bill.items || []).some((item) => {
+      const haystack = [
+        item.productName,
+        item.color,
+        item.storage,
+        item.ram,
+        item.imei1,
+        item.imei2,
+        item.serialNumber,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const imeiDigits = `${item.imei1 || ""}${item.imei2 || ""}`.replace(
+        /\D/g,
+        "",
+      );
       return (
-        imei1.includes(q) ||
-        imei2.includes(q) ||
-        (qDigits.length > 0 &&
-          (imei1Digits.includes(qDigits) || imei2Digits.includes(qDigits)))
+        haystack.includes(q) ||
+        (qDigits.length > 0 && imeiDigits.includes(qDigits))
       );
     });
-    const exchangeImei1 = bill.exchangeImei1?.toLowerCase() || "";
-    const exchangeImei2 = bill.exchangeImei2?.toLowerCase() || "";
-    const exchangeImeiMatch =
-      exchangeImei1.includes(q) ||
-      exchangeImei2.includes(q) ||
-      (qDigits.length > 0 &&
-        ((bill.exchangeImei1 || "").replace(/\D/g, "").includes(qDigits) ||
-          (bill.exchangeImei2 || "").replace(/\D/g, "").includes(qDigits)));
+
+    const exchangeHaystack = [
+      bill.exchangeModel,
+      bill.exchangeColor,
+      bill.exchangeStorage,
+      bill.exchangeRam,
+      bill.exchangeImei1,
+      bill.exchangeImei2,
+      bill.exchangeSerial,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const exchangeImeiDigits =
+      `${bill.exchangeImei1 || ""}${bill.exchangeImei2 || ""}`.replace(
+        /\D/g,
+        "",
+      );
+    const exchangeMatch =
+      exchangeHaystack.includes(q) ||
+      (qDigits.length > 0 && exchangeImeiDigits.includes(qDigits));
+
     return (
       bill.invoiceNumber.toLowerCase().includes(q) ||
       bill.customerName.toLowerCase().includes(q) ||
       phoneMatch ||
-      imeiMatch ||
-      exchangeImeiMatch
+      productMatch ||
+      exchangeMatch
     );
   });
 
@@ -98,8 +122,8 @@ export function BillsPage() {
         title="Bills"
         description={
           isGstTab
-            ? "GST tax invoices for submission. Search by invoice, customer, phone, or IMEI — not counted in shop sales."
-            : "Shop bills with payment modes. Filter by period and search invoice, customer, phone, or IMEI."
+            ? "GST tax invoices for submission. Search by invoice, customer, phone, product, or IMEI — not counted in shop sales."
+            : "Shop bills with payment modes. Filter by period and search invoice, customer, phone, product, or IMEI."
         }
         action={
           <Link to="/" className="btn-primary">
@@ -149,7 +173,7 @@ export function BillsPage() {
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
           <input
             className="field pl-11"
-            placeholder="Search invoice, customer, phone, or IMEI…"
+            placeholder="Search invoice, customer, phone, product, or IMEI…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -179,7 +203,7 @@ export function BillsPage() {
           }
           description={
             searchQuery
-              ? "Try another name, phone, IMEI, or invoice number."
+              ? "Try another name, phone, product, IMEI, or invoice number."
               : isGstTab
                 ? "Create a bill with “Generate GST bill” turned on."
                 : "Try another filter, or create a new bill from the New Bill screen."
