@@ -14,7 +14,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
   try {
     const period: ActivityPeriod = isActivityPeriod(req.query.period)
       ? req.query.period
-      : "today";
+      : "all";
     const range = getPeriodRange(period);
     const billDateFilter = toDateFilter(range);
 

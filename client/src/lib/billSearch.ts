@@ -1,11 +1,31 @@
 /** Case-insensitive bill/due search by invoice, customer, phone, product, or IMEI. */
 
+export type BillSearchScope = "all" | "name" | "phone" | "imei" | "product";
+
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
 }
 
 function includesText(haystack: string, query: string) {
   return haystack.toLowerCase().includes(query);
+}
+
+function matchesPhone(phone: string, rawQuery: string, query: string) {
+  const qDigits = digitsOnly(rawQuery);
+  const phoneDigits = digitsOnly(phone);
+  return (
+    includesText(phone, query) ||
+    (qDigits.length > 0 && phoneDigits.includes(qDigits))
+  );
+}
+
+function matchesImeiValue(imei: string | null | undefined, rawQuery: string, query: string) {
+  if (!imei) return false;
+  const qDigits = digitsOnly(rawQuery);
+  return (
+    includesText(imei, query) ||
+    (qDigits.length > 0 && digitsOnly(imei).includes(qDigits))
+  );
 }
 
 export function matchesBillSearch(
@@ -31,10 +51,42 @@ export function matchesBillSearch(
     exchangeSerial?: string | null;
   },
   rawQuery: string,
+  scope: BillSearchScope = "all",
 ): boolean {
   const query = rawQuery.trim().toLowerCase();
   if (!query) return true;
 
+  if (scope === "name") {
+    return includesText(bill.customerName, query);
+  }
+
+  if (scope === "phone") {
+    return matchesPhone(bill.customerPhone, rawQuery, query);
+  }
+
+  if (scope === "imei") {
+    for (const item of bill.items || []) {
+      if (
+        matchesImeiValue(item.imei1, rawQuery, query) ||
+        matchesImeiValue(item.imei2, rawQuery, query)
+      ) {
+        return true;
+      }
+    }
+    return (
+      matchesImeiValue(bill.exchangeImei1, rawQuery, query) ||
+      matchesImeiValue(bill.exchangeImei2, rawQuery, query)
+    );
+  }
+
+  if (scope === "product") {
+    for (const item of bill.items || []) {
+      if (includesText(item.productName || "", query)) return true;
+    }
+    return includesText(bill.exchangeModel || "", query);
+  }
+
+  // Default: search everything (current behavior)
   const qDigits = digitsOnly(rawQuery);
   const phoneDigits = digitsOnly(bill.customerPhone);
   if (qDigits && phoneDigits.includes(qDigits)) return true;
@@ -93,10 +145,36 @@ export function matchesDueSearch(
     financeCompanyName2?: string | null;
   },
   rawQuery: string,
-  options?: { includeFinanceCompany?: boolean },
+  options?: {
+    includeFinanceCompany?: boolean;
+    scope?: BillSearchScope;
+  },
 ): boolean {
+  const scope = options?.scope ?? "all";
   const query = rawQuery.trim().toLowerCase();
   if (!query) return true;
+
+  if (scope === "name") {
+    return includesText(due.customerName, query);
+  }
+
+  if (scope === "phone") {
+    return matchesPhone(due.customerPhone, rawQuery, query);
+  }
+
+  if (scope === "imei") {
+    for (const imei of due.imeiNumbers || []) {
+      if (matchesImeiValue(imei, rawQuery, query)) return true;
+    }
+    return false;
+  }
+
+  if (scope === "product") {
+    for (const label of due.productLabels || []) {
+      if (includesText(label, query)) return true;
+    }
+    return false;
+  }
 
   const qDigits = digitsOnly(rawQuery);
   const phoneDigits = digitsOnly(due.customerPhone);

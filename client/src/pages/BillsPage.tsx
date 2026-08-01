@@ -6,9 +6,13 @@ import {
   PeriodFilter,
   type ActivityPeriodValue,
 } from "../components/PeriodFilter";
+import { SearchScopeRadios } from "../components/SearchScopeRadios";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
-import { matchesBillSearch } from "../lib/billSearch";
+import {
+  matchesBillSearch,
+  type BillSearchScope,
+} from "../lib/billSearch";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill } from "../types";
 
@@ -20,7 +24,8 @@ export function BillsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [period, setPeriod] = useState<ActivityPeriodValue>("today");
+  const [searchScope, setSearchScope] = useState<BillSearchScope>("all");
+  const [period, setPeriod] = useState<ActivityPeriodValue>("all");
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
 
@@ -52,7 +57,9 @@ export function BillsPage() {
   }, [period, tab]);
 
   // Period filter + search apply together (shop bills and GST bills).
-  const filtered = bills.filter((bill) => matchesBillSearch(bill, searchQuery));
+  const filtered = bills.filter((bill) =>
+    matchesBillSearch(bill, searchQuery, searchScope),
+  );
 
   const isGstTab = tab === "gst";
 
@@ -110,13 +117,30 @@ export function BillsPage() {
         </div>
 
         <PeriodFilter value={period} onChange={setPeriod} />
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
-          <input
-            className="field pl-11"
-            placeholder="Search invoice, customer, phone, product, or IMEI…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
+            <input
+              className="field pl-11"
+              placeholder={
+                searchScope === "name"
+                  ? "Search by customer name…"
+                  : searchScope === "phone"
+                    ? "Search by phone…"
+                    : searchScope === "imei"
+                      ? "Search by IMEI…"
+                      : searchScope === "product"
+                        ? "Search by product name…"
+                        : "Search invoice, customer, phone, product, or IMEI…"
+              }
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <SearchScopeRadios
+            name="bills-search-scope"
+            value={searchScope}
+            onChange={setSearchScope}
           />
         </div>
       </div>
