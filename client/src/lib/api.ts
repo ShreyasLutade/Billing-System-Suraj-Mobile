@@ -85,10 +85,16 @@ export const api = {
       body: JSON.stringify({ phone, password }),
     }),
   me: () => request<{ data: { user: AuthUser } }>("/auth/me"),
-  listBills: (period?: string) =>
-    request<{ data: Bill[]; period?: string }>(
-      `/bills${period ? `?period=${encodeURIComponent(period)}` : ""}`,
-    ),
+  listBills: (period?: string, options?: { withGst?: boolean }) => {
+    const params = new URLSearchParams();
+    if (period) params.set("period", period);
+    if (options?.withGst === true) params.set("withGst", "true");
+    if (options?.withGst === false) params.set("withGst", "false");
+    const query = params.toString();
+    return request<{ data: Bill[]; period?: string }>(
+      `/bills${query ? `?${query}` : ""}`,
+    );
+  },
   getBill: (id: string) => request<{ data: Bill }>(`/bills/${id}`),
   createBill: (payload: CreateBillPayload) =>
     request<{ data: Bill }>("/bills", {

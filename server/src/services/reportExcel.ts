@@ -12,12 +12,13 @@ async function fetchBills(scope: ReportScope, now = new Date()) {
   const where =
     scope === "today"
       ? {
+          withGst: false,
           billDate: {
             gte: startOfDayIST(now),
             lte: endOfDayIST(now),
           },
         }
-      : {};
+      : { withGst: false };
 
   return prisma.bill.findMany({
     where,
@@ -182,6 +183,7 @@ function addSummarySheet(
 async function addOutstandingDuesSheet(wb: ExcelJS.Workbook) {
   const dues = await prisma.bill.findMany({
     where: {
+      withGst: false,
       dueAmount: { gt: 0 },
       dueSettled: false,
     },
@@ -216,6 +218,7 @@ async function addOutstandingDuesSheet(wb: ExcelJS.Workbook) {
 async function addFinanceDuesSheet(wb: ExcelJS.Workbook) {
   const dues = await prisma.bill.findMany({
     where: {
+      withGst: false,
       financeAmount: { gt: 0 },
       financeReceived: false,
     },

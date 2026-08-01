@@ -19,7 +19,10 @@ analyticsRouter.get("/summary", async (req, res, next) => {
     const billDateFilter = toDateFilter(range);
 
     const periodBills = await prisma.bill.findMany({
-      where: billDateFilter ? { billDate: billDateFilter } : undefined,
+      where: {
+        withGst: false,
+        ...(billDateFilter ? { billDate: billDateFilter } : {}),
+      },
       select: {
         grandTotal: true,
         payableAmount: true,
@@ -46,6 +49,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
 
     const outstanding = await prisma.bill.aggregate({
       where: {
+        withGst: false,
         dueAmount: { gt: 0 },
         dueSettled: false,
       },
@@ -55,6 +59,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
 
     const dueBills = await prisma.bill.findMany({
       where: {
+        withGst: false,
         dueAmount: { gt: 0 },
         dueSettled: false,
       },

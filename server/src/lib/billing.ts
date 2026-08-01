@@ -258,6 +258,9 @@ export const createBillSchema = z
       });
     }
 
+    // GST bills are submission-only — payments/dues are not recorded
+    if (data.withGst) return;
+
     const due = payableAmount.minus(paid);
     if (due.gt(0) && !data.dueDate?.trim()) {
       ctx.addIssue({

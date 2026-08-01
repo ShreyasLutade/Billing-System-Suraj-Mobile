@@ -122,7 +122,6 @@ export function BillDetailPage() {
         description={
           [
             `Created ${format(new Date(bill.billDate), "dd MMM yyyy")}`,
-            bill.withGst ? "GST tax invoice" : "Non-GST bill",
             bill.createdByRole
               ? bill.createdByName ||
                 (bill.createdByRole === "ADMIN" ? "Admin" : "Staff")
@@ -169,10 +168,10 @@ export function BillDetailPage() {
               href={api.pdfUrl(bill.id)}
               target="_blank"
               rel="noreferrer"
-              title={bill.withGst ? "GST tax invoice PDF" : "Non-GST bill PDF"}
+              title="Download PDF"
             >
               <Download className="h-4 w-4" />
-              {bill.withGst ? "Download GST PDF" : "Download PDF"}
+              Download PDF
             </a>
             {isAdmin ? (
               <button
@@ -187,7 +186,7 @@ export function BillDetailPage() {
                 Delete
               </button>
             ) : null}
-            {hasDue ? (
+            {hasDue && !bill.withGst ? (
               <button
                 type="button"
                 className="btn-primary"
@@ -287,7 +286,7 @@ export function BillDetailPage() {
             </div>
           </div>
 
-          {bill.isExchange ? (
+          {!bill.withGst && bill.isExchange ? (
             <div className="glass-panel p-5 sm:p-6">
               <h3 className="font-display text-lg font-semibold text-ink-900">
                 Exchange mobile
@@ -330,7 +329,7 @@ export function BillDetailPage() {
               <Row label="Subtotal" value={formatINR(bill.subtotal)} />
               <Row label="GST" value={formatINR(bill.gstAmount)} />
               <Row label="Gross total" value={formatINR(bill.grandTotal)} />
-              {bill.isExchange && bill.exchangeValue ? (
+              {!bill.withGst && bill.isExchange && bill.exchangeValue ? (
                 <Row
                   label="Less: Exchange"
                   value={`- ${formatINR(bill.exchangeValue)}`}
@@ -338,13 +337,18 @@ export function BillDetailPage() {
                 />
               ) : null}
               <Row
-                label="Payable"
-                value={formatINR(bill.payableAmount ?? bill.grandTotal)}
+                label={bill.withGst ? "Invoice total" : "Payable"}
+                value={formatINR(
+                  bill.withGst
+                    ? bill.grandTotal
+                    : (bill.payableAmount ?? bill.grandTotal),
+                )}
                 strong
               />
             </dl>
           </div>
 
+          {!bill.withGst ? (
           <div className="glass-panel p-5 sm:p-6">
             <h3 className="font-display text-lg font-semibold text-ink-900">
               Payment split
@@ -423,8 +427,19 @@ export function BillDetailPage() {
               </p>
             ) : null}
           </div>
+          ) : (
+            <div className="glass-panel p-5 sm:p-6">
+              <h3 className="font-display text-lg font-semibold text-ink-900">
+                Submission invoice
+              </h3>
+              <p className="mt-2 text-sm text-ink-500">
+                Payment modes are not recorded. This bill is excluded from shop
+                sales.
+              </p>
+            </div>
+          )}
 
-          {hasDue ? (
+          {!bill.withGst && hasDue ? (
             <div className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-5 shadow-soft sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember-500">
                 {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
@@ -457,7 +472,8 @@ export function BillDetailPage() {
                 </button>
               ) : null}
             </div>
-          ) : (
+          ) : null}
+          {!bill.withGst && !hasDue ? (
             <div className="rounded-3xl border border-tide-100 bg-gradient-to-br from-tide-100/70 to-white p-5 shadow-soft sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-tide-600">
                 Status
@@ -477,7 +493,7 @@ export function BillDetailPage() {
                 />
               ) : null}
             </div>
-          )}
+          ) : null}
         </aside>
       </div>
 
