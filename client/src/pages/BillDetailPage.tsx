@@ -120,12 +120,16 @@ export function BillDetailPage() {
         eyebrow="Invoice"
         title={bill.invoiceNumber}
         description={
-          bill.createdByRole
-            ? `Created ${format(new Date(bill.billDate), "dd MMM yyyy")} · ${
-                bill.createdByName ||
+          [
+            `Created ${format(new Date(bill.billDate), "dd MMM yyyy")}`,
+            bill.withGst ? "GST tax invoice" : "Non-GST bill",
+            bill.createdByRole
+              ? bill.createdByName ||
                 (bill.createdByRole === "ADMIN" ? "Admin" : "Staff")
-              }`
-            : `Created ${format(new Date(bill.billDate), "dd MMM yyyy")}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
         }
         action={
           <div className="flex flex-wrap gap-2">
@@ -165,9 +169,10 @@ export function BillDetailPage() {
               href={api.pdfUrl(bill.id)}
               target="_blank"
               rel="noreferrer"
+              title={bill.withGst ? "GST tax invoice PDF" : "Non-GST bill PDF"}
             >
               <Download className="h-4 w-4" />
-              Download PDF
+              {bill.withGst ? "Download GST PDF" : "Download PDF"}
             </a>
             {isAdmin ? (
               <button

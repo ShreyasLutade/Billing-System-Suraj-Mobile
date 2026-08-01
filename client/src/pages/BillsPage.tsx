@@ -115,9 +115,20 @@ export function BillsPage() {
           >
           <div>
             <div className="flex items-center justify-between gap-3">
-              <p className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-tide-600">
-                {bill.invoiceNumber}
-              </p>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <p className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-tide-600">
+                  {bill.invoiceNumber}
+                </p>
+                <span
+                  className={
+                    bill.withGst
+                      ? "shrink-0 rounded-full bg-ink-900/90 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-white"
+                      : "shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-ink-600"
+                  }
+                >
+                  {bill.withGst ? "GST bill" : "Non-GST bill"}
+                </span>
+              </div>
               {bill.createdByRole ? (
                 <span
                   className={
