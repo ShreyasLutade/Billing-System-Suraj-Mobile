@@ -7,12 +7,16 @@ import {
   PeriodFilter,
   type DuePeriodValue,
 } from "../components/PeriodFilter";
+import { SearchScopeRadios } from "../components/SearchScopeRadios";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
-import { matchesDueSearch } from "../lib/billSearch";
+import {
+  matchesDueSearch,
+  type BillSearchScope,
+} from "../lib/billSearch";
 import type {
   DueItem,
   DuesSummary,
@@ -60,6 +64,7 @@ export function DuesPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDue, setSelectedDue] = useState<DueItem | null>(null);
   const [query, setQuery] = useState("");
+  const [searchScope, setSearchScope] = useState<BillSearchScope>("all");
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [selectedFinanceDue, setSelectedFinanceDue] =
     useState<FinanceDueItem | null>(null);
@@ -103,12 +108,17 @@ export function DuesPage() {
   const searchQuery = query.trim();
 
   const filteredDues =
-    data?.dues.filter((due) => matchesDueSearch(due, searchQuery)) || [];
+    data?.dues.filter((due) =>
+      matchesDueSearch(due, searchQuery, { scope: searchScope }),
+    ) || [];
 
   const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
   const filteredFinanceDues =
     financeData?.dues.filter((due) =>
-      matchesDueSearch(due, searchQuery, { includeFinanceCompany: true }),
+      matchesDueSearch(due, searchQuery, {
+        includeFinanceCompany: searchScope === "all",
+        scope: searchScope,
+      }),
     ) || [];
   const filteredFinanceTotal = filteredFinanceDues.reduce(
     (sum, due) => sum + due.financeAmount,
@@ -190,17 +200,32 @@ export function DuesPage() {
         {tab === "customer" ? (
           <PeriodFilter variant="dues" value={period} onChange={setPeriod} />
         ) : null}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
-          <input
-            className="field pl-11"
-            placeholder={
-              tab === "customer"
-                ? "Search invoice, customer, phone, product, or IMEI…"
-                : "Search finance, customer, phone, product, or IMEI…"
-            }
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
+            <input
+              className="field pl-11"
+              placeholder={
+                searchScope === "name"
+                  ? "Search by customer name…"
+                  : searchScope === "phone"
+                    ? "Search by phone…"
+                    : searchScope === "imei"
+                      ? "Search by IMEI…"
+                      : searchScope === "product"
+                        ? "Search by product name…"
+                        : tab === "customer"
+                          ? "Search invoice, customer, phone, product, or IMEI…"
+                          : "Search finance, customer, phone, product, or IMEI…"
+              }
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <SearchScopeRadios
+            name="dues-search-scope"
+            value={searchScope}
+            onChange={setSearchScope}
           />
         </div>
       </div>

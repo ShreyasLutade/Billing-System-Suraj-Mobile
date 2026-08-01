@@ -15,7 +15,7 @@ export function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<ActivityPeriodValue>("today");
+  const [period, setPeriod] = useState<ActivityPeriodValue>("all");
 
   useEffect(() => {
     let active = true;

@@ -110,7 +110,7 @@ export const api = {
     request<{ data: { id: string; invoiceNumber: string } }>(`/bills/${id}`, {
       method: "DELETE",
     }),
-  analytics: (period: string = "today") =>
+  analytics: (period: string = "all") =>
     request<{ data: AnalyticsSummary }>(
       `/analytics/summary?period=${encodeURIComponent(period)}`,
     ),
