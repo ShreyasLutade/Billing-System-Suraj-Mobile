@@ -3,7 +3,7 @@ import type { BillSearchScope } from "../lib/billSearch";
 const OPTIONS: Array<{ value: Exclude<BillSearchScope, "all">; label: string }> =
   [
     { value: "name", label: "Name" },
-    { value: "phone", label: "Phone" },
+    { value: "phone", label: "Number" },
     { value: "imei", label: "IMEI" },
     { value: "product", label: "Product" },
   ];
