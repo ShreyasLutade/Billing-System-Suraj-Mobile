@@ -29,6 +29,8 @@ model Bill {
   customerPhone     String
   customerAddress   String?
   notes             String?
+  /// false = non-GST bill PDF; true = GST tax invoice PDF
+  withGst           Boolean          @default(false)
   subtotal          Float
   gstAmount         Float
   grandTotal        Float
@@ -45,11 +47,17 @@ model Bill {
   financeReceivedAt  DateTime?
   isExchange         Boolean          @default(false)
   exchangeModel      String?
+  /// IOS | ANDROID — used when adding exchange phone to catalog as USED
+  exchangePlatform   String?
+  exchangeColor      String?
+  exchangeStorage    String?
+  exchangeRam        String?
   exchangeImei1      String?
   exchangeImei2      String?
   exchangeSerial     String?
   exchangeValue      Float?
   exchangeNotes      String?
+  exchangeMobileCatalogId String?
   dueAmount          Float            @default(0)
   dueDate           DateTime?
   dueSettled        Boolean          @default(false)

@@ -81,6 +81,7 @@ export const createBillSchema = z
           !Number.isNaN(Date.parse(value)),
         "Invalid bill date",
       ),
+    withGst: z.boolean().default(false),
     items: z.array(billItemSchema).min(1, "Add at least one product"),
     useCash: z.boolean().default(false),
     useOnline: z.boolean().default(false),
@@ -95,6 +96,10 @@ export const createBillSchema = z
     financeCompanyName2: z.string().trim().optional().nullable(),
     isExchange: z.boolean().default(false),
     exchangeModel: z.string().trim().optional().nullable(),
+    exchangePlatform: z.enum(["IOS", "ANDROID"]).optional().nullable(),
+    exchangeColor: z.string().trim().optional().nullable(),
+    exchangeStorage: z.string().trim().optional().nullable(),
+    exchangeRam: z.string().trim().optional().nullable(),
     exchangeImei1: z.string().trim().optional().nullable(),
     exchangeImei2: z.string().trim().optional().nullable(),
     exchangeSerial: z.string().trim().optional().nullable(),
@@ -115,8 +120,40 @@ export const createBillSchema = z
     if (data.isExchange && !data.exchangeModel?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Enter exchange mobile model / name",
+        message: "Enter exchange mobile name",
         path: ["exchangeModel"],
+      });
+    }
+    if (data.isExchange && !data.exchangePlatform) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select exchange phone OS",
+        path: ["exchangePlatform"],
+      });
+    }
+    if (data.isExchange && !data.exchangeColor?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter exchange phone color",
+        path: ["exchangeColor"],
+      });
+    }
+    if (data.isExchange && !data.exchangeStorage?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter exchange phone storage",
+        path: ["exchangeStorage"],
+      });
+    }
+    if (
+      data.isExchange &&
+      data.exchangePlatform === "ANDROID" &&
+      !data.exchangeRam?.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter exchange phone RAM",
+        path: ["exchangeRam"],
       });
     }
 

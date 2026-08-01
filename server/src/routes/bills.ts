@@ -7,6 +7,7 @@ import {
 } from "../lib/billing";
 import { getPeriodRange, isActivityPeriod, toDateFilter } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
+import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { requireAdmin } from "../middleware/auth";
 
 export const billsRouter = Router();
@@ -27,6 +28,55 @@ async function nextInvoiceNumber(tx: Prisma.TransactionClient) {
     update: { counter: { increment: 1 } },
   });
   return `SMS-${year}-${String(sequence.counter).padStart(4, "0")}`;
+}
+
+async function resolveExchangeCatalog(
+  tx: Prisma.TransactionClient,
+  input: {
+    isExchange?: boolean;
+    exchangeModel?: string | null;
+    exchangePlatform?: "IOS" | "ANDROID" | null;
+    exchangeColor?: string | null;
+    exchangeStorage?: string | null;
+    exchangeRam?: string | null;
+  },
+) {
+  if (
+    !input.isExchange ||
+    !input.exchangeModel?.trim() ||
+    !input.exchangePlatform ||
+    !input.exchangeColor?.trim() ||
+    !input.exchangeStorage?.trim()
+  ) {
+    return {
+      exchangePlatform: null as string | null,
+      exchangeColor: null as string | null,
+      exchangeStorage: null as string | null,
+      exchangeRam: null as string | null,
+      exchangeMobileCatalogId: null as string | null,
+      exchangeModel: input.isExchange
+        ? input.exchangeModel?.trim() || null
+        : null,
+    };
+  }
+
+  const { mobile } = await upsertMobileCatalog(tx, {
+    name: input.exchangeModel,
+    platform: input.exchangePlatform,
+    condition: "USED",
+    color: input.exchangeColor,
+    storage: input.exchangeStorage,
+    ram: input.exchangeRam,
+  });
+
+  return {
+    exchangeModel: mobile.name,
+    exchangePlatform: mobile.platform,
+    exchangeColor: mobile.color,
+    exchangeStorage: mobile.storage,
+    exchangeRam: mobile.ram || null,
+    exchangeMobileCatalogId: mobile.id,
+  };
 }
 
 function serializeBill<
@@ -177,6 +227,8 @@ billsRouter.post("/", async (req, res, next) => {
         }
       }
 
+      const exchange = await resolveExchangeCatalog(tx, input);
+
       return tx.bill.create({
         data: {
           invoiceNumber,
@@ -187,6 +239,7 @@ billsRouter.post("/", async (req, res, next) => {
           customerPhone: input.customerPhone,
           customerAddress: input.customerAddress || null,
           notes: input.notes || null,
+          withGst: Boolean(input.withGst),
           subtotal: totals.subtotal,
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
@@ -206,9 +259,12 @@ billsRouter.post("/", async (req, res, next) => {
           financeCompanyId2,
           financeCompanyName2,
           isExchange: Boolean(input.isExchange),
-          exchangeModel: input.isExchange
-            ? input.exchangeModel?.trim() || null
-            : null,
+          exchangeModel: exchange.exchangeModel,
+          exchangePlatform: exchange.exchangePlatform,
+          exchangeColor: exchange.exchangeColor,
+          exchangeStorage: exchange.exchangeStorage,
+          exchangeRam: exchange.exchangeRam,
+          exchangeMobileCatalogId: exchange.exchangeMobileCatalogId,
           exchangeImei1: input.isExchange
             ? input.exchangeImei1?.trim() || null
             : null,
@@ -347,6 +403,8 @@ billsRouter.put("/:id", async (req, res, next) => {
         existing.financeCompanyId === financeCompanyId &&
         existing.financeCompanyId2 === financeCompanyId2;
 
+      const exchange = await resolveExchangeCatalog(tx, input);
+
       return tx.bill.update({
         where: { id: existing.id },
         data: {
@@ -354,6 +412,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           customerPhone: input.customerPhone,
           customerAddress: input.customerAddress || null,
           notes: input.notes || null,
+          withGst: Boolean(input.withGst),
           ...(input.billDate
             ? { billDate: parseDateInput(input.billDate) }
             : {}),
@@ -383,9 +442,12 @@ billsRouter.put("/:id", async (req, res, next) => {
               ? existing.financeReceivedAt
               : null,
           isExchange: Boolean(input.isExchange),
-          exchangeModel: input.isExchange
-            ? input.exchangeModel?.trim() || null
-            : null,
+          exchangeModel: exchange.exchangeModel,
+          exchangePlatform: exchange.exchangePlatform,
+          exchangeColor: exchange.exchangeColor,
+          exchangeStorage: exchange.exchangeStorage,
+          exchangeRam: exchange.exchangeRam,
+          exchangeMobileCatalogId: exchange.exchangeMobileCatalogId,
           exchangeImei1: input.isExchange
             ? input.exchangeImei1?.trim() || null
             : null,

@@ -280,24 +280,33 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   return y + 8;
 }
 
-function drawInvoiceBar(doc: PDFKit.PDFDocument, y: number) {
+function drawInvoiceBar(
+  doc: PDFKit.PDFDocument,
+  y: number,
+  withGst: boolean,
+) {
   const h = 22;
   doc.rect(MARGIN, y, CONTENT_WIDTH, h).fill(COLORS.goldSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
 
-  doc
-    .fillColor(COLORS.ink)
-    .font(FONT.regular)
-    .fontSize(8)
-    .text(shop.gstin ? `GSTIN: ${shop.gstin}` : "GSTIN: —", MARGIN + 8, y + 7, {
-      lineBreak: false,
-    });
+  if (withGst) {
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.regular)
+      .fontSize(8)
+      .text(
+        shop.gstin ? `GSTIN: ${shop.gstin}` : "GSTIN: —",
+        MARGIN + 8,
+        y + 7,
+        { lineBreak: false },
+      );
+  }
 
   doc
     .fillColor(COLORS.gold)
     .font(FONT.bold)
     .fontSize(11)
-    .text("TAX INVOICE", MARGIN, y + 5, {
+    .text(withGst ? "TAX INVOICE" : "BILL", MARGIN, y + 5, {
       width: CONTENT_WIDTH,
       align: "center",
       lineBreak: false,
@@ -401,30 +410,108 @@ function drawColumnLines(
   }
 }
 
+function itemNameMeta(item: BillItem) {
+  const specs = [item.color, item.storage, item.ram].filter(Boolean).join(" · ");
+  const condition =
+    item.condition === "USED" ? "Old" : item.condition === "NEW" ? "New" : "";
+  return { specs, condition };
+}
+
+function drawItemNameCell(
+  doc: PDFKit.PDFDocument,
+  item: BillItem,
+  x: number,
+  y: number,
+  width: number,
+) {
+  const { specs, condition } = itemNameMeta(item);
+  let ty = y + 4;
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text(item.productName, x + 3, ty, {
+      width: width - 6,
+      lineBreak: false,
+    });
+  ty += 11;
+  if (specs || condition) {
+    doc
+      .fillColor(COLORS.muted)
+      .font(FONT.regular)
+      .fontSize(7)
+      .text([specs, condition].filter(Boolean).join(" · "), x + 3, ty, {
+        width: width - 6,
+        lineBreak: false,
+      });
+    ty += 10;
+  }
+  if (item.imei1) {
+    doc
+      .fillColor(COLORS.muted)
+      .font(FONT.medium)
+      .fontSize(6.5)
+      .text(`IMEI: ${item.imei1}`, x + 3, ty, {
+        width: width - 6,
+        lineBreak: false,
+      });
+    ty += 9;
+  }
+  if (item.serialNumber) {
+    doc
+      .fillColor(COLORS.muted)
+      .font(FONT.medium)
+      .fontSize(6.5)
+      .text(`S/N: ${item.serialNumber}`, x + 3, ty, {
+        width: width - 6,
+        lineBreak: false,
+      });
+  }
+}
+
 function drawItemsTable(
   doc: PDFKit.PDFDocument,
   bill: BillWithItems,
   y: number,
+  withGst: boolean,
 ) {
-  // No HSN column — widths sum to CONTENT_WIDTH (~539)
-  const cols = [
-    { key: "sr", label: "Sr.", w: 28 },
-    { key: "name", label: "Name of Product / Service", w: 190 },
-    { key: "qty", label: "Qty", w: 32 },
-    { key: "rate", label: "Rate", w: 64 },
-    { key: "taxable", label: "Taxable Value", w: 78 },
-    { key: "gstp", label: "GST %", w: 40 },
-    { key: "gsta", label: "GST Amt", w: 52 },
-    { key: "total", label: "Total", w: 55 },
-  ] as const;
+  const cols = withGst
+    ? ([
+        { key: "sr", label: "Sr.", w: 28 },
+        { key: "name", label: "Name of Product / Service", w: 190 },
+        { key: "qty", label: "Qty", w: 32 },
+        { key: "rate", label: "Rate", w: 64 },
+        { key: "taxable", label: "Taxable Value", w: 78 },
+        { key: "gstp", label: "GST %", w: 40 },
+        { key: "gsta", label: "GST Amt", w: 52 },
+        { key: "total", label: "Total", w: 55 },
+      ] as const)
+    : ([
+        { key: "sr", label: "Sr.", w: 28 },
+        { key: "name", label: "Name of Product / Service", w: 280 },
+        { key: "qty", label: "Qty", w: 40 },
+        { key: "rate", label: "Rate", w: 90 },
+        { key: "total", label: "Amount", w: 101 },
+      ] as const);
 
   // Reserve room below the table for totals + declaration + terms footer
-  // (matches sample invoice: tall blank body, totals near bottom)
   const footH = 18;
-  const upperBoxH = 58;
-  const totalBarH = 26;
+  const exchangeBoxH =
+    !withGst && bill.isExchange && bill.exchangeValue ? 62 : 0;
+  const upperBoxH = withGst ? 58 : 50;
+  // Non-GST: payment modes + total payable side-by-side in one band
+  const paymentBoxH = withGst ? 0 : 78;
+  const totalBarH = withGst ? 26 : 0;
   const declH = 48;
-  const totalsBlockH = 4 + upperBoxH + totalBarH + 8 + declH;
+  const totalsBlockH =
+    4 +
+    exchangeBoxH +
+    (exchangeBoxH ? 6 : 0) +
+    upperBoxH +
+    paymentBoxH +
+    totalBarH +
+    8 +
+    declH;
   const tableBodyBottom =
     PAGE.height - MARGIN - FOOTER_BLOCK_H - 8 - totalsBlockH - footH;
 
@@ -463,90 +550,40 @@ function drawItemsTable(
     qtySum += item.quantity;
     totalSum += amount;
 
-    const specs = [item.color, item.storage, item.ram]
-      .filter(Boolean)
-      .join(" · ");
-    const condition =
-      item.condition === "USED"
-        ? "Old"
-        : item.condition === "NEW"
-          ? "New"
-          : "";
+    const { specs, condition } = itemNameMeta(item);
     const nameLines = [item.productName];
     if (specs) nameLines.push(specs);
     if (condition) nameLines.push(condition);
     if (item.imei1) nameLines.push(`IMEI: ${item.imei1}`);
     if (item.serialNumber) nameLines.push(`S/N: ${item.serialNumber}`);
-
     const rowH = Math.max(28, nameLines.length * 10 + 4);
 
     strokeBox(doc, MARGIN, y, CONTENT_WIDTH, rowH);
     drawColumnLines(doc, cols, y, rowH);
 
-    const values: Record<(typeof cols)[number]["key"], string> = {
-      sr: String(index + 1),
-      name: "",
-      qty: String(item.quantity),
-      rate: money(item.rate),
-      taxable: money(taxable),
-      gstp: item.gstPercent ? `${item.gstPercent}%` : "—",
-      gsta: money(gst),
-      total: money(amount),
-    };
-
     x = MARGIN;
     for (const col of cols) {
       if (col.key === "name") {
-        let ty = y + 4;
-        doc
-          .fillColor(COLORS.ink)
-          .font(FONT.bold)
-          .fontSize(8)
-          .text(item.productName, x + 3, ty, {
-            width: col.w - 6,
-            lineBreak: false,
-          });
-        ty += 11;
-        if (specs || condition) {
-          doc
-            .fillColor(COLORS.muted)
-            .font(FONT.regular)
-            .fontSize(7)
-            .text([specs, condition].filter(Boolean).join(" · "), x + 3, ty, {
-              width: col.w - 6,
-              lineBreak: false,
-            });
-          ty += 10;
-        }
-        if (item.imei1) {
-          doc
-            .fillColor(COLORS.muted)
-            .font(FONT.medium)
-            .fontSize(6.5)
-            .text(`IMEI: ${item.imei1}`, x + 3, ty, {
-              width: col.w - 6,
-              lineBreak: false,
-            });
-          ty += 9;
-        }
-        if (item.serialNumber) {
-          doc
-            .fillColor(COLORS.muted)
-            .font(FONT.medium)
-            .fontSize(6.5)
-            .text(`S/N: ${item.serialNumber}`, x + 3, ty, {
-              width: col.w - 6,
-              lineBreak: false,
-            });
-        }
+        drawItemNameCell(doc, item, x, y, col.w);
       } else {
+        let value = "";
+        if (col.key === "sr") value = String(index + 1);
+        else if (col.key === "qty") value = String(item.quantity);
+        else if (col.key === "rate") value = money(item.rate);
+        else if (col.key === "taxable") value = money(taxable);
+        else if (col.key === "gstp")
+          value = item.gstPercent ? `${item.gstPercent}%` : "—";
+        else if (col.key === "gsta") value = money(gst);
+        else if (col.key === "total") value = money(amount);
+
+        const centerKeys = new Set(["sr", "qty", "rate", "total"]);
         doc
           .fillColor(COLORS.ink)
           .font(FONT.regular)
           .fontSize(7.5)
-          .text(values[col.key], x + 2, y + rowH / 2 - 4, {
+          .text(value, x + 2, y + rowH / 2 - 4, {
             width: col.w - 4,
-            align: col.key === "sr" || col.key === "qty" ? "center" : "right",
+            align: centerKeys.has(col.key) ? "center" : "right",
             lineBreak: false,
           });
       }
@@ -556,33 +593,7 @@ function drawItemsTable(
     y += rowH;
   });
 
-  if (bill.isExchange && bill.exchangeValue) {
-    const rowH = 26;
-    strokeBox(doc, MARGIN, y, CONTENT_WIDTH, rowH);
-    doc
-      .fillColor(COLORS.ink)
-      .font(FONT.bold)
-      .fontSize(8)
-      .text(
-        `Less: Exchange (${bill.exchangeModel || "Old phone"}${
-          bill.exchangeImei1 ? ` · IMEI ${bill.exchangeImei1}` : ""
-        })`,
-        MARGIN + 6,
-        y + 8,
-        { width: 360, lineBreak: false },
-      );
-    doc
-      .font(FONT.bold)
-      .text(
-        `- ${money(bill.exchangeValue)}`,
-        MARGIN + CONTENT_WIDTH - 61,
-        y + 8,
-        { width: 55, align: "right", lineBreak: false },
-      );
-    y += rowH;
-  }
-
-  // Blank filler so the item grid stretches down the page (like sample invoice)
+  // Blank filler so the item grid stretches down the page
   if (y < tableBodyBottom) {
     const fillerH = tableBodyBottom - y;
     strokeBox(doc, MARGIN, y, CONTENT_WIDTH, fillerH);
@@ -590,36 +601,53 @@ function drawItemsTable(
     y = tableBodyBottom;
   }
 
-  const qtyX = MARGIN + 28 + 190;
-  const taxableX = qtyX + 32 + 64;
-  const gstAmtX = taxableX + 78 + 40;
   doc.rect(MARGIN, y, CONTENT_WIDTH, footH).fill(COLORS.goldSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, footH);
   doc
     .fillColor(COLORS.ink)
     .font(FONT.bold)
     .fontSize(8)
-    .text("Total", MARGIN + 28, y + 5, { width: 160, lineBreak: false })
-    .text(String(qtySum), qtyX, y + 5, {
-      width: 32,
-      align: "center",
-      lineBreak: false,
-    })
-    .text(money(taxableSum), taxableX, y + 5, {
-      width: 78,
-      align: "right",
-      lineBreak: false,
-    })
-    .text(money(gstSum), gstAmtX, y + 5, {
-      width: 52,
-      align: "right",
-      lineBreak: false,
-    })
-    .text(money(totalSum), MARGIN + CONTENT_WIDTH - 55, y + 5, {
-      width: 55,
-      align: "right",
-      lineBreak: false,
-    });
+    .text("Total", MARGIN + 28, y + 5, { width: 160, lineBreak: false });
+
+  if (withGst) {
+    const qtyX = MARGIN + 28 + 190;
+    const taxableX = qtyX + 32 + 64;
+    const gstAmtX = taxableX + 78 + 40;
+    doc
+      .text(String(qtySum), qtyX, y + 5, {
+        width: 32,
+        align: "center",
+        lineBreak: false,
+      })
+      .text(money(taxableSum), taxableX, y + 5, {
+        width: 78,
+        align: "right",
+        lineBreak: false,
+      })
+      .text(money(gstSum), gstAmtX, y + 5, {
+        width: 52,
+        align: "right",
+        lineBreak: false,
+      })
+      .text(money(totalSum), MARGIN + CONTENT_WIDTH - 55, y + 5, {
+        width: 55,
+        align: "center",
+        lineBreak: false,
+      });
+  } else {
+    const qtyX = MARGIN + 28 + 280;
+    doc
+      .text(String(qtySum), qtyX, y + 5, {
+        width: 40,
+        align: "center",
+        lineBreak: false,
+      })
+      .text(money(totalSum), MARGIN + CONTENT_WIDTH - 101, y + 5, {
+        width: 101,
+        align: "center",
+        lineBreak: false,
+      });
+  }
 
   return {
     y: y + footH,
@@ -629,13 +657,222 @@ function drawItemsTable(
   };
 }
 
+function drawExchangeBox(
+  doc: PDFKit.PDFDocument,
+  bill: BillWithItems,
+  y: number,
+) {
+  if (!bill.isExchange || !bill.exchangeValue) return y;
+
+  const h = 56;
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
+  doc.rect(MARGIN, y, CONTENT_WIDTH, 18).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, 18);
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Exchange details", MARGIN + 8, y + 5, { lineBreak: false });
+  doc
+    .font(FONT.bold)
+    .text(`− ${money(bill.exchangeValue)}`, MARGIN + 8, y + 5, {
+      width: CONTENT_WIDTH - 16,
+      align: "right",
+      lineBreak: false,
+    });
+
+  const details = [
+    bill.exchangeModel || "Old phone",
+    bill.exchangeColor || null,
+    bill.exchangeStorage || null,
+    bill.exchangeRam || null,
+    bill.exchangeImei1 ? `IMEI: ${bill.exchangeImei1}` : null,
+    bill.exchangeImei2 ? `IMEI 2: ${bill.exchangeImei2}` : null,
+    bill.exchangeSerial ? `S/N: ${bill.exchangeSerial}` : null,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.regular)
+    .fontSize(8)
+    .text(details, MARGIN + 8, y + 28, {
+      width: CONTENT_WIDTH - 16,
+    });
+
+  return y + h + 6;
+}
+
+function drawPlainTotalsSection(
+  doc: PDFKit.PDFDocument,
+  bill: BillWithItems,
+  y: number,
+) {
+  const payable = bill.payableAmount ?? bill.grandTotal;
+  const wordsH = 50;
+  const bandH = 78;
+  const payW = Math.round(CONTENT_WIDTH * 0.68);
+  const totalW = CONTENT_WIDTH - payW;
+
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, wordsH);
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(7)
+    .text("Total Amount in Words", MARGIN + 8, y + 8, {
+      width: CONTENT_WIDTH - 16,
+      align: "center",
+      lineBreak: false,
+    });
+  doc
+    .font(FONT.regular)
+    .fontSize(8)
+    .text(amountInWords(payable), MARGIN + 8, y + 22, {
+      width: CONTENT_WIDTH - 16,
+      align: "center",
+    });
+
+  y += wordsH;
+
+  // Left: selected payment modes only · Right: total payable
+  strokeBox(doc, MARGIN, y, payW, bandH);
+  strokeBox(doc, MARGIN + payW, y, totalW, bandH);
+  doc
+    .moveTo(MARGIN + payW, y)
+    .lineTo(MARGIN + payW, y + bandH)
+    .strokeColor(COLORS.charcoal)
+    .lineWidth(0.9)
+    .stroke();
+
+  doc.rect(MARGIN, y, payW, 18).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, y, payW, 18);
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Payment details", MARGIN + 8, y + 5, { lineBreak: false });
+
+  const financeAmount2 = bill.financeAmount2 || 0;
+  const finance1 =
+    financeAmount2 > 0
+      ? Math.max(bill.financeAmount - financeAmount2, 0)
+      : bill.financeAmount;
+
+  const rows: Array<[string, string]> = [];
+  if (bill.cashAmount > 0) rows.push(["Cash", money(bill.cashAmount)]);
+  if (bill.onlineAmount > 0) rows.push(["Online", money(bill.onlineAmount)]);
+  if (finance1 > 0) {
+    rows.push([
+      bill.financeCompanyName
+        ? `Finance (${bill.financeCompanyName})`
+        : "Finance",
+      money(finance1),
+    ]);
+  }
+  if (financeAmount2 > 0) {
+    rows.push([
+      bill.financeCompanyName2
+        ? `Finance (${bill.financeCompanyName2})`
+        : "Finance 2",
+      money(financeAmount2),
+    ]);
+  }
+  if (bill.dueAmount > 0) {
+    rows.push([
+      bill.dueDate
+        ? `Due (by ${format(bill.dueDate, "dd MMM yyyy")})`
+        : "Due",
+      money(bill.dueAmount),
+    ]);
+  }
+
+  if (!rows.length) {
+    doc
+      .fillColor(COLORS.muted)
+      .font(FONT.regular)
+      .fontSize(8)
+      .text("No payment modes selected", MARGIN + 8, y + 40, {
+        width: payW - 16,
+        align: "center",
+      });
+  } else {
+    const colW = payW / rows.length;
+    rows.forEach((row, i) => {
+      const cx = MARGIN + i * colW;
+      doc
+        .fillColor(COLORS.muted)
+        .font(FONT.regular)
+        .fontSize(7)
+        .text(row[0], cx + 4, y + 28, {
+          width: colW - 8,
+          align: "center",
+        });
+      doc
+        .fillColor(COLORS.ink)
+        .font(FONT.bold)
+        .fontSize(9)
+        .text(row[1], cx + 4, y + 48, {
+          width: colW - 8,
+          align: "center",
+          lineBreak: false,
+        });
+    });
+  }
+
+  const totalX = MARGIN + payW;
+  doc.rect(totalX, y, totalW, bandH).fill(COLORS.goldSoft);
+  strokeBox(doc, totalX, y, totalW, bandH);
+  doc
+    .fillColor(COLORS.gold)
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Total Payable", totalX + 8, y + 22, {
+      width: totalW - 16,
+      align: "center",
+      lineBreak: false,
+    });
+  doc
+    .fontSize(11)
+    .text(inr(payable), totalX + 8, y + 42, {
+      width: totalW - 16,
+      align: "center",
+      lineBreak: false,
+    });
+
+  const declY = y + bandH + 8;
+  const declH = 48;
+  strokeBox(doc, MARGIN, declY, CONTENT_WIDTH, declH);
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.regular)
+    .fontSize(7)
+    .text(
+      `Certified that the particulars given above are true and correct. For ${shop.name}`,
+      MARGIN + 8,
+      declY + 8,
+      { width: CONTENT_WIDTH * 0.62 },
+    );
+  doc
+    .font(FONT.bold)
+    .fontSize(8)
+    .text("Authorised Signatory", MARGIN + 8, declY + declH - 16, {
+      width: CONTENT_WIDTH - 16,
+      align: "right",
+      lineBreak: false,
+    });
+
+  return declY + declH;
+}
+
 function drawTotalsSection(
   doc: PDFKit.PDFDocument,
   bill: BillWithItems,
   y: number,
   totals: { taxableSum: number; gstSum: number; totalSum: number },
 ) {
-  const payable = bill.payableAmount ?? bill.grandTotal;
+  // GST invoice shows full item total — do not deduct exchange
+  const invoiceTotal = totals.totalSum || bill.grandTotal;
   const leftW = Math.round(CONTENT_WIDTH * 0.55);
   const rightW = CONTENT_WIDTH - leftW;
   const upperBoxH = 58;
@@ -664,20 +901,15 @@ function drawTotalsSection(
   doc
     .font(FONT.regular)
     .fontSize(7.5)
-    .text(amountInWords(payable), MARGIN + 8, y + 24, {
+    .text(amountInWords(invoiceTotal), MARGIN + 8, y + 24, {
       width: leftW - 16,
       align: "center",
     });
 
-  const rows = [
+  const rows: Array<[string, string]> = [
     ["Taxable Amount", money(totals.taxableSum || bill.subtotal)],
-    ["Add: GST", money(totals.gstSum || bill.gstAmount)],
     ["Total Tax", money(totals.gstSum || bill.gstAmount)],
-    [
-      bill.exchangeValue ? "Less: Exchange" : null,
-      bill.exchangeValue ? `- ${money(bill.exchangeValue)}` : null,
-    ],
-  ].filter((r): r is [string, string] => Boolean(r[0] && r[1]));
+  ];
 
   let ry = y + 10;
   for (const [label, value] of rows) {
@@ -705,7 +937,7 @@ function drawTotalsSection(
     .text("Total Amount After Tax", MARGIN + 10, barY + 8, {
       lineBreak: false,
     });
-  doc.text(inr(payable), MARGIN + 10, barY + 8, {
+  doc.text(inr(invoiceTotal), MARGIN + 10, barY + 8, {
     width: CONTENT_WIDTH - 20,
     align: "right",
     lineBreak: false,
@@ -782,14 +1014,15 @@ function drawFooter(doc: PDFKit.PDFDocument) {
 
 export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const withGst = Boolean(bill.withGst);
     const doc = new PDFDocument({
       size: "A4",
       margin: 0,
       autoFirstPage: true,
       info: {
-        Title: `Invoice ${bill.invoiceNumber}`,
+        Title: `${withGst ? "Tax Invoice" : "Bill"} ${bill.invoiceNumber}`,
         Author: shop.name,
-        Subject: "Tax Invoice",
+        Subject: withGst ? "Tax Invoice" : "Bill",
       },
     });
     const chunks: Buffer[] = [];
@@ -800,11 +1033,16 @@ export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
 
     registerFonts(doc);
     let y = drawHeader(doc);
-    y = drawInvoiceBar(doc, y);
+    y = drawInvoiceBar(doc, y, withGst);
     y = drawCustomerMeta(doc, bill, y);
 
-    const table = drawItemsTable(doc, bill, y);
-    y = drawTotalsSection(doc, bill, table.y + 4, table);
+    const table = drawItemsTable(doc, bill, y, withGst);
+    if (withGst) {
+      y = drawTotalsSection(doc, bill, table.y + 4, table);
+    } else {
+      y = drawExchangeBox(doc, bill, table.y + 4);
+      y = drawPlainTotalsSection(doc, bill, y);
+    }
 
     if (bill.notes) {
       doc
