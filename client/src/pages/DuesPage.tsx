@@ -12,6 +12,7 @@ import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfir
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { matchesDueSearch } from "../lib/billSearch";
 import type {
   DueItem,
   DuesSummary,
@@ -99,32 +100,16 @@ export function DuesPage() {
     }
   }, [period, tab]);
 
+  const searchQuery = query.trim();
+
   const filteredDues =
-    data?.dues.filter((due) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        due.invoiceNumber.toLowerCase().includes(q) ||
-        due.customerName.toLowerCase().includes(q) ||
-        due.customerPhone.includes(q) ||
-        due.imeiNumbers?.some((imei) => imei.toLowerCase().includes(q))
-      );
-    }) || [];
+    data?.dues.filter((due) => matchesDueSearch(due, searchQuery)) || [];
 
   const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
   const filteredFinanceDues =
-    financeData?.dues.filter((due) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        due.invoiceNumber.toLowerCase().includes(q) ||
-        due.customerName.toLowerCase().includes(q) ||
-        due.customerPhone.includes(q) ||
-        due.financeCompanyName?.toLowerCase().includes(q) ||
-        due.financeCompanyName2?.toLowerCase().includes(q) ||
-        due.imeiNumbers?.some((imei) => imei.toLowerCase().includes(q))
-      );
-    }) || [];
+    financeData?.dues.filter((due) =>
+      matchesDueSearch(due, searchQuery, { includeFinanceCompany: true }),
+    ) || [];
   const filteredFinanceTotal = filteredFinanceDues.reduce(
     (sum, due) => sum + due.financeAmount,
     0,
@@ -211,8 +196,8 @@ export function DuesPage() {
             className="field pl-11"
             placeholder={
               tab === "customer"
-                ? "Search invoice, customer, phone, or IMEI…"
-                : "Search finance, customer, phone, or IMEI…"
+                ? "Search invoice, customer, phone, product, or IMEI…"
+                : "Search finance, customer, phone, product, or IMEI…"
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}

@@ -141,6 +141,7 @@ export type DueItem = {
   grandTotal?: number;
   payableAmount?: number;
   isPartialPaid?: boolean;
+  productLabels?: string[];
   imeiNumbers?: string[];
 };
 
@@ -164,6 +165,7 @@ export type FinanceDueItem = {
   financeCompanyName2?: string | null;
   financeReceived: boolean;
   financeReceivedAt?: string | null;
+  productLabels?: string[];
   imeiNumbers?: string[];
 };
 
