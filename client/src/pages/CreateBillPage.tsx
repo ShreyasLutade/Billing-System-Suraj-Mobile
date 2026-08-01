@@ -131,15 +131,32 @@ export function CreateBillPage() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [withGst, setWithGst] = useState(false);
   const [useCustomBillDate, setUseCustomBillDate] = useState(false);
   const [customBillDate, setCustomBillDate] = useState(todayDateInput());
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
   const [isExchange, setIsExchange] = useState(false);
+  const [exchangePlatform, setExchangePlatform] = useState<"IOS" | "ANDROID">(
+    "IOS",
+  );
   const [exchangeModel, setExchangeModel] = useState("");
+  const [exchangeColor, setExchangeColor] = useState("");
+  const [exchangeStorage, setExchangeStorage] = useState("");
+  const [exchangeRam, setExchangeRam] = useState("");
   const [exchangeImei1, setExchangeImei1] = useState("");
-  const [exchangeSerial, setExchangeSerial] = useState("");
   const [exchangeValue, setExchangeValue] = useState<number | "">("");
   const [exchangeNotes, setExchangeNotes] = useState("");
+
+  function clearExchangeFields() {
+    setExchangePlatform("IOS");
+    setExchangeModel("");
+    setExchangeColor("");
+    setExchangeStorage("");
+    setExchangeRam("");
+    setExchangeImei1("");
+    setExchangeValue("");
+    setExchangeNotes("");
+  }
   const [useCash, setUseCash] = useState(false);
   const [useOnline, setUseOnline] = useState(false);
   const [useFinance, setUseFinance] = useState(false);
@@ -158,8 +175,34 @@ export function CreateBillPage() {
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const [successInvoice, setSuccessInvoice] = useState<string | null>(null);
+  const [successPayment, setSuccessPayment] = useState<{
+    payableAmount: number;
+    cashAmount: number;
+    onlineAmount: number;
+    financeAmount: number;
+    financeLabel: string;
+    dueAmount: number;
+    dueDate: string | null;
+  } | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+
+  function captureSuccessPayment(bill: Bill) {
+    setSuccessPayment({
+      payableAmount: bill.payableAmount ?? bill.grandTotal,
+      cashAmount: bill.cashAmount || 0,
+      onlineAmount: bill.onlineAmount || 0,
+      financeAmount: (bill.financeAmount || 0) + (bill.financeAmount2 || 0),
+      financeLabel: formatFinanceCompanies(
+        bill.financeCompanyName,
+        bill.financeCompanyName2,
+      ),
+      dueAmount: bill.dueAmount || 0,
+      dueDate: bill.dueDate
+        ? bill.dueDate.slice(0, 10).split("-").reverse().join("/")
+        : null,
+    });
+  }
 
   function validatePhone(value: string) {
     const digits = value.replace(/\D/g, "");
@@ -181,16 +224,13 @@ export function CreateBillPage() {
     setPhoneError(null);
     setCustomerAddress("");
     setNotes("");
+    setWithGst(false);
     setUseCustomBillDate(false);
     setCustomBillDate(todayDateInput());
     setItems([blankItem()]);
     setAddMobileForItem(null);
     setIsExchange(false);
-    setExchangeModel("");
-    setExchangeImei1("");
-    setExchangeSerial("");
-    setExchangeValue("");
-    setExchangeNotes("");
+    clearExchangeFields();
     setUseCash(false);
     setUseOnline(false);
     setUseFinance(false);
@@ -203,6 +243,7 @@ export function CreateBillPage() {
     setError(null);
     setSuccessId(null);
     setSuccessInvoice(null);
+    setSuccessPayment(null);
     setShareError(null);
     setSharing(false);
     setLoadingBill(false);
@@ -214,6 +255,7 @@ export function CreateBillPage() {
     setCustomerPhone(bill.customerPhone.replace(/\D/g, "").slice(0, 10));
     setCustomerAddress(bill.customerAddress || "");
     setNotes(bill.notes || "");
+    setWithGst(Boolean(bill.withGst));
     setUseCustomBillDate(true);
     setCustomBillDate(toDateInputValue(bill.billDate));
     setItems(
@@ -239,9 +281,14 @@ export function CreateBillPage() {
         : [blankItem()],
     );
     setIsExchange(bill.isExchange);
+    setExchangePlatform(
+      bill.exchangePlatform === "ANDROID" ? "ANDROID" : "IOS",
+    );
     setExchangeModel(bill.exchangeModel || "");
+    setExchangeColor(bill.exchangeColor || "");
+    setExchangeStorage(bill.exchangeStorage || "");
+    setExchangeRam(bill.exchangeRam || "");
     setExchangeImei1(bill.exchangeImei1 || "");
-    setExchangeSerial(bill.exchangeSerial || "");
     setExchangeValue(bill.exchangeValue ?? "");
     setExchangeNotes(bill.exchangeNotes || "");
     setUseCash(bill.cashAmount > 0);
@@ -276,6 +323,7 @@ export function CreateBillPage() {
     setDueDate(bill.dueDate ? bill.dueDate.slice(0, 10) : "");
     setSuccessId(null);
     setSuccessInvoice(null);
+    setSuccessPayment(null);
     setShareError(null);
     setError(null);
     setPhoneError(null);
@@ -617,6 +665,7 @@ export function CreateBillPage() {
       customerAddress: customerAddress || null,
       notes: notes || null,
       billDate: useCustomBillDate ? customBillDate.trim() : null,
+      withGst,
       useCash,
       useOnline,
       useFinance,
@@ -630,9 +679,16 @@ export function CreateBillPage() {
       financeCompanyName2: useFinance ? resolvedCompanyName2 : null,
       isExchange,
       exchangeModel: isExchange ? exchangeModel.trim() : null,
+      exchangePlatform: isExchange ? exchangePlatform : null,
+      exchangeColor: isExchange ? exchangeColor.trim() : null,
+      exchangeStorage: isExchange ? exchangeStorage.trim() : null,
+      exchangeRam:
+        isExchange && exchangePlatform === "ANDROID"
+          ? exchangeRam.trim()
+          : null,
       exchangeImei1: isExchange ? exchangeImei1.trim() || null : null,
       exchangeImei2: null,
-      exchangeSerial: isExchange ? exchangeSerial.trim() || null : null,
+      exchangeSerial: null,
       exchangeValue:
         isExchange && exchangeValue !== "" ? Number(exchangeValue) : null,
       exchangeNotes: isExchange ? exchangeNotes.trim() || null : null,
@@ -764,6 +820,15 @@ export function CreateBillPage() {
     }
   }
 
+  async function refreshMobileCatalog() {
+    try {
+      const { data } = await api.listMobileCatalog();
+      setMobileCatalog(data);
+    } catch {
+      // Keep existing catalog if refresh fails
+    }
+  }
+
   async function confirmCreate() {
     if (!pendingPayload) return;
     setSaving(true);
@@ -775,7 +840,9 @@ export function CreateBillPage() {
       setSaveSummary(null);
       setSuccessId(data.id);
       setSuccessInvoice(data.invoiceNumber);
+      captureSuccessPayment(data);
       setShareError(null);
+      if (data.isExchange) await refreshMobileCatalog();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save bill");
     } finally {
@@ -794,8 +861,10 @@ export function CreateBillPage() {
       setPendingDiff([]);
       setSuccessId(data.id);
       setSuccessInvoice(data.invoiceNumber);
+      captureSuccessPayment(data);
       setShareError(null);
       setOriginalBill(data);
+      if (data.isExchange) await refreshMobileCatalog();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update bill");
     } finally {
@@ -861,6 +930,60 @@ export function CreateBillPage() {
           <p className="mt-1 text-sm font-medium text-ink-700">
             {successInvoice}
           </p>
+        ) : null}
+        {successPayment ? (
+          <div className="mx-auto mt-5 w-full max-w-sm rounded-2xl border border-ink-100 bg-ink-50/70 px-4 py-4 text-left">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-ink-500">Payable</span>
+              <span className="font-display text-xl font-semibold text-ink-900">
+                {formatINR(successPayment.payableAmount)}
+              </span>
+            </div>
+            <dl className="mt-3 space-y-2 border-t border-ink-100 pt-3 text-sm">
+              {successPayment.cashAmount > 0 ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-ink-500">Cash</dt>
+                  <dd className="font-medium text-ink-800">
+                    {formatINR(successPayment.cashAmount)}
+                  </dd>
+                </div>
+              ) : null}
+              {successPayment.onlineAmount > 0 ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-ink-500">Online</dt>
+                  <dd className="font-medium text-ink-800">
+                    {formatINR(successPayment.onlineAmount)}
+                  </dd>
+                </div>
+              ) : null}
+              {successPayment.financeAmount > 0 ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-ink-500">
+                    Finance
+                    {successPayment.financeLabel
+                      ? ` · ${successPayment.financeLabel}`
+                      : ""}
+                  </dt>
+                  <dd className="font-medium text-ink-800">
+                    {formatINR(successPayment.financeAmount)}
+                  </dd>
+                </div>
+              ) : null}
+              {successPayment.dueAmount > 0 ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-ember-500">
+                    Due
+                    {successPayment.dueDate
+                      ? ` · by ${successPayment.dueDate}`
+                      : ""}
+                  </dt>
+                  <dd className="font-medium text-ember-500">
+                    {formatINR(successPayment.dueAmount)}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
         ) : null}
         {shareError ? (
           <p className="mt-3 text-sm text-ember-500">{shareError}</p>
@@ -1239,7 +1362,7 @@ export function CreateBillPage() {
                   Mobile exchange?
                 </p>
                 <p className="mt-1 text-sm text-ink-500">
-                  Enter old phone details. Exchange value is deducted from the payable amount.
+                  Add the old phone like a catalog mobile (saved as Old). Exchange value is deducted from payable.
                 </p>
               </div>
               <input
@@ -1247,13 +1370,7 @@ export function CreateBillPage() {
                 checked={isExchange}
                 onChange={(e) => {
                   setIsExchange(e.target.checked);
-                  if (!e.target.checked) {
-                    setExchangeModel("");
-                    setExchangeImei1("");
-                    setExchangeSerial("");
-                    setExchangeValue("");
-                    setExchangeNotes("");
-                  }
+                  if (!e.target.checked) clearExchangeFields();
                 }}
                 className="h-6 w-6 shrink-0 rounded border-ink-300 text-tide-600 focus:ring-tide-400"
               />
@@ -1267,81 +1384,154 @@ export function CreateBillPage() {
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-5 grid gap-4 border-t border-ink-100 pt-5 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
+                  <div className="mt-5 space-y-4 border-t border-ink-100 pt-5">
+                    <p className="rounded-2xl bg-tide-100/60 px-4 py-3 text-xs text-tide-600">
+                      Entered as a second-hand (Old) mobile in the catalog so it can be sold later.
+                      Payable = bill total − exchange value.
+                    </p>
+
+                    <div>
+                      <span className="label required">Operating system</span>
+                      <div className="grid grid-cols-2 gap-1 rounded-2xl border border-ink-100 bg-ink-50/70 p-1">
+                        {(["IOS", "ANDROID"] as const).map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={
+                              exchangePlatform === option
+                                ? "rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
+                                : "rounded-xl px-4 py-2.5 text-sm font-semibold text-ink-500 transition hover:bg-white"
+                            }
+                            aria-pressed={exchangePlatform === option}
+                            onClick={() => {
+                              setExchangePlatform(option);
+                              if (option === "IOS") setExchangeRam("");
+                            }}
+                          >
+                            {option === "IOS" ? "iOS" : "Android"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
                       <label className="label required" htmlFor="exchangeModel">
-                        Exchange mobile model
+                        Phone name
                       </label>
                       <input
                         id="exchangeModel"
                         className="field"
                         value={exchangeModel}
                         onChange={(e) => setExchangeModel(e.target.value)}
-                        placeholder="e.g. Redmi Note 10"
-                        required={isExchange}
-                      />
-                    </div>
-                    <div>
-                      <label className="label" htmlFor="exchangeImei1">
-                        IMEI
-                      </label>
-                      <input
-                        id="exchangeImei1"
-                        className="field font-mono"
-                        value={exchangeImei1}
-                        onChange={(e) => setExchangeImei1(e.target.value)}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div>
-                      <label className="label" htmlFor="exchangeSerial">
-                        Serial number
-                      </label>
-                      <input
-                        id="exchangeSerial"
-                        className="field font-mono"
-                        value={exchangeSerial}
-                        onChange={(e) => setExchangeSerial(e.target.value)}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div>
-                      <label className="label required" htmlFor="exchangeValue">
-                        Exchange value (₹)
-                      </label>
-                      <input
-                        id="exchangeValue"
-                        className="field"
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={exchangeValue}
-                        onChange={(e) =>
-                          setExchangeValue(
-                            e.target.value === ""
-                              ? ""
-                              : Number(e.target.value) || 0,
-                          )
+                        placeholder={
+                          exchangePlatform === "IOS"
+                            ? "e.g. iPhone 12"
+                            : "e.g. Samsung S21"
                         }
-                        placeholder="Amount to deduct"
                         required={isExchange}
                       />
                     </div>
-                    <div className="sm:col-span-2">
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="label required" htmlFor="exchangeColor">
+                          Color
+                        </label>
+                        <input
+                          id="exchangeColor"
+                          className="field"
+                          value={exchangeColor}
+                          onChange={(e) => setExchangeColor(e.target.value)}
+                          placeholder="e.g. Black"
+                          required={isExchange}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="label required"
+                          htmlFor="exchangeStorage"
+                        >
+                          Storage
+                        </label>
+                        <input
+                          id="exchangeStorage"
+                          className="field"
+                          value={exchangeStorage}
+                          onChange={(e) => setExchangeStorage(e.target.value)}
+                          placeholder="e.g. 128 GB"
+                          required={isExchange}
+                        />
+                      </div>
+                    </div>
+
+                    {exchangePlatform === "ANDROID" ? (
+                      <div>
+                        <label className="label required" htmlFor="exchangeRam">
+                          RAM
+                        </label>
+                        <input
+                          id="exchangeRam"
+                          className="field"
+                          value={exchangeRam}
+                          onChange={(e) => setExchangeRam(e.target.value)}
+                          placeholder="e.g. 8 GB"
+                          required={isExchange}
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="label" htmlFor="exchangeImei1">
+                          IMEI
+                        </label>
+                        <input
+                          id="exchangeImei1"
+                          className="field font-mono"
+                          value={exchangeImei1}
+                          onChange={(e) => setExchangeImei1(e.target.value)}
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="label required"
+                          htmlFor="exchangeValue"
+                        >
+                          Exchange value (₹)
+                        </label>
+                        <input
+                          id="exchangeValue"
+                          className="field"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={exchangeValue}
+                          onChange={(e) =>
+                            setExchangeValue(
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value) || 0,
+                            )
+                          }
+                          placeholder="Amount to deduct"
+                          required={isExchange}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
                       <label className="label" htmlFor="exchangeNotes">
-                        Condition / notes
+                        Notes
                       </label>
                       <textarea
                         id="exchangeNotes"
-                        className="field min-h-[88px] resize-y"
+                        className="field min-h-[72px] resize-y"
                         value={exchangeNotes}
                         onChange={(e) => setExchangeNotes(e.target.value)}
                         placeholder="Optional — screen condition, box, etc."
                       />
                     </div>
-                    <p className="sm:col-span-2 rounded-2xl bg-tide-100/60 px-4 py-3 text-xs text-tide-600">
-                      Payable = bill total − exchange value. Payment split uses the payable amount.
-                    </p>
                   </div>
                 </motion.div>
               ) : null}
@@ -1673,9 +1863,28 @@ export function CreateBillPage() {
               </p>
             ) : null}
 
+            <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-ink-300 text-tide-600 focus:ring-tide-500"
+                checked={withGst}
+                onChange={(e) => setWithGst(e.target.checked)}
+              />
+              <span className="text-left">
+                <span className="block text-sm font-semibold text-ink-900">
+                  Generate GST bill
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  {withGst
+                    ? "PDF will be a GST tax invoice"
+                    : "PDF will be a non-GST bill (default)"}
+                </span>
+              </span>
+            </label>
+
             <button
               type="submit"
-              className="btn-primary mt-6 w-full"
+              className="btn-primary mt-4 w-full"
               disabled={saving}
             >
               {saving

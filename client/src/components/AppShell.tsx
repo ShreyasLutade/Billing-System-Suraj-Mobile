@@ -58,7 +58,7 @@ export function AppShell() {
             aria-label="Suraj Mobile — New Bill"
           >
             <img
-              src="/favicon.svg"
+              src="/suraj_mobile_icon.png"
               alt=""
               className="h-11 w-11 shrink-0 object-contain"
             />

@@ -16,6 +16,7 @@ export type BillSnapshot = {
   customerPhone: string;
   customerAddress: string;
   notes: string;
+  withGst: boolean;
   useCash: boolean;
   useOnline: boolean;
   useFinance: boolean;
@@ -29,6 +30,10 @@ export type BillSnapshot = {
   financeCompanyName2: string;
   isExchange: boolean;
   exchangeModel: string;
+  exchangePlatform: string;
+  exchangeColor: string;
+  exchangeStorage: string;
+  exchangeRam: string;
   exchangeImei1: string;
   exchangeSerial: string;
   exchangeValue: number | null;
@@ -119,6 +124,7 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     customerPhone: bill.customerPhone,
     customerAddress: bill.customerAddress || "",
     notes: bill.notes || "",
+    withGst: Boolean(bill.withGst),
     useCash: bill.cashAmount > 0,
     useOnline: bill.onlineAmount > 0,
     useFinance: bill.financeAmount > 0,
@@ -132,6 +138,10 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     financeCompanyName2: bill.financeCompanyName2 || "",
     isExchange: bill.isExchange,
     exchangeModel: bill.exchangeModel || "",
+    exchangePlatform: bill.exchangePlatform || "",
+    exchangeColor: bill.exchangeColor || "",
+    exchangeStorage: bill.exchangeStorage || "",
+    exchangeRam: bill.exchangeRam || "",
     exchangeImei1: bill.exchangeImei1 || "",
     exchangeSerial: bill.exchangeSerial || "",
     exchangeValue: bill.exchangeValue ?? null,
@@ -170,6 +180,7 @@ export function payloadToSnapshot(
     customerPhone: payload.customerPhone,
     customerAddress: payload.customerAddress || "",
     notes: payload.notes || "",
+    withGst: Boolean(payload.withGst),
     useCash: payload.useCash,
     useOnline: payload.useOnline,
     useFinance: payload.useFinance,
@@ -185,6 +196,10 @@ export function payloadToSnapshot(
     financeCompanyName2: payload.financeCompanyName2 || "",
     isExchange: Boolean(payload.isExchange),
     exchangeModel: payload.exchangeModel || "",
+    exchangePlatform: payload.exchangePlatform || "",
+    exchangeColor: payload.exchangeColor || "",
+    exchangeStorage: payload.exchangeStorage || "",
+    exchangeRam: payload.exchangeRam || "",
     exchangeImei1: payload.exchangeImei1 || "",
     exchangeSerial: payload.exchangeSerial || "",
     exchangeValue: payload.exchangeValue ?? null,
@@ -224,6 +239,12 @@ export function diffBillSnapshots(
     display(after.customerAddress),
   );
   pushChange(lines, "Notes", display(before.notes), display(after.notes));
+  pushChange(
+    lines,
+    "Invoice type",
+    before.withGst ? "GST tax invoice" : "Non-GST bill",
+    after.withGst ? "GST tax invoice" : "Non-GST bill",
+  );
 
   pushChange(lines, "Gross total", money(before.grandTotal), money(after.grandTotal));
   pushChange(
@@ -276,9 +297,33 @@ export function diffBillSnapshots(
   if (before.isExchange || after.isExchange) {
     pushChange(
       lines,
-      "Exchange model",
+      "Exchange phone",
       display(before.exchangeModel),
       display(after.exchangeModel),
+    );
+    pushChange(
+      lines,
+      "Exchange OS",
+      display(before.exchangePlatform),
+      display(after.exchangePlatform),
+    );
+    pushChange(
+      lines,
+      "Exchange color",
+      display(before.exchangeColor),
+      display(after.exchangeColor),
+    );
+    pushChange(
+      lines,
+      "Exchange storage",
+      display(before.exchangeStorage),
+      display(after.exchangeStorage),
+    );
+    pushChange(
+      lines,
+      "Exchange RAM",
+      display(before.exchangeRam),
+      display(after.exchangeRam),
     );
     pushChange(
       lines,

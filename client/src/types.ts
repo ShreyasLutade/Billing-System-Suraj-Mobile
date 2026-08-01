@@ -34,6 +34,7 @@ export type Bill = {
   customerPhone: string;
   customerAddress?: string | null;
   notes?: string | null;
+  withGst?: boolean;
   subtotal: number;
   gstAmount: number;
   grandTotal: number;
@@ -50,11 +51,16 @@ export type Bill = {
   financeReceivedAt?: string | null;
   isExchange: boolean;
   exchangeModel?: string | null;
+  exchangePlatform?: "IOS" | "ANDROID" | string | null;
+  exchangeColor?: string | null;
+  exchangeStorage?: string | null;
+  exchangeRam?: string | null;
   exchangeImei1?: string | null;
   exchangeImei2?: string | null;
   exchangeSerial?: string | null;
   exchangeValue?: number | null;
   exchangeNotes?: string | null;
+  exchangeMobileCatalogId?: string | null;
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;
@@ -173,6 +179,7 @@ export type CreateBillPayload = {
   customerAddress?: string | null;
   notes?: string | null;
   billDate?: string | null;
+  withGst?: boolean;
   items: BillItem[];
   useCash: boolean;
   useOnline: boolean;
@@ -187,6 +194,10 @@ export type CreateBillPayload = {
   financeCompanyName2?: string | null;
   isExchange?: boolean;
   exchangeModel?: string | null;
+  exchangePlatform?: "IOS" | "ANDROID" | null;
+  exchangeColor?: string | null;
+  exchangeStorage?: string | null;
+  exchangeRam?: string | null;
   exchangeImei1?: string | null;
   exchangeImei2?: string | null;
   exchangeSerial?: string | null;

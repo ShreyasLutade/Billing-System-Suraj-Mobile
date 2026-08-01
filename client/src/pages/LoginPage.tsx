@@ -94,7 +94,7 @@ export function LoginPage() {
         <div className="login-card glass-panel p-7 sm:p-9">
           <div className="mb-8 text-center">
             <img
-              src="/favicon.svg"
+              src="/suraj_mobile_icon.png"
               alt=""
               className="mx-auto h-16 w-16 object-contain"
             />

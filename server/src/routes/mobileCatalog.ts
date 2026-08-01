@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { upsertMobileCatalog } from "../services/mobileCatalog";
 
 export const mobileCatalogRouter = Router();
 
@@ -22,21 +23,6 @@ const createMobileSchema = z
       });
     }
   });
-
-function clean(value: string) {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function capitalizeFirst(value: string) {
-  const normalized = clean(value);
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
-
-function normalizeCapacity(value: string) {
-  const normalized = clean(value);
-  const capacity = normalized.replace(/\s*gb\s*$/i, "").trim();
-  return /^\d+$/.test(capacity) ? `${capacity} GB` : normalized;
-}
 
 mobileCatalogRouter.get("/", async (_req, res, next) => {
   try {
@@ -65,26 +51,8 @@ mobileCatalogRouter.post("/", async (req, res, next) => {
       return;
     }
 
-    const input = parsed.data;
-    const values = {
-      name: capitalizeFirst(input.name),
-      platform: input.platform,
-      condition: input.condition,
-      color: capitalizeFirst(input.color),
-      storage: normalizeCapacity(input.storage),
-      ram: input.platform === "ANDROID" ? normalizeCapacity(input.ram) : "",
-    };
-
-    const existing = await prisma.mobileCatalog.findFirst({
-      where: values,
-    });
-    if (existing) {
-      res.json({ data: existing, created: false });
-      return;
-    }
-
-    const mobile = await prisma.mobileCatalog.create({ data: values });
-    res.status(201).json({ data: mobile, created: true });
+    const { mobile, created } = await upsertMobileCatalog(prisma, parsed.data);
+    res.status(created ? 201 : 200).json({ data: mobile, created });
   } catch (error) {
     next(error);
   }
