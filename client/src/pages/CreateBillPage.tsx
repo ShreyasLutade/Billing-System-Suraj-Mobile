@@ -524,39 +524,40 @@ export function CreateBillPage() {
     });
   }
 
+  function remainingForMode(mode: "cash" | "online" | "finance") {
+    const cash = mode === "cash" ? 0 : useCash ? cashAmount : 0;
+    const online = mode === "online" ? 0 : useOnline ? onlineAmount : 0;
+    const finance =
+      mode === "finance"
+        ? 0
+        : useFinance
+          ? financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
+          : 0;
+    return round2(
+      Math.max(totals.payableAmount - cash - online - finance, 0),
+    );
+  }
+
   function togglePayment(
     mode: "cash" | "online" | "finance",
     checked: boolean,
   ) {
-    const currentlyEnabled =
-      Number(useCash) + Number(useOnline) + Number(useFinance);
-    const isFirstEnabled = checked && currentlyEnabled === 0;
-    const defaultAmount = isFirstEnabled ? totals.payableAmount : undefined;
-
     if (mode === "cash") {
       setUseCash(checked);
       if (!checked) setCashAmount(0);
-      else if (defaultAmount !== undefined) setCashAmount(defaultAmount);
+      else setCashAmount(remainingForMode("cash"));
     }
     if (mode === "online") {
       setUseOnline(checked);
       if (!checked) setOnlineAmount(0);
-      else if (defaultAmount !== undefined) setOnlineAmount(defaultAmount);
+      else setOnlineAmount(remainingForMode("online"));
     }
     if (mode === "finance") {
       setUseFinance(checked);
       if (!checked) {
         resetFinanceEntries();
       } else {
-        const remainingAfterCashAndOnline = round2(
-          Math.max(
-            totals.payableAmount -
-              (useCash ? cashAmount : 0) -
-              (useOnline ? onlineAmount : 0),
-            0,
-          ),
-        );
-        setFinanceEntries([blankFinanceEntry(remainingAfterCashAndOnline)]);
+        setFinanceEntries([blankFinanceEntry(remainingForMode("finance"))]);
       }
     }
   }
@@ -1548,7 +1549,8 @@ export function CreateBillPage() {
               </h2>
             </div>
             <p className="mb-5 text-sm text-ink-500">
-              Tick each mode received and enter its amount.
+              Tick each mode — remaining payable fills in automatically. Adjust
+              amounts if needed.
             </p>
 
             <div className="space-y-3">
