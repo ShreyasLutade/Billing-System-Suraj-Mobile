@@ -26,6 +26,7 @@ duesRouter.get("/", async (req, res, next) => {
     const dateFilter = toDateFilter(getPeriodRange(period));
 
     const where: Prisma.BillWhereInput = {
+      withGst: false,
       dueAmount: { gt: 0 },
       dueSettled: false,
       ...(dateFilter
@@ -90,6 +91,7 @@ duesRouter.get("/finance", async (_req, res, next) => {
   try {
     const dues = await prisma.bill.findMany({
       where: {
+        withGst: false,
         financeAmount: { gt: 0 },
         financeReceived: false,
       },

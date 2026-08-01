@@ -242,8 +242,8 @@ export function diffBillSnapshots(
   pushChange(
     lines,
     "Invoice type",
-    before.withGst ? "GST tax invoice" : "Non-GST bill",
-    after.withGst ? "GST tax invoice" : "Non-GST bill",
+    before.withGst ? "GST bill" : "Shop bill",
+    after.withGst ? "GST bill" : "Shop bill",
   );
 
   pushChange(lines, "Gross total", money(before.grandTotal), money(after.grandTotal));

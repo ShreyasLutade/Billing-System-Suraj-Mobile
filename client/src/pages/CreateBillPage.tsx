@@ -176,6 +176,7 @@ export function CreateBillPage() {
   const [successId, setSuccessId] = useState<string | null>(null);
   const [successInvoice, setSuccessInvoice] = useState<string | null>(null);
   const [successPayment, setSuccessPayment] = useState<{
+    withGst: boolean;
     payableAmount: number;
     cashAmount: number;
     onlineAmount: number;
@@ -189,7 +190,10 @@ export function CreateBillPage() {
 
   function captureSuccessPayment(bill: Bill) {
     setSuccessPayment({
-      payableAmount: bill.payableAmount ?? bill.grandTotal,
+      withGst: Boolean(bill.withGst),
+      payableAmount: bill.withGst
+        ? bill.grandTotal
+        : (bill.payableAmount ?? bill.grandTotal),
       cashAmount: bill.cashAmount || 0,
       onlineAmount: bill.onlineAmount || 0,
       financeAmount: (bill.financeAmount || 0) + (bill.financeAmount2 || 0),
@@ -602,6 +606,61 @@ export function CreateBillPage() {
   }
 
   async function buildPayload(): Promise<CreateBillPayload | null> {
+    if (withGst) {
+      return {
+        customerName,
+        customerPhone,
+        customerAddress: customerAddress || null,
+        notes: notes || null,
+        billDate: useCustomBillDate ? customBillDate.trim() : null,
+        withGst: true,
+        useCash: false,
+        useOnline: false,
+        useFinance: false,
+        cashAmount: 0,
+        onlineAmount: 0,
+        financeAmount: 0,
+        financeCompanyId: null,
+        financeCompanyName: null,
+        financeAmount2: 0,
+        financeCompanyId2: null,
+        financeCompanyName2: null,
+        isExchange: false,
+        exchangeModel: null,
+        exchangePlatform: null,
+        exchangeColor: null,
+        exchangeStorage: null,
+        exchangeRam: null,
+        exchangeImei1: null,
+        exchangeImei2: null,
+        exchangeSerial: null,
+        exchangeValue: null,
+        exchangeNotes: null,
+        dueDate: null,
+        items: items.map((item) => ({
+          productName: item.productName,
+          mobileCatalogId:
+            item.catalogMode === "mobile" ? item.mobileCatalogId || null : null,
+          platform: item.catalogMode === "mobile" ? item.platform || null : null,
+          color: item.catalogMode === "mobile" ? item.color || null : null,
+          storage: item.catalogMode === "mobile" ? item.storage || null : null,
+          ram:
+            item.catalogMode === "mobile" && item.platform === "ANDROID"
+              ? item.ram || null
+              : null,
+          condition:
+            item.catalogMode === "mobile" ? item.condition || null : null,
+          quantity: item.quantity,
+          rate: item.rate,
+          gstPercent: item.gstPercent,
+          imei1: item.imei1 || null,
+          imei2: null,
+          serialNumber: item.serialNumber || null,
+          warrantyMonths: item.warrantyMonths || null,
+        })),
+      };
+    }
+
     let resolvedCompanyId: string | null = null;
     let resolvedCompanyName: string | null = null;
     let resolvedCompanyId2: string | null = null;
@@ -666,7 +725,7 @@ export function CreateBillPage() {
       customerAddress: customerAddress || null,
       notes: notes || null,
       billDate: useCustomBillDate ? customBillDate.trim() : null,
-      withGst,
+      withGst: false,
       useCash,
       useOnline,
       useFinance,
@@ -764,7 +823,7 @@ export function CreateBillPage() {
       }
     }
 
-    if (!hasDue && totals.dueAmount > 0) {
+    if (!withGst && !hasDue && totals.dueAmount > 0) {
       setError(
         `Payment is short by ${formatINR(totals.dueAmount)}. Complete the payment split or turn on "This bill has due".`,
       );
@@ -772,7 +831,7 @@ export function CreateBillPage() {
       return;
     }
 
-    if (hasDue && totals.dueAmount > 0 && !dueDate.trim()) {
+    if (!withGst && hasDue && totals.dueAmount > 0 && !dueDate.trim()) {
       setError("Select expected collection date for the pending due amount");
       document.getElementById("dueDate")?.focus();
       return;
@@ -948,55 +1007,63 @@ export function CreateBillPage() {
         {successPayment ? (
           <div className="mx-auto mt-5 w-full max-w-sm rounded-2xl border border-ink-100 bg-ink-50/70 px-4 py-4 text-left">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-ink-500">Payable</span>
+              <span className="text-sm text-ink-500">
+                {successPayment.withGst ? "Invoice total" : "Payable"}
+              </span>
               <span className="font-display text-xl font-semibold text-ink-900">
                 {formatINR(successPayment.payableAmount)}
               </span>
             </div>
-            <dl className="mt-3 space-y-2 border-t border-ink-100 pt-3 text-sm">
-              {successPayment.cashAmount > 0 ? (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-ink-500">Cash</dt>
-                  <dd className="font-medium text-ink-800">
-                    {formatINR(successPayment.cashAmount)}
-                  </dd>
-                </div>
-              ) : null}
-              {successPayment.onlineAmount > 0 ? (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-ink-500">Online</dt>
-                  <dd className="font-medium text-ink-800">
-                    {formatINR(successPayment.onlineAmount)}
-                  </dd>
-                </div>
-              ) : null}
-              {successPayment.financeAmount > 0 ? (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-ink-500">
-                    Finance
-                    {successPayment.financeLabel
-                      ? ` · ${successPayment.financeLabel}`
-                      : ""}
-                  </dt>
-                  <dd className="font-medium text-ink-800">
-                    {formatINR(successPayment.financeAmount)}
-                  </dd>
-                </div>
-              ) : null}
-              {successPayment.dueAmount > 0 ? (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-ember-500">
-                    Due
-                    {successPayment.dueDate
-                      ? ` · by ${successPayment.dueDate}`
-                      : ""}
-                  </dt>
-                  <dd className="font-medium text-ember-500">
-                    {formatINR(successPayment.dueAmount)}
-                  </dd>
-                </div>
-              ) : null}
-            </dl>
+            {successPayment.withGst ? (
+              <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-500">
+                Submission invoice — not recorded in shop sales.
+              </p>
+            ) : (
+              <dl className="mt-3 space-y-2 border-t border-ink-100 pt-3 text-sm">
+                {successPayment.cashAmount > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-500">Cash</dt>
+                    <dd className="font-medium text-ink-800">
+                      {formatINR(successPayment.cashAmount)}
+                    </dd>
+                  </div>
+                ) : null}
+                {successPayment.onlineAmount > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-500">Online</dt>
+                    <dd className="font-medium text-ink-800">
+                      {formatINR(successPayment.onlineAmount)}
+                    </dd>
+                  </div>
+                ) : null}
+                {successPayment.financeAmount > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-500">
+                      Finance
+                      {successPayment.financeLabel
+                        ? ` · ${successPayment.financeLabel}`
+                        : ""}
+                    </dt>
+                    <dd className="font-medium text-ink-800">
+                      {formatINR(successPayment.financeAmount)}
+                    </dd>
+                  </div>
+                ) : null}
+                {successPayment.dueAmount > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ember-500">
+                      Due
+                      {successPayment.dueDate
+                        ? ` · by ${successPayment.dueDate}`
+                        : ""}
+                    </dt>
+                    <dd className="font-medium text-ember-500">
+                      {formatINR(successPayment.dueAmount)}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            )}
           </div>
         ) : null}
         {shareError ? (
@@ -1070,6 +1137,40 @@ export function CreateBillPage() {
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <label className="glass-panel flex cursor-pointer items-start gap-3 p-5 sm:p-6">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-ink-300 text-tide-600 focus:ring-tide-500"
+            checked={withGst}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setWithGst(on);
+              if (on) {
+                setUseCash(false);
+                setUseOnline(false);
+                setUseFinance(false);
+                setHasDue(false);
+                setCashAmount(0);
+                setOnlineAmount(0);
+                resetFinanceEntries();
+                setDueDate("");
+                setIsExchange(false);
+                clearExchangeFields();
+              }
+            }}
+          />
+          <span className="text-left">
+            <span className="block font-display text-lg font-semibold text-ink-900">
+              Generate GST bill
+            </span>
+            <span className="mt-1 block text-sm text-ink-500">
+              {withGst
+                ? "GST tax invoice for submission only — payment split is hidden and not recorded in sales."
+                : "Default shop bill with payment modes. Turn on for a GST tax invoice."}
+            </span>
+          </span>
+        </label>
+
         <section className="glass-panel p-5 sm:p-6">
           <h2 className="font-display text-lg font-semibold text-ink-900">
             Customer
@@ -1377,6 +1478,7 @@ export function CreateBillPage() {
             ))}
           </AnimatePresence>
 
+          {!withGst ? (
           <div className="glass-panel p-5 sm:p-6">
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <div>
@@ -1559,9 +1661,17 @@ export function CreateBillPage() {
               ) : null}
             </AnimatePresence>
           </div>
+          ) : null}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <section
+          className={
+            withGst
+              ? "grid gap-6"
+              : "grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"
+          }
+        >
+          {!withGst ? (
           <div className="glass-panel p-5 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Wallet className="h-5 w-5 text-tide-600" />
@@ -1804,6 +1914,7 @@ export function CreateBillPage() {
               ) : null}
             </AnimatePresence>
           </div>
+          ) : null}
 
           <div className="glass-panel overflow-hidden p-5 sm:p-6">
             <h2 className="font-display text-lg font-semibold text-ink-900">
@@ -1822,7 +1933,7 @@ export function CreateBillPage() {
                 label="Gross total"
                 value={formatINR(totals.grandTotal)}
               />
-              {totals.exchangeDeduction > 0 ? (
+              {!withGst && totals.exchangeDeduction > 0 ? (
                 <SummaryRow
                   label="Less: Exchange"
                   value={`- ${formatINR(totals.exchangeDeduction)}`}
@@ -1830,10 +1941,14 @@ export function CreateBillPage() {
                 />
               ) : null}
               <SummaryRow
-                label="Payable"
-                value={formatINR(totals.payableAmount)}
+                label={withGst ? "Invoice total" : "Payable"}
+                value={formatINR(
+                  withGst ? totals.grandTotal : totals.payableAmount,
+                )}
                 strong
               />
+              {!withGst ? (
+                <>
               <div className="border-t border-ink-100 pt-3" />
               <SummaryRow label="Cash" value={formatINR(totals.cash)} />
               <SummaryRow label="Online" value={formatINR(totals.online)} />
@@ -1865,6 +1980,12 @@ export function CreateBillPage() {
                 accent={totals.dueAmount > 0}
               />
               ) : null}
+                </>
+              ) : (
+                <p className="border-t border-ink-100 pt-3 text-xs text-ink-500">
+                  GST bill — payment modes are not recorded; excluded from shop sales.
+                </p>
+              )}
             </dl>
 
             <div className="mt-5">
@@ -1886,28 +2007,9 @@ export function CreateBillPage() {
               </p>
             ) : null}
 
-            <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-ink-300 text-tide-600 focus:ring-tide-500"
-                checked={withGst}
-                onChange={(e) => setWithGst(e.target.checked)}
-              />
-              <span className="text-left">
-                <span className="block text-sm font-semibold text-ink-900">
-                  Generate GST bill
-                </span>
-                <span className="mt-0.5 block text-xs text-ink-500">
-                  {withGst
-                    ? "PDF will be a GST tax invoice"
-                    : "PDF will be a non-GST bill (default)"}
-                </span>
-              </span>
-            </label>
-
             <button
               type="submit"
-              className="btn-primary mt-4 w-full"
+              className="btn-primary mt-6 w-full"
               disabled={saving}
             >
               {saving

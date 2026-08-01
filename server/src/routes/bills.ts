@@ -20,7 +20,20 @@ function parseDateInput(value: string) {
   return new Date(value);
 }
 
-async function nextInvoiceNumber(tx: Prisma.TransactionClient) {
+async function nextInvoiceNumber(
+  tx: Prisma.TransactionClient,
+  withGst = false,
+) {
+  if (withGst) {
+    // Separate series for GST submission invoices: SMS-GST-3000, 3001, …
+    const sequence = await tx.invoiceSequence.upsert({
+      where: { id: 2 },
+      create: { id: 2, counter: 3000 },
+      update: { counter: { increment: 1 } },
+    });
+    return `SMS-GST-${sequence.counter}`;
+  }
+
   const year = new Date().getFullYear();
   const sequence = await tx.invoiceSequence.upsert({
     where: { id: 1 },
@@ -28,6 +41,30 @@ async function nextInvoiceNumber(tx: Prisma.TransactionClient) {
     update: { counter: { increment: 1 } },
   });
   return `SMS-${year}-${String(sequence.counter).padStart(4, "0")}`;
+}
+
+function totalsForPersist(
+  input: { withGst?: boolean },
+  totals: ReturnType<typeof computeBillTotals>,
+) {
+  if (!input.withGst) return totals;
+  // GST invoices are submission-only — no payments, dues, or exchange
+  return {
+    ...totals,
+    payableAmount: totals.grandTotal,
+    cashAmount: 0,
+    onlineAmount: 0,
+    financeAmount: 0,
+    financeAmount2: 0,
+    dueAmount: 0,
+  };
+}
+
+function exchangeInputForPersist<T extends { withGst?: boolean; isExchange?: boolean }>(
+  input: T,
+): T {
+  if (!input.withGst) return input;
+  return { ...input, isExchange: false };
 }
 
 async function resolveExchangeCatalog(
@@ -134,6 +171,12 @@ billsRouter.get("/", async (req, res, next) => {
       ? { billDate: billDateFilter }
       : {};
 
+    if (req.query.withGst === "true") {
+      where.withGst = true;
+    } else if (req.query.withGst === "false") {
+      where.withGst = false;
+    }
+
     const bills = await prisma.bill.findMany({
       where,
       include: { items: true },
@@ -173,10 +216,10 @@ billsRouter.post("/", async (req, res, next) => {
     }
 
     const input = parsed.data;
-    const totals = computeBillTotals(input);
+    const totals = totalsForPersist(input, computeBillTotals(input));
 
     const bill = await prisma.$transaction(async (tx) => {
-      const invoiceNumber = await nextInvoiceNumber(tx);
+      const invoiceNumber = await nextInvoiceNumber(tx, Boolean(input.withGst));
 
       let financeCompanyId: string | null = null;
       let financeCompanyName: string | null = null;
@@ -227,7 +270,8 @@ billsRouter.post("/", async (req, res, next) => {
         }
       }
 
-      const exchange = await resolveExchangeCatalog(tx, input);
+      const persistInput = exchangeInputForPersist(input);
+      const exchange = await resolveExchangeCatalog(tx, persistInput);
 
       return tx.bill.create({
         data: {
@@ -258,26 +302,26 @@ billsRouter.post("/", async (req, res, next) => {
             : { financeCompanyName: null }),
           financeCompanyId2,
           financeCompanyName2,
-          isExchange: Boolean(input.isExchange),
+          isExchange: Boolean(persistInput.isExchange),
           exchangeModel: exchange.exchangeModel,
           exchangePlatform: exchange.exchangePlatform,
           exchangeColor: exchange.exchangeColor,
           exchangeStorage: exchange.exchangeStorage,
           exchangeRam: exchange.exchangeRam,
           exchangeMobileCatalogId: exchange.exchangeMobileCatalogId,
-          exchangeImei1: input.isExchange
+          exchangeImei1: persistInput.isExchange
             ? input.exchangeImei1?.trim() || null
             : null,
-          exchangeImei2: input.isExchange
+          exchangeImei2: persistInput.isExchange
             ? input.exchangeImei2?.trim() || null
             : null,
-          exchangeSerial: input.isExchange
+          exchangeSerial: persistInput.isExchange
             ? input.exchangeSerial?.trim() || null
             : null,
-          exchangeValue: input.isExchange
+          exchangeValue: persistInput.isExchange
             ? input.exchangeValue ?? null
             : null,
-          exchangeNotes: input.isExchange
+          exchangeNotes: persistInput.isExchange
             ? input.exchangeNotes?.trim() || null
             : null,
           dueAmount: totals.dueAmount,
@@ -343,7 +387,7 @@ billsRouter.put("/:id", async (req, res, next) => {
     }
 
     const input = parsed.data;
-    const totals = computeBillTotals(input);
+    const totals = totalsForPersist(input, computeBillTotals(input));
 
     const bill = await prisma.$transaction(async (tx) => {
       let financeCompanyId: string | null = null;
@@ -403,7 +447,8 @@ billsRouter.put("/:id", async (req, res, next) => {
         existing.financeCompanyId === financeCompanyId &&
         existing.financeCompanyId2 === financeCompanyId2;
 
-      const exchange = await resolveExchangeCatalog(tx, input);
+      const persistInput = exchangeInputForPersist(input);
+      const exchange = await resolveExchangeCatalog(tx, persistInput);
 
       return tx.bill.update({
         where: { id: existing.id },
@@ -441,26 +486,26 @@ billsRouter.put("/:id", async (req, res, next) => {
             financeDetailsUnchanged && existing.financeReceived
               ? existing.financeReceivedAt
               : null,
-          isExchange: Boolean(input.isExchange),
+          isExchange: Boolean(persistInput.isExchange),
           exchangeModel: exchange.exchangeModel,
           exchangePlatform: exchange.exchangePlatform,
           exchangeColor: exchange.exchangeColor,
           exchangeStorage: exchange.exchangeStorage,
           exchangeRam: exchange.exchangeRam,
           exchangeMobileCatalogId: exchange.exchangeMobileCatalogId,
-          exchangeImei1: input.isExchange
+          exchangeImei1: persistInput.isExchange
             ? input.exchangeImei1?.trim() || null
             : null,
-          exchangeImei2: input.isExchange
+          exchangeImei2: persistInput.isExchange
             ? input.exchangeImei2?.trim() || null
             : null,
-          exchangeSerial: input.isExchange
+          exchangeSerial: persistInput.isExchange
             ? input.exchangeSerial?.trim() || null
             : null,
-          exchangeValue: input.isExchange
+          exchangeValue: persistInput.isExchange
             ? input.exchangeValue ?? null
             : null,
-          exchangeNotes: input.isExchange
+          exchangeNotes: persistInput.isExchange
             ? input.exchangeNotes?.trim() || null
             : null,
           dueAmount: totals.dueAmount,
