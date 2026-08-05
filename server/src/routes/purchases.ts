@@ -1,0 +1,219 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../lib/prisma";
+import { upsertSupplierByName } from "../services/suppliers";
+
+export const purchasesRouter = Router();
+
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function serializeSuppliers(names: string[]) {
+  return JSON.stringify(names.map((n) => n.trim()).filter(Boolean));
+}
+
+const purchaseItemSchema = z
+  .object({
+    platform: z.enum(["IOS", "ANDROID"]),
+    mobileName: z.string().trim().min(2).max(100),
+    storage: z.string().trim().min(1).max(30),
+    ram: z.string().trim().max(30).optional().default(""),
+    color: z.string().trim().min(1).max(50),
+    imei: z.string().trim().min(8).max(20),
+    purchasePrice: z.coerce.number().positive(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.platform === "ANDROID" && !data.ram?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "RAM is required for Android mobiles",
+        path: ["ram"],
+      });
+    }
+  });
+
+const createPurchaseSchema = z.object({
+  supplierId: z.string().trim().optional().nullable(),
+  supplierName: z.string().trim().min(2).max(100).optional().nullable(),
+  supplierPhone: z.string().trim().max(15).optional().nullable(),
+  condition: z.enum(["NEW", "USED"]),
+  note: z.string().trim().max(500).optional().nullable(),
+  purchaseDate: z.string().trim().optional().nullable(),
+  items: z.array(purchaseItemSchema).min(1, "Add at least one mobile"),
+});
+
+purchasesRouter.get("/", async (req, res, next) => {
+  try {
+    const supplierId =
+      typeof req.query.supplierId === "string" ? req.query.supplierId : undefined;
+
+    const purchases = await prisma.purchase.findMany({
+      where: supplierId ? { supplierId } : undefined,
+      orderBy: { purchaseDate: "desc" },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        items: {
+          include: {
+            stockItem: {
+              select: {
+                id: true,
+                mobileName: true,
+                imei: true,
+                purchasePrice: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.json({ data: purchases });
+  } catch (error) {
+    next(error);
+  }
+});
+
+purchasesRouter.post("/", async (req, res, next) => {
+  try {
+    const parsed = createPurchaseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const data = parsed.data;
+    const imeis = data.items.map((item) => item.imei.replace(/\s+/g, ""));
+    if (new Set(imeis).size !== imeis.length) {
+      res.status(400).json({ error: "Duplicate IMEI numbers in this purchase" });
+      return;
+    }
+
+    const existing = await prisma.stockItem.findMany({
+      where: { imei: { in: imeis } },
+      select: { imei: true },
+    });
+    if (existing.length) {
+      res.status(409).json({
+        error: `IMEI already in stock: ${existing.map((e) => e.imei).join(", ")}`,
+      });
+      return;
+    }
+
+    let supplier =
+      data.supplierId
+        ? await prisma.supplier.findUnique({ where: { id: data.supplierId } })
+        : null;
+
+    if (!supplier && data.supplierName?.trim()) {
+      const phoneDigits = data.supplierPhone?.replace(/\D/g, "") || null;
+      supplier = await upsertSupplierByName(prisma, data.supplierName, {
+        phone: phoneDigits,
+      });
+    }
+
+    if (!supplier) {
+      res.status(400).json({ error: "Select or enter a supplier" });
+      return;
+    }
+
+    let purchaseDate = new Date();
+    if (data.purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(data.purchaseDate)) {
+      const [y, m, d] = data.purchaseDate.split("-").map(Number);
+      purchaseDate = new Date(y, m - 1, d, 12, 0, 0);
+    }
+
+    const totalAmount = round2(
+      data.items.reduce((sum, item) => sum + item.purchasePrice, 0),
+    );
+
+    const purchase = await prisma.$transaction(async (tx) => {
+      const created = await tx.purchase.create({
+        data: {
+          supplierId: supplier!.id,
+          purchaseDate,
+          note: data.note || null,
+          condition: data.condition,
+          totalAmount,
+        },
+      });
+
+      const stockItems = [];
+      for (const item of data.items) {
+        const imei = item.imei.replace(/\s+/g, "");
+        const stock = await tx.stockItem.create({
+          data: {
+            condition: data.condition,
+            platform: item.platform,
+            mobileName: item.mobileName.trim(),
+            storage: item.storage.trim(),
+            ram: item.platform === "ANDROID" ? item.ram.trim() : "",
+            color: item.color.trim(),
+            imei,
+            purchasePrice: item.purchasePrice,
+            suppliers: serializeSuppliers([supplier!.name]),
+            supplierId: supplier!.id,
+            status: "AVAILABLE",
+            createdAt: purchaseDate,
+          },
+        });
+        await tx.purchaseItem.create({
+          data: {
+            purchaseId: created.id,
+            stockItemId: stock.id,
+          },
+        });
+        stockItems.push(stock);
+      }
+
+      return tx.purchase.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          supplier: true,
+          items: { include: { stockItem: true } },
+        },
+      });
+    });
+
+    res.status(201).json({ data: purchase });
+  } catch (error) {
+    next(error);
+  }
+});
+
+purchasesRouter.post("/:id/mark-paid", async (req, res, next) => {
+  try {
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: req.params.id },
+      include: {
+        supplier: true,
+        items: { include: { stockItem: true } },
+      },
+    });
+    if (!purchase) {
+      res.status(404).json({ error: "Purchase not found" });
+      return;
+    }
+    if (purchase.paidAt) {
+      res.status(400).json({ error: "This purchase is already marked paid" });
+      return;
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { paidAt: new Date() },
+      include: {
+        supplier: true,
+        items: { include: { stockItem: true } },
+      },
+    });
+
+    res.json({ data: updated });
+  } catch (error) {
+    next(error);
+  }
+});

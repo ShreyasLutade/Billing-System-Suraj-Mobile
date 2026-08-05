@@ -21,6 +21,7 @@ export const billItemSchema = z
   .object({
     productName: z.string().trim().min(1, "Product name is required"),
     mobileCatalogId: z.string().trim().optional().nullable(),
+    stockItemId: z.string().trim().optional().nullable(),
     platform: z.enum(["IOS", "ANDROID"]).optional().nullable(),
     color: z.string().trim().optional().nullable(),
     storage: z.string().trim().optional().nullable(),

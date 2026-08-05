@@ -7,6 +7,12 @@ import type {
   FinanceDuesSummary,
   FinanceCompany,
   MobileCatalog,
+  Purchase,
+  StockHistory,
+  StockItem,
+  Supplier,
+  SupplierDetail,
+  SupplierPayment,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -135,6 +141,112 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  listStock: (condition?: "NEW" | "USED", includeIds?: string[]) => {
+    const params = new URLSearchParams();
+    if (condition) params.set("condition", condition);
+    if (includeIds?.length) params.set("includeIds", includeIds.join(","));
+    const query = params.toString();
+    return request<{ data: StockItem[] }>(
+      `/stock${query ? `?${query}` : ""}`,
+    );
+  },
+  createStockItem: (payload: {
+    condition: "NEW" | "USED";
+    platform: "IOS" | "ANDROID";
+    mobileName: string;
+    storage: string;
+    ram?: string;
+    color: string;
+    imei: string;
+    purchasePrice: number;
+    suppliers?: string[];
+    supplierId?: string | null;
+  }) =>
+    request<{ data: StockItem }>("/stock", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteStockItem: (id: string) =>
+    request<{ data: { id: string } }>(`/stock/${id}`, {
+      method: "DELETE",
+    }),
+  stockHistory: (id: string) =>
+    request<{ data: StockHistory }>(`/stock/${id}/history`),
+  listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
+  getSupplier: (id: string) =>
+    request<{ data: SupplierDetail }>(`/suppliers/${id}`),
+  createSupplier: (payload: {
+    name: string;
+    phone?: string | null;
+    address?: string | null;
+    notes?: string | null;
+  }) =>
+    request<{ data: Supplier }>("/suppliers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateSupplier: (
+    id: string,
+    payload: {
+      name?: string;
+      phone?: string | null;
+      address?: string | null;
+      notes?: string | null;
+    },
+  ) =>
+    request<{ data: Supplier }>(`/suppliers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  createSupplierPayment: (
+    id: string,
+    payload: {
+      amount: number;
+      method: "cash" | "online" | "na";
+      paidAt?: string | null;
+      note?: string | null;
+    },
+  ) =>
+    request<{ data: SupplierPayment; ledger: Supplier }>(
+      `/suppliers/${id}/payments`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+  createPurchase: (payload: {
+    supplierId?: string | null;
+    supplierName?: string | null;
+    supplierPhone?: string | null;
+    condition: "NEW" | "USED";
+    note?: string | null;
+    purchaseDate?: string | null;
+    items: Array<{
+      platform: "IOS" | "ANDROID";
+      mobileName: string;
+      storage: string;
+      ram?: string;
+      color: string;
+      imei: string;
+      purchasePrice: number;
+    }>;
+  }) =>
+    request<{ data: Purchase }>("/purchases", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  markPurchasePaid: (id: string) =>
+    request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
+      method: "POST",
+    }),
+  listPurchases: (supplierId?: string) => {
+    const params = new URLSearchParams();
+    if (supplierId) params.set("supplierId", supplierId);
+    const query = params.toString();
+    return request<{ data: Purchase[] }>(
+      `/purchases${query ? `?${query}` : ""}`,
+    );
+  },
   listDues: (period: string = "all") =>
     request<{ data: DuesSummary }>(
       `/dues?period=${encodeURIComponent(period)}`,

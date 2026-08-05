@@ -185,7 +185,7 @@ export function FieldPicker({
         <div
           id={listId}
           role="listbox"
-          className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
+          className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
         >
           {conditionFilters ? (
             <div

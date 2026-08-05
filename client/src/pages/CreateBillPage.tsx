@@ -16,7 +16,6 @@ import {
   type SaveBillSummary,
 } from "../components/SaveBillConfirmModal";
 import { PageHeader, LoadingBlock } from "../components/ui";
-import { AddMobileModal } from "../components/AddMobileModal";
 import { FieldPicker } from "../components/FieldPicker";
 import {
   ADD_NEW_FINANCE,
@@ -35,7 +34,7 @@ import type {
   BillItem,
   CreateBillPayload,
   FinanceCompany,
-  MobileCatalog,
+  StockItem,
 } from "../types";
 
 type DraftItem = BillItem & {
@@ -48,6 +47,7 @@ const blankItem = (): DraftItem => ({
   catalogMode: "mobile",
   productName: "",
   mobileCatalogId: null,
+  stockItemId: null,
   platform: null,
   color: "",
   storage: "",
@@ -60,6 +60,29 @@ const blankItem = (): DraftItem => ({
   serialNumber: "",
   warrantyMonths: undefined,
 });
+
+function formatStockOptionLabel(stock: {
+  mobileName: string;
+  color: string;
+  storage: string;
+  ram: string;
+  imei: string;
+}) {
+  const ramLabel = (() => {
+    if (!stock.ram) return null;
+    const capacity = stock.ram.replace(/\s*gb\s*$/i, "").trim();
+    return /^\d+$/.test(capacity)
+      ? `${capacity} GB RAM`
+      : `${stock.ram} RAM`;
+  })();
+
+  return [
+    [stock.mobileName, stock.color, stock.storage, ramLabel]
+      .filter(Boolean)
+      .join(" • "),
+    `IMEI ${stock.imei}`,
+  ].join(" · ");
+}
 
 type FinanceDraft = {
   key: string;
@@ -167,8 +190,7 @@ export function CreateBillPage() {
     blankFinanceEntry(),
   ]);
   const [financeCompanies, setFinanceCompanies] = useState<FinanceCompany[]>([]);
-  const [mobileCatalog, setMobileCatalog] = useState<MobileCatalog[]>([]);
-  const [addMobileForItem, setAddMobileForItem] = useState<string | null>(null);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [savingFinanceKey, setSavingFinanceKey] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -232,7 +254,6 @@ export function CreateBillPage() {
     setUseCustomBillDate(false);
     setCustomBillDate(todayDateInput());
     setItems([blankItem()]);
-    setAddMobileForItem(null);
     setIsExchange(false);
     clearExchangeFields();
     setUseCash(false);
@@ -267,9 +288,12 @@ export function CreateBillPage() {
         ? bill.items.map((item) => ({
             key: crypto.randomUUID(),
             catalogMode:
-              item.mobileCatalogId || item.platform ? "mobile" : "other",
+              item.stockItemId || item.mobileCatalogId || item.platform
+                ? "mobile"
+                : "other",
             productName: item.productName,
             mobileCatalogId: item.mobileCatalogId || null,
+            stockItemId: item.stockItemId || null,
             platform: item.platform || null,
             color: item.color || "",
             storage: item.storage || "",
@@ -377,32 +401,60 @@ export function CreateBillPage() {
     financeEntries,
   ]);
 
-  const mobileOptions = useMemo(
-    () => [
-      ...mobileCatalog.map((mobile) => {
-        const isUsed = (mobile.condition || "NEW") === "USED";
-        const ramLabel = (() => {
-          if (!mobile.ram) return null;
-          const capacity = mobile.ram.replace(/\s*gb\s*$/i, "").trim();
-          return /^\d+$/.test(capacity)
-            ? `${capacity} GB RAM`
-            : `${mobile.ram} RAM`;
-        })();
+  const mobileOptions = useMemo(() => {
+    const fromStock = stockItems.map((stock) => {
+      const isUsed = stock.condition === "USED";
+      return {
+        value: stock.id,
+        label: formatStockOptionLabel(stock),
+        badge: isUsed ? "Old" : "New",
+        badgeTone: (isUsed ? "old" : "new") as "old" | "new",
+        condition: stock.condition as "USED" | "NEW",
+      };
+    });
 
-        return {
-          value: mobile.id,
-          label: [mobile.name, mobile.color, mobile.storage, ramLabel]
-            .filter(Boolean)
-            .join(" • "),
-          badge: isUsed ? "Old" : "New",
-          badgeTone: (isUsed ? "old" : "new") as "old" | "new",
-          condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
-        };
-      }),
+    // Keep currently selected sold/legacy units visible while editing
+    for (const item of items) {
+      if (
+        item.catalogMode !== "mobile" ||
+        !item.stockItemId ||
+        stockItems.some((stock) => stock.id === item.stockItemId)
+      ) {
+        continue;
+      }
+      const isUsed = (item.condition || "NEW") === "USED";
+      fromStock.push({
+        value: item.stockItemId,
+        label: formatStockOptionLabel({
+          mobileName: item.productName,
+          color: item.color || "",
+          storage: item.storage || "",
+          ram: item.ram || "",
+          imei: item.imei1 || "",
+        }),
+        badge: isUsed ? "Old" : "New",
+        badgeTone: (isUsed ? "old" : "new") as "old" | "new",
+        condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
+      });
+    }
+
+    return [
+      ...fromStock,
       { value: "__other__", label: "Other product / accessory" },
-    ],
-    [mobileCatalog],
-  );
+    ];
+  }, [stockItems, items]);
+
+  function stockOptionsForItem(itemKey: string) {
+    const selectedElsewhere = new Set(
+      items
+        .filter((row) => row.key !== itemKey && row.stockItemId)
+        .map((row) => row.stockItemId as string),
+    );
+    return mobileOptions.filter(
+      (option) =>
+        option.value === "__other__" || !selectedElsewhere.has(option.value),
+    );
+  }
 
   useEffect(() => {
     if (!hasDue || totals.dueAmount <= 0) setDueDate("");
@@ -411,16 +463,16 @@ export function CreateBillPage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const [financeResult, mobileResult] = await Promise.allSettled([
+      const [financeResult, stockResult] = await Promise.allSettled([
         api.listFinanceCompanies(),
-        api.listMobileCatalog(),
+        api.listStock(),
       ]);
       if (!active) return;
       if (financeResult.status === "fulfilled") {
         setFinanceCompanies(financeResult.value.data);
       }
-      if (mobileResult.status === "fulfilled") {
-        setMobileCatalog(mobileResult.value.data);
+      if (stockResult.status === "fulfilled") {
+        setStockItems(stockResult.value.data);
       }
     })();
     return () => {
@@ -441,6 +493,13 @@ export function CreateBillPage() {
         const { data } = await api.getBill(editId);
         if (!active) return;
         applyBillToForm(data);
+        const keepIds = data.items
+          .map((item) => item.stockItemId)
+          .filter((id): id is string => Boolean(id));
+        if (keepIds.length) {
+          const stockResult = await api.listStock(undefined, keepIds);
+          if (active) setStockItems(stockResult.data);
+        }
       } catch (err) {
         if (active) {
           setLoadError(
@@ -572,16 +631,19 @@ export function CreateBillPage() {
     );
   }
 
-  function applyCatalogMobile(key: string, mobile: MobileCatalog) {
+  function applyStockMobile(key: string, stock: StockItem) {
     updateItem(key, {
       catalogMode: "mobile",
-      productName: mobile.name,
-      mobileCatalogId: mobile.id,
-      platform: mobile.platform,
-      color: mobile.color,
-      storage: mobile.storage,
-      ram: mobile.platform === "ANDROID" ? mobile.ram : "",
-      condition: mobile.condition || "NEW",
+      stockItemId: stock.id,
+      mobileCatalogId: null,
+      productName: stock.mobileName,
+      platform: stock.platform,
+      color: stock.color,
+      storage: stock.storage,
+      ram: stock.platform === "ANDROID" ? stock.ram : "",
+      condition: stock.condition || "NEW",
+      imei1: stock.imei,
+      quantity: 1,
     });
   }
 
@@ -591,18 +653,26 @@ export function CreateBillPage() {
         catalogMode: "other",
         productName: "",
         mobileCatalogId: null,
+        stockItemId: null,
         platform: null,
         color: "",
         storage: "",
         ram: "",
         condition: null,
+        imei1: "",
       });
       return;
     }
 
-    const mobile = mobileCatalog.find((entry) => entry.id === value);
-    if (!mobile) return;
-    applyCatalogMobile(key, mobile);
+    const stock = stockItems.find((entry) => entry.id === value);
+    if (stock) {
+      applyStockMobile(key, stock);
+      return;
+    }
+
+    // Selected unit already on this bill while editing (sold status)
+    const current = items.find((entry) => entry.key === key);
+    if (current?.stockItemId === value) return;
   }
 
   async function buildPayload(): Promise<CreateBillPayload | null> {
@@ -641,6 +711,8 @@ export function CreateBillPage() {
           productName: item.productName,
           mobileCatalogId:
             item.catalogMode === "mobile" ? item.mobileCatalogId || null : null,
+          stockItemId:
+            item.catalogMode === "mobile" ? item.stockItemId || null : null,
           platform: item.catalogMode === "mobile" ? item.platform || null : null,
           color: item.catalogMode === "mobile" ? item.color || null : null,
           storage: item.catalogMode === "mobile" ? item.storage || null : null,
@@ -757,6 +829,8 @@ export function CreateBillPage() {
         productName: item.productName,
         mobileCatalogId:
           item.catalogMode === "mobile" ? item.mobileCatalogId || null : null,
+        stockItemId:
+          item.catalogMode === "mobile" ? item.stockItemId || null : null,
         platform: item.catalogMode === "mobile" ? item.platform || null : null,
         color: item.catalogMode === "mobile" ? item.color || null : null,
         storage: item.catalogMode === "mobile" ? item.storage || null : null,
@@ -794,18 +868,22 @@ export function CreateBillPage() {
       return;
     }
 
-    const incompleteMobile = items.find(
-      (item) =>
-        item.catalogMode === "mobile" &&
-        (!item.productName ||
-          !item.platform ||
-          !item.color ||
-          !item.storage ||
-          (item.platform === "ANDROID" && !item.ram)),
-    );
+    const incompleteMobile = items.find((item) => {
+      if (item.catalogMode !== "mobile") return false;
+      const detailsComplete =
+        Boolean(item.productName) &&
+        Boolean(item.platform) &&
+        Boolean(item.color) &&
+        Boolean(item.storage) &&
+        (item.platform !== "ANDROID" || Boolean(item.ram));
+      if (item.stockItemId) return !detailsComplete;
+      // Older bills may not have a stock link yet
+      if (isEdit && detailsComplete) return false;
+      return true;
+    });
     if (incompleteMobile) {
       setError(
-        "Select a complete mobile variant with name, color, storage, and RAM for Android.",
+        "Select a phone from stock (add units under Stock first). Accessories can use Other product.",
       );
       return;
     }
@@ -893,12 +971,12 @@ export function CreateBillPage() {
     }
   }
 
-  async function refreshMobileCatalog() {
+  async function refreshStock(includeIds: string[] = []) {
     try {
-      const { data } = await api.listMobileCatalog();
-      setMobileCatalog(data);
+      const { data } = await api.listStock(undefined, includeIds);
+      setStockItems(data);
     } catch {
-      // Keep existing catalog if refresh fails
+      // Keep existing stock if refresh fails
     }
   }
 
@@ -915,7 +993,7 @@ export function CreateBillPage() {
       setSuccessInvoice(data.invoiceNumber);
       captureSuccessPayment(data);
       setShareError(null);
-      if (data.isExchange) await refreshMobileCatalog();
+      await refreshStock();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save bill");
     } finally {
@@ -937,7 +1015,10 @@ export function CreateBillPage() {
       captureSuccessPayment(data);
       setShareError(null);
       setOriginalBill(data);
-      if (data.isExchange) await refreshMobileCatalog();
+      const keepIds = data.items
+        .map((item) => item.stockItemId)
+        .filter((id): id is string => Boolean(id));
+      await refreshStock(keepIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update bill");
     } finally {
@@ -1325,38 +1406,24 @@ export function CreateBillPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="sm:col-span-2 lg:col-span-4">
-                    <div className="mb-1.5 flex items-center justify-between gap-3">
-                      <label className="label required mb-0">Phone</label>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-tide-600 hover:text-tide-700"
-                        onClick={() => setAddMobileForItem(item.key)}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add new mobile
-                      </button>
-                    </div>
+                    <label className="label required">Phone</label>
                     <FieldPicker
                       value={
                         item.catalogMode === "other"
                           ? "__other__"
-                          : item.mobileCatalogId ||
-                            mobileCatalog.find(
-                              (mobile) =>
-                                mobile.name === item.productName &&
-                                mobile.color === item.color &&
-                                mobile.storage === item.storage &&
-                                (mobile.ram || "") === (item.ram || ""),
-                            )?.id ||
-                            ""
+                          : item.stockItemId || ""
                       }
                       onChange={(value) => selectMobile(item.key, value)}
-                      placeholder="Select phone"
+                      placeholder={
+                        stockItems.length
+                          ? "Select from stock"
+                          : "No stock yet — add phones under Stock"
+                      }
                       searchable
-                      searchPlaceholder="Search phone…"
+                      searchPlaceholder="Search stock phone / IMEI…"
                       required
                       conditionFilters
-                      options={mobileOptions}
+                      options={stockOptionsForItem(item.key)}
                     />
                   </div>
 
@@ -1439,7 +1506,10 @@ export function CreateBillPage() {
                       onChange={(e) =>
                         updateItem(item.key, { imei1: e.target.value })
                       }
-                      placeholder="Optional"
+                      placeholder={
+                        item.stockItemId ? "From stock" : "Optional"
+                      }
+                      readOnly={Boolean(item.stockItemId)}
                     />
                   </div>
                   <div>
@@ -2021,25 +2091,6 @@ export function CreateBillPage() {
           </div>
         </section>
       </form>
-
-      <AnimatePresence>
-        {addMobileForItem ? (
-          <AddMobileModal
-            onClose={() => setAddMobileForItem(null)}
-            onCreated={(mobile) => {
-              setMobileCatalog((previous) =>
-                previous.some((entry) => entry.id === mobile.id)
-                  ? previous
-                  : [...previous, mobile].sort((a, b) =>
-                      a.name.localeCompare(b.name),
-                    ),
-              );
-              applyCatalogMobile(addMobileForItem, mobile);
-              setAddMobileForItem(null);
-            }}
-          />
-        ) : null}
-      </AnimatePresence>
 
       {showSaveConfirm && saveSummary ? (
         <SaveBillConfirmModal

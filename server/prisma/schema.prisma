@@ -102,6 +102,7 @@ model BillItem {
   billId         String
   productName    String
   mobileCatalogId String?
+  stockItemId    String?
   platform       String?
   color          String?
   storage        String?
@@ -118,9 +119,11 @@ model BillItem {
   warrantyMonths Int?
   bill           Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
   mobileCatalog  MobileCatalog? @relation(fields: [mobileCatalogId], references: [id])
+  stockItem      StockItem? @relation(fields: [stockItemId], references: [id])
 
   @@index([billId])
   @@index([mobileCatalogId])
+  @@index([stockItemId])
 }
 
 model MobileCatalog {
@@ -164,4 +167,98 @@ model ReportSendLog {
 
   @@unique([scope, dateKey])
   @@index([dateKey])
+}
+
+/// Shop inventory unit (one phone = one IMEI).
+model StockItem {
+  id            String   @id @default(cuid())
+  /// NEW | USED
+  condition     String
+  /// IOS | ANDROID
+  platform      String
+  mobileName    String
+  storage       String
+  /// Required for ANDROID; empty for IOS
+  ram           String   @default("")
+  color         String
+  imei          String   @unique
+  purchasePrice Float
+  /// Legacy JSON string array of supplier names (kept for old rows)
+  suppliers     String   @default("[]")
+  supplierId    String?
+  /// AVAILABLE | SOLD
+  status        String   @default("AVAILABLE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  billItems     BillItem[]
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  purchaseItem  PurchaseItem?
+
+  @@index([condition])
+  @@index([status])
+  @@index([mobileName])
+  @@index([createdAt])
+  @@index([supplierId])
+}
+
+/// Party master — Tally-style supplier ledger.
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  purchases Purchase[]
+  payments  SupplierPayment[]
+  stockItems StockItem[]
+
+  @@index([name])
+}
+
+/// Purchase voucher: mobiles bought from one supplier in one entry.
+model Purchase {
+  id           String    @id @default(cuid())
+  supplierId   String
+  purchaseDate DateTime  @default(now())
+  note         String?
+  totalAmount  Float     @default(0)
+  /// NEW | USED — condition of units in this purchase
+  condition    String    @default("NEW")
+  /// When set, this purchase is fully paid to the supplier
+  paidAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  supplier     Supplier  @relation(fields: [supplierId], references: [id])
+  items        PurchaseItem[]
+
+  @@index([supplierId])
+  @@index([purchaseDate])
+  @@index([paidAt])
+}
+
+model PurchaseItem {
+  id          String    @id @default(cuid())
+  purchaseId  String
+  stockItemId String    @unique
+  purchase    Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+}
+
+model SupplierPayment {
+  id         String   @id @default(cuid())
+  supplierId String
+  amount     Float
+  /// cash | online | na
+  method     String
+  paidAt     DateTime @default(now())
+  note       String?
+  createdAt  DateTime @default(now())
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([paidAt])
 }

@@ -5,7 +5,9 @@ import {
   BarChart3,
   FilePlus2,
   LogOut,
+  Package,
   ReceiptText,
+  Truck,
   Wallet,
   X,
 } from "lucide-react";
@@ -33,6 +35,8 @@ export function AppShell() {
     { to: "/", label: "New Bill", icon: FilePlus2 },
     { to: "/bills", label: "Bills", icon: ReceiptText },
     { to: "/dues", label: "Dues", icon: Wallet },
+    { to: "/stock", label: "Stock", icon: Package },
+    { to: "/suppliers", label: "Suppliers", icon: Truck },
     ...(isAdmin
       ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }]
       : []),
@@ -138,11 +142,15 @@ export function AppShell() {
         <div
           className={clsx(
             "mx-auto grid max-w-lg gap-1",
-            links.length >= 4
-              ? "grid-cols-4"
-              : links.length === 3
-                ? "grid-cols-3"
-                : "grid-cols-2",
+            links.length >= 6
+              ? "grid-cols-6"
+              : links.length >= 5
+                ? "grid-cols-5"
+                : links.length >= 4
+                  ? "grid-cols-4"
+                  : links.length === 3
+                    ? "grid-cols-3"
+                    : "grid-cols-2",
           )}
         >
           {links.map((link) => (
