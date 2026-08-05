@@ -13,8 +13,13 @@ import { duesRouter } from "./routes/dues";
 import { authRouter, seedUsers } from "./routes/auth";
 import { reportsRouter, reportsCronRouter } from "./routes/reports";
 import { mobileCatalogRouter } from "./routes/mobileCatalog";
+import { stockRouter } from "./routes/stock";
+import { suppliersRouter } from "./routes/suppliers";
+import { purchasesRouter } from "./routes/purchases";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
+import { prisma } from "./lib/prisma";
+import { backfillSuppliersFromStock } from "./services/suppliers";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -64,6 +69,9 @@ app.use("/api/bills", requireAuth, billsRouter);
 app.use("/api/analytics", requireAuth, requireAdmin, analyticsRouter);
 app.use("/api/finance-companies", requireAuth, financeCompaniesRouter);
 app.use("/api/mobile-catalog", requireAuth, mobileCatalogRouter);
+app.use("/api/stock", requireAuth, stockRouter);
+app.use("/api/suppliers", requireAuth, suppliersRouter);
+app.use("/api/purchases", requireAuth, purchasesRouter);
 app.use("/api/dues", requireAuth, duesRouter);
 app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 
@@ -120,6 +128,16 @@ if (serveClient) {
 async function start() {
   await seedFinanceCompanies();
   await seedUsers();
+  try {
+    const result = await backfillSuppliersFromStock(prisma);
+    if (result.linked || result.created) {
+      console.log(
+        `[suppliers] Backfill: linked ${result.linked} stock rows, created ${result.created} suppliers`,
+      );
+    }
+  } catch (error) {
+    console.warn("[suppliers] Backfill skipped:", error);
+  }
   startDailyReportScheduler();
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`Suraj Billing API running on http://localhost:${port}`);

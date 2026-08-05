@@ -2,6 +2,7 @@ export type BillItem = {
   id?: string;
   productName: string;
   mobileCatalogId?: string | null;
+  stockItemId?: string | null;
   platform?: "IOS" | "ANDROID" | null;
   color?: string | null;
   storage?: string | null;
@@ -128,6 +129,104 @@ export type MobileCatalog = {
   storage: string;
   ram: string;
   createdAt: string;
+};
+
+export type StockItem = {
+  id: string;
+  condition: "NEW" | "USED";
+  platform: "IOS" | "ANDROID";
+  mobileName: string;
+  storage: string;
+  ram: string;
+  color: string;
+  imei: string;
+  purchasePrice: number;
+  suppliers: string[];
+  supplierId?: string | null;
+  supplierName?: string | null;
+  status: "AVAILABLE" | "SOLD" | string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Supplier = {
+  id: string;
+  name: string;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  purchaseCount: number;
+  totalPurchased: number;
+  totalPaid: number;
+  outstanding: number;
+  stockAvailable: number;
+  stockSold: number;
+};
+
+export type SupplierPayment = {
+  id: string;
+  supplierId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  note?: string | null;
+  createdAt: string;
+};
+
+export type PurchaseStockRef = {
+  id: string;
+  mobileName: string;
+  imei: string;
+  purchasePrice: number;
+  status: string;
+  color?: string;
+  storage?: string;
+  ram?: string;
+  platform?: string;
+  condition?: string;
+};
+
+export type Purchase = {
+  id: string;
+  supplierId: string;
+  purchaseDate: string;
+  note?: string | null;
+  totalAmount: number;
+  condition: "NEW" | "USED" | string;
+  paidAt?: string | null;
+  createdAt: string;
+  supplier?: { id: string; name: string };
+  items: Array<{
+    id: string;
+    stockItemId: string;
+    stockItem: PurchaseStockRef;
+  }>;
+};
+
+export type SupplierDetail = Supplier & {
+  purchases: Purchase[];
+  payments?: SupplierPayment[];
+  stockItems: StockItem[];
+};
+
+export type StockHistory = {
+  stock: StockItem;
+  purchase: {
+    id: string;
+    purchaseDate: string;
+    note?: string | null;
+    supplier: { id: string; name: string };
+  } | null;
+  supplier: { id: string; name: string } | null;
+  sale: {
+    billId: string;
+    invoiceNumber: string;
+    billDate: string;
+    customerName: string;
+    customerPhone: string;
+  } | null;
 };
 
 export type DueItem = {

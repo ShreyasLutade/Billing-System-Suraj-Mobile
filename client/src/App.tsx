@@ -3,11 +3,15 @@ import { AuthProvider } from "./auth/AuthContext";
 import { GuestOnly, RequireAdmin, RequireAuth } from "./auth/guards";
 import { AppShell } from "./components/AppShell";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
 import { CreateBillPage } from "./pages/CreateBillPage";
 import { DuesPage } from "./pages/DuesPage";
 import { LoginPage } from "./pages/LoginPage";
+import { StockPage } from "./pages/StockPage";
+import { SupplierDetailPage } from "./pages/SupplierDetailPage";
+import { SuppliersPage } from "./pages/SuppliersPage";
 
 export default function App() {
   return (
@@ -28,6 +32,10 @@ export default function App() {
               />
               <Route path="bills/:id" element={<BillDetailPage />} />
               <Route path="dues" element={<DuesPage />} />
+              <Route path="stock" element={<StockPage />} />
+              <Route path="stock/add" element={<AddStockPage />} />
+              <Route path="suppliers" element={<SuppliersPage />} />
+              <Route path="suppliers/:id" element={<SupplierDetailPage />} />
               <Route element={<RequireAdmin />}>
                 <Route path="analytics" element={<AnalyticsPage />} />
               </Route>

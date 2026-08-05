@@ -1,0 +1,849 @@
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, ChevronDown, Package, Plus, Trash2, X } from "lucide-react";
+import { FieldPicker } from "./FieldPicker";
+import { api, formatINR } from "../lib/api";
+import type { Purchase, Supplier } from "../types";
+
+export type PurchasePrefill = Partial<
+  Pick<
+    {
+      platform: "IOS" | "ANDROID";
+      mobileName: string;
+      storage: string;
+      ram: string;
+      color: string;
+    },
+    "platform" | "mobileName" | "storage" | "ram" | "color"
+  >
+>;
+
+type DraftMobile = {
+  id: string;
+  platform: "IOS" | "ANDROID";
+  mobileName: string;
+  storage: string;
+  ram: string;
+  color: string;
+  imei: string;
+  purchasePrice: string;
+};
+
+function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
+  return {
+    id: crypto.randomUUID(),
+    platform: prefill?.platform || "IOS",
+    mobileName: prefill?.mobileName || "",
+    storage: prefill?.storage || "",
+    ram: prefill?.platform === "IOS" ? "" : prefill?.ram || "",
+    color: prefill?.color || "",
+    imei: "",
+    purchasePrice: "",
+  };
+}
+
+function draftSummary(draft: DraftMobile) {
+  return [
+    draft.mobileName.trim() || "Untitled",
+    draft.color.trim() || null,
+    draft.storage.trim() || null,
+    draft.platform === "ANDROID" && draft.ram.trim() ? draft.ram.trim() : null,
+    draft.imei.trim() ? `IMEI ${draft.imei.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function validateDraft(draft: DraftMobile): string | null {
+  if (!draft.mobileName.trim()) return "Mobile name is required";
+  if (!draft.storage.trim()) return "Storage is required";
+  if (!draft.color.trim()) return "Color is required";
+  if (draft.platform === "ANDROID" && !draft.ram.trim()) {
+    return "RAM is required for Android mobiles";
+  }
+  if (!draft.imei.trim() || draft.imei.trim().length < 8) {
+    return "Enter a valid IMEI number";
+  }
+  const price = Number(draft.purchasePrice);
+  if (!Number.isFinite(price) || price <= 0) {
+    return "Enter a valid purchase price";
+  }
+  return null;
+}
+
+export function PurchaseEntryModal({
+  condition,
+  onClose,
+  onCreated,
+  fixedSupplier = null,
+  prefill = null,
+  layout = "modal",
+}: {
+  condition: "NEW" | "USED";
+  onClose: () => void;
+  onCreated: (purchase: Purchase) => void;
+  fixedSupplier?: Supplier | null;
+  prefill?: PurchasePrefill | null;
+  layout?: "modal" | "page";
+}) {
+  const isPage = layout === "page";
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierId, setSupplierId] = useState(fixedSupplier?.id || "");
+  const [supplierName, setSupplierName] = useState(fixedSupplier?.name || "");
+  const [supplierPhone, setSupplierPhone] = useState(fixedSupplier?.phone || "");
+  const [useNewSupplier, setUseNewSupplier] = useState(!fixedSupplier);
+  const [queued, setQueued] = useState<DraftMobile[]>([]);
+  const [draft, setDraft] = useState<DraftMobile>(() => blankDraft(prefill));
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (fixedSupplier) return;
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await api.listSuppliers();
+        if (active) setSuppliers(data);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [fixedSupplier]);
+
+  const supplierOptions = useMemo(
+    () =>
+      suppliers.map((s) => ({
+        value: s.id,
+        label: s.name,
+        description: s.phone || undefined,
+      })),
+    [suppliers],
+  );
+
+  function updateDraft(patch: Partial<DraftMobile>) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function updateQueued(id: string, patch: Partial<DraftMobile>) {
+    setQueued((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addAnother() {
+    setError(null);
+    if (!fixedSupplier && useNewSupplier && !supplierName.trim()) {
+      setError("Supplier name is required");
+      return;
+    }
+    if (!fixedSupplier && useNewSupplier) {
+      const phone = supplierPhone.replace(/\D/g, "");
+      if (phone.length < 10) {
+        setError("Enter a valid 10-digit supplier phone");
+        return;
+      }
+    }
+    if (!fixedSupplier && !useNewSupplier && !supplierId) {
+      setError("Select a supplier");
+      return;
+    }
+    const issue = validateDraft(draft);
+    if (issue) {
+      setError(issue);
+      return;
+    }
+    const imei = draft.imei.replace(/\s+/g, "");
+    if (queued.some((item) => item.imei.replace(/\s+/g, "") === imei)) {
+      setError("This IMEI is already in the list above");
+      return;
+    }
+    setQueued((current) => [...current, { ...draft, imei }]);
+    setExpandedId(null);
+    setDraft(blankDraft());
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+
+    if (!fixedSupplier && useNewSupplier && !supplierName.trim()) {
+      setError("Supplier name is required");
+      return;
+    }
+    if (!fixedSupplier && useNewSupplier) {
+      const phone = supplierPhone.replace(/\D/g, "");
+      if (phone.length < 10) {
+        setError("Enter a valid 10-digit supplier phone");
+        return;
+      }
+    }
+    if (!fixedSupplier && !useNewSupplier && !supplierId) {
+      setError("Select a supplier");
+      return;
+    }
+
+    const issue = validateDraft(draft);
+    if (issue) {
+      setError(issue);
+      return;
+    }
+
+    const currentImei = draft.imei.replace(/\s+/g, "");
+    if (queued.some((item) => item.imei.replace(/\s+/g, "") === currentImei)) {
+      setError("This IMEI is already in the list above");
+      return;
+    }
+
+    for (const item of queued) {
+      const queuedIssue = validateDraft(item);
+      if (queuedIssue) {
+        setError(`Queued mobile: ${queuedIssue}`);
+        setExpandedId(item.id);
+        return;
+      }
+    }
+
+    const allDrafts = [...queued, { ...draft, imei: currentImei }];
+    setSaving(true);
+    try {
+      const { data } = await api.createPurchase({
+        supplierId: fixedSupplier?.id || (useNewSupplier ? null : supplierId),
+        supplierName: fixedSupplier
+          ? null
+          : useNewSupplier
+            ? supplierName.trim()
+            : null,
+        supplierPhone: fixedSupplier
+          ? null
+          : useNewSupplier
+            ? supplierPhone.replace(/\D/g, "")
+            : null,
+        condition,
+        items: allDrafts.map((item) => ({
+          platform: item.platform,
+          mobileName: item.mobileName,
+          storage: item.storage,
+          ram: item.platform === "ANDROID" ? item.ram : "",
+          color: item.color,
+          imei: item.imei,
+          purchasePrice: Number(item.purchasePrice),
+        })),
+      });
+      onCreated(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save purchase");
+      setSaving(false);
+    }
+  }
+
+  const formBody = (
+    <>
+        <div
+          className={
+            isPage
+              ? "mb-3 flex items-start justify-between gap-3"
+              : "sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-ink-100 bg-white px-5 py-4"
+          }
+        >
+          <div className="min-w-0">
+            {isPage ? (
+              <button
+                type="button"
+                className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
+                onClick={onClose}
+                disabled={saving}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to stock
+              </button>
+            ) : null}
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
+              {condition === "NEW" ? "New stock purchase" : "Second-hand purchase"}
+            </p>
+            <h2
+              className={
+                isPage
+                  ? "mt-1 font-display text-2xl font-semibold text-ink-900"
+                  : "mt-1 font-display text-xl font-semibold text-ink-900"
+              }
+            >
+              {isPage ? "Add mobile" : "Purchase entry"}
+            </h2>
+          </div>
+          {!isPage ? (
+            <button
+              type="button"
+              className="rounded-xl p-2 text-ink-400 hover:bg-ink-50"
+              onClick={onClose}
+              disabled={saving}
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
+
+        <div className={isPage ? "space-y-4" : "space-y-3 px-5 py-4"}>
+          {fixedSupplier ? (
+            <div className="rounded-xl border border-ink-200 bg-ink-50 px-3 py-2 text-sm">
+              <span className="text-ink-500">Supplier · </span>
+              <span className="font-semibold text-ink-900">
+                {fixedSupplier.name}
+              </span>
+              {fixedSupplier.phone ? (
+                <span className="text-ink-600"> · {fixedSupplier.phone}</span>
+              ) : null}
+            </div>
+          ) : (
+            <div
+              className={
+                isPage
+                  ? "grid gap-3 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-start"
+                  : "space-y-2"
+              }
+            >
+              <div>
+                {isPage ? (
+                  <span className="label">Supplier type</span>
+                ) : null}
+                <div className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5">
+                  <button
+                    type="button"
+                    className={
+                      !useNewSupplier
+                        ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
+                        : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
+                    }
+                    onClick={() => setUseNewSupplier(false)}
+                    disabled={saving}
+                  >
+                    Existing
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      useNewSupplier
+                        ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
+                        : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
+                    }
+                    onClick={() => setUseNewSupplier(true)}
+                    disabled={saving}
+                  >
+                    New supplier
+                  </button>
+                </div>
+              </div>
+              {useNewSupplier ? (
+                <div
+                  className={
+                    isPage
+                      ? "grid gap-3 sm:grid-cols-2"
+                      : "space-y-2"
+                  }
+                >
+                  <div>
+                    <label className="label required" htmlFor="purchaseSupplierName">
+                      Supplier name
+                    </label>
+                    <input
+                      id="purchaseSupplierName"
+                      className="field"
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
+                      required
+                      disabled={saving}
+                    />
+                  </div>
+                  <div>
+                    <label className="label required" htmlFor="purchaseSupplierPhone">
+                      Phone number
+                    </label>
+                    <input
+                      id="purchaseSupplierPhone"
+                      className="field"
+                      type="tel"
+                      inputMode="numeric"
+                      value={supplierPhone}
+                      onChange={(e) => setSupplierPhone(e.target.value)}
+                      placeholder="10-digit mobile"
+                      required
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="label required">Supplier</label>
+                  <FieldPicker
+                    value={supplierId}
+                    onChange={setSupplierId}
+                    placeholder={
+                      suppliers.length
+                        ? "Select supplier"
+                        : "No suppliers yet — add a new one"
+                    }
+                    searchable
+                    searchPlaceholder="Search supplier name…"
+                    required
+                    disabled={saving}
+                    options={supplierOptions}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {queued.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+                Queued ({queued.length})
+              </p>
+              {queued.map((item, index) => {
+                const open = expandedId === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-sm"
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left"
+                      onClick={() =>
+                        setExpandedId((c) => (c === item.id ? null : item.id))
+                      }
+                    >
+                      <ChevronDown
+                        className={`mt-0.5 h-4 w-4 shrink-0 text-ink-400 transition ${
+                          open ? "rotate-180" : ""
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-semibold text-ink-500">
+                          Mobile {index + 1}
+                        </span>
+                        <span className="mt-0.5 block text-sm font-medium text-ink-900">
+                          {draftSummary(item)}
+                        </span>
+                      </span>
+                    </button>
+                    {open ? (
+                      <div className="space-y-2 border-t border-ink-200 bg-white px-3 py-3">
+                        <DraftFields
+                          draft={item}
+                          disabled={saving}
+                          idPrefix={`q-${item.id}`}
+                          onChange={(patch) => updateQueued(item.id, patch)}
+                          wide={isPage}
+                        />
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-sm text-rose-600"
+                          onClick={() =>
+                            setQueued((c) => c.filter((row) => row.id !== item.id))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remove
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div
+            className={
+              isPage
+                ? "rounded-2xl border border-ink-200 bg-white/80 p-4 sm:p-5"
+                : "rounded-xl border border-ink-200 bg-white p-3"
+            }
+          >
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+              Mobile {queued.length + 1}
+            </p>
+            <DraftFields
+              draft={draft}
+              disabled={saving}
+              idPrefix="current"
+              onChange={updateDraft}
+              autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
+              wide={isPage}
+            />
+          </div>
+        </div>
+
+        {error ? (
+          <p
+            className={
+              isPage
+                ? "mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                : "border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700"
+            }
+          >
+            {error}
+          </p>
+        ) : null}
+
+        <div
+          className={
+            isPage
+              ? "mt-4 flex flex-col gap-2 border-t border-ink-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
+              : "sticky bottom-0 flex flex-col gap-2 border-t border-ink-100 bg-white px-5 py-3"
+          }
+        >
+          <button
+            type="button"
+            className={isPage ? "btn-secondary sm:w-auto" : "btn-secondary w-full"}
+            onClick={addAnother}
+            disabled={saving}
+          >
+            <Plus className="h-4 w-4" />
+            Add another mobile
+          </button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              <Package className="h-4 w-4" />
+              {saving
+                ? "Saving…"
+                : queued.length
+                  ? `Save ${queued.length + 1} mobiles`
+                  : "Save purchase"}
+            </button>
+          </div>
+        </div>
+    </>
+  );
+
+  if (isPage) {
+    return (
+      <form
+        onSubmit={(event) => void submit(event)}
+        className="w-full pb-8"
+      >
+        {formBody}
+      </form>
+    );
+  }
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={() => !saving && onClose()}
+    >
+      <motion.form
+        onSubmit={(event) => void submit(event)}
+        role="dialog"
+        aria-modal="true"
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/70 bg-white shadow-lift"
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: 0.98 }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {formBody}
+      </motion.form>
+    </motion.div>
+  );
+}
+
+function DraftFields({
+  draft,
+  disabled,
+  idPrefix,
+  onChange,
+  autoFocusTarget = null,
+  wide = false,
+}: {
+  draft: DraftMobile;
+  disabled?: boolean;
+  idPrefix: string;
+  onChange: (patch: Partial<DraftMobile>) => void;
+  autoFocusTarget?: "name" | "imei" | null;
+  wide?: boolean;
+}) {
+  if (wide) {
+    return (
+      <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-[16rem_minmax(0,1fr)]">
+          <div>
+            <span className="label required">Operating system</span>
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5">
+              {(["IOS", "ANDROID"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={
+                    draft.platform === option
+                      ? "rounded-lg bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
+                      : "rounded-lg px-3 py-2 text-sm font-semibold text-ink-500"
+                  }
+                  onClick={() =>
+                    onChange({
+                      platform: option,
+                      ram: option === "IOS" ? "" : draft.ram,
+                    })
+                  }
+                  disabled={disabled}
+                >
+                  {option === "IOS" ? "iOS" : "Android"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="label required" htmlFor={`${idPrefix}-name`}>
+              Mobile name
+            </label>
+            <input
+              id={`${idPrefix}-name`}
+              className="field"
+              value={draft.mobileName}
+              onChange={(e) => onChange({ mobileName: e.target.value })}
+              required
+              autoFocus={autoFocusTarget === "name"}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+
+        <div
+          className={
+            draft.platform === "ANDROID"
+              ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+              : "grid gap-3 sm:grid-cols-2"
+          }
+        >
+          <div>
+            <label className="label required" htmlFor={`${idPrefix}-storage`}>
+              Storage
+            </label>
+            <input
+              id={`${idPrefix}-storage`}
+              className="field"
+              value={draft.storage}
+              onChange={(e) => onChange({ storage: e.target.value })}
+              required
+              disabled={disabled}
+            />
+          </div>
+          <div>
+            <label className="label required" htmlFor={`${idPrefix}-color`}>
+              Color
+            </label>
+            <input
+              id={`${idPrefix}-color`}
+              className="field"
+              value={draft.color}
+              onChange={(e) => onChange({ color: e.target.value })}
+              required
+              disabled={disabled}
+            />
+          </div>
+          {draft.platform === "ANDROID" ? (
+            <div>
+              <label className="label required" htmlFor={`${idPrefix}-ram`}>
+                RAM
+              </label>
+              <input
+                id={`${idPrefix}-ram`}
+                className="field"
+                value={draft.ram}
+                onChange={(e) => onChange({ ram: e.target.value })}
+                required
+                disabled={disabled}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label required" htmlFor={`${idPrefix}-imei`}>
+              IMEI
+            </label>
+            <input
+              id={`${idPrefix}-imei`}
+              className="field font-mono"
+              value={draft.imei}
+              onChange={(e) => onChange({ imei: e.target.value })}
+              required
+              autoFocus={autoFocusTarget === "imei"}
+              disabled={disabled}
+            />
+          </div>
+          <div>
+            <label className="label required" htmlFor={`${idPrefix}-price`}>
+              Purchase price
+            </label>
+            <input
+              id={`${idPrefix}-price`}
+              className="field"
+              type="number"
+              min="1"
+              step="0.01"
+              value={draft.purchasePrice}
+              onChange={(e) => onChange({ purchasePrice: e.target.value })}
+              required
+              disabled={disabled}
+            />
+            {draft.purchasePrice ? (
+              <p className="mt-1 text-xs text-ink-400">
+                {formatINR(Number(draft.purchasePrice) || 0)}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <span className="label required">Operating system</span>
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5">
+          {(["IOS", "ANDROID"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={
+                draft.platform === option
+                  ? "rounded-lg bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
+                  : "rounded-lg px-3 py-2 text-sm font-semibold text-ink-500"
+              }
+              onClick={() =>
+                onChange({
+                  platform: option,
+                  ram: option === "IOS" ? "" : draft.ram,
+                })
+              }
+              disabled={disabled}
+            >
+              {option === "IOS" ? "iOS" : "Android"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="label required" htmlFor={`${idPrefix}-name`}>
+          Mobile name
+        </label>
+        <input
+          id={`${idPrefix}-name`}
+          className="field"
+          value={draft.mobileName}
+          onChange={(e) => onChange({ mobileName: e.target.value })}
+          required
+          autoFocus={autoFocusTarget === "name"}
+          disabled={disabled}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-storage`}>
+            Storage
+          </label>
+          <input
+            id={`${idPrefix}-storage`}
+            className="field"
+            value={draft.storage}
+            onChange={(e) => onChange({ storage: e.target.value })}
+            required
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-color`}>
+            Color
+          </label>
+          <input
+            id={`${idPrefix}-color`}
+            className="field"
+            value={draft.color}
+            onChange={(e) => onChange({ color: e.target.value })}
+            required
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      {draft.platform === "ANDROID" ? (
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-ram`}>
+            RAM
+          </label>
+          <input
+            id={`${idPrefix}-ram`}
+            className="field"
+            value={draft.ram}
+            onChange={(e) => onChange({ ram: e.target.value })}
+            required
+            disabled={disabled}
+          />
+        </div>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-imei`}>
+            IMEI
+          </label>
+          <input
+            id={`${idPrefix}-imei`}
+            className="field font-mono"
+            value={draft.imei}
+            onChange={(e) => onChange({ imei: e.target.value })}
+            required
+            autoFocus={autoFocusTarget === "imei"}
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-price`}>
+            Purchase price
+          </label>
+          <input
+            id={`${idPrefix}-price`}
+            className="field"
+            type="number"
+            min="1"
+            step="0.01"
+            value={draft.purchasePrice}
+            onChange={(e) => onChange({ purchasePrice: e.target.value })}
+            required
+            disabled={disabled}
+          />
+          {draft.purchasePrice ? (
+            <p className="mt-1 text-xs text-ink-400">
+              {formatINR(Number(draft.purchasePrice) || 0)}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PurchaseEntryOverlay(
+  props: ComponentProps<typeof PurchaseEntryModal> & { open: boolean },
+) {
+  const { open, ...rest } = props;
+  return (
+    <AnimatePresence>{open ? <PurchaseEntryModal {...rest} /> : null}</AnimatePresence>
+  );
+}

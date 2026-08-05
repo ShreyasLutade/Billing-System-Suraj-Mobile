@@ -8,6 +8,10 @@ import {
 import { getPeriodRange, isActivityPeriod, toDateFilter } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
+import {
+  releaseStockIds,
+  syncStockForBillItems,
+} from "../services/stockSync";
 import { requireAdmin } from "../middleware/auth";
 
 export const billsRouter = Router();
@@ -273,6 +277,8 @@ billsRouter.post("/", async (req, res, next) => {
       const persistInput = exchangeInputForPersist(input);
       const exchange = await resolveExchangeCatalog(tx, persistInput);
 
+      await syncStockForBillItems(tx, totals.items);
+
       return tx.bill.create({
         data: {
           invoiceNumber,
@@ -336,6 +342,7 @@ billsRouter.post("/", async (req, res, next) => {
             create: totals.items.map((item) => ({
               productName: item.productName,
               mobileCatalogId: item.mobileCatalogId,
+              stockItemId: item.stockItemId || null,
               platform: item.platform,
               color: item.color,
               storage: item.storage,
@@ -360,6 +367,28 @@ billsRouter.post("/", async (req, res, next) => {
   } catch (error) {
     if (error instanceof Error && error.message === "FINANCE_COMPANY_NOT_FOUND") {
       res.status(400).json({ error: "Selected finance company was not found" });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_NOT_FOUND") {
+      res.status(400).json({ error: "Selected stock phone was not found" });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_UNAVAILABLE") {
+      res.status(400).json({
+        error: "One of the selected phones is already sold or unavailable",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_DUPLICATE") {
+      res.status(400).json({
+        error: "The same stock phone cannot be added twice on one bill",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_IMEI_MISMATCH") {
+      res.status(400).json({
+        error: "IMEI does not match the selected stock phone",
+      });
       return;
     }
     next(error);
@@ -450,6 +479,11 @@ billsRouter.put("/:id", async (req, res, next) => {
       const persistInput = exchangeInputForPersist(input);
       const exchange = await resolveExchangeCatalog(tx, persistInput);
 
+      const previousStockIds = existing.items
+        .map((item) => item.stockItemId)
+        .filter((id): id is string => Boolean(id));
+      await syncStockForBillItems(tx, totals.items, previousStockIds);
+
       return tx.bill.update({
         where: { id: existing.id },
         data: {
@@ -524,6 +558,7 @@ billsRouter.put("/:id", async (req, res, next) => {
             create: totals.items.map((item) => ({
               productName: item.productName,
               mobileCatalogId: item.mobileCatalogId,
+              stockItemId: item.stockItemId || null,
               platform: item.platform,
               color: item.color,
               storage: item.storage,
@@ -550,6 +585,28 @@ billsRouter.put("/:id", async (req, res, next) => {
       res.status(400).json({ error: "Selected finance company was not found" });
       return;
     }
+    if (error instanceof Error && error.message === "STOCK_NOT_FOUND") {
+      res.status(400).json({ error: "Selected stock phone was not found" });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_UNAVAILABLE") {
+      res.status(400).json({
+        error: "One of the selected phones is already sold or unavailable",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_DUPLICATE") {
+      res.status(400).json({
+        error: "The same stock phone cannot be added twice on one bill",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "STOCK_IMEI_MISMATCH") {
+      res.status(400).json({
+        error: "IMEI does not match the selected stock phone",
+      });
+      return;
+    }
     next(error);
   }
 });
@@ -558,14 +615,23 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
     const existing = await prisma.bill.findUnique({
       where: { id: req.params.id },
-      select: { id: true, invoiceNumber: true },
+      include: { items: { select: { stockItemId: true } } },
     });
     if (!existing) {
       res.status(404).json({ error: "Bill not found" });
       return;
     }
 
-    await prisma.bill.delete({ where: { id: existing.id } });
+    await prisma.$transaction(async (tx) => {
+      await releaseStockIds(
+        tx,
+        existing.items
+          .map((item) => item.stockItemId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      await tx.bill.delete({ where: { id: existing.id } });
+    });
+
     res.json({
       data: { id: existing.id, invoiceNumber: existing.invoiceNumber },
     });
