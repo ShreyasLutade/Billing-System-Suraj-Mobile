@@ -1,21 +1,11 @@
 import type { PhoneModel } from "../types";
-
-function normalize(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/\+/g, " plus ")
-    .replace(/[^a-z0-9.]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+import {
+  compactSearchText,
+  normalizeSearchText,
+} from "./elasticSearch";
 
 function tokens(value: string) {
-  return normalize(value).split(" ").filter(Boolean);
-}
-
-/** Compact form for matching: "iphone 15 pro" → "iphone15pro" */
-function compact(value: string) {
-  return normalize(value).replace(/\s+/g, "");
+  return normalizeSearchText(value).split(" ").filter(Boolean);
 }
 
 /** Rank phone models for Google-like typeahead. */
@@ -24,20 +14,20 @@ export function rankPhoneModels(
   query: string,
   limit = 12,
 ): PhoneModel[] {
-  const q = normalize(query);
+  const q = normalizeSearchText(query);
   if (!q) return [];
 
   const qTokens = tokens(q);
-  const qCompact = compact(q);
+  const qCompact = compactSearchText(q);
   const scored: Array<{ model: PhoneModel; score: number }> = [];
 
   for (const model of models) {
-    const name = normalize(model.name);
-    const storage = normalize(model.storage);
-    const ram = normalize(model.ram || "");
+    const name = normalizeSearchText(model.name);
+    const storage = normalizeSearchText(model.storage);
+    const ram = normalizeSearchText(model.ram || "");
     const haystack = `${name} ${storage} ${ram}`.trim();
-    const nameCompact = compact(model.name);
-    const hayCompact = compact(haystack);
+    const nameCompact = compactSearchText(model.name);
+    const hayCompact = compactSearchText(haystack);
 
     let score = 0;
 

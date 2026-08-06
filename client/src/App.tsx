@@ -11,6 +11,7 @@ import { DuesPage } from "./pages/DuesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
+import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 
 export default function App() {
@@ -35,6 +36,10 @@ export default function App() {
               <Route path="stock" element={<StockPage />} />
               <Route path="stock/add" element={<AddStockPage />} />
               <Route path="suppliers" element={<SuppliersPage />} />
+              <Route
+                path="suppliers/:id/purchases/:purchaseId"
+                element={<PurchaseDetailPage />}
+              />
               <Route path="suppliers/:id" element={<SupplierDetailPage />} />
               <Route element={<RequireAdmin />}>
                 <Route path="analytics" element={<AnalyticsPage />} />

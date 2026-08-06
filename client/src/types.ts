@@ -172,6 +172,8 @@ export type Supplier = {
   outstanding: number;
   stockAvailable: number;
   stockSold: number;
+  /** Total units purchased from this supplier (available + sold). */
+  stockPurchased: number;
 };
 
 export type SupplierPayment = {
@@ -195,6 +197,9 @@ export type PurchaseStockRef = {
   ram?: string;
   platform?: string;
   condition?: string;
+  soldBillId?: string | null;
+  soldInvoiceNumber?: string | null;
+  soldCustomerName?: string | null;
 };
 
 export type Purchase = {

@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Check, Plus, X } from "lucide-react";
-import { PurchaseEntryModal } from "../components/PurchaseEntryModal";
+import { ArrowLeft, Check, X } from "lucide-react";
 import { EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import type { Purchase, SupplierDetail } from "../types";
@@ -20,14 +19,11 @@ function formatDate(value: string) {
 
 export function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [data, setData] = useState<SupplierDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"purchases" | "stock">("purchases");
-  const [showPurchase, setShowPurchase] = useState(false);
-  const [purchaseCondition, setPurchaseCondition] = useState<"NEW" | "USED">(
-    "NEW",
-  );
   const [confirmPurchase, setConfirmPurchase] = useState<Purchase | null>(null);
   const [markingPaid, setMarkingPaid] = useState(false);
 
@@ -115,14 +111,6 @@ export function SupplierDetailPage() {
             </span>
           </p>
         </div>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={() => setShowPurchase(true)}
-        >
-          <Plus className="h-4 w-4" />
-          New purchase
-        </button>
       </div>
 
       {error ? (
@@ -157,18 +145,15 @@ export function SupplierDetailPage() {
         data.purchases.length === 0 ? (
           <EmptyState
             title="No purchases"
-            description="Record a purchase to add mobiles from this supplier."
+            description="Purchases appear here after you add stock from this supplier."
           />
         ) : (
           <div className="overflow-x-auto border border-ink-300 bg-white">
-            <table className="w-full min-w-[40rem] border-collapse text-sm">
+            <table className="w-full min-w-[28rem] border-collapse text-sm">
               <thead>
                 <tr className="bg-ink-100 text-ink-700">
                   <th className="border-b border-r border-ink-300 px-2 py-1.5 text-left font-semibold">
                     Date
-                  </th>
-                  <th className="border-b border-r border-ink-300 px-2 py-1.5 text-left font-semibold">
-                    Items
                   </th>
                   <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
                     Qty
@@ -185,21 +170,20 @@ export function SupplierDetailPage() {
                 {data.purchases.map((p) => {
                   const paid = Boolean(p.paidAt);
                   return (
-                    <tr key={p.id} className="odd:bg-white even:bg-ink-50/60">
+                    <tr
+                      key={p.id}
+                      className="cursor-pointer odd:bg-white even:bg-ink-50/60 hover:bg-tide-50/70"
+                      onClick={() =>
+                        navigate(`/suppliers/${data.id}/purchases/${p.id}`)
+                      }
+                    >
                       <td className="border-b border-r border-ink-200 px-2 py-1.5">
                         {formatDate(p.purchaseDate)}
                         <span className="mt-0.5 block text-[11px] uppercase text-ink-400">
                           {p.condition === "USED" ? "Second hand" : "New"}
                         </span>
                       </td>
-                      <td className="border-b border-r border-ink-200 px-2 py-1.5">
-                        {p.items
-                          .slice(0, 3)
-                          .map((i) => i.stockItem.mobileName)
-                          .join(", ")}
-                        {p.items.length > 3 ? ` +${p.items.length - 3}` : ""}
-                      </td>
-                      <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right tabular-nums">
+                      <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right text-base font-semibold tabular-nums text-ink-900">
                         {p.items.length}
                       </td>
                       <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right tabular-nums font-medium">
@@ -207,7 +191,7 @@ export function SupplierDetailPage() {
                       </td>
                       <td className="border-b border-ink-200 px-2 py-1.5 text-right">
                         {paid ? (
-                          <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600 opacity-60">
+                          <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600">
                             <Check className="h-3.5 w-3.5" />
                             Paid
                           </span>
@@ -215,9 +199,12 @@ export function SupplierDetailPage() {
                           <button
                             type="button"
                             className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
-                            onClick={() => setConfirmPurchase(p)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setConfirmPurchase(p);
+                            }}
                           >
-                            Paid
+                            Mark paid
                           </button>
                         )}
                       </td>
@@ -226,6 +213,9 @@ export function SupplierDetailPage() {
                 })}
               </tbody>
             </table>
+            <p className="border-t border-ink-200 px-2 py-1 text-[11px] text-ink-400">
+              Tap a row to see each mobile in that purchase.
+            </p>
           </div>
         )
       ) : null}
@@ -280,20 +270,6 @@ export function SupplierDetailPage() {
       ) : null}
 
       <AnimatePresence>
-        {showPurchase ? (
-          <PurchaseEntryModal
-            condition={purchaseCondition}
-            fixedSupplier={data}
-            onClose={() => setShowPurchase(false)}
-            onCreated={async () => {
-              setShowPurchase(false);
-              await load();
-            }}
-          />
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {confirmPurchase ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
@@ -340,10 +316,8 @@ export function SupplierDetailPage() {
                   {formatDate(confirmPurchase.purchaseDate)}
                 </p>
                 <p>
-                  <span className="text-ink-500">Items · </span>
-                  {confirmPurchase.items
-                    .map((i) => i.stockItem.mobileName)
-                    .join(", ")}
+                  <span className="text-ink-500">Qty · </span>
+                  {confirmPurchase.items.length}
                 </p>
                 <p className="text-base font-semibold text-ink-900">
                   Amount {formatINR(confirmPurchase.totalAmount)}
@@ -375,25 +349,6 @@ export function SupplierDetailPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-
-      {showPurchase ? (
-        <div className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 gap-1 rounded-lg border border-ink-200 bg-white p-0.5 shadow-lift md:bottom-6">
-          {(["NEW", "USED"] as const).map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={
-                purchaseCondition === c
-                  ? "rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-white"
-                  : "rounded-md px-3 py-1.5 text-xs font-medium text-ink-600"
-              }
-              onClick={() => setPurchaseCondition(c)}
-            >
-              {c === "NEW" ? "New" : "Second hand"}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

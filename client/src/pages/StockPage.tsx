@@ -11,6 +11,7 @@ import {
 import type { AddStockLocationState } from "./AddStockPage";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { api, formatINR, round2 } from "../lib/api";
+import { matchesElasticFields } from "../lib/elasticSearch";
 import type { StockHistory, StockItem } from "../types";
 
 type StockTab = "NEW" | "USED";
@@ -171,23 +172,22 @@ export function StockPage() {
   }, [tab]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      const haystack = [
-        item.mobileName,
-        item.color,
-        item.storage,
-        item.ram,
-        item.imei,
-        item.platform,
-        item.supplierName || "",
-        ...item.suppliers,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
+    if (!query.trim()) return items;
+    return items.filter((item) =>
+      matchesElasticFields(
+        [
+          item.mobileName,
+          item.color,
+          item.storage,
+          item.ram,
+          item.imei,
+          item.platform,
+          item.supplierName || "",
+          ...item.suppliers,
+        ],
+        query,
+      ),
+    );
   }, [items, query]);
 
   const groups = useMemo(() => groupStockByProduct(filtered), [filtered]);

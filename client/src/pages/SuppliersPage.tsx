@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
-import { PurchaseEntryModal } from "../components/PurchaseEntryModal";
 import { api, formatINR } from "../lib/api";
+import { matchesElasticFields } from "../lib/elasticSearch";
 import type { Supplier } from "../types";
 
 export function SuppliersPage() {
@@ -13,10 +12,6 @@ export function SuppliersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [showPurchase, setShowPurchase] = useState(false);
-  const [purchaseCondition, setPurchaseCondition] = useState<"NEW" | "USED">(
-    "NEW",
-  );
 
   async function load() {
     setLoading(true);
@@ -36,13 +31,9 @@ export function SuppliersPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return suppliers;
+    if (!query.trim()) return suppliers;
     return suppliers.filter((s) =>
-      [s.name, s.phone || "", s.address || ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
+      matchesElasticFields([s.name, s.phone], query),
     );
   }, [suppliers, query]);
 
@@ -53,8 +44,9 @@ export function SuppliersPage() {
         paid: acc.paid + s.totalPaid,
         outstanding: acc.outstanding + s.outstanding,
         stock: acc.stock + s.stockAvailable,
+        qty: acc.qty + (s.stockPurchased ?? s.stockAvailable + s.stockSold),
       }),
-      { purchased: 0, paid: 0, outstanding: 0, stock: 0 },
+      { purchased: 0, paid: 0, outstanding: 0, stock: 0, qty: 0 },
     );
   }, [filtered]);
 
@@ -63,16 +55,6 @@ export function SuppliersPage() {
       <PageHeader
         title="Suppliers"
         description="Supplier ledger — purchases, payments, and outstanding."
-        action={
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setShowPurchase(true)}
-          >
-            <Plus className="h-4 w-4" />
-            New purchase
-          </button>
-        }
       />
 
       <div className="mb-3 relative">
@@ -96,11 +78,11 @@ export function SuppliersPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           title={query.trim() ? "No matching suppliers" : "No suppliers yet"}
-          description="Record a purchase to create the first supplier ledger."
+          description="Suppliers appear here after you add stock from the Stock page."
         />
       ) : (
         <div className="overflow-x-auto border border-ink-300 bg-white">
-          <table className="w-full min-w-[44rem] border-collapse text-left text-sm">
+          <table className="w-full min-w-[48rem] border-collapse text-left text-sm">
             <thead>
               <tr className="bg-ink-100 text-ink-700">
                 <th className="border-b border-r border-ink-300 px-2 py-1.5 font-semibold">
@@ -111,6 +93,9 @@ export function SuppliersPage() {
                 </th>
                 <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
                   In stock
+                </th>
+                <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
+                  Qty purchased
                 </th>
                 <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
                   Purchased
@@ -140,6 +125,9 @@ export function SuppliersPage() {
                     {s.stockAvailable}
                   </td>
                   <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right tabular-nums">
+                    {s.stockPurchased ?? s.stockAvailable + s.stockSold}
+                  </td>
+                  <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right tabular-nums">
                     {formatINR(s.totalPurchased)}
                   </td>
                   <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right tabular-nums">
@@ -163,6 +151,9 @@ export function SuppliersPage() {
                   {totals.stock}
                 </td>
                 <td className="border-t border-r border-ink-300 px-2 py-1.5 text-right tabular-nums">
+                  {totals.qty}
+                </td>
+                <td className="border-t border-r border-ink-300 px-2 py-1.5 text-right tabular-nums">
                   {formatINR(totals.purchased)}
                 </td>
                 <td className="border-t border-r border-ink-300 px-2 py-1.5 text-right tabular-nums">
@@ -183,42 +174,6 @@ export function SuppliersPage() {
           </p>
         </div>
       )}
-
-      <AnimatePresence>
-        {showPurchase ? (
-          <div>
-            <div className="fixed inset-x-0 top-0 z-[60] flex justify-center gap-2 p-2 pointer-events-none">
-              <div className="pointer-events-auto flex gap-1 rounded-lg border border-ink-200 bg-white p-0.5 shadow-lift">
-                {(["NEW", "USED"] as const).map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={
-                      purchaseCondition === c
-                        ? "rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-white"
-                        : "rounded-md px-3 py-1.5 text-xs font-medium text-ink-600"
-                    }
-                    onClick={() => setPurchaseCondition(c)}
-                  >
-                    {c === "NEW" ? "New" : "Second hand"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <PurchaseEntryModal
-              condition={purchaseCondition}
-              onClose={() => setShowPurchase(false)}
-              onCreated={(purchase) => {
-                setShowPurchase(false);
-                void load();
-                if (purchase.supplierId) {
-                  navigate(`/suppliers/${purchase.supplierId}`);
-                }
-              }}
-            />
-          </div>
-        ) : null}
-      </AnimatePresence>
     </div>
   );
 }

@@ -1763,7 +1763,11 @@ export function CreateBillPage() {
                   <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                     <label className="label">IMEI</label>
                     <input
-                      className="field min-w-0 font-mono text-sm tracking-wide"
+                      className={
+                        item.stockItemId && !withGst
+                          ? "field min-w-0 cursor-default border-ink-200 bg-ink-100/80 font-mono text-sm tracking-wide text-ink-600"
+                          : "field min-w-0 font-mono text-sm tracking-wide"
+                      }
                       value={item.imei1 || ""}
                       onChange={(e) =>
                         updateItem(item.key, { imei1: e.target.value })
