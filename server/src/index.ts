@@ -16,10 +16,12 @@ import { mobileCatalogRouter } from "./routes/mobileCatalog";
 import { stockRouter } from "./routes/stock";
 import { suppliersRouter } from "./routes/suppliers";
 import { purchasesRouter } from "./routes/purchases";
+import { phoneModelsRouter } from "./routes/phoneModels";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
+import { ensurePhoneModelsSeeded } from "./services/phoneModels";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -72,6 +74,7 @@ app.use("/api/mobile-catalog", requireAuth, mobileCatalogRouter);
 app.use("/api/stock", requireAuth, stockRouter);
 app.use("/api/suppliers", requireAuth, suppliersRouter);
 app.use("/api/purchases", requireAuth, purchasesRouter);
+app.use("/api/phone-models", requireAuth, phoneModelsRouter);
 app.use("/api/dues", requireAuth, duesRouter);
 app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 
@@ -128,6 +131,11 @@ if (serveClient) {
 async function start() {
   await seedFinanceCompanies();
   await seedUsers();
+  try {
+    await ensurePhoneModelsSeeded(prisma);
+  } catch (error) {
+    console.warn("[phone-models] Seed skipped:", error);
+  }
   try {
     const result = await backfillSuppliersFromStock(prisma);
     if (result.linked || result.created) {

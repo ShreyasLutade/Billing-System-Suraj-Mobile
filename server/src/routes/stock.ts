@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { normalizeCapacity } from "../lib/capacity";
 import { upsertSupplierByName } from "../services/suppliers";
 
 export const stockRouter = Router();
@@ -249,8 +250,11 @@ stockRouter.post("/", async (req, res, next) => {
           condition: data.condition,
           platform: data.platform,
           mobileName: data.mobileName.trim(),
-          storage: data.storage.trim(),
-          ram: data.platform === "ANDROID" ? data.ram.trim() : "",
+          storage: normalizeCapacity(data.storage),
+          ram:
+            data.platform === "ANDROID"
+              ? normalizeCapacity(data.ram)
+              : "",
           color: data.color.trim(),
           imei,
           purchasePrice: data.purchasePrice,

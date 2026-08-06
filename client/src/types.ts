@@ -131,6 +131,15 @@ export type MobileCatalog = {
   createdAt: string;
 };
 
+/** Stock search catalog (no color). */
+export type PhoneModel = {
+  id: string;
+  platform: "IOS" | "ANDROID";
+  name: string;
+  storage: string;
+  ram: string;
+};
+
 export type StockItem = {
   id: string;
   condition: "NEW" | "USED";

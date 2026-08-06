@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { normalizeCapacity } from "../lib/capacity";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -18,12 +19,6 @@ function clean(value: string) {
 function capitalizeFirst(value: string) {
   const normalized = clean(value);
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
-
-function normalizeCapacity(value: string) {
-  const normalized = clean(value);
-  const capacity = normalized.replace(/\s*gb\s*$/i, "").trim();
-  return /^\d+$/.test(capacity) ? `${capacity} GB` : normalized;
 }
 
 export function normalizeMobileCatalogValues(input: MobileCatalogInput) {

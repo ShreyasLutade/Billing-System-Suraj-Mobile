@@ -7,6 +7,7 @@ import type {
   FinanceDuesSummary,
   FinanceCompany,
   MobileCatalog,
+  PhoneModel,
   Purchase,
   StockHistory,
   StockItem,
@@ -102,6 +103,14 @@ export const api = {
     );
   },
   getBill: (id: string) => request<{ data: Bill }>(`/bills/${id}`),
+  lookupCustomerByPhone: (phone: string, init?: RequestInit) =>
+    request<{
+      data: {
+        customerName: string;
+        customerPhone: string;
+        customerAddress: string | null;
+      } | null;
+    }>(`/bills/customer-lookup?phone=${encodeURIComponent(phone)}`, init),
   createBill: (payload: CreateBillPayload) =>
     request<{ data: Bill }>("/bills", {
       method: "POST",
@@ -129,6 +138,22 @@ export const api = {
     }),
   listMobileCatalog: () =>
     request<{ data: MobileCatalog[] }>("/mobile-catalog"),
+  listPhoneModels: (platform?: "IOS" | "ANDROID") => {
+    const query = platform
+      ? `?platform=${encodeURIComponent(platform)}`
+      : "";
+    return request<{ data: PhoneModel[] }>(`/phone-models${query}`);
+  },
+  createPhoneModel: (payload: {
+    platform: "IOS" | "ANDROID";
+    name: string;
+    storage: string;
+    ram?: string | null;
+  }) =>
+    request<{ data: PhoneModel }>("/phone-models", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   createMobile: (payload: {
     name: string;
     platform: "IOS" | "ANDROID";

@@ -2,11 +2,13 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 
@@ -22,6 +24,13 @@ export type FieldPickerOption = {
 };
 
 type ConditionFilter = "ALL" | "NEW" | "USED";
+
+type MenuPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
 
 type Props = {
   options: FieldPickerOption[];
@@ -51,12 +60,15 @@ export function FieldPicker({
   const [query, setQuery] = useState("");
   const [conditionFilter, setConditionFilter] =
     useState<ConditionFilter>("ALL");
+  const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
-  const selectedLabel =
-    options.find((option) => option.value === value)?.label || placeholder;
+  const selected = options.find((option) => option.value === value);
+  const selectedLabel = selected?.label || placeholder;
+  const selectedDescription = selected?.description;
 
   const filteredOptions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,13 +90,54 @@ export function FieldPicker({
   const close = useCallback(() => {
     setOpen(false);
     setQuery("");
+    setMenuPos(null);
   }, []);
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = rootRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const gap = 8;
+    const spaceBelow = window.innerHeight - rect.bottom - gap - 12;
+    const spaceAbove = rect.top - gap - 12;
+    const preferBelow = spaceBelow >= 180 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(
+      160,
+      Math.min(320, preferBelow ? spaceBelow : spaceAbove),
+    );
+    const top = preferBelow
+      ? rect.bottom + gap
+      : Math.max(12, rect.top - gap - maxHeight);
+
+    setMenuPos({
+      top,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || disabled) return;
+    updateMenuPosition();
+    function onReposition() {
+      updateMenuPosition();
+    }
+    window.addEventListener("resize", onReposition);
+    // capture scroll from any scrollable ancestor
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, disabled, updateMenuPosition, filteredOptions.length, conditionFilter]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent | TouchEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        close();
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      close();
     }
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("touchstart", onPointerDown);
@@ -112,6 +165,93 @@ export function FieldPicker({
       requestAnimationFrame(() => searchRef.current?.focus());
     }
   }, [open, searchable]);
+
+  const menu =
+    open && !disabled && menuPos
+      ? createPortal(
+          <div
+            ref={menuRef}
+            id={listId}
+            role="listbox"
+            className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
+            style={{
+              position: "fixed",
+              top: menuPos.top,
+              left: menuPos.left,
+              width: menuPos.width,
+              maxHeight: menuPos.maxHeight,
+              zIndex: 9999,
+            }}
+          >
+            {conditionFilters ? (
+              <div
+                className="flex items-center gap-4 border-b border-ink-100 px-3 py-2.5"
+                role="radiogroup"
+                aria-label="Filter by condition"
+              >
+                {(
+                  [
+                    { value: "ALL", label: "All" },
+                    { value: "NEW", label: "New" },
+                    { value: "USED", label: "Old" },
+                  ] as const
+                ).map((option) => (
+                  <FilterCircle
+                    key={option.value}
+                    label={option.label}
+                    selected={conditionFilter === option.value}
+                    onSelect={() => {
+                      if (
+                        option.value !== "ALL" &&
+                        conditionFilter === option.value
+                      ) {
+                        setConditionFilter("ALL");
+                        return;
+                      }
+                      setConditionFilter(option.value);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null}
+            <div
+              className="overflow-y-auto overscroll-contain p-1.5"
+              style={{ maxHeight: menuPos.maxHeight - (conditionFilters ? 52 : 0) }}
+            >
+              <PickerOption
+                active={!value}
+                label={placeholder}
+                muted
+                onSelect={() => {
+                  onChange("");
+                  close();
+                }}
+              />
+              {filteredOptions.map((option) => (
+                <PickerOption
+                  key={option.value}
+                  active={value === option.value}
+                  label={option.label}
+                  description={option.description}
+                  icon={option.icon}
+                  badge={option.badge}
+                  badgeTone={option.badgeTone}
+                  onSelect={() => {
+                    onChange(option.value);
+                    close();
+                  }}
+                />
+              ))}
+              {filteredOptions.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-ink-400">
+                  No matching option found
+                </p>
+              ) : null}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <div ref={rootRef} className="relative">
@@ -159,7 +299,7 @@ export function FieldPicker({
           type="button"
           disabled={disabled}
           className={clsx(
-            "field flex min-h-[48px] items-center justify-between gap-3 text-left text-base sm:text-sm",
+            "field flex min-h-[48px] items-start justify-between gap-3 py-2.5 text-left text-base sm:items-center sm:text-sm",
             open && "border-tide-500 ring-4 ring-tide-400/20",
             !value && "text-ink-300",
             disabled && "cursor-not-allowed opacity-55",
@@ -171,87 +311,26 @@ export function FieldPicker({
             if (!disabled) setOpen((prev) => !prev);
           }}
         >
-          <span className="min-w-0 flex-1 truncate">{selectedLabel}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block whitespace-normal break-words leading-snug">
+              {selectedLabel}
+            </span>
+            {value && selectedDescription ? (
+              <span className="mt-1 block break-all font-mono text-xs leading-5 tracking-wide text-ink-500">
+                {selectedDescription}
+              </span>
+            ) : null}
+          </span>
           <ChevronDown
             className={clsx(
-              "h-5 w-5 shrink-0 text-ink-500 transition",
+              "mt-0.5 h-5 w-5 shrink-0 text-ink-500 transition sm:mt-0",
               open && "rotate-180",
             )}
           />
         </button>
       )}
 
-      {open && !disabled ? (
-        <div
-          id={listId}
-          role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
-        >
-          {conditionFilters ? (
-            <div
-              className="flex items-center gap-4 border-b border-ink-100 px-3 py-2.5"
-              role="radiogroup"
-              aria-label="Filter by condition"
-            >
-              {(
-                [
-                  { value: "ALL", label: "All" },
-                  { value: "NEW", label: "New" },
-                  { value: "USED", label: "Old" },
-                ] as const
-              ).map((option) => (
-                <FilterCircle
-                  key={option.value}
-                  label={option.label}
-                  selected={conditionFilter === option.value}
-                  onSelect={() => {
-                    // Clicking the active New/Old again returns to All
-                    if (
-                      option.value !== "ALL" &&
-                      conditionFilter === option.value
-                    ) {
-                      setConditionFilter("ALL");
-                      return;
-                    }
-                    setConditionFilter(option.value);
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-          <div className="max-h-56 overflow-y-auto overscroll-contain p-1.5 sm:max-h-64">
-            <PickerOption
-              active={!value}
-              label={placeholder}
-              muted
-              onSelect={() => {
-                onChange("");
-                close();
-              }}
-            />
-            {filteredOptions.map((option) => (
-              <PickerOption
-                key={option.value}
-                active={value === option.value}
-                label={option.label}
-                description={option.description}
-                icon={option.icon}
-                badge={option.badge}
-                badgeTone={option.badgeTone}
-                onSelect={() => {
-                  onChange(option.value);
-                  close();
-                }}
-              />
-            ))}
-            {filteredOptions.length === 0 ? (
-              <p className="px-3 py-4 text-center text-sm text-ink-400">
-                No matching option found
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {menu}
     </div>
   );
 }
@@ -326,12 +405,14 @@ function PickerOption({
     >
       {icon ? <span className="shrink-0">{icon}</span> : null}
       <span className="min-w-0 flex-1">
-        <span className="block truncate">{label}</span>
+        <span className="block whitespace-normal break-words leading-snug">
+          {label}
+        </span>
         {description ? (
           <span
             className={clsx(
-              "mt-0.5 block text-xs leading-5",
-              active ? "text-white/75" : "text-ink-400",
+              "mt-1 block break-all font-mono text-xs leading-5 tracking-wide",
+              active ? "text-white/80" : "text-ink-500",
             )}
           >
             {description}

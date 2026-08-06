@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -63,7 +63,7 @@ const blankItem = (): DraftItem => ({
   warrantyMonths: undefined,
 });
 
-function formatStockOptionLabel(stock: {
+function formatStockOption(stock: {
   mobileName: string;
   color: string;
   storage: string;
@@ -78,12 +78,12 @@ function formatStockOptionLabel(stock: {
       : `${stock.ram} RAM`;
   })();
 
-  return [
-    [stock.mobileName, stock.color, stock.storage, ramLabel]
+  return {
+    label: [stock.mobileName, stock.color, stock.storage, ramLabel]
       .filter(Boolean)
       .join(" • "),
-    `IMEI ${stock.imei}`,
-  ].join(" · ");
+    description: stock.imei ? `IMEI ${stock.imei}` : undefined,
+  };
 }
 
 type FinanceDraft = {
@@ -155,6 +155,9 @@ export function CreateBillPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [customerAddress, setCustomerAddress] = useState("");
+  const [fetchingCustomer, setFetchingCustomer] = useState(false);
+  const customerLookupAbortRef = useRef<AbortController | null>(null);
+  const lastCustomerLookupPhoneRef = useRef("");
   const [notes, setNotes] = useState("");
   const [withGst, setWithGst] = useState(false);
   const [useCustomBillDate, setUseCustomBillDate] = useState(false);
@@ -251,6 +254,7 @@ export function CreateBillPage() {
     setSaveSummary(null);
     setCustomerName("");
     setCustomerPhone("");
+    lastCustomerLookupPhoneRef.current = "";
     setPhoneError(null);
     setCustomerAddress("");
     setNotes("");
@@ -282,6 +286,9 @@ export function CreateBillPage() {
     setOriginalBill(bill);
     setCustomerName(bill.customerName);
     setCustomerPhone(bill.customerPhone.replace(/\D/g, "").slice(0, 10));
+    lastCustomerLookupPhoneRef.current = bill.customerPhone
+      .replace(/\D/g, "")
+      .slice(0, 10);
     setCustomerAddress(bill.customerAddress || "");
     setNotes(bill.notes || "");
     setWithGst(Boolean(bill.withGst));
@@ -408,9 +415,11 @@ export function CreateBillPage() {
   const stockOptions = useMemo(() => {
     const fromStock = stockItems.map((stock) => {
       const isUsed = stock.condition === "USED";
+      const formatted = formatStockOption(stock);
       return {
         value: stock.id,
-        label: formatStockOptionLabel(stock),
+        label: formatted.label,
+        description: formatted.description,
         badge: isUsed ? "Old" : "New",
         badgeTone: (isUsed ? "old" : "new") as "old" | "new",
         condition: stock.condition as "USED" | "NEW",
@@ -427,15 +436,17 @@ export function CreateBillPage() {
         continue;
       }
       const isUsed = (item.condition || "NEW") === "USED";
+      const formatted = formatStockOption({
+        mobileName: item.productName,
+        color: item.color || "",
+        storage: item.storage || "",
+        ram: item.ram || "",
+        imei: item.imei1 || "",
+      });
       fromStock.push({
         value: item.stockItemId,
-        label: formatStockOptionLabel({
-          mobileName: item.productName,
-          color: item.color || "",
-          storage: item.storage || "",
-          ram: item.ram || "",
-          imei: item.imei1 || "",
-        }),
+        label: formatted.label,
+        description: formatted.description,
         badge: isUsed ? "Old" : "New",
         badgeTone: (isUsed ? "old" : "new") as "old" | "new",
         condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
@@ -490,6 +501,65 @@ export function CreateBillPage() {
   useEffect(() => {
     if (!hasDue || totals.dueAmount <= 0) setDueDate("");
   }, [hasDue, totals.dueAmount]);
+
+  // Autofill name/address from latest bill when phone is complete (indexed lookup).
+  useEffect(() => {
+    if (customerPhone.length !== 10) {
+      lastCustomerLookupPhoneRef.current = "";
+      setFetchingCustomer(false);
+      if (!customerPhone) {
+        setCustomerName("");
+        setCustomerAddress("");
+      }
+      return;
+    }
+    if (lastCustomerLookupPhoneRef.current === customerPhone) return;
+
+    customerLookupAbortRef.current?.abort();
+    const controller = new AbortController();
+    customerLookupAbortRef.current = controller;
+    const phone = customerPhone;
+    setFetchingCustomer(true);
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+      setFetchingCustomer(false);
+      // Mark as attempted so we don't keep retrying this number
+      lastCustomerLookupPhoneRef.current = phone;
+    }, 3000);
+
+    void (async () => {
+      try {
+        const { data } = await api.lookupCustomerByPhone(phone, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        window.clearTimeout(timeoutId);
+        lastCustomerLookupPhoneRef.current = phone;
+        if (data) {
+          setCustomerName(data.customerName);
+          setCustomerAddress(data.customerAddress || "");
+        } else {
+          // New number with no past bill — clear previous autofill
+          setCustomerName("");
+          setCustomerAddress("");
+        }
+      } catch {
+        // Ignore abort / network / timeout — user can type manually
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (!controller.signal.aborted) {
+          setFetchingCustomer(false);
+        }
+      }
+    })();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+      setFetchingCustomer(false);
+    };
+  }, [customerPhone]);
 
   useEffect(() => {
     let active = true;
@@ -1410,62 +1480,74 @@ export function CreateBillPage() {
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label required" htmlFor="customerName">
-                Name
-              </label>
-              <input
-                id="customerName"
-                className="field"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Customer full name"
-                required
-              />
-            </div>
-            <div>
-              <label className="label required" htmlFor="customerPhone">
-                Phone
-              </label>
-              <input
-                id="customerPhone"
-                className={`field ${phoneError ? "border-ember-400 focus:border-ember-500 focus:ring-ember-200" : ""}`}
-                inputMode="numeric"
-                maxLength={10}
-                value={customerPhone}
-                onChange={(e) => {
-                  const next = e.target.value.replace(/\D/g, "").slice(0, 10);
-                  setCustomerPhone(next);
-                  if (phoneError && next.length === 10) setPhoneError(null);
-                }}
-                onBlur={() => setPhoneError(validatePhone(customerPhone))}
-                placeholder="10-digit mobile"
-                aria-invalid={Boolean(phoneError)}
-                aria-describedby={phoneError ? "customerPhone-error" : undefined}
-                required
-              />
-              {phoneError ? (
-                <p
-                  id="customerPhone-error"
-                  className="mt-1.5 text-xs font-medium text-ember-500"
-                  role="alert"
-                >
-                  {phoneError}
-                </p>
-              ) : null}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label" htmlFor="customerAddress">
-                Address (optional)
-              </label>
-              <input
-                id="customerAddress"
-                className="field"
-                value={customerAddress}
-                onChange={(e) => setCustomerAddress(e.target.value)}
-                placeholder="Village / city"
-              />
-            </div>
+              <div className="sm:col-span-2">
+                <label className="label required" htmlFor="customerPhone">
+                  Phone
+                </label>
+                <input
+                  id="customerPhone"
+                  className={`field ${phoneError ? "border-ember-400 focus:border-ember-500 focus:ring-ember-200" : ""}`}
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={customerPhone}
+                  onChange={(e) => {
+                    const next = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    setCustomerPhone(next);
+                    if (phoneError && next.length === 10) setPhoneError(null);
+                  }}
+                  onBlur={() => setPhoneError(validatePhone(customerPhone))}
+                  placeholder="10-digit mobile"
+                  aria-invalid={Boolean(phoneError)}
+                  aria-describedby={
+                    phoneError ? "customerPhone-error" : undefined
+                  }
+                  required
+                  autoComplete="tel"
+                />
+                {phoneError ? (
+                  <p
+                    id="customerPhone-error"
+                    className="mt-1.5 text-xs font-medium text-ember-500"
+                    role="alert"
+                  >
+                    {phoneError}
+                  </p>
+                ) : null}
+                {fetchingCustomer ? (
+                  <p
+                    className="mt-1.5 text-xs font-medium text-tide-600"
+                    aria-live="polite"
+                  >
+                    Fetching customer details…
+                  </p>
+                ) : null}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label required" htmlFor="customerName">
+                  Name
+                </label>
+                <input
+                  id="customerName"
+                  className="field"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Customer full name"
+                  required
+                  autoComplete="name"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="customerAddress">
+                  Address (optional)
+                </label>
+                <input
+                  id="customerAddress"
+                  className="field"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  placeholder="Village / city"
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -1678,10 +1760,10 @@ export function CreateBillPage() {
                       placeholder={withGst ? "e.g. 18" : "0"}
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                     <label className="label">IMEI</label>
                     <input
-                      className="field font-mono"
+                      className="field min-w-0 font-mono text-sm tracking-wide"
                       value={item.imei1 || ""}
                       onChange={(e) =>
                         updateItem(item.key, { imei1: e.target.value })

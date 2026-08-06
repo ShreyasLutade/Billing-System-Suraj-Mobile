@@ -8,6 +8,7 @@ import {
 import { getPeriodRange, isActivityPeriod, toDateFilter } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
+import { upsertCustomerProfile } from "../services/customers";
 import {
   releaseStockIds,
   syncStockForBillItems,
@@ -196,6 +197,57 @@ billsRouter.get("/", async (req, res, next) => {
   }
 });
 
+/** Fast customer autofill by phone — Customer profile first, then latest bill. */
+billsRouter.get("/customer-lookup", async (req, res, next) => {
+  try {
+    const phone = String(req.query.phone || "")
+      .replace(/\D/g, "")
+      .slice(0, 10);
+    if (phone.length !== 10) {
+      res.json({ data: null });
+      return;
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { phone },
+      select: { name: true, phone: true, address: true },
+    });
+    if (customer) {
+      res.json({
+        data: {
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          customerAddress: customer.address,
+        },
+      });
+      return;
+    }
+
+    // Backfill path for phones billed before Customer table existed
+    const bill = await prisma.bill.findFirst({
+      where: { customerPhone: phone },
+      orderBy: [{ billDate: "desc" }, { createdAt: "desc" }],
+      select: {
+        customerName: true,
+        customerPhone: true,
+        customerAddress: true,
+      },
+    });
+
+    res.json({
+      data: bill
+        ? {
+            customerName: bill.customerName,
+            customerPhone: bill.customerPhone,
+            customerAddress: bill.customerAddress,
+          }
+        : null,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 billsRouter.get("/:id", async (req, res, next) => {
   try {
     const bill = await prisma.bill.findUnique({
@@ -282,6 +334,12 @@ billsRouter.post("/", async (req, res, next) => {
       const exchange = await resolveExchangeCatalog(tx, persistInput);
 
       await syncStockForBillItems(tx, totals.items);
+
+      await upsertCustomerProfile(tx, {
+        customerPhone: input.customerPhone,
+        customerName: input.customerName,
+        customerAddress: input.customerAddress,
+      });
 
       return tx.bill.create({
         data: {
@@ -487,6 +545,12 @@ billsRouter.put("/:id", async (req, res, next) => {
         .map((item) => item.stockItemId)
         .filter((id): id is string => Boolean(id));
       await syncStockForBillItems(tx, totals.items, previousStockIds);
+
+      await upsertCustomerProfile(tx, {
+        customerPhone: input.customerPhone,
+        customerName: input.customerName,
+        customerAddress: input.customerAddress,
+      });
 
       return tx.bill.update({
         where: { id: existing.id },
