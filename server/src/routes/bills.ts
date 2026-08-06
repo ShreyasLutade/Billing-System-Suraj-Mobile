@@ -52,7 +52,7 @@ function totalsForPersist(
   totals: ReturnType<typeof computeBillTotals>,
 ) {
   if (!input.withGst) return totals;
-  // GST invoices are submission-only — no payments, dues, or exchange
+  // GST invoices are submission-only — no payments, dues, exchange, or stock links
   return {
     ...totals,
     payableAmount: totals.grandTotal,
@@ -61,6 +61,10 @@ function totalsForPersist(
     financeAmount: 0,
     financeAmount2: 0,
     dueAmount: 0,
+    items: totals.items.map((item) => ({
+      ...item,
+      stockItemId: null,
+    })),
   };
 }
 

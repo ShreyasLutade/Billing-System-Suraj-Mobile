@@ -10,6 +10,7 @@ import {
   Trash2,
   Wallet,
 } from "lucide-react";
+import { AddMobileModal } from "../components/AddMobileModal";
 import { BillChangeConfirmModal } from "../components/BillChangeConfirmModal";
 import {
   SaveBillConfirmModal,
@@ -34,6 +35,7 @@ import type {
   BillItem,
   CreateBillPayload,
   FinanceCompany,
+  MobileCatalog,
   StockItem,
 } from "../types";
 
@@ -191,6 +193,8 @@ export function CreateBillPage() {
   ]);
   const [financeCompanies, setFinanceCompanies] = useState<FinanceCompany[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [mobileCatalog, setMobileCatalog] = useState<MobileCatalog[]>([]);
+  const [addMobileForItem, setAddMobileForItem] = useState<string | null>(null);
   const [savingFinanceKey, setSavingFinanceKey] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -401,7 +405,7 @@ export function CreateBillPage() {
     financeEntries,
   ]);
 
-  const mobileOptions = useMemo(() => {
+  const stockOptions = useMemo(() => {
     const fromStock = stockItems.map((stock) => {
       const isUsed = stock.condition === "USED";
       return {
@@ -444,13 +448,40 @@ export function CreateBillPage() {
     ];
   }, [stockItems, items]);
 
+  const catalogMobileOptions = useMemo(
+    () => [
+      ...mobileCatalog.map((mobile) => {
+        const isUsed = (mobile.condition || "NEW") === "USED";
+        const ramLabel = (() => {
+          if (!mobile.ram) return null;
+          const capacity = mobile.ram.replace(/\s*gb\s*$/i, "").trim();
+          return /^\d+$/.test(capacity)
+            ? `${capacity} GB RAM`
+            : `${mobile.ram} RAM`;
+        })();
+
+        return {
+          value: mobile.id,
+          label: [mobile.name, mobile.color, mobile.storage, ramLabel]
+            .filter(Boolean)
+            .join(" • "),
+          badge: isUsed ? "Old" : "New",
+          badgeTone: (isUsed ? "old" : "new") as "old" | "new",
+          condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
+        };
+      }),
+      { value: "__other__", label: "Other product / accessory" },
+    ],
+    [mobileCatalog],
+  );
+
   function stockOptionsForItem(itemKey: string) {
     const selectedElsewhere = new Set(
       items
         .filter((row) => row.key !== itemKey && row.stockItemId)
         .map((row) => row.stockItemId as string),
     );
-    return mobileOptions.filter(
+    return stockOptions.filter(
       (option) =>
         option.value === "__other__" || !selectedElsewhere.has(option.value),
     );
@@ -463,9 +494,10 @@ export function CreateBillPage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const [financeResult, stockResult] = await Promise.allSettled([
+      const [financeResult, stockResult, mobileResult] = await Promise.allSettled([
         api.listFinanceCompanies(),
         api.listStock(),
+        api.listMobileCatalog(),
       ]);
       if (!active) return;
       if (financeResult.status === "fulfilled") {
@@ -473,6 +505,9 @@ export function CreateBillPage() {
       }
       if (stockResult.status === "fulfilled") {
         setStockItems(stockResult.value.data);
+      }
+      if (mobileResult.status === "fulfilled") {
+        setMobileCatalog(mobileResult.value.data);
       }
     })();
     return () => {
@@ -631,6 +666,43 @@ export function CreateBillPage() {
     );
   }
 
+  function applyCatalogMobile(key: string, mobile: MobileCatalog) {
+    updateItem(key, {
+      catalogMode: "mobile",
+      stockItemId: null,
+      mobileCatalogId: mobile.id,
+      productName: mobile.name,
+      platform: mobile.platform,
+      color: mobile.color,
+      storage: mobile.storage,
+      ram: mobile.platform === "ANDROID" ? mobile.ram : "",
+      condition: mobile.condition || "NEW",
+      quantity: 1,
+    });
+  }
+
+  function selectCatalogMobile(key: string, value: string) {
+    if (value === "__other__") {
+      updateItem(key, {
+        catalogMode: "other",
+        productName: "",
+        mobileCatalogId: null,
+        stockItemId: null,
+        platform: null,
+        color: "",
+        storage: "",
+        ram: "",
+        condition: null,
+        imei1: "",
+      });
+      return;
+    }
+
+    const mobile = mobileCatalog.find((entry) => entry.id === value);
+    if (!mobile) return;
+    applyCatalogMobile(key, mobile);
+  }
+
   function applyStockMobile(key: string, stock: StockItem) {
     updateItem(key, {
       catalogMode: "mobile",
@@ -711,9 +783,10 @@ export function CreateBillPage() {
           productName: item.productName,
           mobileCatalogId:
             item.catalogMode === "mobile" ? item.mobileCatalogId || null : null,
-          stockItemId:
-            item.catalogMode === "mobile" ? item.stockItemId || null : null,
-          platform: item.catalogMode === "mobile" ? item.platform || null : null,
+          // GST invoices never link stock units
+          stockItemId: null,
+          platform:
+            item.catalogMode === "mobile" ? item.platform || null : null,
           color: item.catalogMode === "mobile" ? item.color || null : null,
           storage: item.catalogMode === "mobile" ? item.storage || null : null,
           ram:
@@ -831,15 +904,16 @@ export function CreateBillPage() {
           item.catalogMode === "mobile" ? item.mobileCatalogId || null : null,
         stockItemId:
           item.catalogMode === "mobile" ? item.stockItemId || null : null,
-        platform: item.catalogMode === "mobile" ? item.platform || null : null,
-        color: item.catalogMode === "mobile" ? item.color || null : null,
-        storage: item.catalogMode === "mobile" ? item.storage || null : null,
+        platform:
+          item.catalogMode === "other" ? null : item.platform || null,
+        color: item.catalogMode === "other" ? null : item.color || null,
+        storage: item.catalogMode === "other" ? null : item.storage || null,
         ram:
-          item.catalogMode === "mobile" && item.platform === "ANDROID"
+          item.catalogMode !== "other" && item.platform === "ANDROID"
             ? item.ram || null
             : null,
         condition:
-          item.catalogMode === "mobile" ? item.condition || null : null,
+          item.catalogMode === "other" ? null : item.condition || null,
         quantity: item.quantity,
         rate: item.rate,
         gstPercent: item.gstPercent,
@@ -876,6 +950,11 @@ export function CreateBillPage() {
         Boolean(item.color) &&
         Boolean(item.storage) &&
         (item.platform !== "ANDROID" || Boolean(item.ram));
+
+      if (withGst) {
+        return !(item.mobileCatalogId || detailsComplete);
+      }
+
       if (item.stockItemId) return !detailsComplete;
       // Older bills may not have a stock link yet
       if (isEdit && detailsComplete) return false;
@@ -883,7 +962,9 @@ export function CreateBillPage() {
     });
     if (incompleteMobile) {
       setError(
-        "Select a phone from stock (add units under Stock first). Accessories can use Other product.",
+        withGst
+          ? "Select a phone from the list or use Add new mobile. Accessories can use Other product."
+          : "Select a phone from stock (add units under Stock first). Accessories can use Other product.",
       );
       return;
     }
@@ -1237,6 +1318,33 @@ export function CreateBillPage() {
                 setDueDate("");
                 setIsExchange(false);
                 clearExchangeFields();
+                // Detach stock — GST lines use catalog phones only
+                setItems((prev) =>
+                  prev.map((item) => {
+                    if (item.catalogMode === "other") {
+                      return { ...item, stockItemId: null };
+                    }
+                    return {
+                      ...item,
+                      stockItemId: null,
+                      catalogMode: "mobile" as const,
+                    };
+                  }),
+                );
+              } else {
+                setItems((prev) =>
+                  prev.map((item) =>
+                    item.catalogMode === "mobile" && !item.stockItemId
+                      ? {
+                          ...blankItem(),
+                          key: item.key,
+                          gstPercent: item.gstPercent,
+                          rate: item.rate,
+                          quantity: item.quantity,
+                        }
+                      : item,
+                  ),
+                );
               }
             }}
           />
@@ -1377,6 +1485,13 @@ export function CreateBillPage() {
             </button>
           </div>
 
+          {withGst ? (
+            <p className="text-sm text-ink-500">
+              Pick a saved phone or add a new one. GST lines are not taken from
+              stock and do not change inventory.
+            </p>
+          ) : null}
+
           <AnimatePresence initial={false}>
             {items.map((item, index) => (
               <motion.div
@@ -1405,44 +1520,109 @@ export function CreateBillPage() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="sm:col-span-2 lg:col-span-4">
-                    <label className="label required">Phone</label>
-                    <FieldPicker
-                      value={
-                        item.catalogMode === "other"
-                          ? "__other__"
-                          : item.stockItemId || ""
-                      }
-                      onChange={(value) => selectMobile(item.key, value)}
-                      placeholder={
-                        stockItems.length
-                          ? "Select from stock"
-                          : "No stock yet — add phones under Stock"
-                      }
-                      searchable
-                      searchPlaceholder="Search stock phone / IMEI…"
-                      required
-                      conditionFilters
-                      options={stockOptionsForItem(item.key)}
-                    />
-                  </div>
+                  {withGst ? (
+                    <>
+                      <div className="sm:col-span-2 lg:col-span-4">
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <label className="label required mb-0">Phone</label>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-tide-600 hover:text-tide-700"
+                            onClick={() => setAddMobileForItem(item.key)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add new mobile
+                          </button>
+                        </div>
+                        <FieldPicker
+                          value={
+                            item.catalogMode === "other"
+                              ? "__other__"
+                              : item.mobileCatalogId ||
+                                mobileCatalog.find(
+                                  (mobile) =>
+                                    mobile.name === item.productName &&
+                                    mobile.color === item.color &&
+                                    mobile.storage === item.storage &&
+                                    (mobile.ram || "") === (item.ram || ""),
+                                )?.id ||
+                                ""
+                          }
+                          onChange={(value) =>
+                            selectCatalogMobile(item.key, value)
+                          }
+                          placeholder={
+                            mobileCatalog.length
+                              ? "Select phone"
+                              : "No phones yet — use Add new mobile"
+                          }
+                          searchable
+                          searchPlaceholder="Search phone…"
+                          required
+                          conditionFilters
+                          options={catalogMobileOptions}
+                        />
+                      </div>
 
-                  {item.catalogMode === "other" ? (
-                    <div className="sm:col-span-2 lg:col-span-4">
-                    <label className="label required">Product name</label>
-                    <input
-                      className="field"
-                      value={item.productName}
-                        onChange={(event) =>
-                          updateItem(item.key, {
-                            productName: event.target.value,
-                          })
-                        }
-                        placeholder="e.g. Charger / Earphones"
-                      required
-                    />
-                  </div>
-                  ) : null}
+                      {item.catalogMode === "other" ? (
+                        <div className="sm:col-span-2 lg:col-span-4">
+                          <label className="label required">Product name</label>
+                          <input
+                            className="field"
+                            value={item.productName}
+                            onChange={(event) =>
+                              updateItem(item.key, {
+                                productName: event.target.value,
+                              })
+                            }
+                            placeholder="e.g. Charger / Earphones"
+                            required
+                          />
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <div className="sm:col-span-2 lg:col-span-4">
+                        <label className="label required">Phone</label>
+                        <FieldPicker
+                          value={
+                            item.catalogMode === "other"
+                              ? "__other__"
+                              : item.stockItemId || ""
+                          }
+                          onChange={(value) => selectMobile(item.key, value)}
+                          placeholder={
+                            stockItems.length
+                              ? "Select from stock"
+                              : "No stock yet — add phones under Stock"
+                          }
+                          searchable
+                          searchPlaceholder="Search stock phone / IMEI…"
+                          required
+                          conditionFilters
+                          options={stockOptionsForItem(item.key)}
+                        />
+                      </div>
+
+                      {item.catalogMode === "other" ? (
+                        <div className="sm:col-span-2 lg:col-span-4">
+                          <label className="label required">Product name</label>
+                          <input
+                            className="field"
+                            value={item.productName}
+                            onChange={(event) =>
+                              updateItem(item.key, {
+                                productName: event.target.value,
+                              })
+                            }
+                            placeholder="e.g. Charger / Earphones"
+                            required
+                          />
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                   <div>
                     <label className="label required">Qty</label>
                     <input
@@ -1507,9 +1687,13 @@ export function CreateBillPage() {
                         updateItem(item.key, { imei1: e.target.value })
                       }
                       placeholder={
-                        item.stockItemId ? "From stock" : "Optional"
+                        item.stockItemId
+                          ? "From stock"
+                          : withGst
+                            ? "Optional"
+                            : "Optional"
                       }
-                      readOnly={Boolean(item.stockItemId)}
+                      readOnly={Boolean(item.stockItemId) && !withGst}
                     />
                   </div>
                   <div>
@@ -2091,6 +2275,25 @@ export function CreateBillPage() {
           </div>
         </section>
       </form>
+
+      <AnimatePresence>
+        {addMobileForItem ? (
+          <AddMobileModal
+            onClose={() => setAddMobileForItem(null)}
+            onCreated={(mobile) => {
+              setMobileCatalog((previous) =>
+                previous.some((entry) => entry.id === mobile.id)
+                  ? previous
+                  : [...previous, mobile].sort((a, b) =>
+                      a.name.localeCompare(b.name),
+                    ),
+              );
+              applyCatalogMobile(addMobileForItem, mobile);
+              setAddMobileForItem(null);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       {showSaveConfirm && saveSummary ? (
         <SaveBillConfirmModal
