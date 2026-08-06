@@ -21,6 +21,16 @@ model User {
   @@unique([phone, role])
 }
 
+/// Latest known customer profile by phone — used for bill autofill.
+model Customer {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Bill {
   id                String           @id @default(cuid())
   invoiceNumber     String           @unique
@@ -141,6 +151,23 @@ model MobileCatalog {
   @@unique([name, platform, color, storage, ram, condition])
   @@index([name])
   @@index([condition])
+}
+
+/// Phone model variants for stock search (no color — keeps list smaller).
+model PhoneModel {
+  id        String   @id @default(cuid())
+  /// IOS | ANDROID
+  platform  String
+  name      String
+  storage   String
+  /// Empty for iOS
+  ram       String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platform, name, storage, ram])
+  @@index([platform])
+  @@index([name])
 }
 
 model FinanceCompany {

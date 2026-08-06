@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { normalizeCapacity } from "../lib/capacity";
 import { upsertSupplierByName } from "../services/suppliers";
+import { upsertPhoneModel } from "../services/phoneModels";
 
 export const purchasesRouter = Router();
 
@@ -150,8 +152,11 @@ purchasesRouter.post("/", async (req, res, next) => {
             condition: data.condition,
             platform: item.platform,
             mobileName: item.mobileName.trim(),
-            storage: item.storage.trim(),
-            ram: item.platform === "ANDROID" ? item.ram.trim() : "",
+            storage: normalizeCapacity(item.storage),
+            ram:
+              item.platform === "ANDROID"
+                ? normalizeCapacity(item.ram)
+                : "",
             color: item.color.trim(),
             imei,
             purchasePrice: item.purchasePrice,
@@ -178,6 +183,20 @@ purchasesRouter.post("/", async (req, res, next) => {
         },
       });
     });
+
+    // Remember model variants (no color) for future stock search.
+    for (const item of data.items) {
+      try {
+        await upsertPhoneModel(prisma, {
+          platform: item.platform,
+          name: item.mobileName,
+          storage: item.storage,
+          ram: item.ram,
+        });
+      } catch (error) {
+        console.warn("[phone-models] Upsert after purchase failed:", error);
+      }
+    }
 
     res.status(201).json({ data: purchase });
   } catch (error) {

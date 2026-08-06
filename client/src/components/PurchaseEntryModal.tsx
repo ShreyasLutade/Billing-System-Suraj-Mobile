@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } fro
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, Package, Plus, Trash2, X } from "lucide-react";
 import { FieldPicker } from "./FieldPicker";
-import { api, formatINR } from "../lib/api";
-import type { Purchase, Supplier } from "../types";
+import {
+  MobileNameSearch,
+  invalidatePhoneModelCache,
+} from "./MobileNameSearch";
+import { api } from "../lib/api";
+import type { PhoneModel, Purchase, Supplier } from "../types";
 
 export type PurchasePrefill = Partial<
   Pick<
@@ -91,7 +95,7 @@ export function PurchaseEntryModal({
   const [supplierId, setSupplierId] = useState(fixedSupplier?.id || "");
   const [supplierName, setSupplierName] = useState(fixedSupplier?.name || "");
   const [supplierPhone, setSupplierPhone] = useState(fixedSupplier?.phone || "");
-  const [useNewSupplier, setUseNewSupplier] = useState(!fixedSupplier);
+  const [useNewSupplier, setUseNewSupplier] = useState(false);
   const [queued, setQueued] = useState<DraftMobile[]>([]);
   const [draft, setDraft] = useState<DraftMobile>(() => blankDraft(prefill));
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -166,6 +170,15 @@ export function PurchaseEntryModal({
     setDraft(blankDraft());
   }
 
+  function removeCurrentMobile() {
+    if (queued.length === 0) return;
+    setError(null);
+    const previous = queued[queued.length - 1];
+    setQueued((current) => current.slice(0, -1));
+    setDraft(previous);
+    setExpandedId(null);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -233,6 +246,7 @@ export function PurchaseEntryModal({
           purchasePrice: Number(item.purchasePrice),
         })),
       });
+      invalidatePhoneModelCache();
       onCreated(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save purchase");
@@ -262,17 +276,28 @@ export function PurchaseEntryModal({
               </button>
             ) : null}
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-              {condition === "NEW" ? "New stock purchase" : "Second-hand purchase"}
+              {condition === "NEW" ? "New stock" : "Second-hand stock"}
             </p>
-            <h2
-              className={
-                isPage
-                  ? "mt-1 font-display text-2xl font-semibold text-ink-900"
-                  : "mt-1 font-display text-xl font-semibold text-ink-900"
-              }
-            >
-              {isPage ? "Add mobile" : "Purchase entry"}
-            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h2
+                className={
+                  isPage
+                    ? "font-display text-2xl font-semibold text-ink-900"
+                    : "font-display text-xl font-semibold text-ink-900"
+                }
+              >
+                {isPage ? "Add mobile" : "Purchase entry"}
+              </h2>
+              <span
+                className={
+                  condition === "USED"
+                    ? "rounded-full bg-ember-500 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-soft"
+                    : "rounded-full bg-tide-600 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-soft"
+                }
+              >
+                {condition === "USED" ? "Second hand" : "New"}
+              </span>
+            </div>
           </div>
           {!isPage ? (
             <button
@@ -475,6 +500,17 @@ export function PurchaseEntryModal({
               autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
               wide={isPage}
             />
+            {queued.length > 0 ? (
+              <button
+                type="button"
+                className="mt-3 inline-flex items-center gap-1 text-sm text-rose-600"
+                onClick={removeCurrentMobile}
+                disabled={saving}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -595,10 +631,16 @@ function DraftFields({
                       : "rounded-lg px-3 py-2 text-sm font-semibold text-ink-500"
                   }
                   onClick={() =>
-                    onChange({
-                      platform: option,
-                      ram: option === "IOS" ? "" : draft.ram,
-                    })
+                    onChange(
+                      draft.platform === option
+                        ? {}
+                        : {
+                            platform: option,
+                            mobileName: "",
+                            storage: "",
+                            ram: "",
+                          },
+                    )
                   }
                   disabled={disabled}
                 >
@@ -611,14 +653,27 @@ function DraftFields({
             <label className="label required" htmlFor={`${idPrefix}-name`}>
               Mobile name
             </label>
-            <input
+            <MobileNameSearch
               id={`${idPrefix}-name`}
-              className="field"
+              platform={draft.platform}
               value={draft.mobileName}
-              onChange={(e) => onChange({ mobileName: e.target.value })}
               required
               autoFocus={autoFocusTarget === "name"}
               disabled={disabled}
+              onChange={(mobileName) =>
+                onChange(
+                  mobileName.trim()
+                    ? { mobileName }
+                    : { mobileName: "", storage: "", ram: "" },
+                )
+              }
+              onSelectModel={(model: PhoneModel) =>
+                onChange({
+                  mobileName: model.name,
+                  storage: model.storage,
+                  ram: draft.platform === "ANDROID" ? model.ram : "",
+                })
+              }
             />
           </div>
         </div>
@@ -639,6 +694,7 @@ function DraftFields({
               className="field"
               value={draft.storage}
               onChange={(e) => onChange({ storage: e.target.value })}
+              placeholder="e.g. 128"
               required
               disabled={disabled}
             />
@@ -666,6 +722,7 @@ function DraftFields({
                 className="field"
                 value={draft.ram}
                 onChange={(e) => onChange({ ram: e.target.value })}
+                placeholder="e.g. 8"
                 required
                 disabled={disabled}
               />
@@ -703,11 +760,6 @@ function DraftFields({
               required
               disabled={disabled}
             />
-            {draft.purchasePrice ? (
-              <p className="mt-1 text-xs text-ink-400">
-                {formatINR(Number(draft.purchasePrice) || 0)}
-              </p>
-            ) : null}
           </div>
         </div>
       </div>
@@ -729,10 +781,16 @@ function DraftFields({
                   : "rounded-lg px-3 py-2 text-sm font-semibold text-ink-500"
               }
               onClick={() =>
-                onChange({
-                  platform: option,
-                  ram: option === "IOS" ? "" : draft.ram,
-                })
+                onChange(
+                  draft.platform === option
+                    ? {}
+                    : {
+                        platform: option,
+                        mobileName: "",
+                        storage: "",
+                        ram: "",
+                      },
+                )
               }
               disabled={disabled}
             >
@@ -745,14 +803,27 @@ function DraftFields({
         <label className="label required" htmlFor={`${idPrefix}-name`}>
           Mobile name
         </label>
-        <input
+        <MobileNameSearch
           id={`${idPrefix}-name`}
-          className="field"
+          platform={draft.platform}
           value={draft.mobileName}
-          onChange={(e) => onChange({ mobileName: e.target.value })}
           required
           autoFocus={autoFocusTarget === "name"}
           disabled={disabled}
+          onChange={(mobileName) =>
+            onChange(
+              mobileName.trim()
+                ? { mobileName }
+                : { mobileName: "", storage: "", ram: "" },
+            )
+          }
+          onSelectModel={(model: PhoneModel) =>
+            onChange({
+              mobileName: model.name,
+              storage: model.storage,
+              ram: draft.platform === "ANDROID" ? model.ram : "",
+            })
+          }
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -765,6 +836,7 @@ function DraftFields({
             className="field"
             value={draft.storage}
             onChange={(e) => onChange({ storage: e.target.value })}
+            placeholder="e.g. 128"
             required
             disabled={disabled}
           />
@@ -793,6 +865,7 @@ function DraftFields({
             className="field"
             value={draft.ram}
             onChange={(e) => onChange({ ram: e.target.value })}
+            placeholder="e.g. 8"
             required
             disabled={disabled}
           />
@@ -828,11 +901,6 @@ function DraftFields({
             required
             disabled={disabled}
           />
-          {draft.purchasePrice ? (
-            <p className="mt-1 text-xs text-ink-400">
-              {formatINR(Number(draft.purchasePrice) || 0)}
-            </p>
-          ) : null}
         </div>
       </div>
     </div>
