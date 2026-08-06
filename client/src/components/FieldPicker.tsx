@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import clsx from "clsx";
+import { matchesElasticFields } from "../lib/elasticSearch";
 
 export type FieldPickerOption = {
   value: string;
@@ -68,10 +69,8 @@ export function FieldPicker({
 
   const selected = options.find((option) => option.value === value);
   const selectedLabel = selected?.label || placeholder;
-  const selectedDescription = selected?.description;
 
   const filteredOptions = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return options.filter((option) => {
       if (
         conditionFilter !== "ALL" &&
@@ -80,10 +79,11 @@ export function FieldPicker({
       ) {
         return false;
       }
-      if (!q) return true;
-      return `${option.label} ${option.description || ""} ${option.badge || ""}`
-        .toLowerCase()
-        .includes(q);
+      if (!query.trim()) return true;
+      return matchesElasticFields(
+        [option.label, option.description, option.badge],
+        query,
+      );
     });
   }, [options, query, conditionFilter]);
 
@@ -315,11 +315,6 @@ export function FieldPicker({
             <span className="block whitespace-normal break-words leading-snug">
               {selectedLabel}
             </span>
-            {value && selectedDescription ? (
-              <span className="mt-1 block break-all font-mono text-xs leading-5 tracking-wide text-ink-500">
-                {selectedDescription}
-              </span>
-            ) : null}
           </span>
           <ChevronDown
             className={clsx(

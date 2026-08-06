@@ -77,6 +77,78 @@ purchasesRouter.get("/", async (req, res, next) => {
   }
 });
 
+const stockItemSelect = {
+  id: true,
+  mobileName: true,
+  storage: true,
+  ram: true,
+  color: true,
+  imei: true,
+  purchasePrice: true,
+  status: true,
+  platform: true,
+  condition: true,
+} as const;
+
+purchasesRouter.get("/:id", async (req, res, next) => {
+  try {
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: req.params.id },
+      include: {
+        supplier: { select: { id: true, name: true, phone: true } },
+        items: {
+          include: {
+            stockItem: {
+              select: {
+                ...stockItemSelect,
+                billItems: {
+                  orderBy: { bill: { billDate: "desc" } },
+                  take: 1,
+                  select: {
+                    billId: true,
+                    bill: {
+                      select: {
+                        id: true,
+                        invoiceNumber: true,
+                        customerName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!purchase) {
+      res.status(404).json({ error: "Purchase not found" });
+      return;
+    }
+
+    res.json({
+      data: {
+        ...purchase,
+        items: purchase.items.map((item) => {
+          const sale = item.stockItem.billItems[0]?.bill;
+          const { billItems: _billItems, ...stockItem } = item.stockItem;
+          return {
+            ...item,
+            stockItem: {
+              ...stockItem,
+              soldBillId: sale?.id ?? null,
+              soldInvoiceNumber: sale?.invoiceNumber ?? null,
+              soldCustomerName: sale?.customerName ?? null,
+            },
+          };
+        }),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 purchasesRouter.post("/", async (req, res, next) => {
   try {
     const parsed = createPurchaseSchema.safeParse(req.body);

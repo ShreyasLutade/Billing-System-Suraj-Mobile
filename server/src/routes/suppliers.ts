@@ -10,18 +10,22 @@ function round2(value: number) {
 }
 
 async function supplierLedgerStats(supplierId: string) {
-  const [purchases, stockAvailable, stockSold] = await Promise.all([
-    prisma.purchase.findMany({
-      where: { supplierId },
-      select: { totalAmount: true, paidAt: true },
-    }),
-    prisma.stockItem.count({
-      where: { supplierId, status: "AVAILABLE" },
-    }),
-    prisma.stockItem.count({
-      where: { supplierId, status: "SOLD" },
-    }),
-  ]);
+  const [purchases, stockAvailable, stockSold, stockPurchased] =
+    await Promise.all([
+      prisma.purchase.findMany({
+        where: { supplierId },
+        select: { totalAmount: true, paidAt: true },
+      }),
+      prisma.stockItem.count({
+        where: { supplierId, status: "AVAILABLE" },
+      }),
+      prisma.stockItem.count({
+        where: { supplierId, status: "SOLD" },
+      }),
+      prisma.stockItem.count({
+        where: { supplierId },
+      }),
+    ]);
 
   let totalPurchased = 0;
   let totalPaid = 0;
@@ -40,6 +44,7 @@ async function supplierLedgerStats(supplierId: string) {
     outstanding: round2(Math.max(totalPurchased - totalPaid, 0)),
     stockAvailable,
     stockSold,
+    stockPurchased,
   };
 }
 

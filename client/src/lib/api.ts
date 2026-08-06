@@ -264,6 +264,8 @@ export const api = {
     request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
       method: "POST",
     }),
+  getPurchase: (id: string) =>
+    request<{ data: Purchase }>(`/purchases/${id}`),
   listPurchases: (supplierId?: string) => {
     const params = new URLSearchParams();
     if (supplierId) params.set("supplierId", supplierId);

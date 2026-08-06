@@ -1,4 +1,6 @@
-/** Case-insensitive bill/due search by invoice, customer, phone, product, or IMEI. */
+/** Bill/due search by invoice, customer, phone, product, or IMEI (spaces optional). */
+
+import { matchesElasticSearch } from "./elasticSearch";
 
 export type BillSearchScope = "all" | "name" | "phone" | "imei" | "product";
 
@@ -7,7 +9,7 @@ function digitsOnly(value: string) {
 }
 
 function includesText(haystack: string, query: string) {
-  return haystack.toLowerCase().includes(query);
+  return matchesElasticSearch(haystack, query);
 }
 
 function matchesPhone(phone: string, rawQuery: string, query: string) {
