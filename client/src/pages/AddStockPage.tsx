@@ -38,6 +38,7 @@ export function AddStockPage() {
       outstanding: 0,
       stockAvailable: 0,
       stockSold: 0,
+      stockPurchased: 0,
       createdAt: "",
       updatedAt: "",
     };
