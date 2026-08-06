@@ -315,10 +315,21 @@ export async function sendReportEmail(report: ReportMailAttachment) {
     ``,
     isToday
       ? `Attached is today's billing Excel for ${shop}.`
-      : `Attached is the full up-to-date billing Excel for ${shop}.`,
+      : `Attached is the FULL DATABASE BACKUP Excel for ${shop}.`,
     ``,
     `Date: ${report.dateLabel} (IST)`,
     `Bills in file: ${report.billCount}`,
+    ...(isToday
+      ? []
+      : [
+          ``,
+          `This file includes restore-ready sheets for:`,
+          `Bills, BillItems, DuePayments, Customers, StockItems,`,
+          `Suppliers, Purchases, PurchaseItems, SupplierPayments,`,
+          `FinanceCompanies, MobileCatalog, PhoneModels, Users,`,
+          `InvoiceSequence (plus Outstanding/Finance dues views).`,
+          `Keep this email safe — it contains login password hashes.`,
+        ]),
     ``,
     `This email was sent automatically.`,
     ``,
