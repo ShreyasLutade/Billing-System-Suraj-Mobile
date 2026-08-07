@@ -462,6 +462,7 @@ async function addSuppliersSheet(wb: ExcelJS.Workbook) {
     { header: "phone", key: "phone", width: 14 },
     { header: "address", key: "address", width: 28 },
     { header: "notes", key: "notes", width: 28 },
+    { header: "isExchange", key: "isExchange", width: 12 },
     { header: "createdAt", key: "createdAt", width: 24 },
     { header: "updatedAt", key: "updatedAt", width: 24 },
   ];
@@ -473,6 +474,7 @@ async function addSuppliersSheet(wb: ExcelJS.Workbook) {
       phone: row.phone || "",
       address: row.address || "",
       notes: row.notes || "",
+      isExchange: yesNo(row.isExchange),
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),
     });

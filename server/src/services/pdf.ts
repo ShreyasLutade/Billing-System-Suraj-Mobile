@@ -499,8 +499,12 @@ function drawItemsTable(
   const exchangeBoxH =
     !withGst && bill.isExchange && bill.exchangeValue ? 62 : 0;
   const upperBoxH = withGst ? 58 : 50;
+  const payCustomerAmount =
+    !withGst && bill.isExchange && bill.exchangeValue
+      ? Math.max(Number(bill.exchangeValue) - Number(bill.grandTotal || 0), 0)
+      : 0;
   // Non-GST: payment modes + total payable side-by-side in one band
-  const paymentBoxH = withGst ? 0 : 78;
+  const paymentBoxH = withGst ? 0 : payCustomerAmount > 0 ? 102 : 78;
   const totalBarH = withGst ? 26 : 0;
   const declH = 48;
   const totalsBlockH =
@@ -710,8 +714,12 @@ function drawPlainTotalsSection(
   y: number,
 ) {
   const payable = bill.payableAmount ?? bill.grandTotal;
+  const payCustomerAmount =
+    bill.isExchange && bill.exchangeValue
+      ? Math.max(Number(bill.exchangeValue) - Number(bill.grandTotal || 0), 0)
+      : 0;
   const wordsH = 50;
-  const bandH = 78;
+  const bandH = payCustomerAmount > 0 ? 102 : 78;
   const payW = Math.round(CONTENT_WIDTH * 0.68);
   const totalW = CONTENT_WIDTH - payW;
 
@@ -823,22 +831,57 @@ function drawPlainTotalsSection(
   const totalX = MARGIN + payW;
   doc.rect(totalX, y, totalW, bandH).fill(COLORS.goldSoft);
   strokeBox(doc, totalX, y, totalW, bandH);
-  doc
-    .fillColor(COLORS.gold)
-    .font(FONT.bold)
-    .fontSize(8)
-    .text("Total Payable", totalX + 8, y + 22, {
-      width: totalW - 16,
-      align: "center",
-      lineBreak: false,
-    });
-  doc
-    .fontSize(11)
-    .text(inr(payable), totalX + 8, y + 42, {
-      width: totalW - 16,
-      align: "center",
-      lineBreak: false,
-    });
+  if (payCustomerAmount > 0) {
+    doc
+      .fillColor(COLORS.gold)
+      .font(FONT.bold)
+      .fontSize(7)
+      .text("Total Payable", totalX + 8, y + 12, {
+        width: totalW - 16,
+        align: "center",
+        lineBreak: false,
+      });
+    doc
+      .fontSize(11)
+      .text(inr(payable), totalX + 8, y + 28, {
+        width: totalW - 16,
+        align: "center",
+        lineBreak: false,
+      });
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.bold)
+      .fontSize(7)
+      .text("Payable to customer", totalX + 8, y + 54, {
+        width: totalW - 16,
+        align: "center",
+        lineBreak: false,
+      });
+    doc
+      .fontSize(11)
+      .text(inr(payCustomerAmount), totalX + 8, y + 70, {
+        width: totalW - 16,
+        align: "center",
+        lineBreak: false,
+      });
+  } else {
+    doc
+      .fillColor(COLORS.gold)
+      .font(FONT.bold)
+      .fontSize(8)
+      .text("Total Payable", totalX + 8, y + 22, {
+        width: totalW - 16,
+        align: "center",
+        lineBreak: false,
+      });
+    doc
+      .fontSize(11)
+      .text(inr(payable), totalX + 8, y + 42, {
+        width: totalW - 16,
+        align: "center",
+        lineBreak: false,
+      });
+  }
 
   const declY = y + bandH + 8;
   const declH = 48;

@@ -3,6 +3,9 @@ import {
   endOfDay,
   endOfMonth,
   endOfWeek,
+  format,
+  isValid,
+  parseISO,
   startOfDay,
   startOfMonth,
   startOfWeek,
@@ -121,4 +124,23 @@ export function periodLabel(period: Period) {
     case "all":
       return "All time";
   }
+}
+
+/** YYYY-MM-DD query params for custom date ranges. */
+export function parseDayParam(value: unknown, end = false) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const parsed = parseISO(value);
+  if (!isValid(parsed)) return null;
+  return end ? endOfDay(parsed) : startOfDay(parsed);
+}
+
+export function customPeriodLabel(from: Date | null, to: Date | null) {
+  const fromLabel = from ? format(from, "dd MMM yyyy") : "…";
+  const toLabel = to ? format(to, "dd MMM yyyy") : "…";
+  if (from && to && format(from, "yyyy-MM-dd") === format(to, "yyyy-MM-dd")) {
+    return fromLabel;
+  }
+  return `${fromLabel} – ${toLabel}`;
 }

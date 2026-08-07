@@ -5,12 +5,19 @@ import {
   computeBillTotals,
   createBillSchema,
 } from "../lib/billing";
-import { getPeriodRange, isActivityPeriod, toDateFilter } from "../lib/period";
+import {
+  getPeriodRange,
+  isActivityPeriod,
+  parseDayParam,
+  toDateFilter,
+} from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { upsertCustomerProfile } from "../services/customers";
 import {
+  clearExchangeStock,
   releaseStockIds,
+  syncExchangeStock,
   syncStockForBillItems,
 } from "../services/stockSync";
 import { requireAdmin } from "../middleware/auth";
@@ -172,10 +179,20 @@ const billDetailInclude = {
 
 billsRouter.get("/", async (req, res, next) => {
   try {
-    const period = isActivityPeriod(req.query.period)
-      ? req.query.period
-      : "all";
-    const billDateFilter = toDateFilter(getPeriodRange(period));
+    const customFrom = parseDayParam(req.query.from, false);
+    const customTo = parseDayParam(req.query.to, true);
+    const hasCustomRange = Boolean(customFrom || customTo);
+
+    const period = hasCustomRange
+      ? "custom"
+      : isActivityPeriod(req.query.period)
+        ? req.query.period
+        : "all";
+
+    const billDateFilter = hasCustomRange
+      ? toDateFilter({ from: customFrom, to: customTo })
+      : toDateFilter(getPeriodRange(period === "custom" ? "all" : period));
+
     const where: Prisma.BillWhereInput = billDateFilter
       ? { billDate: billDateFilter }
       : {};
@@ -191,7 +208,12 @@ billsRouter.get("/", async (req, res, next) => {
       include: { items: true },
       orderBy: { billDate: "desc" },
     });
-    res.json({ data: bills.map(serializeBill), period });
+    res.json({
+      data: bills.map(serializeBill),
+      period,
+      from: customFrom ? customFrom.toISOString() : null,
+      to: customTo ? customTo.toISOString() : null,
+    });
   } catch (error) {
     next(error);
   }
@@ -341,12 +363,14 @@ billsRouter.post("/", async (req, res, next) => {
         customerAddress: input.customerAddress,
       });
 
-      return tx.bill.create({
+      const billDate = input.billDate
+        ? parseDateInput(input.billDate)
+        : new Date();
+
+      const bill = await tx.bill.create({
         data: {
           invoiceNumber,
-          billDate: input.billDate
-            ? parseDateInput(input.billDate)
-            : new Date(),
+          billDate,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           customerAddress: input.customerAddress || null,
@@ -423,6 +447,28 @@ billsRouter.post("/", async (req, res, next) => {
         },
         include: { items: true },
       });
+
+      await syncExchangeStock(tx, {
+        invoiceNumber,
+        isExchange: Boolean(persistInput.isExchange),
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerAddress: input.customerAddress,
+        exchangeModel: exchange.exchangeModel,
+        exchangePlatform: exchange.exchangePlatform,
+        exchangeColor: exchange.exchangeColor,
+        exchangeStorage: exchange.exchangeStorage,
+        exchangeRam: exchange.exchangeRam,
+        exchangeImei1: persistInput.isExchange
+          ? input.exchangeImei1?.trim() || null
+          : null,
+        exchangeValue: persistInput.isExchange
+          ? input.exchangeValue ?? null
+          : null,
+        purchaseDate: billDate,
+      });
+
+      return bill;
     });
 
     res.status(201).json({ data: serializeBill(bill) });
@@ -450,6 +496,12 @@ billsRouter.post("/", async (req, res, next) => {
     if (error instanceof Error && error.message === "STOCK_IMEI_MISMATCH") {
       res.status(400).json({
         error: "IMEI does not match the selected stock phone",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "EXCHANGE_IMEI_TAKEN") {
+      res.status(409).json({
+        error: "Exchange IMEI is already in stock. Use a different IMEI.",
       });
       return;
     }
@@ -552,7 +604,11 @@ billsRouter.put("/:id", async (req, res, next) => {
         customerAddress: input.customerAddress,
       });
 
-      return tx.bill.update({
+      const billDate = input.billDate
+        ? parseDateInput(input.billDate)
+        : existing.billDate;
+
+      const bill = await tx.bill.update({
         where: { id: existing.id },
         data: {
           customerName: input.customerName,
@@ -560,9 +616,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           customerAddress: input.customerAddress || null,
           notes: input.notes || null,
           withGst: Boolean(input.withGst),
-          ...(input.billDate
-            ? { billDate: parseDateInput(input.billDate) }
-            : {}),
+          ...(input.billDate ? { billDate } : {}),
           subtotal: totals.subtotal,
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
@@ -645,6 +699,28 @@ billsRouter.put("/:id", async (req, res, next) => {
         },
         include: { items: true },
       });
+
+      await syncExchangeStock(tx, {
+        invoiceNumber: existing.invoiceNumber,
+        isExchange: Boolean(persistInput.isExchange),
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerAddress: input.customerAddress,
+        exchangeModel: exchange.exchangeModel,
+        exchangePlatform: exchange.exchangePlatform,
+        exchangeColor: exchange.exchangeColor,
+        exchangeStorage: exchange.exchangeStorage,
+        exchangeRam: exchange.exchangeRam,
+        exchangeImei1: persistInput.isExchange
+          ? input.exchangeImei1?.trim() || null
+          : null,
+        exchangeValue: persistInput.isExchange
+          ? input.exchangeValue ?? null
+          : null,
+        purchaseDate: billDate,
+      });
+
+      return bill;
     });
 
     res.json({ data: serializeBill(bill) });
@@ -675,6 +751,12 @@ billsRouter.put("/:id", async (req, res, next) => {
       });
       return;
     }
+    if (error instanceof Error && error.message === "EXCHANGE_IMEI_TAKEN") {
+      res.status(409).json({
+        error: "Exchange IMEI is already in stock. Use a different IMEI.",
+      });
+      return;
+    }
     next(error);
   }
 });
@@ -697,6 +779,7 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
           .map((item) => item.stockItemId)
           .filter((id): id is string => Boolean(id)),
       );
+      await clearExchangeStock(tx, existing.invoiceNumber);
       await tx.bill.delete({ where: { id: existing.id } });
     });
 

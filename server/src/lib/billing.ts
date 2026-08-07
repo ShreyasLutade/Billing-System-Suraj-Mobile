@@ -157,6 +157,13 @@ export const createBillSchema = z
         path: ["exchangeRam"],
       });
     }
+    if (data.isExchange && !data.exchangeImei1?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter exchange phone IMEI",
+        path: ["exchangeImei1"],
+      });
+    }
 
     if (
       data.isExchange &&
@@ -239,14 +246,6 @@ export const createBillSchema = z
       data.isExchange && data.exchangeValue != null
         ? money(data.exchangeValue)
         : money(0);
-
-    if (exchangeDeduction.gt(grandTotal)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Exchange amount cannot exceed bill total",
-        path: ["exchangeValue"],
-      });
-    }
 
     const payableAmount = Decimal.max(grandTotal.minus(exchangeDeduction), 0);
     const paid = cash.plus(online).plus(finance);

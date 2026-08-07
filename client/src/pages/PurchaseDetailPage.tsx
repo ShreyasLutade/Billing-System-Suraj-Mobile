@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import clsx from "clsx";
 import { ArrowLeft } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
 import { EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import type { Purchase } from "../types";
@@ -17,7 +19,7 @@ function formatDate(value: string) {
 }
 
 const COLS =
-  "grid grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_minmax(8.5rem,9.5rem)] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_minmax(9rem,10.5rem)]";
+  "grid grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_minmax(9rem,11rem)] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_minmax(10rem,12rem)]";
 
 export function PurchaseDetailPage() {
   const { id: supplierId, purchaseId } = useParams<{
@@ -25,6 +27,7 @@ export function PurchaseDetailPage() {
     purchaseId: string;
   }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,155 +117,167 @@ export function PurchaseDetailPage() {
           description="This purchase has no stock units linked."
         />
       ) : (
-        <div className="overflow-x-auto border border-ink-300 bg-white">
-          <div className="min-w-[52rem]">
-            <div
-              className={`${COLS} border-b border-ink-300 bg-ink-100 text-sm font-semibold text-ink-700`}
-            >
-              <div className="border-r border-ink-300 px-2 py-1.5">Product</div>
-              <div className="border-r border-ink-300 px-2 py-1.5">Storage</div>
-              <div className="border-r border-ink-300 px-2 py-1.5">RAM</div>
-              <div className="border-r border-ink-300 px-2 py-1.5">Color</div>
-              <div className="border-r border-ink-300 px-2 py-1.5">IMEI</div>
-              <div className="border-r border-ink-300 px-2 py-1.5 text-right">
-                Purchase price
+        <div className="ledger-card">
+          <div className="ledger-scroll">
+            <div className="min-w-[52rem]">
+              <div
+                className={clsx(
+                  COLS,
+                  "border-b-2 border-[#DCE2EA] bg-[#F1F4F8] text-[11px] font-bold uppercase tracking-[0.08em] text-ink-500",
+                )}
+              >
+                <div className="border-r border-[#EEF1F5] px-3 py-2">Product</div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2">Storage</div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2">RAM</div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2">Color</div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2">IMEI</div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2 text-right">
+                  Purchase price
+                </div>
+                <div className="px-3 py-2">Status</div>
               </div>
-              <div className="px-2 py-1.5">Status</div>
-            </div>
 
-            {purchase.items.map((row, index) => {
-              const item = row.stockItem;
-              const sold = item.status === "SOLD";
-              const billId = item.soldBillId;
-              const openBill = () => {
-                if (sold && billId) navigate(`/bills/${billId}`);
-              };
+              {purchase.items.map((row, index) => {
+                const item = row.stockItem;
+                const sold = item.status === "SOLD";
+                const billId = item.soldBillId;
+                const openBill = () => {
+                  if (sold && billId) navigate(`/bills/${billId}`);
+                };
 
-              return (
-                <div
-                  key={row.id}
-                  role={sold && billId ? "link" : undefined}
-                  tabIndex={sold && billId ? 0 : undefined}
-                  onClick={openBill}
-                  onKeyDown={(event) => {
-                    if (
-                      sold &&
-                      billId &&
-                      (event.key === "Enter" || event.key === " ")
-                    ) {
-                      event.preventDefault();
-                      openBill();
+                return (
+                  <div
+                    key={row.id}
+                    role={sold && billId ? "link" : undefined}
+                    tabIndex={sold && billId ? 0 : undefined}
+                    onClick={openBill}
+                    onKeyDown={(event) => {
+                      if (
+                        sold &&
+                        billId &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault();
+                        openBill();
+                      }
+                    }}
+                    className={clsx(
+                      COLS,
+                      "relative isolate overflow-hidden border-b border-[#EEF1F5] text-[13px]",
+                      !sold && (index % 2 === 0 ? "bg-white" : "bg-[#FAFBFC]"),
+                      sold && "bg-rose-50/70",
+                      sold && billId && "cursor-pointer hover:bg-rose-50",
+                    )}
+                    title={
+                      sold && billId
+                        ? `Sold to ${item.soldCustomerName || "customer"} · open bill`
+                        : undefined
                     }
-                  }}
-                  className={[
-                    COLS,
-                    "relative isolate overflow-hidden border-b border-ink-200 text-sm",
-                    !sold && (index % 2 === 0 ? "bg-white" : "bg-ink-50/60"),
-                    sold ? "bg-rose-50/70" : "",
-                    sold && billId ? "cursor-pointer hover:bg-rose-50" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  title={
-                    sold && billId
-                      ? `Sold to ${item.soldCustomerName || "customer"} · open bill`
-                      : undefined
-                  }
-                >
-                  <div
-                    className={[
-                      "border-r border-ink-200 px-2 py-2 font-medium",
-                      sold ? "text-ink-400" : "text-ink-900",
-                    ].join(" ")}
                   >
-                    {item.mobileName}
-                  </div>
-                  <div
-                    className={[
-                      "border-r border-ink-200 px-2 py-2 tabular-nums",
-                      sold ? "text-ink-400" : "text-ink-800",
-                    ].join(" ")}
-                  >
-                    {item.storage || "—"}
-                  </div>
-                  <div
-                    className={[
-                      "border-r border-ink-200 px-2 py-2 tabular-nums",
-                      sold ? "text-ink-400" : "text-ink-800",
-                    ].join(" ")}
-                  >
-                    {item.platform === "ANDROID" && item.ram ? item.ram : "—"}
-                  </div>
-                  <div
-                    className={[
-                      "border-r border-ink-200 px-2 py-2",
-                      sold ? "text-ink-400" : "text-ink-800",
-                    ].join(" ")}
-                  >
-                    {item.color || "—"}
-                  </div>
-                  <div
-                    className={[
-                      "border-r border-ink-200 px-2 py-2 font-mono text-xs sm:text-sm",
-                      sold ? "text-ink-400" : "text-ink-600",
-                    ].join(" ")}
-                  >
-                    {item.imei}
-                  </div>
-                  <div
-                    className={[
-                      "border-r border-ink-200 px-2 py-2 text-right tabular-nums",
-                      sold ? "text-ink-400" : "text-ink-800",
-                    ].join(" ")}
-                  >
-                    {formatINR(item.purchasePrice)}
-                  </div>
-                  <div className="relative z-20 min-w-0 px-2 py-2">
+                    <div
+                      className={clsx(
+                        "border-r border-[#EEF1F5] px-3 py-1 font-semibold",
+                        sold ? "text-ink-400" : "text-ink-900",
+                      )}
+                    >
+                      {item.mobileName}
+                    </div>
+                    <div
+                      className={clsx(
+                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums",
+                        sold ? "text-ink-400" : "text-ink-500",
+                      )}
+                    >
+                      {item.storage || "—"}
+                    </div>
+                    <div
+                      className={clsx(
+                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums",
+                        sold ? "text-ink-400" : "text-ink-500",
+                      )}
+                    >
+                      {item.platform === "ANDROID" && item.ram ? item.ram : "—"}
+                    </div>
+                    <div
+                      className={clsx(
+                        "border-r border-[#EEF1F5] px-3 py-1",
+                        sold ? "text-ink-400" : "text-ink-500",
+                      )}
+                    >
+                      {item.color || "—"}
+                    </div>
+                    <div
+                      className={clsx(
+                        "border-r border-[#EEF1F5] px-3 py-1 font-mono text-xs sm:text-[13px]",
+                        sold ? "text-ink-400" : "text-ink-500",
+                      )}
+                    >
+                      {item.imei}
+                    </div>
+                    <div
+                      className={clsx(
+                        "border-r border-[#EEF1F5] px-3 py-1 text-right tabular-nums",
+                        sold ? "text-ink-400" : "text-ink-500",
+                      )}
+                    >
+                      {formatINR(item.purchasePrice)}
+                    </div>
+                    <div className="relative z-20 min-w-0 px-3 py-1">
+                      {sold ? (
+                        <div className="relative z-20 space-y-0.5">
+                          {billId ? (
+                            <button
+                              type="button"
+                              className="block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold text-rose-600 underline decoration-rose-400/80 underline-offset-2 hover:text-rose-700"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate(`/bills/${billId}`);
+                              }}
+                            >
+                              Sold
+                              {item.soldInvoiceNumber
+                                ? ` · ${item.soldInvoiceNumber}`
+                                : ""}
+                            </button>
+                          ) : (
+                            <span className="block truncate whitespace-nowrap text-xs font-semibold text-rose-600">
+                              Sold
+                            </span>
+                          )}
+                          {isAdmin &&
+                          item.soldPrice != null &&
+                          Number.isFinite(item.soldPrice) ? (
+                            <p className="truncate text-xs font-semibold tabular-nums text-ink-700">
+                              @ {formatINR(item.soldPrice)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="inline-flex whitespace-nowrap rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          In stock
+                        </span>
+                      )}
+                    </div>
+
                     {sold ? (
-                      billId ? (
-                        <button
-                          type="button"
-                          className="relative z-20 block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold text-rose-600 underline decoration-rose-400/80 underline-offset-2 hover:text-rose-700"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            navigate(`/bills/${billId}`);
-                          }}
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+                      >
+                        <span
+                          className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm sm:text-xs"
+                          style={{ transform: "rotate(-12deg)" }}
                         >
                           Sold
-                          {item.soldInvoiceNumber
-                            ? ` · ${item.soldInvoiceNumber}`
-                            : ""}
-                        </button>
-                      ) : (
-                        <span className="relative z-20 block truncate whitespace-nowrap text-xs font-semibold text-rose-600">
-                          Sold
                         </span>
-                      )
-                    ) : (
-                      <span className="inline-flex whitespace-nowrap rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                        In stock
-                      </span>
-                    )}
+                      </div>
+                    ) : null}
                   </div>
-
-                  {sold ? (
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-                    >
-                      <span
-                        className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm sm:text-xs"
-                        style={{ transform: "rotate(-12deg)" }}
-                      >
-                        Sold
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-          <p className="border-t border-ink-200 px-2 py-1 text-[11px] text-ink-400">
+          <p className="ledger-note">
             Tap a sold row or the bill link to open the customer bill.
           </p>
         </div>

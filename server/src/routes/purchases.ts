@@ -92,6 +92,7 @@ const stockItemSelect = {
 
 purchasesRouter.get("/:id", async (req, res, next) => {
   try {
+    const isAdmin = req.user?.role === "ADMIN";
     const purchase = await prisma.purchase.findUnique({
       where: { id: req.params.id },
       include: {
@@ -106,6 +107,8 @@ purchasesRouter.get("/:id", async (req, res, next) => {
                   take: 1,
                   select: {
                     billId: true,
+                    amount: true,
+                    rate: true,
                     bill: {
                       select: {
                         id: true,
@@ -130,7 +133,8 @@ purchasesRouter.get("/:id", async (req, res, next) => {
       data: {
         ...purchase,
         items: purchase.items.map((item) => {
-          const sale = item.stockItem.billItems[0]?.bill;
+          const saleLine = item.stockItem.billItems[0];
+          const sale = saleLine?.bill;
           const { billItems: _billItems, ...stockItem } = item.stockItem;
           return {
             ...item,
@@ -139,6 +143,12 @@ purchasesRouter.get("/:id", async (req, res, next) => {
               soldBillId: sale?.id ?? null,
               soldInvoiceNumber: sale?.invoiceNumber ?? null,
               soldCustomerName: sale?.customerName ?? null,
+              // Selling price only for admins (staff never receive it).
+              soldPrice: isAdmin
+                ? saleLine != null
+                  ? round2(saleLine.amount ?? saleLine.rate ?? 0)
+                  : null
+                : undefined,
             },
           };
         }),

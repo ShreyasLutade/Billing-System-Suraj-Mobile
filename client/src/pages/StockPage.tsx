@@ -1,20 +1,49 @@
-import { useEffect, useMemo, useState, Fragment } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import clsx from "clsx";
 import {
+  ArrowDownUp,
   ArrowLeft,
-  Package,
+  Check,
+  ChevronDown,
   Plus,
+  RefreshCw,
   Search,
   Smartphone,
   Trash2,
 } from "lucide-react";
 import type { AddStockLocationState } from "./AddStockPage";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
+import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { api, formatINR, round2 } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
-import type { StockHistory, StockItem } from "../types";
+import type { StockItem } from "../types";
 
 type StockTab = "NEW" | "USED";
+type SortKey = "model" | "qty" | "avg" | "total";
+
+const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
+  { key: "model", label: "Model" },
+  { key: "qty", label: "Qty" },
+  { key: "avg", label: "Avg price" },
+  { key: "total", label: "Total value" },
+];
+
+function stockSortLabel(key: SortKey, dir: 1 | -1) {
+  const base =
+    key === "model"
+      ? "Model"
+      : key === "qty"
+        ? "Qty"
+        : key === "avg"
+          ? "Avg price"
+          : "Total value";
+  if (key === "model") {
+    return dir === 1 ? "A → Z" : "Z → A";
+  }
+  return `${base} ${dir === -1 ? "↓" : "↑"}`;
+}
 
 type StockGroup = {
   key: string;
@@ -25,6 +54,7 @@ type StockGroup = {
   platform: string;
   supplierId: string | null;
   supplierName: string | null;
+  supplierIsExchange: boolean;
   quantity: number;
   avgPrice: number;
   totalValue: number;
@@ -48,18 +78,25 @@ function stockGroupKey(item: StockItem) {
   return [name, color, storage, ram].join("|");
 }
 
+function formatVariant(
+  group: Pick<StockGroup, "color" | "storage" | "ram" | "platform">,
+) {
+  return [
+    group.color || null,
+    group.storage || null,
+    group.platform === "ANDROID" && group.ram ? group.ram : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function formatProductLabel(
   group: Pick<
     StockGroup,
     "productName" | "color" | "storage" | "ram" | "platform"
   >,
 ) {
-  return [
-    group.productName,
-    group.color || null,
-    group.storage || null,
-    group.platform === "ANDROID" && group.ram ? group.ram : null,
-  ]
+  return [group.productName, formatVariant(group) || null]
     .filter(Boolean)
     .join(" · ");
 }
@@ -90,6 +127,7 @@ function groupStockByProduct(items: StockItem[]): StockGroup[] {
         platform: sample?.platform || "",
         supplierId: sample?.supplierId || null,
         supplierName: sample?.supplierName || sample?.suppliers?.[0] || null,
+        supplierIsExchange: Boolean(sample?.supplierIsExchange),
         quantity,
         avgPrice: quantity ? round2(totalValue / quantity) : 0,
         totalValue: round2(totalValue),
@@ -112,6 +150,25 @@ function formatPurchaseDate(value: string) {
   }).format(date);
 }
 
+function sortGroups(
+  groups: StockGroup[],
+  sortKey: SortKey,
+  sortDir: 1 | -1,
+) {
+  return [...groups].sort((a, b) => {
+    if (sortKey === "model") {
+      const x = a.productName.toLowerCase();
+      const y = b.productName.toLowerCase();
+      if (x < y) return -1 * sortDir;
+      if (x > y) return 1 * sortDir;
+      return 0;
+    }
+    if (sortKey === "qty") return (a.quantity - b.quantity) * sortDir;
+    if (sortKey === "avg") return (a.avgPrice - b.avgPrice) * sortDir;
+    return (a.totalValue - b.totalValue) * sortDir;
+  });
+}
+
 export function StockPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -127,28 +184,23 @@ export function StockPage() {
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("model");
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (locationState?.condition === "USED" || locationState?.condition === "NEW") {
+    if (
+      locationState?.condition === "USED" ||
+      locationState?.condition === "NEW"
+    ) {
       setTab(locationState.condition);
     }
   }, [locationState?.condition]);
 
-  function openAddPage(prefillGroup: StockGroup | null = null) {
+  function openAddPage() {
     const state: AddStockLocationState = {
       condition: tab,
-      prefill: prefillGroup
-        ? {
-            platform:
-              prefillGroup.platform === "ANDROID" ? "ANDROID" : "IOS",
-            mobileName: prefillGroup.productName,
-            storage: prefillGroup.storage,
-            ram: prefillGroup.ram,
-            color: prefillGroup.color,
-          }
-        : null,
-      supplierId: prefillGroup?.supplierId || null,
-      supplierName: prefillGroup?.supplierName || null,
     };
     navigate("/stock/add", { state });
   }
@@ -171,6 +223,27 @@ export function StockPage() {
     void loadStock(tab);
   }, [tab]);
 
+  useEffect(() => {
+    if (!sortOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        sortWrapRef.current &&
+        !sortWrapRef.current.contains(event.target as Node)
+      ) {
+        setSortOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSortOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [sortOpen]);
+
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
     return items.filter((item) =>
@@ -191,9 +264,24 @@ export function StockPage() {
   }, [items, query]);
 
   const groups = useMemo(() => groupStockByProduct(filtered), [filtered]);
+  const sortedGroups = useMemo(
+    () => sortGroups(groups, sortKey, sortDir),
+    [groups, sortKey, sortDir],
+  );
+  const stockReveal = useInfiniteReveal(
+    sortedGroups,
+    `${tab}|${query}|${sortKey}|${sortDir}|${sortedGroups.length}`,
+  );
   const selectedGroup = useMemo(
     () => groups.find((group) => group.key === selectedKey) || null,
     [groups, selectedKey],
+  );
+
+  const tabGroups = useMemo(() => groupStockByProduct(items), [items]);
+  const summaryUnits = items.length;
+  const summaryModels = tabGroups.length;
+  const summaryValue = round2(
+    items.reduce((sum, item) => sum + (item.purchasePrice || 0), 0),
   );
 
   const totalQty = filtered.length;
@@ -234,7 +322,6 @@ export function StockPage() {
         error={error}
         onBack={() => setSelectedKey(null)}
         onRemove={(unit) => void removeItem(unit)}
-        onAdd={() => openAddPage(selectedGroup)}
       />
     );
   }
@@ -242,13 +329,14 @@ export function StockPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Inventory"
         title="Stock"
-        description="New and second-hand mobiles in the shop."
+        description="New and second-hand mobiles currently in the shop."
         action={
           <button
             type="button"
             className="btn-primary"
-            onClick={() => openAddPage(null)}
+            onClick={() => openAddPage()}
           >
             <Plus className="h-4 w-4" />
             Add mobile
@@ -256,51 +344,73 @@ export function StockPage() {
         }
       />
 
-      <div className="mb-3 space-y-2">
-        <div
-          className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5"
-          role="tablist"
-          aria-label="Stock type"
-        >
+      <div className="tb-toolbar">
+        <div className="tb-tabs" role="tablist" aria-label="Stock type">
           <button
             type="button"
             role="tab"
             aria-selected={tab === "NEW"}
-            className={
-              tab === "NEW"
-                ? "inline-flex items-center justify-center gap-1.5 rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                : "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-ink-600 hover:bg-white"
-            }
+            className={clsx("tb-tab", tab === "NEW" && "tb-tab-on")}
             onClick={() => setTab("NEW")}
           >
-            <Smartphone className="h-3.5 w-3.5" />
+            <Smartphone className="h-4 w-4 shrink-0" />
             New
+            {tab === "NEW" ? (
+              <span className="tb-cnt">{summaryUnits}</span>
+            ) : null}
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={tab === "USED"}
-            className={
-              tab === "USED"
-                ? "inline-flex items-center justify-center gap-1.5 rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                : "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-ink-600 hover:bg-white"
-            }
+            className={clsx("tb-tab", tab === "USED" && "tb-tab-on")}
             onClick={() => setTab("USED")}
           >
-            <Package className="h-3.5 w-3.5" />
+            <RefreshCw className="h-4 w-4 shrink-0" />
             Second hand
+            {tab === "USED" ? (
+              <span className="tb-cnt">{summaryUnits}</span>
+            ) : null}
           </button>
         </div>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
-          <input
-            className="field h-9 py-1.5 pl-8 text-sm"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search product, IMEI, supplier…"
-            aria-label="Search stock"
-          />
+        <div className="tb-searchrow">
+          <div className="tb-search">
+            <Search className="h-[17px] w-[17px] shrink-0 text-[#7A8699]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search product, IMEI, supplier…"
+              aria-label="Search stock"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="flex items-center justify-between gap-3 rounded-[12px] bg-ink-900 px-3.5 py-2 shadow-soft">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">
+            Stock value
+          </p>
+          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-white">
+            {loading ? "…" : formatINR(summaryValue)}
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Units in stock
+          </p>
+          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-ink-900">
+            {loading ? "…" : summaryUnits}
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Distinct models
+          </p>
+          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-ink-900">
+            {loading ? "…" : summaryModels}
+          </p>
         </div>
       </div>
 
@@ -328,71 +438,199 @@ export function StockPage() {
           }
         />
       ) : (
-        <div className="overflow-x-auto border border-ink-300 bg-white">
-          <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
-            <thead>
-              <tr className="bg-ink-100 text-ink-700">
-                <th className="border-b border-r border-ink-300 px-2 py-1.5 font-semibold">
-                  Product name
-                </th>
-                <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
-                  Qty
-                </th>
-                <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
-                  Avg price
-                </th>
-                <th className="border-b border-ink-300 px-2 py-1.5 text-right font-semibold">
-                  Total value
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((group) => (
-                <tr
-                  key={group.key}
-                  className="cursor-pointer odd:bg-white even:bg-ink-50/60 hover:bg-tide-50/70"
-                  onClick={() => setSelectedKey(group.key)}
+        <>
+          <div className="mb-2.5 flex items-center justify-between gap-3 px-1 text-[13px] text-ink-500">
+            <span>
+              Showing <b className="font-semibold text-ink-900">{groups.length}</b>{" "}
+              models · <b className="font-semibold text-ink-900">{totalQty}</b>{" "}
+              units
+            </span>
+            <div className="relative shrink-0" ref={sortWrapRef}>
+              <button
+                type="button"
+                className={clsx(
+                  "inline-flex items-center justify-center gap-2 rounded-[11px] border bg-white p-2.5 text-[13px] font-semibold text-ink-700 shadow-soft transition sm:px-3.5 sm:py-2",
+                  sortOpen
+                    ? "border-ink-900 text-ink-900"
+                    : "border-ink-100 text-ink-500 hover:border-ink-300 hover:text-ink-900",
+                )}
+                aria-haspopup="true"
+                aria-expanded={sortOpen}
+                aria-label={`Sort: ${stockSortLabel(sortKey, sortDir)}`}
+                title={`Sort: ${stockSortLabel(sortKey, sortDir)}`}
+                onClick={() => setSortOpen((open) => !open)}
+              >
+                <ArrowDownUp
+                  className="h-4 w-4 text-ink-500 sm:h-[15px] sm:w-[15px] sm:text-ink-300"
+                  strokeWidth={2}
+                />
+                <span className="hidden sm:inline">
+                  Sort:{" "}
+                  <b className="font-semibold text-ink-900">
+                    {stockSortLabel(sortKey, sortDir)}
+                  </b>
+                </span>
+                <ChevronDown
+                  className={clsx(
+                    "hidden h-[13px] w-[13px] text-ink-300 transition sm:block",
+                    sortOpen && "rotate-180",
+                  )}
+                  strokeWidth={2}
+                />
+              </button>
+
+              {sortOpen ? (
+                <div
+                  className="absolute right-0 top-[calc(100%+8px)] z-40 w-[230px] origin-top-right rounded-[14px] border border-ink-100 bg-white p-3 shadow-[0_8px_20px_rgba(16,25,40,.10),0_24px_60px_rgba(16,25,40,.16)]"
+                  role="menu"
+                  aria-label="Sort stock"
                 >
-                  <td className="border-b border-r border-ink-200 px-2 py-1 font-medium text-ink-900">
-                    {formatProductLabel(group)}
-                  </td>
-                  <td className="border-b border-r border-ink-200 px-2 py-1 text-right tabular-nums text-ink-800">
-                    {group.quantity}
-                  </td>
-                  <td className="border-b border-r border-ink-200 px-2 py-1 text-right tabular-nums text-ink-800">
-                    {formatINR(group.avgPrice)}
-                  </td>
-                  <td className="border-b border-ink-200 px-2 py-1 text-right tabular-nums text-ink-800">
-                    {formatINR(group.totalValue)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-ink-50 font-semibold text-ink-900">
-                <td className="border-t border-r border-ink-300 px-2 py-1.5">
-                  Total
-                </td>
-                <td className="border-t border-r border-ink-300 px-2 py-1.5 text-right tabular-nums">
-                  {totalQty}
-                </td>
-                <td className="border-t border-r border-ink-300 px-2 py-1.5 text-right text-ink-400">
-                  —
-                </td>
-                <td className="border-t border-ink-300 px-2 py-1.5 text-right tabular-nums">
-                  {formatINR(totalValue)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-          <p className="border-t border-ink-200 px-2 py-1 text-[11px] text-ink-400">
-            Click a product for unit details. Manage suppliers under{" "}
-            <Link to="/suppliers" className="text-tide-600 underline hover:text-tide-700">
-              Suppliers
-            </Link>
-            .
-          </p>
-        </div>
+                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">
+                    Direction
+                  </p>
+                  <div className="mb-3 grid grid-cols-2 gap-0.5 rounded-[10px] bg-[#EEF0F3] p-[3px]">
+                    <button
+                      type="button"
+                      className={clsx(
+                        "rounded-[7px] px-2 py-1.5 text-center text-xs transition",
+                        sortDir === -1
+                          ? "bg-white font-semibold text-ink-900 shadow-soft"
+                          : "font-medium text-ink-500 hover:text-ink-900",
+                      )}
+                      onClick={() => setSortDir(-1)}
+                    >
+                      High → Low
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "rounded-[7px] px-2 py-1.5 text-center text-xs transition",
+                        sortDir === 1
+                          ? "bg-white font-semibold text-ink-900 shadow-soft"
+                          : "font-medium text-ink-500 hover:text-ink-900",
+                      )}
+                      onClick={() => setSortDir(1)}
+                    >
+                      Low → High
+                    </button>
+                  </div>
+
+                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">
+                    Sort by
+                  </p>
+                  <div className="space-y-0.5">
+                    {SORT_FIELD_OPTIONS.map((option) => {
+                      const on = sortKey === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={on}
+                          className={clsx(
+                            "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
+                            on
+                              ? "bg-[#F1F5FF] font-semibold text-ink-900"
+                              : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
+                          )}
+                          onClick={() => setSortKey(option.key)}
+                        >
+                          {option.label}
+                          <Check
+                            className={clsx(
+                              "h-[15px] w-[15px] text-[#2563EB]",
+                              on ? "opacity-100" : "opacity-0",
+                            )}
+                            strokeWidth={2.6}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="ledger-card">
+            <div className="ledger-scroll">
+              <table className="ledger-table min-w-[36rem]">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Variant</th>
+                    <th className="text-center">Qty</th>
+                    <th className="text-right">Avg price</th>
+                    <th className="text-right">Total value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockReveal.visibleItems.map((group) => {
+                    const variant = formatVariant(group);
+                    return (
+                      <tr
+                        key={group.key}
+                        className="ledger-row-click"
+                        onClick={() => setSelectedKey(group.key)}
+                      >
+                        <td className="font-semibold text-ink-900">
+                          {group.productName}
+                        </td>
+                        <td className="text-ink-500">{variant || "—"}</td>
+                        <td className="text-center">
+                          <span
+                            className={clsx(
+                              "tabular-nums font-semibold",
+                              group.quantity > 1
+                                ? "text-[#2563EB]"
+                                : "text-ink-500",
+                            )}
+                          >
+                            {group.quantity}
+                          </span>
+                        </td>
+                        <td className="text-right tabular-nums text-ink-500">
+                          {formatINR(group.avgPrice)}
+                        </td>
+                        <td className="text-right tabular-nums font-bold text-ink-900">
+                          {formatINR(group.totalValue)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={2}>Total</td>
+                    <td className="text-center tabular-nums">{totalQty}</td>
+                    <td className="text-right text-ink-300">—</td>
+                    <td className="text-right text-[15px] tabular-nums">
+                      {formatINR(totalValue)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <LoadMoreSentinel
+              sentinelRef={stockReveal.sentinelRef}
+              hasMore={stockReveal.hasMore}
+              loadingMore={stockReveal.loadingMore}
+              totalCount={stockReveal.totalCount}
+              showEnd={false}
+            />
+            <p className="ledger-note">
+              Tap a row for unit-level detail (IMEI, purchase date, supplier).
+              Manage suppliers under{" "}
+              <Link
+                to="/suppliers"
+                className="font-medium text-[#2563EB] hover:underline"
+              >
+                Suppliers
+              </Link>
+              .
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
@@ -405,7 +643,6 @@ function StockProductDetail({
   error,
   onBack,
   onRemove,
-  onAdd,
 }: {
   group: StockGroup;
   condition: StockTab;
@@ -413,7 +650,6 @@ function StockProductDetail({
   error: string | null;
   onBack: () => void;
   onRemove: (unit: StockItem) => void;
-  onAdd: () => void;
 }) {
   const title = formatProductLabel(group);
   const units = [...group.units].sort(
@@ -421,60 +657,49 @@ function StockProductDetail({
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const isUsed = condition === "USED";
-  const [histories, setHistories] = useState<Record<string, StockHistory>>({});
-  const [expandedImei, setExpandedImei] = useState<string | null>(null);
-
-  async function toggleHistory(unit: StockItem) {
-    if (expandedImei === unit.id) {
-      setExpandedImei(null);
-      return;
-    }
-    setExpandedImei(unit.id);
-    if (histories[unit.id]) return;
-    try {
-      const { data } = await api.stockHistory(unit.id);
-      setHistories((current) => ({ ...current, [unit.id]: data }));
-    } catch {
-      // ignore
-    }
-  }
 
   return (
     <div>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <button
-            type="button"
-            className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
-            onClick={onBack}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to stock
-          </button>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-display text-xl font-semibold leading-snug text-ink-900 sm:text-2xl">
-              {title}
-            </h1>
-            <span
-              className={
-                isUsed
-                  ? "rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ember-500"
-                  : "rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-tide-700"
-              }
-            >
-              {isUsed ? "Second hand" : "New"}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-ink-500">
-            {group.quantity} unit{group.quantity === 1 ? "" : "s"} · Avg{" "}
-            {formatINR(group.avgPrice)} · Total {formatINR(group.totalValue)}
-            {group.supplierName ? ` · ${group.supplierName}` : ""}
-          </p>
-        </div>
-        <button type="button" className="btn-primary shrink-0" onClick={onAdd}>
-          <Plus className="h-4 w-4" />
-          Add same mobile
+      <div className="mb-3">
+        <button
+          type="button"
+          className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
+          onClick={onBack}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to stock
         </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-display text-xl font-semibold leading-snug text-ink-900 sm:text-2xl">
+            {title}
+          </h1>
+          <span
+            className={
+              isUsed
+                ? "rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ember-500"
+                : "rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-tide-700"
+            }
+          >
+            {isUsed ? "Second hand" : "New"}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-ink-500">
+          {group.quantity} unit{group.quantity === 1 ? "" : "s"} · Avg{" "}
+          {formatINR(group.avgPrice)} · Total {formatINR(group.totalValue)}
+          {group.supplierName ? (
+            <>
+              {" · "}
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                {group.supplierName}
+                {group.supplierIsExchange ? (
+                  <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                    Exchange
+                  </span>
+                ) : null}
+              </span>
+            </>
+          ) : null}
+        </p>
       </div>
 
       {error ? (
@@ -483,131 +708,65 @@ function StockProductDetail({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto border border-ink-300 bg-white">
-        <table className="w-full min-w-[44rem] border-collapse text-left text-sm">
-          <thead>
-            <tr className="bg-ink-100 text-ink-700">
-              <th className="border-b border-r border-ink-300 px-2 py-1.5 font-semibold">
-                Purchase date
-              </th>
-              <th className="border-b border-r border-ink-300 px-2 py-1.5 font-semibold">
-                Supplier name
-              </th>
-              <th className="border-b border-r border-ink-300 px-2 py-1.5 text-right font-semibold">
-                Price
-              </th>
-              <th className="border-b border-r border-ink-300 px-2 py-1.5 font-semibold">
-                IMEI
-              </th>
-              <th className="border-b border-ink-300 px-2 py-1.5 text-right font-semibold">
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {units.map((unit) => {
-              const history = histories[unit.id];
-              const open = expandedImei === unit.id;
-              return (
-                <Fragment key={unit.id}>
-                  <tr className="odd:bg-white even:bg-ink-50/60">
-                    <td className="border-b border-r border-ink-200 px-2 py-1.5 text-ink-800">
-                      {formatPurchaseDate(unit.createdAt)}
-                    </td>
-                    <td className="border-b border-r border-ink-200 px-2 py-1.5 text-ink-800">
+      <div className="ledger-card">
+        <div className="ledger-scroll">
+          <table className="ledger-table min-w-[44rem]">
+            <thead>
+              <tr>
+                <th>Purchase date</th>
+                <th>Supplier name</th>
+                <th className="text-right">Price</th>
+                <th>IMEI</th>
+                <th className="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {units.map((unit) => (
+                <tr key={unit.id}>
+                  <td className="text-ink-800">
+                    {formatPurchaseDate(unit.createdAt)}
+                  </td>
+                  <td className="whitespace-normal text-ink-800">
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
                       {unit.supplierName || unit.suppliers[0] || "—"}
-                      {unit.supplierId ? (
-                        <>
-                          {" "}
-                          <Link
-                            to={`/suppliers/${unit.supplierId}`}
-                            className="text-xs text-tide-600 underline hover:text-tide-700"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            ledger
-                          </Link>
-                        </>
+                      {unit.supplierIsExchange ? (
+                        <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                          Exchange
+                        </span>
                       ) : null}
-                    </td>
-                    <td className="border-b border-r border-ink-200 px-2 py-1.5 text-right tabular-nums text-ink-800">
-                      {formatINR(unit.purchasePrice)}
-                    </td>
-                    <td className="border-b border-r border-ink-200 px-2 py-1.5 font-mono text-ink-800">
-                      <button
-                        type="button"
-                        className="text-left font-mono text-tide-600 hover:text-tide-700 hover:underline"
-                        onClick={() => void toggleHistory(unit)}
-                        title="IMEI history"
-                      >
-                        {unit.imei}
-                      </button>
-                    </td>
-                    <td className="border-b border-ink-200 px-2 py-1.5 text-right">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-rose-600 hover:underline disabled:opacity-50"
-                        disabled={deletingId === unit.id}
-                        onClick={() => onRemove(unit)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {deletingId === unit.id ? "…" : "Remove"}
-                      </button>
-                    </td>
-                  </tr>
-                  {open ? (
-                    <tr className="bg-tide-50/40">
-                      <td
-                        colSpan={5}
-                        className="border-b border-ink-200 px-3 py-2 text-xs text-ink-700"
-                      >
-                        {!history ? (
-                          <span>Loading history…</span>
-                        ) : (
-                          <div className="space-y-1">
-                            <p>
-                              <span className="font-semibold">Purchased</span>{" "}
-                              {formatPurchaseDate(
-                                history.purchase?.purchaseDate ||
-                                  unit.createdAt,
-                              )}{" "}
-                              from{" "}
-                              {history.supplier?.name ||
-                                unit.supplierName ||
-                                unit.suppliers[0] ||
-                                "—"}{" "}
-                              @ {formatINR(unit.purchasePrice)}
-                            </p>
-                            {history.sale ? (
-                              <p>
-                                <span className="font-semibold">Sold</span>{" "}
-                                {formatPurchaseDate(history.sale.billDate)} on{" "}
-                                <Link
-                                  to={`/bills/${history.sale.billId}`}
-                                  className="font-mono text-tide-600 underline hover:text-tide-700"
-                                >
-                                  {history.sale.invoiceNumber}
-                                </Link>{" "}
-                                → {history.sale.customerName} (
-                                {history.sale.customerPhone})
-                              </p>
-                            ) : (
-                              <p className="text-ink-500">
-                                Still in stock (not sold yet).
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-        <p className="border-t border-ink-200 px-2 py-1 text-[11px] text-ink-400">
-          Click an IMEI to see purchase → sale history.
-        </p>
+                    </span>
+                    {unit.supplierId ? (
+                      <>
+                        {" "}
+                        <Link
+                          to={`/suppliers/${unit.supplierId}`}
+                          className="text-xs text-[#2563EB] hover:underline"
+                        >
+                          ledger
+                        </Link>
+                      </>
+                    ) : null}
+                  </td>
+                  <td className="text-right tabular-nums text-ink-800">
+                    {formatINR(unit.purchasePrice)}
+                  </td>
+                  <td className="font-mono text-ink-800">{unit.imei}</td>
+                  <td className="text-right">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-rose-600 hover:underline disabled:opacity-50"
+                      disabled={deletingId === unit.id}
+                      onClick={() => onRemove(unit)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {deletingId === unit.id ? "…" : "Remove"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

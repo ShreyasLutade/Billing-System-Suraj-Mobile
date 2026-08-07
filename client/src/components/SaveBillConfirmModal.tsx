@@ -7,6 +7,7 @@ export type SaveBillSummary = {
   customerPhone: string;
   itemCount: number;
   payableAmount: number;
+  payCustomerAmount?: number;
   cashAmount: number;
   onlineAmount: number;
   financeAmount: number;
@@ -91,8 +92,25 @@ export function SaveBillConfirmModal({
               label="Items"
               value={`${summary.itemCount} product${summary.itemCount === 1 ? "" : "s"}`}
             />
-            <Row label="Payable" value={formatINR(summary.payableAmount)} strong />
-            {payments.length > 0 ? (
+            <Row
+              label={
+                summary.payCustomerAmount && summary.payCustomerAmount > 0
+                  ? "Pay customer"
+                  : "Payable"
+              }
+              value={formatINR(
+                summary.payCustomerAmount && summary.payCustomerAmount > 0
+                  ? summary.payCustomerAmount
+                  : summary.payableAmount,
+              )}
+              strong
+              accent={Boolean(
+                summary.payCustomerAmount && summary.payCustomerAmount > 0,
+              )}
+            />
+            {summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (
+              <Row label="Paid" value="Shop pays customer" />
+            ) : payments.length > 0 ? (
               <Row label="Paid" value={payments.join(" · ")} />
             ) : (
               <Row label="Paid" value="Nothing paid yet" />
@@ -103,7 +121,9 @@ export function SaveBillConfirmModal({
                 value={`− ${formatINR(summary.exchangeValue)}`}
               />
             ) : null}
-            {summary.dueAmount > 0 ? (
+            {summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (
+              <Row label="Due" value="None" />
+            ) : summary.dueAmount > 0 ? (
               <Row
                 label="Due"
                 value={`${formatINR(summary.dueAmount)}${

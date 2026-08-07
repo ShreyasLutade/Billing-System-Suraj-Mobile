@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Check,
   Download,
   Pencil,
@@ -15,11 +16,34 @@ import {
 } from "lucide-react";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
-import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
+
+const PAY = {
+  cash: "#12B886",
+  online: "#3B82F6",
+  finance: "#8B5CF6",
+  due: "#F59E0B",
+} as const;
+
+function formatPhoneDisplay(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+  return phone;
+}
+
+function createdByLabel(bill: Bill) {
+  if (!bill.createdByRole) return null;
+  return (
+    bill.createdByName ||
+    (bill.createdByRole === "ADMIN" ? "Admin" : "Staff")
+  );
+}
 
 export function BillDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -100,8 +124,11 @@ export function BillDetailPage() {
   if (error || !bill) {
     return (
       <div className="space-y-4">
-        <Link to="/bills" className="btn-secondary inline-flex">
-          <ArrowLeft className="h-4 w-4" />
+        <Link
+          to="/bills"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#3A4658] transition hover:text-[#0E1626]"
+        >
+          <ArrowLeft className="h-[15px] w-[15px]" />
           Back to bills
         </Link>
         <EmptyState
@@ -113,36 +140,74 @@ export function BillDetailPage() {
   }
 
   const hasDue = bill.dueAmount > 0 && !bill.dueSettled;
+  const fullyPaid = !bill.withGst && !hasDue;
+  const exchangeRefund =
+    !bill.withGst &&
+    bill.isExchange &&
+    bill.exchangeValue != null &&
+    bill.exchangeValue > bill.grandTotal
+      ? Math.max(bill.exchangeValue - bill.grandTotal, 0)
+      : 0;
+  const payable = bill.withGst
+    ? bill.grandTotal
+    : (bill.payableAmount ?? bill.grandTotal);
+  const creator = createdByLabel(bill);
+  const meta = [
+    `Created ${format(new Date(bill.billDate), "dd MMM yyyy")}`,
+    creator ? `by ${creator}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Invoice"
-        title={bill.invoiceNumber}
-        description={
-          [
-            `Created ${format(new Date(bill.billDate), "dd MMM yyyy")}`,
-            bill.createdByRole
-              ? bill.createdByName ||
-                (bill.createdByRole === "ADMIN" ? "Admin" : "Staff")
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")
-        }
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Link to="/bills" className="btn-secondary">
-              <ArrowLeft className="h-4 w-4" />
-              Bills
-            </Link>
-            <Link to={`/bills/${bill.id}/edit`} className="btn-secondary">
-              <Pencil className="h-4 w-4" />
+      <Link
+        to="/bills"
+        className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#3A4658] transition hover:text-[#0E1626]"
+      >
+        <ArrowLeft className="h-[15px] w-[15px]" />
+        Back to bills
+      </Link>
+
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-5">
+        <div className="min-w-0">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7A8699]">
+            Invoice
+          </span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3">
+            <h1 className="font-display text-[30px] font-bold leading-none tracking-[-0.01em] text-[#0E1626]">
+              {bill.invoiceNumber}
+            </h1>
+            {bill.withGst ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F0FE] px-[11px] py-1 text-xs font-semibold text-[#2563EB]">
+                GST invoice
+              </span>
+            ) : fullyPaid ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-[11px] py-1 text-xs font-semibold text-[#0E9E76]">
+                <Check className="h-[13px] w-[13px]" strokeWidth={2.6} />
+                Fully paid
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF3E2] px-[11px] py-1 text-xs font-semibold text-[#B76E00]">
+                ● {formatINR(bill.dueAmount)} due
+              </span>
+            )}
+          </div>
+          <p className="mt-1.5 text-[13px] text-[#7A8699]">{meta}</p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 sm:w-auto">
+          <div className="flex w-full gap-1.5 sm:w-auto sm:flex-wrap sm:gap-2">
+            <Link
+              to={`/bills/${bill.id}/edit`}
+              className="bd-action flex-1 sm:flex-none"
+            >
+              <Pencil className="h-[15px] w-[15px] shrink-0" />
               Edit
             </Link>
             <button
               type="button"
-              className="btn-secondary"
+              className="bd-action flex-1 sm:flex-none"
               disabled={sharing}
               onClick={() => {
                 setShareError(null);
@@ -160,205 +225,253 @@ export function BillDetailPage() {
                   .finally(() => setSharing(false));
               }}
             >
-              <Share2 className="h-4 w-4" />
-              {sharing ? "Preparing…" : "Share"}
+              <Share2 className="h-[15px] w-[15px] shrink-0" />
+              <span className="truncate">{sharing ? "…" : "Share"}</span>
             </button>
             <a
-              className="btn-secondary"
+              className="bd-action flex-1 sm:flex-none"
               href={api.pdfUrl(bill.id)}
               target="_blank"
               rel="noreferrer"
-              title="Download PDF"
             >
-              <Download className="h-4 w-4" />
-              Download PDF
+              <Download className="h-[15px] w-[15px] shrink-0" />
+              <span className="sm:hidden">PDF</span>
+              <span className="hidden sm:inline">Download PDF</span>
             </a>
             {isAdmin ? (
               <button
                 type="button"
-                className="btn-danger"
+                className="bd-action bd-action-danger flex-1 sm:flex-none"
                 onClick={() => {
                   setDeleteError(null);
                   setShowDeleteConfirm(true);
                 }}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-[15px] w-[15px] shrink-0" />
                 Delete
               </button>
             ) : null}
-            {hasDue && !bill.withGst ? (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => setShowSettle(true)}
-              >
-                <Check className="h-4 w-4" />
-                Collect due
-              </button>
-            ) : null}
           </div>
-        }
-      />
+          {hasDue && !bill.withGst ? (
+            <button
+              type="button"
+              className="btn-primary w-full !rounded-[11px] !px-3.5 !py-2.5 !text-[13px] sm:w-auto"
+              onClick={() => setShowSettle(true)}
+            >
+              <Check className="h-4 w-4" />
+              Collect due
+            </button>
+          ) : null}
+        </div>
+      </div>
 
       {shareError ? (
-        <div className="mb-4 glass-panel px-5 py-4 text-sm text-ember-500">
+        <div className="mb-4 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 text-sm text-ember-500">
           {shareError}
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
-        <section className="space-y-5">
-          <div className="glass-panel p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink-900 text-tide-400">
-                <UserRound className="h-5 w-5" />
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr_340px]">
+        <div className="min-w-0 space-y-4">
+          <section className="bd-card">
+            <div className="flex items-center gap-3.5">
+              <div className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] bg-gradient-to-br from-[#12B886] to-[#0E9E76] text-white">
+                <UserRound className="h-[22px] w-[22px]" strokeWidth={2} />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7A8699]">
                   Customer
                 </p>
-                <h2 className="mt-1 font-display text-2xl font-semibold text-ink-900">
+                <p className="mt-0.5 font-display text-[19px] font-semibold leading-tight text-[#0E1626]">
                   {bill.customerName}
-                </h2>
-                <p className="mt-2 flex items-center gap-2 text-sm text-ink-500">
-                  <Phone className="h-4 w-4" />
-                  {bill.customerPhone}
+                </p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-[13px] tabular-nums text-[#3A4658]">
+                  <Phone className="h-3.5 w-3.5 text-[#7A8699]" />
+                  {formatPhoneDisplay(bill.customerPhone)}
                 </p>
                 {bill.customerAddress ? (
-                  <p className="mt-1 text-sm text-ink-500">{bill.customerAddress}</p>
+                  <p className="mt-1 text-[13px] text-[#7A8699]">
+                    {bill.customerAddress}
+                  </p>
                 ) : null}
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="glass-panel overflow-hidden">
-            <div className="border-b border-ink-100 px-5 py-4 sm:px-6">
-              <h3 className="font-display text-lg font-semibold text-ink-900">
-                Products
-              </h3>
-            </div>
-            <div className="divide-y divide-ink-50">
-              {bill.items.map((item) => (
-                <div key={item.id || item.productName} className="px-5 py-4 sm:px-6">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-ink-900">
-                          {item.productName}
-                        </p>
-                        {item.condition ? (
-                          <span
-                            className={
-                              item.condition === "USED"
-                                ? "rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-ember-500"
-                                : "rounded-full bg-tide-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-tide-700"
-                            }
-                          >
-                            {item.condition === "USED" ? "Old" : "New"}
+          <section className="bd-card">
+            <h2 className="mb-4 font-display text-base font-semibold text-[#0E1626]">
+              Products
+            </h2>
+            <div className="space-y-4">
+              {bill.items.map((item, index) => {
+                const specs = [item.color, item.storage, item.ram]
+                  .filter(Boolean)
+                  .join(" · ");
+                const subParts = [
+                  `Qty ${item.quantity}`,
+                  `Rate ${formatINR(item.rate)}`,
+                  `GST ${item.gstPercent}%`,
+                  item.imei1 ? `IMEI ${item.imei1}` : null,
+                  item.serialNumber ? `Serial ${item.serialNumber}` : null,
+                  item.warrantyMonths
+                    ? `Warranty ${item.warrantyMonths} mo`
+                    : null,
+                ].filter(Boolean);
+
+                return (
+                  <div
+                    key={item.id || `${item.productName}-${index}`}
+                    className="flex items-start justify-between gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-[#0E1626]">
+                        <span>{item.productName}</span>
+                        {item.condition === "USED" ? (
+                          <span className="rounded-md bg-[#FEF3E2] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#B76E00]">
+                            OLD
+                          </span>
+                        ) : item.condition === "NEW" ? (
+                          <span className="rounded-md bg-[#E7F8F1] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#0E9E76]">
+                            NEW
                           </span>
                         ) : null}
                       </div>
-                      {item.color || item.storage || item.ram ? (
-                        <p className="mt-1 text-sm font-medium text-tide-600">
-                          {[item.color, item.storage, item.ram]
-                            .filter(Boolean)
-                            .join(" · ")}
+                      {specs ? (
+                        <p className="mt-1 text-[13px] font-medium text-[#0E9E76]">
+                          {specs}
                         </p>
                       ) : null}
-                      <p className="mt-1 text-sm text-ink-500">
-                        Qty {item.quantity} · Rate {formatINR(item.rate)} · GST{" "}
-                        {item.gstPercent}%
+                      <p className="mt-1 text-[12.5px] leading-relaxed text-[#7A8699]">
+                        {subParts.map((part, i) => (
+                          <span key={part}>
+                            {i > 0 ? (
+                              <span className="mx-1.5 opacity-50">·</span>
+                            ) : null}
+                            {part}
+                          </span>
+                        ))}
                       </p>
-                      <div className="mt-2 space-y-1 text-xs text-ink-500">
-                        {item.imei1 ? <p>IMEI · {item.imei1}</p> : null}
-                        {item.serialNumber ? <p>Serial · {item.serialNumber}</p> : null}
-                        {item.warrantyMonths ? (
-                          <p>Warranty · {item.warrantyMonths} months</p>
-                        ) : null}
-                      </div>
                     </div>
-                    <p className="font-display text-lg font-semibold text-ink-900">
+                    <p className="shrink-0 whitespace-nowrap font-display text-[17px] font-bold tabular-nums text-[#0E1626]">
                       {formatINR(item.amount || 0)}
                     </p>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
+          </section>
 
           {!bill.withGst && bill.isExchange ? (
-            <div className="glass-panel p-5 sm:p-6">
-              <h3 className="font-display text-lg font-semibold text-ink-900">
-                Exchange mobile
-              </h3>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                <Detail label="Model" value={bill.exchangeModel || "—"} />
-                <Detail
+            <section className="bd-card">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#E7F8F1] text-[#0E9E76]">
+                  <ArrowLeftRight className="h-[15px] w-[15px]" strokeWidth={2} />
+                </span>
+                <h2 className="font-display text-base font-semibold text-[#0E1626]">
+                  Exchange mobile
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Kv label="Model" value={bill.exchangeModel || "—"} />
+                <Kv
                   label="Exchange value"
                   value={
                     bill.exchangeValue != null
                       ? formatINR(bill.exchangeValue)
                       : "—"
                   }
+                  highlight
                 />
-                <Detail label="IMEI" value={bill.exchangeImei1 || "—"} />
-                <Detail label="Serial" value={bill.exchangeSerial || "—"} />
-                <Detail label="Notes" value={bill.exchangeNotes || "—"} />
-              </dl>
-            </div>
+                <Kv label="IMEI" value={bill.exchangeImei1 || "—"} />
+                <Kv
+                  label="Serial"
+                  value={bill.exchangeSerial || "—"}
+                  muted={!bill.exchangeSerial}
+                />
+                <Kv
+                  label="Notes"
+                  value={bill.exchangeNotes || "—"}
+                  muted={!bill.exchangeNotes}
+                  full
+                />
+              </div>
+            </section>
           ) : null}
 
           {bill.notes ? (
-            <div className="glass-panel p-5 sm:p-6">
-              <h3 className="font-display text-lg font-semibold text-ink-900">
+            <section className="bd-card">
+              <h2 className="mb-3 font-display text-base font-semibold text-[#0E1626]">
                 Notes
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink-600">
+              </h2>
+              <p className="text-sm leading-relaxed text-[#3A4658]">
                 {bill.notes}
               </p>
-            </div>
+            </section>
           ) : null}
-        </section>
+        </div>
 
-        <aside className="space-y-5">
-          <div className="glass-panel overflow-hidden p-5 sm:p-6">
-            <h3 className="font-display text-lg font-semibold text-ink-900">
+        <aside className="space-y-4">
+          <section className="bd-card">
+            <h2 className="mb-3.5 font-display text-base font-semibold text-[#0E1626]">
               Amount summary
-            </h3>
-            <dl className="mt-4 space-y-3 text-sm">
-              <Row label="Subtotal" value={formatINR(bill.subtotal)} />
-              <Row label="GST" value={formatINR(bill.gstAmount)} />
-              <Row label="Gross total" value={formatINR(bill.grandTotal)} />
-              {!bill.withGst && bill.isExchange && bill.exchangeValue ? (
-                <Row
-                  label="Less: Exchange"
-                  value={`- ${formatINR(bill.exchangeValue)}`}
-                  accent
-                />
-              ) : null}
-              <Row
-                label={bill.withGst ? "Invoice total" : "Payable"}
-                value={formatINR(
-                  bill.withGst
-                    ? bill.grandTotal
-                    : (bill.payableAmount ?? bill.grandTotal),
-                )}
-                strong
+            </h2>
+            <SumLine label="Subtotal" value={formatINR(bill.subtotal)} muted />
+            <SumLine label="GST" value={formatINR(bill.gstAmount)} muted />
+            <SumLine label="Gross total" value={formatINR(bill.grandTotal)} />
+            {!bill.withGst && bill.isExchange && bill.exchangeValue ? (
+              <SumLine
+                label="Less: exchange"
+                value={`−${formatINR(bill.exchangeValue)}`}
+                exchange
               />
-            </dl>
-          </div>
+            ) : null}
+            <div className="mt-2 flex items-baseline justify-between gap-3 border-t-2 border-[#0E1626] pt-3">
+              <span className="text-sm font-semibold text-[#0E1626]">
+                {bill.withGst ? "Invoice total" : "Payable by customer"}
+              </span>
+              <span className="font-display text-2xl font-bold tabular-nums tracking-[-0.01em] text-[#0E1626]">
+                {formatINR(payable)}
+              </span>
+            </div>
+            {exchangeRefund > 0 ? (
+              <div className="mt-3.5 rounded-xl border border-[#F5E0BC] bg-[#FEF3E2] px-3.5 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[12.5px] font-semibold text-[#B76E00]">
+                    Refund due to customer
+                  </span>
+                  <span className="font-display text-lg font-bold tabular-nums text-[#B76E00]">
+                    {formatINR(exchangeRefund)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11.5px] text-[#9A7A3E]">
+                  Exchange value was higher than the bill — this amount is owed
+                  back.
+                </p>
+              </div>
+            ) : null}
+          </section>
 
           {!bill.withGst ? (
-          <div className="glass-panel p-5 sm:p-6">
-            <h3 className="font-display text-lg font-semibold text-ink-900">
-              Payment split
-            </h3>
-            <dl className="mt-4 space-y-3 text-sm">
-              <Row label="Cash" value={formatINR(bill.cashAmount)} />
-              <Row label="Online" value={formatINR(bill.onlineAmount)} />
+            <section className="bd-card">
+              <h2 className="mb-2 font-display text-base font-semibold text-[#0E1626]">
+                Payment split
+              </h2>
+              <PayLine
+                color={PAY.cash}
+                label="Cash"
+                value={formatINR(bill.cashAmount)}
+                zero={!(bill.cashAmount > 0)}
+              />
+              <PayLine
+                color={PAY.online}
+                label="Online"
+                value={formatINR(bill.onlineAmount)}
+                zero={!(bill.onlineAmount > 0)}
+              />
               {bill.financeAmount2 && bill.financeAmount2 > 0 ? (
                 <>
-                  <Row
+                  <PayLine
+                    color={PAY.finance}
                     label={
                       bill.financeCompanyName
                         ? `Finance · ${bill.financeCompanyName}`
@@ -367,89 +480,101 @@ export function BillDetailPage() {
                     value={formatINR(
                       Math.max(bill.financeAmount - bill.financeAmount2, 0),
                     )}
+                    zero={
+                      !(
+                        Math.max(bill.financeAmount - bill.financeAmount2, 0) >
+                        0
+                      )
+                    }
                   />
-                  <Row
+                  <PayLine
+                    color={PAY.finance}
                     label={
                       bill.financeCompanyName2
                         ? `Finance · ${bill.financeCompanyName2}`
                         : "Finance 2"
                     }
                     value={formatINR(bill.financeAmount2)}
+                    zero={!(bill.financeAmount2 > 0)}
                   />
                 </>
               ) : (
-                <Row
+                <PayLine
+                  color={PAY.finance}
                   label={
                     bill.financeCompanyName
                       ? `Finance · ${bill.financeCompanyName}`
                       : "Finance"
                   }
                   value={formatINR(bill.financeAmount)}
+                  zero={!(bill.financeAmount > 0)}
                 />
               )}
-              {bill.financeAmount > 0 ? (
-                <Row
-                  label="Finance status"
-                  value={bill.financeReceived ? "Received" : "Pending"}
-                  accent={!bill.financeReceived}
-                />
-              ) : null}
-              <Row
+              <PayLine
+                color={PAY.due}
                 label="Due"
                 value={formatINR(bill.dueAmount)}
-                accent={bill.dueAmount > 0}
+                zero={!(bill.dueAmount > 0)}
+                last
               />
-            </dl>
-            {bill.financeAmount > 0 && !bill.financeReceived && isAdmin ? (
-              <button
-                type="button"
-                className="btn-primary mt-5 w-full"
-                disabled={markingFinance}
-                onClick={() => {
-                  setFinanceError(null);
-                  setShowFinanceConfirm(true);
-                }}
-              >
-                <Check className="h-4 w-4" />
-                {markingFinance ? "Saving…" : "Mark finance as received"}
-              </button>
-            ) : null}
-            {bill.financeAmount > 0 && bill.financeReceivedAt ? (
-              <p className="mt-3 text-xs font-medium text-tide-600">
-                <Check className="mr-1 inline h-3.5 w-3.5" />
-                Received{" "}
-                {format(new Date(bill.financeReceivedAt), "dd MMM yyyy")}
-              </p>
-            ) : null}
-            {financeError ? (
-              <p className="mt-3 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-ember-500">
-                {financeError}
-              </p>
-            ) : null}
-          </div>
+
+              {bill.financeAmount > 0 ? (
+                <p
+                  className={`mt-3 text-xs font-semibold ${
+                    bill.financeReceived ? "text-[#0E9E76]" : "text-[#B76E00]"
+                  }`}
+                >
+                  Finance status ·{" "}
+                  {bill.financeReceived ? "Received" : "Pending"}
+                  {bill.financeReceivedAt
+                    ? ` · ${format(new Date(bill.financeReceivedAt), "dd MMM yyyy")}`
+                    : ""}
+                </p>
+              ) : null}
+
+              {bill.financeAmount > 0 && !bill.financeReceived && isAdmin ? (
+                <button
+                  type="button"
+                  className="btn-primary mt-4 w-full !rounded-[11px]"
+                  disabled={markingFinance}
+                  onClick={() => {
+                    setFinanceError(null);
+                    setShowFinanceConfirm(true);
+                  }}
+                >
+                  <Check className="h-4 w-4" />
+                  {markingFinance ? "Saving…" : "Mark finance as received"}
+                </button>
+              ) : null}
+              {financeError ? (
+                <p className="mt-3 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-ember-500">
+                  {financeError}
+                </p>
+              ) : null}
+            </section>
           ) : (
-            <div className="glass-panel p-5 sm:p-6">
-              <h3 className="font-display text-lg font-semibold text-ink-900">
+            <section className="bd-card">
+              <h2 className="mb-2 font-display text-base font-semibold text-[#0E1626]">
                 Submission invoice
-              </h3>
-              <p className="mt-2 text-sm text-ink-500">
+              </h2>
+              <p className="text-sm text-[#7A8699]">
                 Payment modes are not recorded. This bill is excluded from shop
                 sales.
               </p>
-            </div>
+            </section>
           )}
 
           {!bill.withGst && hasDue ? (
-            <div className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-5 shadow-soft sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember-500">
+            <div className="relative overflow-hidden rounded-2xl border border-[#F5E0BC] bg-gradient-to-br from-[#FEF3E2] to-white p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#B76E00]">
                 {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
                   ? "Partial paid"
                   : "Pending due"}
               </p>
-              <p className="mt-2 font-display text-3xl font-semibold text-ember-500">
+              <p className="mt-2 font-display text-[22px] font-bold text-[#B76E00]">
                 {formatINR(bill.dueAmount)}
               </p>
-              <p className="mt-2 text-sm text-ink-500">
+              <p className="mt-1 text-[13px] text-[#9A7A3E]">
                 Next due ·{" "}
                 {bill.dueDate
                   ? format(new Date(bill.dueDate), "dd MMM yyyy")
@@ -458,13 +583,13 @@ export function BillDetailPage() {
               {(bill.duePayments?.length ?? 0) > 0 ? (
                 <DuePaymentHistory
                   payments={bill.duePayments!}
-                  borderClass="border-orange-100"
+                  borderClass="border-[#F5E0BC]"
                 />
               ) : null}
               {isAdmin ? (
                 <button
                   type="button"
-                  className="btn-primary mt-5 w-full"
+                  className="btn-primary mt-4 w-full !rounded-[11px]"
                   onClick={() => setShowSettle(true)}
                 >
                   <Check className="h-4 w-4" />
@@ -473,15 +598,23 @@ export function BillDetailPage() {
               ) : null}
             </div>
           ) : null}
-          {!bill.withGst && !hasDue ? (
-            <div className="rounded-3xl border border-tide-100 bg-gradient-to-br from-tide-100/70 to-white p-5 shadow-soft sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-tide-600">
+
+          {!bill.withGst && fullyPaid ? (
+            <div className="relative overflow-hidden rounded-2xl border border-[#CDEFE0] bg-gradient-to-br from-[#E7F8F1] to-[#EAF6FF] p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-[30px] -top-[30px] h-[120px] w-[120px] rounded-full bg-[radial-gradient(circle,rgba(18,184,134,.18),transparent_70%)]"
+              />
+              <p className="relative text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0E9E76]">
                 Status
               </p>
-              <p className="mt-2 font-display text-2xl font-semibold text-ink-900">
+              <p className="relative mt-2 flex items-center gap-2.5 font-display text-[22px] font-bold text-[#0E1626]">
+                <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[#12B886] text-white">
+                  <Check className="h-[15px] w-[15px]" strokeWidth={2.6} />
+                </span>
                 Fully paid
               </p>
-              <p className="mt-2 text-sm text-ink-500">
+              <p className="relative mt-1 text-[13px] text-[#0E9E76]/85">
                 {bill.dueSettledAt
                   ? `Settled on ${format(new Date(bill.dueSettledAt), "dd MMM yyyy")}`
                   : "No pending amount on this invoice."}
@@ -489,7 +622,7 @@ export function BillDetailPage() {
               {(bill.duePayments?.length ?? 0) > 0 ? (
                 <DuePaymentHistory
                   payments={bill.duePayments!}
-                  borderClass="border-tide-100"
+                  borderClass="border-[#CDEFE0]"
                 />
               ) : null}
             </div>
@@ -617,6 +750,107 @@ export function BillDetailPage() {
   );
 }
 
+function Kv({
+  label,
+  value,
+  highlight,
+  muted,
+  full,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  muted?: boolean;
+  full?: boolean;
+}) {
+  return (
+    <div className={full ? "col-span-2" : undefined}>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7A8699]">
+        {label}
+      </p>
+      <p
+        className={
+          highlight
+            ? "font-display text-[15px] font-bold tabular-nums text-[#0E9E76]"
+            : muted
+              ? "text-sm tabular-nums text-[#7A8699]"
+              : "text-sm tabular-nums text-[#0E1626]"
+        }
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SumLine({
+  label,
+  value,
+  muted,
+  exchange,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  exchange?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 text-[13.5px] text-[#3A4658]">
+      <span>{label}</span>
+      <span
+        className={
+          exchange
+            ? "font-semibold tabular-nums text-[#0E9E76]"
+            : muted
+              ? "font-medium tabular-nums text-[#7A8699]"
+              : "font-medium tabular-nums text-[#0E1626]"
+        }
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function PayLine({
+  color,
+  label,
+  value,
+  zero,
+  last,
+}: {
+  color: string;
+  label: string;
+  value: string;
+  zero?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 py-2 text-[13.5px] text-[#3A4658] ${
+        last ? "" : "border-b border-[#E7EAF0]"
+      }`}
+    >
+      <span className="inline-flex min-w-0 items-center gap-2.5">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+          style={{ background: color }}
+        />
+        <span className="truncate">{label}</span>
+      </span>
+      <span
+        className={
+          zero
+            ? "font-medium tabular-nums text-[#7A8699]"
+            : "font-semibold tabular-nums text-[#0E1626]"
+        }
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function DuePaymentHistory({
   payments,
   borderClass,
@@ -625,66 +859,28 @@ function DuePaymentHistory({
   borderClass: string;
 }) {
   return (
-    <div className={`mt-4 space-y-2 border-t pt-3 ${borderClass}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+    <div className={`relative mt-4 space-y-2 border-t pt-3 ${borderClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7A8699]">
         Payment history
       </p>
       <ul className="space-y-2">
         {payments.map((payment) => (
           <li key={payment.id} className="text-sm">
-            <p className="font-medium text-ink-800">
+            <p className="font-medium text-[#0E1626]">
               {formatINR(payment.amount)}
-              <span className="ml-1.5 text-xs font-normal text-ink-400">
+              <span className="ml-1.5 text-xs font-normal text-[#7A8699]">
                 {payment.kind === "full" ? "Full" : "Partial"}
                 {payment.method && payment.method !== "na"
                   ? ` · ${payment.method === "cash" ? "Cash" : "Online"}`
                   : ""}
               </span>
             </p>
-            <p className="text-xs text-ink-500">
+            <p className="text-xs text-[#7A8699]">
               {format(new Date(payment.paidAt), "dd MMM yyyy")}
             </p>
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-[0.14em] text-ink-500">{label}</dt>
-      <dd className="mt-1 font-medium text-ink-800">{value}</dd>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  strong,
-  accent,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-ink-500">{label}</dt>
-      <dd
-        className={
-          strong
-            ? "font-display text-lg font-semibold text-ink-900"
-            : accent
-              ? "font-semibold text-ember-500"
-              : "font-medium text-ink-800"
-        }
-      >
-        {value}
-      </dd>
     </div>
   );
 }

@@ -230,18 +230,22 @@ model StockItem {
 
 /// Party master — Tally-style supplier ledger.
 model Supplier {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  phone     String?
-  address   String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  purchases Purchase[]
-  payments  SupplierPayment[]
+  id         String   @id @default(cuid())
+  name       String   @unique
+  phone      String?
+  address    String?
+  notes      String?
+  /// True when this party came from a customer phone exchange (not a wholesale supplier).
+  isExchange Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  purchases  Purchase[]
+  payments   SupplierPayment[]
   stockItems StockItem[]
 
   @@index([name])
+  @@index([isExchange])
+  @@index([phone])
 }
 
 /// Purchase voucher: mobiles bought from one supplier in one entry.

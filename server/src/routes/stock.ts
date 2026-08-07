@@ -37,7 +37,7 @@ function mapStockItem(item: {
   status: string;
   createdAt: Date;
   updatedAt: Date;
-  supplier?: { id: string; name: string } | null;
+  supplier?: { id: string; name: string; isExchange?: boolean } | null;
 }) {
   const fromJson = parseSuppliers(item.suppliers);
   const supplierName = item.supplier?.name;
@@ -45,6 +45,7 @@ function mapStockItem(item: {
     ...item,
     supplierId: item.supplierId || null,
     supplierName: supplierName || fromJson[0] || null,
+    supplierIsExchange: Boolean(item.supplier?.isExchange),
     suppliers: supplierName
       ? [supplierName]
       : fromJson.length
@@ -121,7 +122,7 @@ stockRouter.get("/", async (req, res, next) => {
             : { status: "AVAILABLE" },
         ],
       },
-      include: { supplier: { select: { id: true, name: true } } },
+      include: { supplier: { select: { id: true, name: true, isExchange: true } } },
       orderBy: [{ createdAt: "desc" }, { mobileName: "asc" }],
     });
 
@@ -262,7 +263,7 @@ stockRouter.post("/", async (req, res, next) => {
           supplierId: supplier!.id,
           status: "AVAILABLE",
         },
-        include: { supplier: { select: { id: true, name: true } } },
+        include: { supplier: { select: { id: true, name: true, isExchange: true } } },
       });
 
       await tx.purchaseItem.create({

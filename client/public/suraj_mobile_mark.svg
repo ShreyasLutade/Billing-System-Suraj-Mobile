@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img">
+  <title>Suraj Mobile</title>
+  <!-- Phone outline — stroke via currentColor; no background fill -->
+  <rect
+    x="12"
+    y="4"
+    width="24"
+    height="40"
+    rx="6"
+    stroke="currentColor"
+    stroke-width="2.6"
+  />
+  <line
+    x1="20"
+    y1="8.5"
+    x2="28"
+    y2="8.5"
+    stroke="currentColor"
+    stroke-width="2.2"
+    stroke-linecap="round"
+  />
+  <!-- Sunrise -->
+  <path d="M17 31a7 7 0 0 1 14 0Z" fill="#F79A2B" />
+  <circle cx="24" cy="30.5" r="4.3" fill="#FFD24A" />
+  <g stroke="#FFD24A" stroke-width="1.85" stroke-linecap="round">
+    <line x1="24" y1="18.5" x2="24" y2="14.5" />
+    <line x1="17.2" y1="21.2" x2="14.6" y2="18.6" />
+    <line x1="30.8" y1="21.2" x2="33.4" y2="18.6" />
+    <line x1="15.2" y1="28.5" x2="12.4" y2="28.5" />
+    <line x1="32.8" y1="28.5" x2="35.6" y2="28.5" />
+    <line x1="18.2" y1="24.2" x2="15.8" y2="21.8" />
+    <line x1="29.8" y1="24.2" x2="32.2" y2="21.8" />
+  </g>
+  <path
+    d="M15.5 34.2c2.6-1.4 5.4-2.1 8.5-2.1s5.9.7 8.5 2.1"
+    stroke="#F79A2B"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+</svg>

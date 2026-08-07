@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
+import clsx from "clsx";
 import {
   ArrowLeft,
   Check,
   Download,
+  Info,
+  ListOrdered,
   Plus,
+  RefreshCw,
   Share2,
   Trash2,
-  Wallet,
+  UserRound,
 } from "lucide-react";
 import { AddMobileModal } from "../components/AddMobileModal";
 import { BillChangeConfirmModal } from "../components/BillChangeConfirmModal";
@@ -16,6 +21,7 @@ import {
   SaveBillConfirmModal,
   type SaveBillSummary,
 } from "../components/SaveBillConfirmModal";
+import { MobileNameSearch } from "../components/MobileNameSearch";
 import { PageHeader, LoadingBlock } from "../components/ui";
 import { FieldPicker } from "../components/FieldPicker";
 import {
@@ -29,6 +35,7 @@ import {
   type DiffLine,
 } from "../lib/billDiff";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { formatCapacityLabel } from "../lib/phoneModelSearch";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type {
   Bill,
@@ -36,6 +43,7 @@ import type {
   CreateBillPayload,
   FinanceCompany,
   MobileCatalog,
+  PhoneModel,
   StockItem,
 } from "../types";
 
@@ -115,6 +123,91 @@ function lineAmount(item: DraftItem) {
   return lineBreakdown(item).amount;
 }
 
+/** True when an item has enough info to allow adding another row. */
+function isDraftItemReady(item: DraftItem, withGst: boolean) {
+  if (!item.quantity || item.quantity < 1) return false;
+  if (!item.rate || item.rate <= 0) return false;
+  if (withGst && (!item.gstPercent || item.gstPercent <= 0)) return false;
+
+  if (item.catalogMode === "other") {
+    return Boolean(item.productName.trim());
+  }
+
+  if (withGst) {
+    return Boolean(
+      item.mobileCatalogId ||
+        (item.productName.trim() &&
+          item.platform &&
+          item.color?.trim() &&
+          item.storage?.trim() &&
+          (item.platform !== "ANDROID" || Boolean(item.ram?.trim()))),
+    );
+  }
+
+  return Boolean(
+    item.stockItemId &&
+      item.productName.trim() &&
+      item.platform &&
+      item.color?.trim() &&
+      item.storage?.trim() &&
+      (item.platform !== "ANDROID" || Boolean(item.ram?.trim())),
+  );
+}
+
+function firstIncompleteDraftFieldId(item: DraftItem, withGst: boolean) {
+  if (item.catalogMode === "other") {
+    if (!item.productName.trim()) return `productName-${item.key}`;
+  } else if (withGst) {
+    const phoneOk = Boolean(
+      item.mobileCatalogId ||
+        (item.productName.trim() &&
+          item.platform &&
+          item.color?.trim() &&
+          item.storage?.trim() &&
+          (item.platform !== "ANDROID" || Boolean(item.ram?.trim()))),
+    );
+    if (!phoneOk) return `phone-${item.key}`;
+  } else if (!item.stockItemId) {
+    return `phone-${item.key}`;
+  }
+
+  if (!item.quantity || item.quantity < 1) return `qty-${item.key}`;
+  if (!item.rate || item.rate <= 0) return `rate-${item.key}`;
+  if (withGst && (!item.gstPercent || item.gstPercent <= 0)) {
+    return `gstPercent-${item.key}`;
+  }
+  return `item-${item.key}`;
+}
+
+function incompleteDraftHint(item: DraftItem, withGst: boolean) {
+  const fieldId = firstIncompleteDraftFieldId(item, withGst);
+  if (fieldId.startsWith("phone-")) {
+    return withGst
+      ? "Select a phone (or Other product) first"
+      : "Select a phone from stock first";
+  }
+  if (fieldId.startsWith("productName-")) return "Enter the product name";
+  if (fieldId.startsWith("qty-")) return "Enter quantity";
+  if (fieldId.startsWith("rate-")) return "Enter the rate";
+  if (fieldId.startsWith("gstPercent-")) return "Enter GST %";
+  return "Complete this item first";
+}
+
+function focusDraftItemField(item: DraftItem, withGst: boolean) {
+  const id = firstIncompleteDraftFieldId(item, withGst);
+  const el = document.getElementById(id);
+  if (!el) return id;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const target =
+    el instanceof HTMLElement &&
+    (el.matches("input,button,textarea,select")
+      ? el
+      : el.querySelector<HTMLElement>("button, input, textarea, select"));
+  target?.focus();
+  if (target instanceof HTMLInputElement) target.select?.();
+  return id;
+}
+
 function todayDateInput() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -174,6 +267,7 @@ export function CreateBillPage() {
   const [exchangeImei1, setExchangeImei1] = useState("");
   const [exchangeValue, setExchangeValue] = useState<number | "">("");
   const [exchangeNotes, setExchangeNotes] = useState("");
+  const [exchangePayConfirmed, setExchangePayConfirmed] = useState(false);
 
   function clearExchangeFields() {
     setExchangePlatform("IOS");
@@ -184,6 +278,7 @@ export function CreateBillPage() {
     setExchangeImei1("");
     setExchangeValue("");
     setExchangeNotes("");
+    setExchangePayConfirmed(false);
   }
   const [useCash, setUseCash] = useState(false);
   const [useOnline, setUseOnline] = useState(false);
@@ -202,11 +297,16 @@ export function CreateBillPage() {
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldHint, setFieldHint] = useState<{
+    fieldId: string;
+    message: string;
+  } | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const [successInvoice, setSuccessInvoice] = useState<string | null>(null);
   const [successPayment, setSuccessPayment] = useState<{
     withGst: boolean;
     payableAmount: number;
+    payCustomerAmount: number;
     cashAmount: number;
     onlineAmount: number;
     financeAmount: number;
@@ -218,11 +318,15 @@ export function CreateBillPage() {
   const [shareError, setShareError] = useState<string | null>(null);
 
   function captureSuccessPayment(bill: Bill) {
+    const exchangeVal = bill.isExchange ? Number(bill.exchangeValue || 0) : 0;
+    const grand = Number(bill.grandTotal || 0);
+    const payCustomerAmount = round2(Math.max(exchangeVal - grand, 0));
     setSuccessPayment({
       withGst: Boolean(bill.withGst),
       payableAmount: bill.withGst
         ? bill.grandTotal
         : (bill.payableAmount ?? bill.grandTotal),
+      payCustomerAmount,
       cashAmount: bill.cashAmount || 0,
       onlineAmount: bill.onlineAmount || 0,
       financeAmount: (bill.financeAmount || 0) + (bill.financeAmount2 || 0),
@@ -274,6 +378,7 @@ export function CreateBillPage() {
     setDueDate("");
     setSaving(false);
     setError(null);
+    setFieldHint(null);
     setSuccessId(null);
     setSuccessInvoice(null);
     setSuccessPayment(null);
@@ -330,6 +435,11 @@ export function CreateBillPage() {
     setExchangeImei1(bill.exchangeImei1 || "");
     setExchangeValue(bill.exchangeValue ?? "");
     setExchangeNotes(bill.exchangeNotes || "");
+    setExchangePayConfirmed(
+      Boolean(
+        bill.isExchange && (bill.exchangeValue || 0) > (bill.grandTotal || 0),
+      ),
+    );
     setUseCash(bill.cashAmount > 0);
     setUseOnline(bill.onlineAmount > 0);
     setUseFinance(bill.financeAmount > 0);
@@ -381,6 +491,7 @@ export function CreateBillPage() {
     const exchangeDeduction =
       isExchange && exchangeValue !== "" ? round2(Number(exchangeValue) || 0) : 0;
     const payableAmount = round2(Math.max(grandTotal - exchangeDeduction, 0));
+    const exchangeRefund = round2(Math.max(exchangeDeduction - grandTotal, 0));
     const cash = useCash ? cashAmount : 0;
     const online = useOnline ? onlineAmount : 0;
     const finance = useFinance
@@ -393,6 +504,7 @@ export function CreateBillPage() {
       gstAmount,
       grandTotal,
       exchangeDeduction,
+      exchangeRefund,
       payableAmount,
       paid,
       dueAmount,
@@ -501,6 +613,29 @@ export function CreateBillPage() {
   useEffect(() => {
     if (!hasDue || totals.dueAmount <= 0) setDueDate("");
   }, [hasDue, totals.dueAmount]);
+
+  useEffect(() => {
+    if (totals.exchangeRefund > 0) {
+      setUseCash(false);
+      setUseOnline(false);
+      setUseFinance(false);
+      setHasDue(false);
+      setCashAmount(0);
+      setOnlineAmount(0);
+      setFinanceEntries([blankFinanceEntry()]);
+      return;
+    }
+    setExchangePayConfirmed(false);
+    setFieldHint((current) =>
+      current?.fieldId === "exchange-pay-confirm-btn" ? null : current,
+    );
+  }, [totals.exchangeRefund]);
+
+  useEffect(() => {
+    if (!fieldHint) return;
+    const timer = window.setTimeout(() => setFieldHint(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [fieldHint]);
 
   // Autofill name/address from latest bill when phone is complete (indexed lookup).
   useEffect(() => {
@@ -731,6 +866,7 @@ export function CreateBillPage() {
   }
 
   function updateItem(key: string, patch: Partial<DraftItem>) {
+    setFieldHint(null);
     setItems((prev) =>
       prev.map((item) => (item.key === key ? { ...item, ...patch } : item)),
     );
@@ -1052,6 +1188,20 @@ export function CreateBillPage() {
       }
     }
 
+    if (!withGst && totals.exchangeRefund > 0 && !exchangePayConfirmed) {
+      setError(null);
+      const btn = document.getElementById("exchange-pay-confirm-btn");
+      btn?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        btn?.focus();
+      }, 280);
+      setFieldHint({
+        fieldId: "exchange-pay-confirm-btn",
+        message: "Confirm here first — exchange value is more, so you need to pay the customer.",
+      });
+      return;
+    }
+
     if (!withGst && !hasDue && totals.dueAmount > 0) {
       setError(
         `Payment is short by ${formatINR(totals.dueAmount)}. Complete the payment split or turn on "This bill has due".`,
@@ -1063,6 +1213,14 @@ export function CreateBillPage() {
     if (!withGst && hasDue && totals.dueAmount > 0 && !dueDate.trim()) {
       setError("Select expected collection date for the pending due amount");
       document.getElementById("dueDate")?.focus();
+      return;
+    }
+
+    if (!withGst && isExchange && !exchangeImei1.trim()) {
+      setError("Enter exchange phone IMEI");
+      const field = document.getElementById("exchangeImei1");
+      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      field?.focus();
       return;
     }
 
@@ -1095,6 +1253,7 @@ export function CreateBillPage() {
         customerPhone: payload.customerPhone,
         itemCount: payload.items.length,
         payableAmount: totals.payableAmount,
+        payCustomerAmount: totals.exchangeRefund,
         cashAmount: payload.useCash ? payload.cashAmount : 0,
         onlineAmount: payload.useOnline ? payload.onlineAmount : 0,
         financeAmount: payload.useFinance
@@ -1238,17 +1397,30 @@ export function CreateBillPage() {
         ) : null}
         {successPayment ? (
           <div className="mx-auto mt-5 w-full max-w-sm rounded-2xl border border-ink-100 bg-ink-50/70 px-4 py-4 text-left">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-ink-500">
-                {successPayment.withGst ? "Invoice total" : "Payable"}
-              </span>
-              <span className="font-display text-xl font-semibold text-ink-900">
-                {formatINR(successPayment.payableAmount)}
-              </span>
-            </div>
+            {successPayment.payCustomerAmount > 0 && !successPayment.withGst ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-ink-500">Pay customer</span>
+                <span className="font-display text-xl font-semibold text-ember-500">
+                  {formatINR(successPayment.payCustomerAmount)}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-ink-500">
+                  {successPayment.withGst ? "Invoice total" : "Payable"}
+                </span>
+                <span className="font-display text-xl font-semibold text-ink-900">
+                  {formatINR(successPayment.payableAmount)}
+                </span>
+              </div>
+            )}
             {successPayment.withGst ? (
               <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-500">
                 Submission invoice — not recorded in shop sales.
+              </p>
+            ) : successPayment.payCustomerAmount > 0 ? (
+              <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-500">
+                Exchange value exceeded the bill. No customer payment due.
               </p>
             ) : (
               <dl className="mt-3 space-y-2 border-t border-ink-100 pt-3 text-sm">
@@ -1368,14 +1540,22 @@ export function CreateBillPage() {
         }
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <label className="glass-panel flex cursor-pointer items-start gap-3 p-5 sm:p-6">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-ink-300 text-tide-600 focus:ring-tide-500"
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex items-center justify-between gap-4 rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft">
+          <div className="min-w-0">
+            <p className="font-display text-base font-semibold text-ink-900">
+              Generate GST bill
+            </p>
+            <p className="mt-1 text-sm text-ink-500">
+              {withGst
+                ? "GST tax invoice for submission only — payment split is hidden and not recorded in sales."
+                : "Default shop bill with payment modes. Turn on for a GST tax invoice."}
+            </p>
+          </div>
+          <Switch
             checked={withGst}
-            onChange={(e) => {
-              const on = e.target.checked;
+            aria-label="Generate GST bill"
+            onChange={(on) => {
               setWithGst(on);
               if (on) {
                 setUseCash(false);
@@ -1418,175 +1598,169 @@ export function CreateBillPage() {
               }
             }}
           />
-          <span className="text-left">
-            <span className="block font-display text-lg font-semibold text-ink-900">
-              Generate GST bill
-            </span>
-            <span className="mt-1 block text-sm text-ink-500">
-              {withGst
-                ? "GST tax invoice for submission only — payment split is hidden and not recorded in sales."
-                : "Default shop bill with payment modes. Turn on for a GST tax invoice."}
-            </span>
-          </span>
-        </label>
+        </div>
 
-        <section className="glass-panel p-5 sm:p-6">
-          <h2 className="font-display text-lg font-semibold text-ink-900">
-            Customer
-          </h2>
-          <div className="mt-4 space-y-4">
-            <label
-              htmlFor="useCustomBillDate"
-              className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-ink-100 bg-ink-50/70 p-4"
-            >
-              <span>
-                <span className="block text-sm font-semibold text-ink-800">
-                  Use custom bill date
-                </span>
-                <span className="mt-1 block text-xs text-ink-500">
-                  Turn on to enter an older bill date instead of today.
-                </span>
-              </span>
-              <input
-                id="useCustomBillDate"
-                type="checkbox"
-                checked={useCustomBillDate}
-                onChange={(event) => {
-                  const enabled = event.target.checked;
-                  setUseCustomBillDate(enabled);
-                  if (enabled && !customBillDate) {
-                    setCustomBillDate(todayDateInput());
-                  }
-                }}
-                className="h-5 w-5 shrink-0 rounded border-ink-300 text-tide-600 focus:ring-tide-300"
-              />
-            </label>
-
-            {useCustomBillDate ? (
-              <div>
-                <label className="label required" htmlFor="customBillDate">
-                  Bill date
-                </label>
-                <input
-                  id="customBillDate"
-                  className="field"
-                  type="date"
-                  value={customBillDate}
-                  max={todayDateInput()}
-                  onChange={(event) => setCustomBillDate(event.target.value)}
-                  required
-                />
-              </div>
-            ) : null}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="label required" htmlFor="customerPhone">
-                  Phone
-                </label>
-                <input
-                  id="customerPhone"
-                  className={`field ${phoneError ? "border-ember-400 focus:border-ember-500 focus:ring-ember-200" : ""}`}
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={customerPhone}
-                  onChange={(e) => {
-                    const next = e.target.value.replace(/\D/g, "").slice(0, 10);
-                    setCustomerPhone(next);
-                    if (phoneError && next.length === 10) setPhoneError(null);
-                  }}
-                  onBlur={() => setPhoneError(validatePhone(customerPhone))}
-                  placeholder="10-digit mobile"
-                  aria-invalid={Boolean(phoneError)}
-                  aria-describedby={
-                    phoneError ? "customerPhone-error" : undefined
-                  }
-                  required
-                  autoComplete="tel"
-                />
-                {phoneError ? (
-                  <p
-                    id="customerPhone-error"
-                    className="mt-1.5 text-xs font-medium text-ember-500"
-                    role="alert"
+        <div className="space-y-4">
+            <section className="rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-tide-100 text-tide-600">
+                    <UserRound className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="font-display text-base font-semibold text-ink-900">
+                      Customer
+                    </h2>
+                    <p className="mt-0.5 text-xs text-ink-500">
+                      Phone lookup fills name and address automatically.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <label
+                    htmlFor="useCustomBillDate"
+                    className="text-xs font-medium text-ink-600"
                   >
-                    {phoneError}
-                  </p>
+                    Custom date
+                  </label>
+                  <Switch
+                    id="useCustomBillDate"
+                    checked={useCustomBillDate}
+                    aria-label="Use custom bill date"
+                    onChange={(enabled) => {
+                      setUseCustomBillDate(enabled);
+                      if (enabled && !customBillDate) {
+                        setCustomBillDate(todayDateInput());
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {useCustomBillDate ? (
+                  <div>
+                    <label className="label required" htmlFor="customBillDate">
+                      Bill date
+                    </label>
+                    <input
+                      id="customBillDate"
+                      className="field"
+                      type="date"
+                      value={customBillDate}
+                      max={todayDateInput()}
+                      onChange={(event) => setCustomBillDate(event.target.value)}
+                      required
+                    />
+                  </div>
                 ) : null}
-                {fetchingCustomer ? (
-                  <p
-                    className="mt-1.5 text-xs font-medium text-tide-600"
-                    aria-live="polite"
-                  >
-                    Fetching customer details…
-                  </p>
-                ) : null}
-              </div>
-              <div className="sm:col-span-2">
-                <label className="label required" htmlFor="customerName">
-                  Name
-                </label>
-                <input
-                  id="customerName"
-                  className="field"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer full name"
-                  required
-                  autoComplete="name"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="label" htmlFor="customerAddress">
-                  Address (optional)
-                </label>
-                <input
-                  id="customerAddress"
-                  className="field"
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  placeholder="Village / city"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-lg font-semibold text-ink-900">
-              Products
-            </h2>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setItems((prev) => [...prev, blankItem()])}
-            >
-              <Plus className="h-4 w-4" />
-              Add item
-            </button>
-          </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="label required" htmlFor="customerPhone">
+                      Phone
+                    </label>
+                    <input
+                      id="customerPhone"
+                      className={`field ${phoneError ? "border-ember-400 focus:border-ember-500 focus:ring-ember-200" : ""}`}
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={customerPhone}
+                      onChange={(e) => {
+                        const next = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        setCustomerPhone(next);
+                        if (phoneError && next.length === 10) setPhoneError(null);
+                      }}
+                      onBlur={() => setPhoneError(validatePhone(customerPhone))}
+                      placeholder="10-digit mobile"
+                      aria-invalid={Boolean(phoneError)}
+                      aria-describedby={
+                        phoneError ? "customerPhone-error" : undefined
+                      }
+                      required
+                      autoComplete="tel"
+                    />
+                    {phoneError ? (
+                      <p
+                        id="customerPhone-error"
+                        className="mt-1.5 text-xs font-medium text-ember-500"
+                        role="alert"
+                      >
+                        {phoneError}
+                      </p>
+                    ) : null}
+                    {fetchingCustomer ? (
+                      <p
+                        className="mt-1.5 text-xs font-medium text-tide-600"
+                        aria-live="polite"
+                      >
+                        Fetching customer details…
+                      </p>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label className="label required" htmlFor="customerName">
+                      Name
+                    </label>
+                    <input
+                      id="customerName"
+                      className="field"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Customer full name"
+                      required
+                      autoComplete="name"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label" htmlFor="customerAddress">
+                      Address (optional)
+                    </label>
+                    <input
+                      id="customerAddress"
+                      className="field"
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      placeholder="Village / city"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          {withGst ? (
-            <p className="text-sm text-ink-500">
-              Pick a saved phone or add a new one. GST lines are not taken from
-              stock and do not change inventory.
-            </p>
-          ) : null}
+            <section className="rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-tide-100 text-tide-600">
+                  <ListOrdered className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="font-display text-base font-semibold text-ink-900">
+                    Products
+                  </h2>
+                  {withGst ? (
+                    <p className="mt-0.5 text-xs text-ink-500">
+                      Pick a saved phone or add a new one. GST lines are not taken from
+                      stock and do not change inventory.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
 
-          <AnimatePresence initial={false}>
-            {items.map((item, index) => (
-              <motion.div
-                key={item.key}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, height: 0 }}
-                className="glass-panel p-5 sm:p-6"
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-ink-700">
-                    Item {index + 1}
-                  </p>
+              <div className="space-y-3">
+                <AnimatePresence initial={false}>
+                  {items.map((item, index) => (
+                    <motion.div
+                      id={`item-${item.key}`}
+                      key={item.key}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="rounded-xl border border-ink-100 bg-ink-50/30 p-4"
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-2">
+                        <span className="inline-flex rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 ring-1 ring-ink-100">
+                          Item {index + 1}
+                        </span>
                   {items.length > 1 ? (
                     <button
                       type="button"
@@ -1616,6 +1790,7 @@ export function CreateBillPage() {
                             Add new mobile
                           </button>
                         </div>
+                        <div id={`phone-${item.key}`}>
                         <FieldPicker
                           value={
                             item.catalogMode === "other"
@@ -1644,12 +1819,14 @@ export function CreateBillPage() {
                           conditionFilters
                           options={catalogMobileOptions}
                         />
+                        </div>
                       </div>
 
                       {item.catalogMode === "other" ? (
                         <div className="sm:col-span-2 lg:col-span-4">
-                          <label className="label required">Product name</label>
+                          <label className="label required" htmlFor={`productName-${item.key}`}>Product name</label>
                           <input
+                            id={`productName-${item.key}`}
                             className="field"
                             value={item.productName}
                             onChange={(event) =>
@@ -1667,6 +1844,7 @@ export function CreateBillPage() {
                     <>
                       <div className="sm:col-span-2 lg:col-span-4">
                         <label className="label required">Phone</label>
+                        <div id={`phone-${item.key}`}>
                         <FieldPicker
                           value={
                             item.catalogMode === "other"
@@ -1685,12 +1863,14 @@ export function CreateBillPage() {
                           conditionFilters
                           options={stockOptionsForItem(item.key)}
                         />
+                        </div>
                       </div>
 
                       {item.catalogMode === "other" ? (
                         <div className="sm:col-span-2 lg:col-span-4">
-                          <label className="label required">Product name</label>
+                          <label className="label required" htmlFor={`productName-${item.key}`}>Product name</label>
                           <input
+                            id={`productName-${item.key}`}
                             className="field"
                             value={item.productName}
                             onChange={(event) =>
@@ -1706,8 +1886,9 @@ export function CreateBillPage() {
                     </>
                   )}
                   <div>
-                    <label className="label required">Qty</label>
+                    <label className="label required" htmlFor={`qty-${item.key}`}>Qty</label>
                     <input
+                      id={`qty-${item.key}`}
                       className="field"
                       type="number"
                       min={1}
@@ -1721,8 +1902,9 @@ export function CreateBillPage() {
                     />
                   </div>
                   <div>
-                    <label className="label required">Rate (₹)</label>
+                    <label className="label required" htmlFor={`rate-${item.key}`}>Rate (₹)</label>
                     <input
+                      id={`rate-${item.key}`}
                       className="field"
                       type="number"
                       min={0}
@@ -1811,556 +1993,790 @@ export function CreateBillPage() {
                     />
                   </div>
                 </div>
-                <p className="mt-4 text-right text-sm font-semibold text-ink-800">
+                <p className="mt-4 border-t border-ink-100/80 pt-3 text-right text-sm font-semibold text-ink-800">
                   Line total · {formatINR(lineAmount(item))}
                 </p>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-
-          {!withGst ? (
-          <div className="glass-panel p-5 sm:p-6">
-            <label className="flex cursor-pointer items-center justify-between gap-4">
-              <div>
-                <p className="font-display text-lg font-semibold text-ink-900">
-                  Mobile exchange?
-                </p>
-                <p className="mt-1 text-sm text-ink-500">
-                  Add the old phone like a catalog mobile (saved as Old). Exchange value is deducted from payable.
-                </p>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
-              <input
-                type="checkbox"
-                checked={isExchange}
-                onChange={(e) => {
-                  setIsExchange(e.target.checked);
-                  if (!e.target.checked) clearExchangeFields();
+
+              <button
+                type="button"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-200 bg-white/60 px-4 py-3 text-sm font-semibold text-ink-600 transition hover:border-tide-300 hover:bg-tide-50/40 hover:text-tide-700"
+                onClick={() => {
+                  const last = items[items.length - 1];
+                  if (last && !isDraftItemReady(last, withGst)) {
+                    const fieldId = focusDraftItemField(last, withGst);
+                    setFieldHint({
+                      fieldId,
+                      message: incompleteDraftHint(last, withGst),
+                    });
+                    return;
+                  }
+                  setFieldHint(null);
+                  setItems((prev) => [...prev, blankItem()]);
                 }}
-                className="h-6 w-6 shrink-0 rounded border-ink-300 text-tide-600 focus:ring-tide-400"
-              />
-            </label>
+              >
+                <Plus className="h-4 w-4" />
+                Add another item
+              </button>
+            </section>
 
-            <AnimatePresence>
-              {isExchange ? (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-5 space-y-4 border-t border-ink-100 pt-5">
-                    <p className="rounded-2xl bg-tide-100/60 px-4 py-3 text-xs text-tide-600">
-                      Entered as a second-hand (Old) mobile in the catalog so it can be sold later.
-                      Payable = bill total − exchange value.
+            {!withGst ? (
+              <section className="overflow-hidden rounded-[18px] border border-ink-100/80 bg-white shadow-soft">
+                <div className="flex items-center gap-3.5 px-5 py-[18px] sm:px-[22px]">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E7F8F1] text-[#0E9E76]">
+                    <RefreshCw className="h-5 w-5" strokeWidth={2} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-display text-[17px] font-semibold text-ink-900">
+                      Mobile exchange
+                    </h2>
+                    <p className="mt-0.5 text-[12.5px] text-ink-300">
+                      Old phone enters second-hand stock; its value is deducted
+                      from payable.
                     </p>
-
-                    <div>
-                      <span className="label required">Operating system</span>
-                      <div className="grid grid-cols-2 gap-1 rounded-2xl border border-ink-100 bg-ink-50/70 p-1">
-                        {(["IOS", "ANDROID"] as const).map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className={
-                              exchangePlatform === option
-                                ? "rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
-                                : "rounded-xl px-4 py-2.5 text-sm font-semibold text-ink-500 transition hover:bg-white"
-                            }
-                            aria-pressed={exchangePlatform === option}
-                            onClick={() => {
-                              setExchangePlatform(option);
-                              if (option === "IOS") setExchangeRam("");
-                            }}
-                          >
-                            {option === "IOS" ? "iOS" : "Android"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="label required" htmlFor="exchangeModel">
-                        Phone name
-                      </label>
-                      <input
-                        id="exchangeModel"
-                        className="field"
-                        value={exchangeModel}
-                        onChange={(e) => setExchangeModel(e.target.value)}
-                        placeholder={
-                          exchangePlatform === "IOS"
-                            ? "e.g. iPhone 12"
-                            : "e.g. Samsung S21"
-                        }
-                        required={isExchange}
-                      />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="label required" htmlFor="exchangeColor">
-                          Color
-                        </label>
-                        <input
-                          id="exchangeColor"
-                          className="field"
-                          value={exchangeColor}
-                          onChange={(e) => setExchangeColor(e.target.value)}
-                          placeholder="e.g. Black"
-                          required={isExchange}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="label required"
-                          htmlFor="exchangeStorage"
-                        >
-                          Storage
-                        </label>
-                        <input
-                          id="exchangeStorage"
-                          className="field"
-                          value={exchangeStorage}
-                          onChange={(e) => setExchangeStorage(e.target.value)}
-                          placeholder="e.g. 128 GB"
-                          required={isExchange}
-                        />
-                      </div>
-                    </div>
-
-                    {exchangePlatform === "ANDROID" ? (
-                      <div>
-                        <label className="label required" htmlFor="exchangeRam">
-                          RAM
-                        </label>
-                        <input
-                          id="exchangeRam"
-                          className="field"
-                          value={exchangeRam}
-                          onChange={(e) => setExchangeRam(e.target.value)}
-                          placeholder="e.g. 8 GB"
-                          required={isExchange}
-                        />
-                      </div>
-                    ) : null}
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="label" htmlFor="exchangeImei1">
-                          IMEI
-                        </label>
-                        <input
-                          id="exchangeImei1"
-                          className="field font-mono"
-                          value={exchangeImei1}
-                          onChange={(e) => setExchangeImei1(e.target.value)}
-                          placeholder="Optional"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="label required"
-                          htmlFor="exchangeValue"
-                        >
-                          Exchange value (₹)
-                        </label>
-                        <input
-                          id="exchangeValue"
-                          className="field"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={exchangeValue}
-                          onChange={(e) =>
-                            setExchangeValue(
-                              e.target.value === ""
-                                ? ""
-                                : Number(e.target.value) || 0,
-                            )
-                          }
-                          placeholder="Amount to deduct"
-                          required={isExchange}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="label" htmlFor="exchangeNotes">
-                        Notes
-                      </label>
-                      <textarea
-                        id="exchangeNotes"
-                        className="field min-h-[72px] resize-y"
-                        value={exchangeNotes}
-                        onChange={(e) => setExchangeNotes(e.target.value)}
-                        placeholder="Optional — screen condition, box, etc."
-                      />
-                    </div>
                   </div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </div>
-          ) : null}
-        </section>
+                  <Switch
+                    checked={isExchange}
+                    aria-label="Mobile exchange"
+                    onChange={(checked) => {
+                      setIsExchange(checked);
+                      if (!checked) clearExchangeFields();
+                    }}
+                  />
+                </div>
 
-        <section
-          className={
-            withGst
-              ? "grid gap-6"
-              : "grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"
-          }
-        >
-          {!withGst ? (
-          <div className="glass-panel p-5 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-tide-600" />
-              <h2 className="font-display text-lg font-semibold text-ink-900">
-                Payment split
-              </h2>
-            </div>
-            <p className="mb-5 text-sm text-ink-500">
-              Tick each mode — remaining payable fills in automatically. Adjust
-              amounts if needed.
-            </p>
-
-            <div className="space-y-3">
-              <label
-                htmlFor="hasDue"
-                className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-orange-200 bg-orange-50/70 p-4"
-              >
-                <span>
-                  <span className="block text-sm font-semibold text-ink-800">
-                    This bill has due
-                  </span>
-                  <span className="mt-1 block text-xs text-ink-500">
-                    Turn on to record any amount the customer will pay later.
-                  </span>
-                </span>
-                <input
-                  id="hasDue"
-                  type="checkbox"
-                  checked={hasDue}
-                  onChange={(event) => setHasDue(event.target.checked)}
-                  className="h-5 w-5 shrink-0 rounded border-ink-300 text-ember-500 focus:ring-orange-300"
-                />
-              </label>
-
-              <PaymentToggle
-                label="Cash"
-                checked={useCash}
-                amount={cashAmount}
-                onChecked={(checked) => togglePayment("cash", checked)}
-                onAmount={setCashAmount}
-              />
-              <PaymentToggle
-                label="Online"
-                checked={useOnline}
-                amount={onlineAmount}
-                onChecked={(checked) => togglePayment("online", checked)}
-                onAmount={setOnlineAmount}
-              />
-              <PaymentToggle
-                label="Finance"
-                checked={useFinance}
-                amount={totals.finance}
-                onChecked={(checked) => togglePayment("finance", checked)}
-                onAmount={() => {}}
-                showAmount={false}
-              >
-                <div className="space-y-4">
-                  {financeEntries.map((entry, index) => {
-                    const excludeIds = financeEntries
-                      .filter((e) => e.key !== entry.key && e.companyId)
-                      .map((e) => e.companyId);
-                    const financeUsed = financeEntries.reduce(
-                      (sum, e) => sum + (e.amount || 0),
-                      0,
-                    );
-                    const remainingForNext = remainingAfterPayments(financeUsed);
-                    const canAddAnother =
-                      index === financeEntries.length - 1 &&
-                      financeEntries.length < MAX_FINANCE_ENTRIES &&
-                      Boolean(entry.select) &&
-                      entry.amount > 0 &&
-                      remainingForNext > 0;
-
-                    return (
-                      <div
-                        key={entry.key}
-                        className={
-                          index > 0
-                            ? "space-y-3 border-t border-ink-100 pt-4"
-                            : "space-y-3"
-                        }
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <label className="label required mb-0">
-                            {financeEntries.length > 1
-                              ? `Finance company ${index + 1}`
-                              : "Finance company"}
-                    </label>
-                          {index > 0 ? (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-ember-500 hover:underline"
-                              onClick={() => removeFinanceEntry(entry.key)}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
+                <AnimatePresence>
+                  {isExchange ? (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-4 px-5 pb-5 sm:px-[22px] sm:pb-[22px]">
+                        <div className="flex items-start gap-2.5 rounded-xl border border-[#CDEFE0] bg-[#E7F8F1] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[#0B7A5B]">
+                          <Info
+                            className="mt-0.5 h-4 w-4 shrink-0"
+                            strokeWidth={2}
+                          />
+                          <span>
+                            Added as a second-hand <b className="font-semibold">(Old)</b>{" "}
+                            mobile in the catalog so it can be resold later.{" "}
+                            <b className="font-semibold">
+                              Payable = bill total − exchange value.
+                            </b>
+                          </span>
                         </div>
-                    <FinanceCompanyPicker
-                      companies={financeCompanies}
-                          value={entry.select}
-                      required={useFinance}
-                          excludeIds={excludeIds}
-                      onChange={(value) => {
-                            updateFinanceEntry(entry.key, {
-                              select: value,
-                              companyId: value === ADD_NEW_FINANCE ? "" : value,
-                              newName:
-                                value === ADD_NEW_FINANCE ? entry.newName : "",
-                            });
-                          }}
-                        />
-                        {entry.select === ADD_NEW_FINANCE ? (
-                    <div>
-                            <label
-                              className="label required"
-                              htmlFor={`newFinanceName-${entry.key}`}
-                            >
-                        New finance company
-                      </label>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                                id={`newFinanceName-${entry.key}`}
-                          className="field"
-                                value={entry.newName}
-                                onChange={(e) =>
-                                  updateFinanceEntry(entry.key, {
-                                    newName: e.target.value,
-                                  })
-                                }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                                    void saveNewFinanceCompany(entry.key);
-                            }
-                          }}
-                          placeholder="e.g. HDFC Finance"
-                          required={
-                                  useFinance && entry.select === ADD_NEW_FINANCE
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="btn-secondary shrink-0"
-                                disabled={
-                                  savingFinanceKey === entry.key ||
-                                  !entry.newName.trim()
-                                }
-                                onClick={() =>
-                                  void saveNewFinanceCompany(entry.key)
-                                }
-                              >
-                                {savingFinanceKey === entry.key
-                                  ? "Saving…"
-                                  : "Save for later"}
-                        </button>
-                      </div>
-                      <p className="mt-2 text-xs text-ink-500">
-                        Saved names stay in the list for all future bills.
-                      </p>
-                    </div>
-                  ) : null}
+
                         <div>
-                          <label className="label required">Amount</label>
-                          <input
-                            className="field"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={entry.amount || ""}
-                            onChange={(e) =>
-                              updateFinanceEntry(entry.key, {
-                                amount: Number(e.target.value) || 0,
-                              })
-                            }
-                            placeholder="Amount paid by finance"
-                            required={useFinance}
+                          <span className="label required">Operating system</span>
+                          <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-[#EEF0F3] p-1.5">
+                            {(["IOS", "ANDROID"] as const).map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                className={clsx(
+                                  "inline-flex items-center justify-center gap-2 rounded-[9px] px-3 py-2.5 text-sm font-medium transition",
+                                  exchangePlatform === option
+                                    ? "bg-ink-900 font-semibold text-white shadow-[0_4px_12px_rgba(11,31,51,.25)]"
+                                    : "text-ink-500 hover:text-ink-700",
+                                )}
+                                aria-pressed={exchangePlatform === option}
+                                onClick={() => {
+                                  if (option === exchangePlatform) return;
+                                  setExchangePlatform(option);
+                                  setExchangeModel("");
+                                  setExchangeStorage("");
+                                  setExchangeRam("");
+                                }}
+                              >
+                                {option === "IOS" ? (
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    className="h-[17px] w-[17px]"
+                                    aria-hidden
+                                  >
+                                    <path
+                                      d="M16 3c0 1.7-1.4 3-3 3 0-1.7 1.4-3 3-3zM12 8c1.5 0 2 1 3.5 1S18 8 19 9c-2 1-1.5 5 .5 6-.6 1.7-2 4-3.5 4-1 0-1.4-.6-2.5-.6s-1.6.6-2.5.6C7 20 5 15 5 12c0-3 2-4 3.5-4S10.5 8 12 8z"
+                                      stroke="currentColor"
+                                      strokeWidth="1.6"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    className="h-[17px] w-[17px]"
+                                    aria-hidden
+                                  >
+                                    <path
+                                      d="M6 10a6 6 0 0 1 12 0M6 10v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6M9 7L7.5 5M15 7l1.5-2M9.5 10h.01M14.5 10h.01"
+                                      stroke="currentColor"
+                                      strokeWidth="1.7"
+                                      strokeLinecap="round"
+                                    />
+                                  </svg>
+                                )}
+                                {option === "IOS" ? "iOS" : "Android"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            className="label required"
+                            htmlFor="exchangeModel"
+                          >
+                            Mobile name
+                          </label>
+                          <MobileNameSearch
+                            id="exchangeModel"
+                            platform={exchangePlatform}
+                            value={exchangeModel}
+                            required={isExchange}
+                            onChange={(name) => {
+                              if (!name.trim()) {
+                                setExchangeModel("");
+                                setExchangeStorage("");
+                                setExchangeRam("");
+                                return;
+                              }
+                              setExchangeModel(name);
+                            }}
+                            onSelectModel={(model: PhoneModel) => {
+                              setExchangeModel(model.name);
+                              setExchangeStorage(
+                                formatCapacityLabel(model.storage) ||
+                                  model.storage,
+                              );
+                              setExchangeRam(
+                                exchangePlatform === "ANDROID"
+                                  ? formatCapacityLabel(model.ram) || model.ram
+                                  : "",
+                              );
+                            }}
                           />
                         </div>
-                        {canAddAnother ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
-                            onClick={addFinanceEntry}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add another finance company · {formatINR(remainingForNext)} left
-                          </button>
-                        ) : null}
+
+                        <div
+                          className={
+                            exchangePlatform === "ANDROID"
+                              ? "grid gap-3.5 sm:grid-cols-3"
+                              : "grid gap-3.5 sm:grid-cols-2"
+                          }
+                        >
+                          <div>
+                            <label
+                              className="label required"
+                              htmlFor="exchangeStorage"
+                            >
+                              Storage
+                            </label>
+                            <input
+                              id="exchangeStorage"
+                              className="field"
+                              value={exchangeStorage}
+                              onChange={(e) =>
+                                setExchangeStorage(e.target.value)
+                              }
+                              placeholder="e.g. 128 GB"
+                              required={isExchange}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              className="label required"
+                              htmlFor="exchangeColor"
+                            >
+                              Color
+                            </label>
+                            <input
+                              id="exchangeColor"
+                              className="field"
+                              value={exchangeColor}
+                              onChange={(e) => setExchangeColor(e.target.value)}
+                              placeholder="e.g. Black"
+                              required={isExchange}
+                            />
+                          </div>
+                          {exchangePlatform === "ANDROID" ? (
+                            <div>
+                              <label
+                                className="label required"
+                                htmlFor="exchangeRam"
+                              >
+                                RAM
+                              </label>
+                              <input
+                                id="exchangeRam"
+                                className="field"
+                                value={exchangeRam}
+                                onChange={(e) => setExchangeRam(e.target.value)}
+                                placeholder="e.g. 8 GB"
+                                required={isExchange}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="grid gap-3.5 sm:grid-cols-2">
+                          <div>
+                            <label
+                              className="label required"
+                              htmlFor="exchangeImei1"
+                            >
+                              IMEI
+                            </label>
+                            <input
+                              id="exchangeImei1"
+                              className="field font-mono"
+                              value={exchangeImei1}
+                              onChange={(e) => setExchangeImei1(e.target.value)}
+                              placeholder="15-digit IMEI"
+                              inputMode="numeric"
+                              required={isExchange}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-[0.07em] text-[#0E9E76]"
+                              htmlFor="exchangeValue"
+                            >
+                              Exchange value
+                              <span className="ml-0.5 text-[#B76E00]"> *</span>
+                            </label>
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
+                                ₹
+                              </span>
+                              <input
+                                id="exchangeValue"
+                                className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)]"
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={exchangeValue}
+                                onChange={(e) =>
+                                  setExchangeValue(
+                                    e.target.value === ""
+                                      ? ""
+                                      : Number(e.target.value) || 0,
+                                  )
+                                }
+                                placeholder="Amount to deduct"
+                                inputMode="decimal"
+                                required={isExchange}
+                              />
+                            </div>
+                            <p className="mt-1 text-[11.5px] text-ink-300">
+                              Subtracted from the bill&apos;s payable amount.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="label" htmlFor="exchangeNotes">
+                            Notes
+                          </label>
+                          <textarea
+                            id="exchangeNotes"
+                            className="field min-h-[70px] resize-y"
+                            value={exchangeNotes}
+                            onChange={(e) => setExchangeNotes(e.target.value)}
+                            placeholder="Optional — screen condition, box, accessories, etc."
+                          />
+                        </div>
+
+                        <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-[#0E1626] to-[#1B2740] px-4 py-3.5 text-white">
+                          <span className="inline-flex items-center gap-2 text-[13px] text-[#B7C3D6]">
+                            <Check
+                              className="h-[15px] w-[15px] text-[#12B886]"
+                              strokeWidth={2.6}
+                            />
+                            Exchange credit on this bill
+                          </span>
+                          <span className="font-display text-lg font-bold tabular-nums text-[#5CE0AE]">
+                            −
+                            {formatINR(
+                              exchangeValue === ""
+                                ? 0
+                                : Number(exchangeValue) || 0,
+                            )}
+                          </span>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </PaymentToggle>
-            </div>
-
-            <AnimatePresence>
-              {hasDue ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  className="mt-5 rounded-2xl border border-orange-200 bg-orange-50/80 p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-ember-500">
-                      Remaining due
-                    </p>
-                    <p className="font-display text-xl font-semibold text-ember-500">
-                      {formatINR(totals.dueAmount)}
-                    </p>
-                  </div>
-                  {totals.dueAmount > 0 ? (
-                    <>
-                  <label className="label required mt-4" htmlFor="dueDate">
-                    Expected collection date
-                  </label>
-                  <input
-                    id="dueDate"
-                    className="field"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    required
-                    aria-required="true"
-                  />
-                  {!dueDate ? (
-                    <p className="mt-2 text-xs font-medium text-ember-500">
-                      Required when due amount is pending
-                    </p>
+                    </motion.div>
                   ) : null}
-                    </>
-                  ) : (
-                    <p className="mt-2 text-xs text-ink-500">
-                      The selected payments currently cover the full payable
-                      amount.
-                    </p>
-                  )}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </div>
-          ) : null}
-
-          <div className="glass-panel overflow-hidden p-5 sm:p-6">
-            <h2 className="font-display text-lg font-semibold text-ink-900">
-              Summary
-            </h2>
-            <dl className="mt-5 space-y-3 text-sm">
-              <SummaryRow
-                label="Taxable value"
-                value={formatINR(totals.subtotal)}
-              />
-              <SummaryRow
-                label="GST (included)"
-                value={formatINR(totals.gstAmount)}
-              />
-              <SummaryRow
-                label="Gross total"
-                value={formatINR(totals.grandTotal)}
-              />
-              {!withGst && totals.exchangeDeduction > 0 ? (
-                <SummaryRow
-                  label="Less: Exchange"
-                  value={`- ${formatINR(totals.exchangeDeduction)}`}
-                  accent
-                />
-              ) : null}
-              <SummaryRow
-                label={withGst ? "Invoice total" : "Payable"}
-                value={formatINR(
-                  withGst ? totals.grandTotal : totals.payableAmount,
-                )}
-                strong
-              />
-              {!withGst ? (
-                <>
-              <div className="border-t border-ink-100 pt-3" />
-              <SummaryRow label="Cash" value={formatINR(totals.cash)} />
-              <SummaryRow label="Online" value={formatINR(totals.online)} />
-              <SummaryRow
-                label={
-                  useFinance
-                    ? (() => {
-                        const names = financeEntries
-                          .map((entry) =>
-                            entry.select === ADD_NEW_FINANCE
-                              ? entry.newName.trim()
-                              : financeCompanies.find(
-                                  (c) => c.id === entry.companyId,
-                                )?.name || "",
-                          )
-                          .filter(Boolean);
-                        return names.length
-                          ? `Finance · ${names.join(" + ")}`
-                          : "Finance";
-                      })()
-                    : "Finance"
-                }
-                value={formatINR(totals.finance)}
-              />
-              {hasDue ? (
-              <SummaryRow
-                label="Due"
-                value={formatINR(totals.dueAmount)}
-                accent={totals.dueAmount > 0}
-              />
-              ) : null}
-                </>
-              ) : (
-                <p className="border-t border-ink-100 pt-3 text-xs text-ink-500">
-                  GST bill — payment modes are not recorded; excluded from shop sales.
-                </p>
-              )}
-            </dl>
-
-            <div className="mt-5">
-              <label className="label" htmlFor="notes">
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                className="field min-h-[88px] resize-y"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional note for this bill"
-              />
-            </div>
-
-            {error ? (
-              <p className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm text-ember-500">
-                {error}
-              </p>
+                </AnimatePresence>
+              </section>
             ) : null}
 
-            <button
-              type="submit"
-              className="btn-primary mt-6 w-full"
-              disabled={saving}
-            >
-              {saving
-                ? "Saving…"
-                : isEdit
-                  ? "Review & update"
-                  : "Save bill"}
-            </button>
+          <div className="space-y-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div
+                className={clsx(
+                  "order-2 rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft",
+                  withGst && "order-none lg:col-span-2",
+                )}
+              >
+                <h2 className="font-display text-base font-semibold text-ink-900">
+                  Summary
+                </h2>
+                <dl className="mt-4 space-y-2">
+                  <SummaryRow
+                    label="Taxable value"
+                    value={formatINR(totals.subtotal)}
+                  />
+                  <SummaryRow
+                    label="GST (included)"
+                    value={formatINR(totals.gstAmount)}
+                  />
+                  <SummaryRow
+                    label="Gross total"
+                    value={formatINR(totals.grandTotal)}
+                  />
+                  {!withGst && totals.exchangeDeduction > 0 ? (
+                    <SummaryRow
+                      label="Exchange credit"
+                      value={`- ${formatINR(totals.exchangeDeduction)}`}
+                      accent
+                    />
+                  ) : null}
+                  <div className="border-t border-ink-100 pt-2">
+                    <SummaryRow
+                      label={withGst ? "Invoice total" : "Payable"}
+                      value={formatINR(
+                        withGst ? totals.grandTotal : totals.payableAmount,
+                      )}
+                      strong
+                    />
+                  </div>
+                  {!withGst && totals.exchangeRefund > 0 ? (
+                    <SummaryRow
+                      label="Pay customer"
+                      value={formatINR(totals.exchangeRefund)}
+                      accent
+                      strong
+                    />
+                  ) : null}
+                  {withGst ? (
+                    <p className="pt-1 text-xs leading-relaxed text-ink-500">
+                      GST bill — payment modes are not recorded; excluded from shop sales.
+                    </p>
+                  ) : null}
+                </dl>
+
+                <div className="mt-4 border-t border-ink-100 pt-4">
+                  <label className="label" htmlFor="notes">
+                    Note (optional)
+                  </label>
+                  <textarea
+                    id="notes"
+                    className="field min-h-[64px] resize-y"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional note for this bill"
+                  />
+                </div>
+
+                {error ? (
+                  <p className="mt-3 rounded-xl bg-orange-50 px-4 py-3 text-sm text-ember-500">
+                    {error}
+                  </p>
+                ) : null}
+
+                <button
+                  type="submit"
+                  className="btn-primary mt-4 w-full"
+                  disabled={saving}
+                >
+                  <Check className="h-4 w-4" />
+                  {saving
+                    ? "Saving…"
+                    : isEdit
+                      ? "Review & update"
+                      : "Save bill"}
+                </button>
+              </div>
+
+              {!withGst ? (
+                <div
+                  className={clsx(
+                    "relative order-1 overflow-hidden rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft",
+                    totals.exchangeRefund > 0 && "min-h-[280px]",
+                  )}
+                >
+                  <h2 className="font-display text-base font-semibold text-ink-900">
+                    Payment
+                  </h2>
+                  <p className="mt-1 text-xs text-ink-500">
+                    Tick each mode — remaining payable fills in automatically.
+                  </p>
+
+                  <div
+                    className={clsx(
+                      "mt-4 space-y-2.5 transition",
+                      totals.exchangeRefund > 0 &&
+                        "pointer-events-none select-none opacity-25 blur-[1px]",
+                    )}
+                  >
+                    <label
+                      htmlFor="hasDue"
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-orange-200/80 bg-orange-50/60 px-3 py-2.5"
+                    >
+                      <span>
+                        <span className="block text-xs font-semibold text-ink-800">
+                          This bill has due
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-ink-500">
+                          Record amount the customer will pay later.
+                        </span>
+                      </span>
+                      <Switch
+                        id="hasDue"
+                        checked={hasDue}
+                        aria-label="This bill has due"
+                        onChange={setHasDue}
+                      />
+                    </label>
+
+                    <PaymentToggle
+                      label="Cash"
+                      tone="cash"
+                      checked={useCash}
+                      amount={cashAmount}
+                      onChecked={(checked) => togglePayment("cash", checked)}
+                      onAmount={setCashAmount}
+                    />
+                    <PaymentToggle
+                      label="Online"
+                      tone="online"
+                      checked={useOnline}
+                      amount={onlineAmount}
+                      onChecked={(checked) => togglePayment("online", checked)}
+                      onAmount={setOnlineAmount}
+                    />
+                    <PaymentToggle
+                      label="Finance"
+                      tone="finance"
+                      checked={useFinance}
+                      amount={totals.finance}
+                      onChecked={(checked) => togglePayment("finance", checked)}
+                      onAmount={() => {}}
+                      showAmount={false}
+                    >
+                      <div className="space-y-4">
+                        {financeEntries.map((entry, index) => {
+                          const excludeIds = financeEntries
+                            .filter((e) => e.key !== entry.key && e.companyId)
+                            .map((e) => e.companyId);
+                          const financeUsed = financeEntries.reduce(
+                            (sum, e) => sum + (e.amount || 0),
+                            0,
+                          );
+                          const remainingForNext = remainingAfterPayments(financeUsed);
+                          const canAddAnother =
+                            index === financeEntries.length - 1 &&
+                            financeEntries.length < MAX_FINANCE_ENTRIES &&
+                            Boolean(entry.select) &&
+                            entry.amount > 0 &&
+                            remainingForNext > 0;
+
+                          return (
+                            <div
+                              key={entry.key}
+                              className={
+                                index > 0
+                                  ? "space-y-3 border-t border-ink-100 pt-4"
+                                  : "space-y-3"
+                              }
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <label className="label required mb-0">
+                                  {financeEntries.length > 1
+                                    ? `Finance company ${index + 1}`
+                                    : "Finance company"}
+                                </label>
+                                {index > 0 ? (
+                                  <button
+                                    type="button"
+                                    className="text-xs font-medium text-ember-500 hover:underline"
+                                    onClick={() => removeFinanceEntry(entry.key)}
+                                  >
+                                    Remove
+                                  </button>
+                                ) : null}
+                              </div>
+                              <FinanceCompanyPicker
+                                companies={financeCompanies}
+                                value={entry.select}
+                                required={useFinance}
+                                excludeIds={excludeIds}
+                                onChange={(value) => {
+                                  updateFinanceEntry(entry.key, {
+                                    select: value,
+                                    companyId: value === ADD_NEW_FINANCE ? "" : value,
+                                    newName:
+                                      value === ADD_NEW_FINANCE ? entry.newName : "",
+                                  });
+                                }}
+                              />
+                              {entry.select === ADD_NEW_FINANCE ? (
+                                <div>
+                                  <label
+                                    className="label required"
+                                    htmlFor={`newFinanceName-${entry.key}`}
+                                  >
+                                    New finance company
+                                  </label>
+                                  <div className="flex flex-col gap-2 sm:flex-row">
+                                    <input
+                                      id={`newFinanceName-${entry.key}`}
+                                      className="field"
+                                      value={entry.newName}
+                                      onChange={(e) =>
+                                        updateFinanceEntry(entry.key, {
+                                          newName: e.target.value,
+                                        })
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          void saveNewFinanceCompany(entry.key);
+                                        }
+                                      }}
+                                      placeholder="e.g. HDFC Finance"
+                                      required={
+                                        useFinance && entry.select === ADD_NEW_FINANCE
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn-secondary shrink-0"
+                                      disabled={
+                                        savingFinanceKey === entry.key ||
+                                        !entry.newName.trim()
+                                      }
+                                      onClick={() =>
+                                        void saveNewFinanceCompany(entry.key)
+                                      }
+                                    >
+                                      {savingFinanceKey === entry.key
+                                        ? "Saving…"
+                                        : "Save for later"}
+                                    </button>
+                                  </div>
+                                  <p className="mt-2 text-xs text-ink-500">
+                                    Saved names stay in the list for all future bills.
+                                  </p>
+                                </div>
+                              ) : null}
+                              <div>
+                                <label className="label required">Amount</label>
+                                <input
+                                  className="field"
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={entry.amount || ""}
+                                  onChange={(e) =>
+                                    updateFinanceEntry(entry.key, {
+                                      amount: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="Amount paid by finance"
+                                  required={useFinance}
+                                />
+                              </div>
+                              {canAddAnother ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
+                                  onClick={addFinanceEntry}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add another finance company · {formatINR(remainingForNext)} left
+                                </button>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </PaymentToggle>
+
+                  {(useCash || useOnline || useFinance || hasDue) &&
+                  (totals.dueAmount > 0 || totals.paid > 0) ? (
+                    <div
+                      className={clsx(
+                        "mt-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold",
+                        totals.dueAmount > 0
+                          ? "border border-amber-200 bg-amber-50 text-amber-800"
+                          : "border border-emerald-200 bg-emerald-50 text-emerald-800",
+                      )}
+                    >
+                      <span>
+                        {totals.dueAmount > 0
+                          ? hasDue
+                            ? "Remaining due"
+                            : "Payment short"
+                          : "Fully paid"}
+                      </span>
+                      <span>
+                        {totals.dueAmount > 0
+                          ? formatINR(totals.dueAmount)
+                          : formatINR(totals.paid)}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <AnimatePresence>
+                    {hasDue ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="mt-3 rounded-xl border border-orange-200/80 bg-orange-50/70 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold text-ember-500">
+                            Remaining due
+                          </p>
+                          <p className="font-display text-lg font-semibold text-ember-500">
+                            {formatINR(totals.dueAmount)}
+                          </p>
+                        </div>
+                        {totals.dueAmount > 0 ? (
+                          <>
+                            <label className="label required mt-3" htmlFor="dueDate">
+                              Expected collection date
+                            </label>
+                            <input
+                              id="dueDate"
+                              className="field"
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                              required
+                              aria-required="true"
+                            />
+                            {!dueDate ? (
+                              <p className="mt-2 text-xs font-medium text-ember-500">
+                                Required when due amount is pending
+                              </p>
+                            ) : null}
+                          </>
+                        ) : (
+                          <p className="mt-2 text-xs text-ink-500">
+                            The selected payments currently cover the full payable
+                            amount.
+                          </p>
+                        )}
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                  </div>
+
+                  {totals.exchangeRefund > 0 ? (
+                    <div
+                      id="exchange-pay-confirm"
+                      className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/90 px-6 text-center backdrop-blur-[2px]"
+                    >
+                      <AnimatePresence mode="wait" initial={false}>
+                        {exchangePayConfirmed ? (
+                          <motion.div
+                            key="exchange-confirmed"
+                            initial={{ opacity: 0, scale: 0.96 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            transition={{ duration: 0.18, ease: "easeOut" }}
+                            className="flex flex-col items-center"
+                          >
+                            <motion.span
+                              initial={{ scale: 0.7, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{
+                                type: "spring",
+                                stiffness: 420,
+                                damping: 22,
+                                mass: 0.6,
+                              }}
+                              className="mb-3 grid h-14 w-14 place-items-center rounded-full bg-[#E7F8F1] text-[#0E9E76]"
+                            >
+                              <Check className="h-7 w-7" strokeWidth={2.5} />
+                            </motion.span>
+                            <p className="font-display text-lg font-semibold text-ink-900">
+                              Confirmed
+                            </p>
+                            <p className="mt-1.5 max-w-[16rem] text-sm leading-relaxed text-ink-500">
+                              Exchange value is more. Pay customer{" "}
+                              <span className="font-semibold text-ink-900">
+                                {formatINR(totals.exchangeRefund)}
+                              </span>
+                              .
+                            </p>
+                            <p className="mt-3 max-w-[16rem] text-xs leading-relaxed text-ink-300">
+                              Edit price to change
+                            </p>
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="exchange-confirm-prompt"
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.96 }}
+                            transition={{ duration: 0.14, ease: "easeOut" }}
+                            className="flex flex-col items-center"
+                          >
+                            <p className="font-display text-lg font-semibold text-ink-900">
+                              Exchange value is more
+                            </p>
+                            <p className="mt-1.5 max-w-[16rem] text-sm leading-relaxed text-ink-500">
+                              You need to pay customer{" "}
+                              <span className="font-semibold text-ink-900">
+                                {formatINR(totals.exchangeRefund)}
+                              </span>
+                              .
+                            </p>
+                            <motion.button
+                              type="button"
+                              id="exchange-pay-confirm-btn"
+                              className="btn-primary mt-5 min-w-[10rem]"
+                              whileTap={{ scale: 0.96 }}
+                              transition={{ duration: 0.1 }}
+                              onClick={() => {
+                                setExchangePayConfirmed(true);
+                                setFieldHint(null);
+                                setError(null);
+                              }}
+                            >
+                              <Check className="h-4 w-4" />
+                              Confirm
+                            </motion.button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </section>
+        </div>
       </form>
+
+      {fieldHint ? (
+        <FieldInfoTip
+          fieldId={fieldHint.fieldId}
+          message={fieldHint.message}
+          onDismiss={() => setFieldHint(null)}
+        />
+      ) : null}
 
       <AnimatePresence>
         {addMobileForItem ? (
@@ -2417,8 +2833,117 @@ export function CreateBillPage() {
   );
 }
 
+function Switch({
+  checked,
+  onChange,
+  id,
+  "aria-label": ariaLabel,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  id?: string;
+  "aria-label"?: string;
+}) {
+  return (
+    <button
+      type="button"
+      id={id}
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={clsx(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        checked
+          ? "border-[#0B9B72] bg-[#12B886] shadow-[0_0_0_3px_rgba(18,184,134,0.25)] focus-visible:ring-[#12B886]"
+          : "border-ink-300 bg-ink-100 shadow-sm focus-visible:ring-ink-300",
+      )}
+    >
+      <span
+        className={clsx(
+          "inline-block h-4 w-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] ring-1 ring-black/10 transition-transform",
+          checked ? "translate-x-[22px]" : "translate-x-0.5",
+        )}
+      />
+    </button>
+  );
+}
+
+function FieldInfoTip({
+  fieldId,
+  message,
+  onDismiss,
+}: {
+  fieldId: string;
+  message: string;
+  onDismiss: () => void;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const el = document.getElementById(fieldId);
+      if (!el) {
+        setPos(null);
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      setPos({
+        top: Math.max(8, rect.top - 8),
+        left: Math.min(rect.left, window.innerWidth - 252),
+      });
+    };
+    // After scrollIntoView settles
+    const frame = window.requestAnimationFrame(update);
+    const delayed = window.setTimeout(update, 280);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(delayed);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [fieldId]);
+
+  if (!pos || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      role="status"
+      className="pointer-events-auto fixed z-[80] max-w-[240px] -translate-y-full"
+      style={{ top: pos.top, left: pos.left }}
+    >
+      <div className="flex items-start gap-2 rounded-xl border border-[#93C5FD] bg-[#E8F0FE] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
+        <span className="min-w-0">{message}</span>
+        <button
+          type="button"
+          className="ml-1 shrink-0 rounded-md px-1 text-[#2563EB]/80 hover:bg-white/60 hover:text-[#1D4ED8]"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+        >
+          ×
+        </button>
+      </div>
+      <span
+        aria-hidden
+        className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
+      />
+    </div>,
+    document.body,
+  );
+}
+
+const PAYMENT_TONE_STYLES = {
+  cash: { accent: "#12B886", ring: "ring-[#12B886]/20", bg: "bg-[#12B886]/5" },
+  online: { accent: "#3B82F6", ring: "ring-[#3B82F6]/20", bg: "bg-[#3B82F6]/5" },
+  finance: { accent: "#8B5CF6", ring: "ring-[#8B5CF6]/20", bg: "bg-[#8B5CF6]/5" },
+} as const;
+
 function PaymentToggle({
   label,
+  tone,
   checked,
   amount,
   onChecked,
@@ -2427,6 +2952,7 @@ function PaymentToggle({
   showAmount = true,
 }: {
   label: string;
+  tone: keyof typeof PAYMENT_TONE_STYLES;
   checked: boolean;
   amount: number;
   onChecked: (value: boolean) => void;
@@ -2434,16 +2960,27 @@ function PaymentToggle({
   children?: ReactNode;
   showAmount?: boolean;
 }) {
+  const styles = PAYMENT_TONE_STYLES[tone];
+
   return (
-    <div className="rounded-2xl border border-ink-100 bg-white/70 p-4 transition hover:border-ink-300">
-      <label className="flex cursor-pointer items-center gap-3">
+    <div
+      className={clsx(
+        "overflow-hidden rounded-xl border border-ink-100 bg-white transition",
+        checked && styles.bg,
+        checked && "ring-1",
+        checked && styles.ring,
+      )}
+      style={{ borderLeftWidth: 3, borderLeftColor: styles.accent }}
+    >
+      <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5">
         <input
           type="checkbox"
           checked={checked}
           onChange={(e) => onChecked(e.target.checked)}
-          className="h-5 w-5 rounded border-ink-300 text-tide-600 focus:ring-tide-400"
+          className="h-4 w-4 rounded border-ink-300 focus:ring-2"
+          style={{ accentColor: styles.accent }}
         />
-        <span className="text-sm font-semibold text-ink-800">{label}</span>
+        <span className="text-xs font-semibold text-ink-800">{label}</span>
       </label>
       <AnimatePresence>
         {checked ? (
@@ -2453,7 +2990,7 @@ function PaymentToggle({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="space-y-3 pt-3">
+            <div className="space-y-3 border-t border-ink-100/80 px-3 pb-3 pt-2.5">
               {children}
               {showAmount ? (
                 <div>
@@ -2490,16 +3027,20 @@ function SummaryRow({
   accent?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-ink-500">{label}</dt>
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <dt className={strong ? "font-medium text-ink-700" : "text-ink-500"}>
+        {label}
+      </dt>
       <dd
-        className={
-          strong
-            ? "font-display text-lg font-semibold text-ink-900"
-            : accent
-              ? "font-semibold text-ember-500"
-              : "font-medium text-ink-800"
-        }
+        className={clsx(
+          strong && accent
+            ? "font-display text-lg font-semibold text-ember-500"
+            : strong
+              ? "font-display text-lg font-semibold text-ink-900"
+              : accent
+                ? "font-semibold text-ember-500"
+                : "font-medium tabular-nums text-ink-800",
+        )}
       >
         {value}
       </dd>
