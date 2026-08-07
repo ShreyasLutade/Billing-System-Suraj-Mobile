@@ -92,9 +92,17 @@ export const api = {
       body: JSON.stringify({ phone, password }),
     }),
   me: () => request<{ data: { user: AuthUser } }>("/auth/me"),
-  listBills: (period?: string, options?: { withGst?: boolean }) => {
+  listBills: (
+    period?: string,
+    options?: { withGst?: boolean; from?: string; to?: string },
+  ) => {
     const params = new URLSearchParams();
-    if (period) params.set("period", period);
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else if (period) {
+      params.set("period", period);
+    }
     if (options?.withGst === true) params.set("withGst", "true");
     if (options?.withGst === false) params.set("withGst", "false");
     const query = params.toString();
@@ -125,10 +133,21 @@ export const api = {
     request<{ data: { id: string; invoiceNumber: string } }>(`/bills/${id}`, {
       method: "DELETE",
     }),
-  analytics: (period: string = "all") =>
-    request<{ data: AnalyticsSummary }>(
-      `/analytics/summary?period=${encodeURIComponent(period)}`,
-    ),
+  analytics: (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    return request<{ data: AnalyticsSummary }>(
+      `/analytics/summary?${params.toString()}`,
+    );
+  },
   listFinanceCompanies: () =>
     request<{ data: FinanceCompany[] }>("/finance-companies"),
   createFinanceCompany: (name: string) =>

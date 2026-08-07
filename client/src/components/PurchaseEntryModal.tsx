@@ -1,14 +1,24 @@
 import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ChevronDown, Package, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Package,
+  Plus,
+  Smartphone,
+  Store,
+  Trash2,
+  X,
+} from "lucide-react";
 import { FieldPicker } from "./FieldPicker";
 import {
   MobileNameSearch,
   invalidatePhoneModelCache,
 } from "./MobileNameSearch";
-import { api } from "../lib/api";
+import { api, formatINR } from "../lib/api";
 import type { PhoneModel, Purchase, Supplier } from "../types";
-
+import clsx from "clsx";
 export type PurchasePrefill = Partial<
   Pick<
     {
@@ -46,16 +56,17 @@ function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
   };
 }
 
-function draftSummary(draft: DraftMobile) {
-  return [
+function draftSummaryParts(draft: DraftMobile) {
+  const product = [
     draft.mobileName.trim() || "Untitled",
     draft.color.trim() || null,
     draft.storage.trim() || null,
     draft.platform === "ANDROID" && draft.ram.trim() ? draft.ram.trim() : null,
-    draft.imei.trim() ? `IMEI ${draft.imei.trim()}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  const imei = draft.imei.trim();
+  return { product, imei };
 }
 
 function validateDraft(draft: DraftMobile): string | null {
@@ -254,39 +265,382 @@ export function PurchaseEntryModal({
     }
   }
 
+  const allMobiles = useMemo(
+    () => [...queued, draft],
+    [queued, draft],
+  );
+  const purchaseTotal = useMemo(
+    () =>
+      allMobiles.reduce((sum, item) => {
+        const price = Number(item.purchasePrice);
+        return sum + (Number.isFinite(price) ? price : 0);
+      }, 0),
+    [allMobiles],
+  );
+  const summarySupplierName = useMemo(() => {
+    if (fixedSupplier?.name) return fixedSupplier.name;
+    if (useNewSupplier) return supplierName.trim() || null;
+    return suppliers.find((s) => s.id === supplierId)?.name || null;
+  }, [
+    fixedSupplier?.name,
+    useNewSupplier,
+    supplierName,
+    suppliers,
+    supplierId,
+  ]);
+
+  if (isPage) {
+    return (
+      <form
+        onSubmit={(event) => void submit(event)}
+        className="w-full pb-10"
+      >
+        <button
+          type="button"
+          className="mb-3.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#0E9E76] hover:underline"
+          onClick={onClose}
+          disabled={saving}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to stock
+        </button>
+
+        <div className="mb-[18px]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-300">
+            {condition === "NEW" ? "New stock" : "Second-hand stock"}
+          </p>
+          <h1 className="mt-1.5 flex flex-wrap items-center gap-3 font-display text-[30px] font-bold tracking-[-0.02em] text-ink-900">
+            Add mobile
+            <span
+              className={clsx(
+                "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-white",
+                condition === "USED" ? "bg-[#B76E00]" : "bg-[#0E9E76]",
+              )}
+            >
+              {condition === "USED" ? "Second hand" : "New"}
+            </span>
+          </h1>
+          <p className="mt-1 max-w-[60ch] text-sm text-ink-300">
+            Record a purchase from a supplier. Add one or more phones — the
+            total purchase cost tallies on the right.
+          </p>
+        </div>
+
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 space-y-4">
+            {/* Supplier */}
+            <section className="rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2.5 font-display text-base font-semibold text-ink-900">
+                  <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#EEF2F8] text-ink-500">
+                    <Store className="h-[15px] w-[15px]" />
+                  </span>
+                  Supplier
+                </h2>
+                {!fixedSupplier ? (
+                  <div className="inline-flex gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1">
+                    <button
+                      type="button"
+                      className={clsx(
+                        "rounded-lg px-4 py-2 text-[13px] font-medium transition",
+                        !useNewSupplier
+                          ? "bg-white font-semibold text-ink-900 shadow-soft"
+                          : "text-ink-500 hover:text-ink-700",
+                      )}
+                      onClick={() => setUseNewSupplier(false)}
+                      disabled={saving}
+                    >
+                      Existing
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "rounded-lg px-4 py-2 text-[13px] font-medium transition",
+                        useNewSupplier
+                          ? "bg-white font-semibold text-ink-900 shadow-soft"
+                          : "text-ink-500 hover:text-ink-700",
+                      )}
+                      onClick={() => setUseNewSupplier(true)}
+                      disabled={saving}
+                    >
+                      New supplier
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {fixedSupplier ? (
+                <p className="rounded-[10px] border border-ink-100 bg-[#FBFCFD] px-3.5 py-3 text-sm text-ink-700">
+                  <span className="font-semibold text-ink-900">
+                    {fixedSupplier.name}
+                  </span>
+                  {fixedSupplier.phone ? (
+                    <span className="text-ink-500"> · {fixedSupplier.phone}</span>
+                  ) : null}
+                </p>
+              ) : useNewSupplier ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label
+                      className="label required"
+                      htmlFor="purchaseSupplierName"
+                    >
+                      Supplier name
+                    </label>
+                    <input
+                      id="purchaseSupplierName"
+                      className="field"
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
+                      placeholder="Business / dealer name"
+                      required
+                      disabled={saving}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="label required"
+                      htmlFor="purchaseSupplierPhone"
+                    >
+                      Phone
+                    </label>
+                    <input
+                      id="purchaseSupplierPhone"
+                      className="field"
+                      type="tel"
+                      inputMode="numeric"
+                      value={supplierPhone}
+                      onChange={(e) => setSupplierPhone(e.target.value)}
+                      placeholder="10-digit mobile"
+                      required
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="label required">Supplier</label>
+                  <FieldPicker
+                    value={supplierId}
+                    onChange={setSupplierId}
+                    placeholder={
+                      suppliers.length
+                        ? "Select supplier…"
+                        : "No suppliers yet — add a new one"
+                    }
+                    searchable
+                    searchPlaceholder="Search supplier name…"
+                    required
+                    disabled={saving}
+                    options={supplierOptions}
+                  />
+                </div>
+              )}
+            </section>
+
+            {/* Queued mobiles */}
+            {queued.map((item, index) => {
+              const open = expandedId === item.id;
+              const summary = draftSummaryParts(item);
+              return (
+                <section
+                  key={item.id}
+                  className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5"
+                >
+                  <div
+                    className={clsx(
+                      "flex items-start justify-between gap-3",
+                      open ? "mb-3.5" : "mb-0",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() =>
+                        setExpandedId((c) => (c === item.id ? null : item.id))
+                      }
+                    >
+                      <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
+                        <ChevronDown
+                          className={clsx(
+                            "h-3.5 w-3.5 shrink-0 transition",
+                            open ? "rotate-180" : "",
+                          )}
+                        />
+                        Mobile {index + 1}
+                      </span>
+                      {!open ? (
+                        <span className="mt-2 block rounded-[10px] border border-ink-100 bg-white px-3 py-2">
+                          <span className="block text-[13px] font-semibold leading-snug text-ink-900">
+                            {summary.product}
+                          </span>
+                          {summary.imei ? (
+                            <span className="mt-1 block break-all font-mono text-[12px] font-medium leading-snug text-ink-500">
+                              IMEI {summary.imei}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-ink-300 transition hover:bg-[#FEF3E2] hover:text-[#B76E00]"
+                      aria-label={`Remove mobile ${index + 1}`}
+                      onClick={() =>
+                        setQueued((c) => c.filter((row) => row.id !== item.id))
+                      }
+                      disabled={saving}
+                    >
+                      <X className="h-[15px] w-[15px]" />
+                    </button>
+                  </div>
+                  {open ? (
+                    <DraftFields
+                      draft={item}
+                      disabled={saving}
+                      idPrefix={`q-${item.id}`}
+                      onChange={(patch) => updateQueued(item.id, patch)}
+                      wide
+                    />
+                  ) : null}
+                </section>
+              );
+            })}
+
+            {/* Current mobile */}
+            <section className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5">
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
+                  Mobile {queued.length + 1}
+                </span>
+                {queued.length > 0 ? (
+                  <button
+                    type="button"
+                    className="grid h-7 w-7 place-items-center rounded-lg text-ink-300 transition hover:bg-[#FEF3E2] hover:text-[#B76E00]"
+                    aria-label="Remove current mobile"
+                    onClick={removeCurrentMobile}
+                    disabled={saving}
+                  >
+                    <X className="h-[15px] w-[15px]" />
+                  </button>
+                ) : null}
+              </div>
+              <DraftFields
+                draft={draft}
+                disabled={saving}
+                idPrefix="current"
+                onChange={updateDraft}
+                autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
+                wide
+              />
+            </section>
+
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-[#0E9E76] hover:bg-[#E7F8F1] hover:text-[#0E9E76]"
+              onClick={addAnother}
+              disabled={saving}
+            >
+              <Plus className="h-[17px] w-[17px]" strokeWidth={2.2} />
+              Add another mobile
+            </button>
+
+            {error ? (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </p>
+            ) : null}
+          </div>
+
+          {/* Purchase summary rail */}
+          <aside className="lg:sticky lg:top-24">
+            <div className="overflow-hidden rounded-[16px] border border-ink-100 bg-white shadow-[0_2px_6px_rgba(16,25,40,.06),0_16px_40px_rgba(16,25,40,.10)]">
+              <div className="p-5">
+                <h2 className="font-display text-[17px] font-semibold text-ink-900">
+                  Purchase summary
+                </h2>
+                <p className="mt-1 mb-3.5 text-[13px] text-ink-300">
+                  From{" "}
+                  <b className="font-semibold text-ink-900">
+                    {summarySupplierName || "— no supplier —"}
+                  </b>
+                </p>
+
+                <div className="space-y-0">
+                  {allMobiles.map((item, index) => {
+                    const price = Number(item.purchasePrice);
+                    const label =
+                      item.mobileName.trim() || `Mobile ${index + 1}`;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2.5 py-1.5 text-[13px] text-ink-500"
+                      >
+                        <span className="min-w-0 truncate">{label}</span>
+                        <span className="shrink-0 tabular-nums font-semibold text-ink-900">
+                          {Number.isFinite(price) && price > 0
+                            ? formatINR(price)
+                            : "₹0.00"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t-2 border-ink-900 pt-3">
+                  <span className="text-sm font-semibold text-ink-900">
+                    Total purchase
+                  </span>
+                  <span className="font-display text-2xl font-bold tabular-nums tracking-tight text-ink-900">
+                    {formatINR(purchaseTotal)}
+                  </span>
+                </div>
+
+                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-2.5 py-1 text-xs font-semibold text-[#0E9E76]">
+                  <Smartphone className="h-3.5 w-3.5" />
+                  {allMobiles.length} unit{allMobiles.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2.5 border-t border-ink-100 bg-[#FAFBFC] px-5 py-4">
+                <button
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink-900 px-4 py-3.5 text-[15px] font-semibold text-white shadow-soft transition hover:-translate-y-px hover:bg-black disabled:opacity-50"
+                  disabled={saving}
+                >
+                  <Check className="h-[17px] w-[17px]" strokeWidth={2.4} />
+                  {saving
+                    ? "Saving…"
+                    : queued.length
+                      ? `Save ${queued.length + 1} mobiles`
+                      : "Save purchase"}
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-ink-100 bg-white px-4 py-2.5 text-sm font-semibold text-ink-500 transition hover:bg-[#F4F5F7] hover:text-ink-900"
+                  onClick={onClose}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </form>
+    );
+  }
+
   const formBody = (
     <>
-        <div
-          className={
-            isPage
-              ? "mb-3 flex items-start justify-between gap-3"
-              : "sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-ink-100 bg-white px-5 py-4"
-          }
-        >
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-ink-100 bg-white px-5 py-4">
           <div className="min-w-0">
-            {isPage ? (
-              <button
-                type="button"
-                className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
-                onClick={onClose}
-                disabled={saving}
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to stock
-              </button>
-            ) : null}
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
               {condition === "NEW" ? "New stock" : "Second-hand stock"}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h2
-                className={
-                  isPage
-                    ? "font-display text-2xl font-semibold text-ink-900"
-                    : "font-display text-xl font-semibold text-ink-900"
-                }
-              >
-                {isPage ? "Add mobile" : "Purchase entry"}
+              <h2 className="font-display text-xl font-semibold text-ink-900">
+                Purchase entry
               </h2>
               <span
                 className={
@@ -299,20 +653,18 @@ export function PurchaseEntryModal({
               </span>
             </div>
           </div>
-          {!isPage ? (
-            <button
-              type="button"
-              className="rounded-xl p-2 text-ink-400 hover:bg-ink-50"
-              onClick={onClose}
-              disabled={saving}
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="rounded-xl p-2 text-ink-300 hover:bg-ink-50"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className={isPage ? "space-y-4" : "space-y-3 px-5 py-4"}>
+        <div className="space-y-3 px-5 py-4">
           {fixedSupplier ? (
             <div className="rounded-xl border border-ink-200 bg-ink-50 px-3 py-2 text-sm">
               <span className="text-ink-500">Supplier · </span>
@@ -324,52 +676,35 @@ export function PurchaseEntryModal({
               ) : null}
             </div>
           ) : (
-            <div
-              className={
-                isPage
-                  ? "grid gap-3 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-start"
-                  : "space-y-2"
-              }
-            >
-              <div>
-                {isPage ? (
-                  <span className="label">Supplier type</span>
-                ) : null}
-                <div className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5">
-                  <button
-                    type="button"
-                    className={
-                      !useNewSupplier
-                        ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                        : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
-                    }
-                    onClick={() => setUseNewSupplier(false)}
-                    disabled={saving}
-                  >
-                    Existing
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      useNewSupplier
-                        ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                        : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
-                    }
-                    onClick={() => setUseNewSupplier(true)}
-                    disabled={saving}
-                  >
-                    New supplier
-                  </button>
-                </div>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5">
+                <button
+                  type="button"
+                  className={
+                    !useNewSupplier
+                      ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
+                      : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
+                  }
+                  onClick={() => setUseNewSupplier(false)}
+                  disabled={saving}
+                >
+                  Existing
+                </button>
+                <button
+                  type="button"
+                  className={
+                    useNewSupplier
+                      ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
+                      : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
+                  }
+                  onClick={() => setUseNewSupplier(true)}
+                  disabled={saving}
+                >
+                  New supplier
+                </button>
               </div>
               {useNewSupplier ? (
-                <div
-                  className={
-                    isPage
-                      ? "grid gap-3 sm:grid-cols-2"
-                      : "space-y-2"
-                  }
-                >
+                <div className="space-y-2">
                   <div>
                     <label className="label required" htmlFor="purchaseSupplierName">
                       Supplier name
@@ -429,6 +764,7 @@ export function PurchaseEntryModal({
               </p>
               {queued.map((item, index) => {
                 const open = expandedId === item.id;
+                const summary = draftSummaryParts(item);
                 return (
                   <div
                     key={item.id}
@@ -442,7 +778,7 @@ export function PurchaseEntryModal({
                       }
                     >
                       <ChevronDown
-                        className={`mt-0.5 h-4 w-4 shrink-0 text-ink-400 transition ${
+                        className={`mt-0.5 h-4 w-4 shrink-0 text-ink-300 transition ${
                           open ? "rotate-180" : ""
                         }`}
                       />
@@ -451,8 +787,13 @@ export function PurchaseEntryModal({
                           Mobile {index + 1}
                         </span>
                         <span className="mt-0.5 block text-sm font-medium text-ink-900">
-                          {draftSummary(item)}
+                          {summary.product}
                         </span>
+                        {summary.imei ? (
+                          <span className="mt-0.5 block break-all font-mono text-xs text-ink-500">
+                            IMEI {summary.imei}
+                          </span>
+                        ) : null}
                       </span>
                     </button>
                     {open ? (
@@ -462,7 +803,6 @@ export function PurchaseEntryModal({
                           disabled={saving}
                           idPrefix={`q-${item.id}`}
                           onChange={(patch) => updateQueued(item.id, patch)}
-                          wide={isPage}
                         />
                         <button
                           type="button"
@@ -482,13 +822,7 @@ export function PurchaseEntryModal({
             </div>
           ) : null}
 
-          <div
-            className={
-              isPage
-                ? "rounded-2xl border border-ink-200 bg-white/80 p-4 sm:p-5"
-                : "rounded-xl border border-ink-200 bg-white p-3"
-            }
-          >
+          <div className="rounded-xl border border-ink-200 bg-white p-3">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
               Mobile {queued.length + 1}
             </p>
@@ -498,7 +832,6 @@ export function PurchaseEntryModal({
               idPrefix="current"
               onChange={updateDraft}
               autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
-              wide={isPage}
             />
             {queued.length > 0 ? (
               <button
@@ -515,27 +848,15 @@ export function PurchaseEntryModal({
         </div>
 
         {error ? (
-          <p
-            className={
-              isPage
-                ? "mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
-                : "border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700"
-            }
-          >
+          <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
             {error}
           </p>
         ) : null}
 
-        <div
-          className={
-            isPage
-              ? "mt-4 flex flex-col gap-2 border-t border-ink-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
-              : "sticky bottom-0 flex flex-col gap-2 border-t border-ink-100 bg-white px-5 py-3"
-          }
-        >
+        <div className="sticky bottom-0 flex flex-col gap-2 border-t border-ink-100 bg-white px-5 py-3">
           <button
             type="button"
-            className={isPage ? "btn-secondary sm:w-auto" : "btn-secondary w-full"}
+            className="btn-secondary w-full"
             onClick={addAnother}
             disabled={saving}
           >
@@ -563,17 +884,6 @@ export function PurchaseEntryModal({
         </div>
     </>
   );
-
-  if (isPage) {
-    return (
-      <form
-        onSubmit={(event) => void submit(event)}
-        className="w-full pb-8"
-      >
-        {formBody}
-      </form>
-    );
-  }
 
   return (
     <motion.div
@@ -620,16 +930,17 @@ function DraftFields({
         <div className="grid gap-3 md:grid-cols-[16rem_minmax(0,1fr)]">
           <div>
             <span className="label required">Operating system</span>
-            <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5">
+            <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 sm:w-auto">
               {(["IOS", "ANDROID"] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
-                  className={
+                  className={clsx(
+                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-medium transition sm:flex-none",
                     draft.platform === option
-                      ? "rounded-lg bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                      : "rounded-lg px-3 py-2 text-sm font-semibold text-ink-500"
-                  }
+                      ? "bg-ink-900 font-semibold text-white shadow-soft"
+                      : "text-ink-500 hover:text-ink-700",
+                  )}
                   onClick={() =>
                     onChange(
                       draft.platform === option

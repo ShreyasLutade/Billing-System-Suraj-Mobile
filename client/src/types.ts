@@ -78,7 +78,7 @@ export type Bill = {
 };
 
 export type AnalyticsSummary = {
-  period: "today" | "yesterday" | "week" | "month" | "all";
+  period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
   periodLabel: string;
   from: string | null;
   to: string | null;
@@ -90,6 +90,16 @@ export type AnalyticsSummary = {
     finance: number;
     due: number;
     bills: number;
+    collected: number;
+    mixTotal: number;
+    cost: number;
+    profit: number;
+    shares: {
+      cash: number;
+      online: number;
+      finance: number;
+      due: number;
+    };
   };
   today: {
     sales: number;
@@ -99,18 +109,29 @@ export type AnalyticsSummary = {
     due: number;
     bills: number;
   };
+  vsPrevious: {
+    mixTotalChangePct: number | null;
+    label: string | null;
+  };
   outstandingDue: {
     amount: number;
     count: number;
+    oldestDueDays: number | null;
   };
-  upcomingDues: Array<{
+  stockOnHand: {
+    count: number;
+    value: number;
+  };
+  periodBills: Array<{
     id: string;
     invoiceNumber: string;
     customerName: string;
     customerPhone: string;
-    dueAmount: number;
-    dueDate: string | null;
     billDate: string;
+    productLabel: string;
+    costPrice: number;
+    sellingPrice: number;
+    profit: number;
   }>;
 };
 
@@ -153,6 +174,8 @@ export type StockItem = {
   suppliers: string[];
   supplierId?: string | null;
   supplierName?: string | null;
+  /** True when the linked supplier is from a customer phone exchange. */
+  supplierIsExchange?: boolean;
   status: "AVAILABLE" | "SOLD" | string;
   createdAt: string;
   updatedAt: string;
@@ -174,6 +197,8 @@ export type Supplier = {
   stockSold: number;
   /** Total units purchased from this supplier (available + sold). */
   stockPurchased: number;
+  /** True when this party is a customer who gave a phone in exchange. */
+  isExchange?: boolean;
 };
 
 export type SupplierPayment = {
@@ -200,6 +225,8 @@ export type PurchaseStockRef = {
   soldBillId?: string | null;
   soldInvoiceNumber?: string | null;
   soldCustomerName?: string | null;
+  /** Selling price from the sale bill — admin only. */
+  soldPrice?: number | null;
 };
 
 export type Purchase = {
@@ -231,9 +258,9 @@ export type StockHistory = {
     id: string;
     purchaseDate: string;
     note?: string | null;
-    supplier: { id: string; name: string };
+    supplier: { id: string; name: string; isExchange?: boolean };
   } | null;
-  supplier: { id: string; name: string } | null;
+  supplier: { id: string; name: string; isExchange?: boolean } | null;
   sale: {
     billId: string;
     invoiceNumber: string;
