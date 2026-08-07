@@ -199,10 +199,11 @@ function focusDraftItemField(item: DraftItem, withGst: boolean) {
   if (!el) return id;
   el.scrollIntoView({ behavior: "smooth", block: "center" });
   const target =
-    el instanceof HTMLElement &&
-    (el.matches("input,button,textarea,select")
-      ? el
-      : el.querySelector<HTMLElement>("button, input, textarea, select"));
+    el instanceof HTMLElement
+      ? el.matches("input,button,textarea,select")
+        ? el
+        : el.querySelector<HTMLElement>("button, input, textarea, select")
+      : null;
   target?.focus();
   if (target instanceof HTMLInputElement) target.select?.();
   return id;
