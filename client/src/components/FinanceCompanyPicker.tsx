@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import clsx from "clsx";
+import { subscribeOutsideDismiss } from "../lib/floatingMenu";
 import type { FinanceCompany } from "../types";
 
 export const ADD_NEW_FINANCE = "__add_new__";
@@ -35,18 +36,12 @@ export function FinanceCompanyPicker({
         "Select finance company";
 
   useEffect(() => {
-    function onPointerDown(event: MouseEvent | TouchEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-    };
-  }, []);
+    if (!open) return;
+    return subscribeOutsideDismiss(
+      (target) => Boolean(rootRef.current?.contains(target as Node | null)),
+      () => setOpen(false),
+    );
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,7 +54,6 @@ export function FinanceCompanyPicker({
 
   return (
     <div ref={rootRef} className="relative">
-      {/* Keep a real select for form validation / accessibility fallback */}
       <select
         className="sr-only"
         tabIndex={-1}
@@ -80,9 +74,10 @@ export function FinanceCompanyPicker({
       <button
         type="button"
         className={clsx(
-          "field flex min-h-[48px] items-center justify-between gap-3 text-left text-base sm:text-sm",
-          open && "border-tide-500 ring-4 ring-tide-400/20",
-          !value && "text-ink-300",
+          "flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 py-2.5 text-left text-base transition sm:text-[14.5px]",
+          open &&
+            "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+          !value && "text-[#9AA6B6]",
         )}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -92,51 +87,59 @@ export function FinanceCompanyPicker({
         <span className="min-w-0 flex-1 truncate">{selectedLabel}</span>
         <ChevronDown
           className={clsx(
-            "h-5 w-5 shrink-0 text-ink-500 transition",
+            "h-[18px] w-[18px] shrink-0 text-ink-500 transition",
             open && "rotate-180",
           )}
         />
       </button>
 
       {open ? (
-          <div
-            id={listId}
-            role="listbox"
-            className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
-          >
-            <div className="max-h-56 overflow-y-auto overscroll-contain p-1.5 sm:max-h-64">
+        <div
+          id={listId}
+          role="listbox"
+          className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+        >
+          <div className="max-h-56 overflow-y-auto overscroll-contain p-1.5 sm:max-h-64">
+            <PickerOption
+              active={!value}
+              label="Select finance company"
+              muted
+              onSelect={() => {
+                onChange("");
+                setOpen(false);
+              }}
+            />
+            {visibleCompanies.map((company) => (
               <PickerOption
-                active={!value}
-                label="Select finance company"
-                muted
+                key={company.id}
+                active={value === company.id}
+                label={company.name}
                 onSelect={() => {
-                  onChange("");
+                  onChange(company.id);
                   setOpen(false);
                 }}
               />
-              {visibleCompanies.map((company) => (
-                <PickerOption
-                  key={company.id}
-                  active={value === company.id}
-                  label={company.name}
-                  onSelect={() => {
-                    onChange(company.id);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-              <div className="my-1 border-t border-ink-50" />
-              <PickerOption
-                active={value === ADD_NEW_FINANCE}
-                label="Add new"
-                icon={<Plus className="h-4 w-4" />}
-                onSelect={() => {
-                  onChange(ADD_NEW_FINANCE);
-                  setOpen(false);
-                }}
-              />
-            </div>
+            ))}
           </div>
+          <div className="border-t border-ink-100 p-2">
+            <button
+              type="button"
+              className={clsx(
+                "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13.5px] font-semibold transition",
+                value === ADD_NEW_FINANCE
+                  ? "bg-[#E7F8F1] text-[#0E9E76]"
+                  : "text-[#0E9E76] hover:bg-[#E7F8F1]",
+              )}
+              onClick={() => {
+                onChange(ADD_NEW_FINANCE);
+                setOpen(false);
+              }}
+            >
+              <Plus className="h-[17px] w-[17px]" strokeWidth={2.2} />
+              Add new finance company
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -161,17 +164,30 @@ function PickerOption({
       role="option"
       aria-selected={Boolean(active)}
       className={clsx(
-        "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-base transition sm:text-sm",
+        "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left transition",
         active
-          ? "bg-ink-900 text-white"
-          : "text-ink-800 active:bg-ink-50 hover:bg-ink-50",
+          ? "bg-[#E7F8F1]"
+          : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA]",
         muted && !active && "text-ink-300",
       )}
       onClick={onSelect}
     >
       {icon ? <span className="shrink-0">{icon}</span> : null}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+      <span
+        className={clsx(
+          "min-w-0 flex-1 truncate text-sm font-semibold",
+          muted && !active ? "text-ink-300" : "text-ink-900",
+        )}
+      >
+        {label}
+      </span>
+      <Check
+        className={clsx(
+          "h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition",
+          active ? "opacity-100" : "opacity-0",
+        )}
+        strokeWidth={2.6}
+      />
     </button>
   );
 }

@@ -1,6 +1,7 @@
 import type { PhoneModel } from "../types";
 import {
   compactSearchText,
+  matchesElasticSearch,
   normalizeSearchText,
 } from "./elasticSearch";
 
@@ -29,6 +30,13 @@ export function rankPhoneModels(
     const nameCompact = compactSearchText(model.name);
     const hayCompact = compactSearchText(haystack);
 
+    if (
+      !matchesElasticSearch(model.name, query) &&
+      !matchesElasticSearch(haystack, query)
+    ) {
+      continue;
+    }
+
     let score = 0;
 
     if (name === q || nameCompact === qCompact) score = 1000;
@@ -55,19 +63,23 @@ export function rankPhoneModels(
           ram.includes(token) ||
           nameCompact.includes(token),
       );
-      if (!allMatch) continue;
-
-      let tokenScore = 480;
-      for (const token of qTokens) {
-        if (nameTokens.includes(token)) tokenScore += 50;
-        else if (name.startsWith(token) || name.includes(` ${token}`)) {
-          tokenScore += 35;
-        } else if (name.includes(token)) tokenScore += 25;
-        else if (storage.includes(token) || ram.includes(token)) tokenScore += 15;
+      if (!allMatch) {
+        // Elastic match already passed (e.g. "redmia13") — keep with base score
+        score = 560;
+      } else {
+        let tokenScore = 480;
+        for (const token of qTokens) {
+          if (nameTokens.includes(token)) tokenScore += 50;
+          else if (name.startsWith(token) || name.includes(` ${token}`)) {
+            tokenScore += 35;
+          } else if (name.includes(token)) tokenScore += 25;
+          else if (storage.includes(token) || ram.includes(token)) {
+            tokenScore += 15;
+          }
+        }
+        if (name.includes(q) || nameCompact.includes(qCompact)) tokenScore += 80;
+        score = tokenScore;
       }
-      // Prefer contiguous phrase order (e.g. "15 pro" inside "iphone 15 pro").
-      if (name.includes(q) || nameCompact.includes(qCompact)) tokenScore += 80;
-      score = tokenScore;
     }
 
     score -= Math.min(model.name.length, 40) * 0.12;
