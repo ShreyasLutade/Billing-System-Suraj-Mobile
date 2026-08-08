@@ -71,12 +71,48 @@ const blankItem = (): DraftItem => ({
   warrantyMonths: undefined,
 });
 
+const STOCK_AVATAR_COLORS: Record<string, { bg: string; fg: string }> = {
+  Apple: { bg: "#EEF0F4", fg: "#1B2740" },
+  Oppo: { bg: "#E7F8F1", fg: "#0E9E76" },
+  Samsung: { bg: "#E8F0FE", fg: "#2563EB" },
+  Redmi: { bg: "#FEECEC", fg: "#D64545" },
+  Xiaomi: { bg: "#FEECEC", fg: "#D64545" },
+  Vivo: { bg: "#EEF0FE", fg: "#4338CA" },
+  Realme: { bg: "#FEF3E2", fg: "#B76E00" },
+  OnePlus: { bg: "#FEECEC", fg: "#B91C1C" },
+};
+
+function stockBrandKey(mobileName: string, platform?: string | null) {
+  if (platform === "IOS" || /^iphone/i.test(mobileName)) return "Apple";
+  const first = mobileName.trim().split(/\s+/)[0] || "?";
+  return first;
+}
+
+function stockAvatar(mobileName: string, platform?: string | null) {
+  const brand = stockBrandKey(mobileName, platform);
+  const colors = STOCK_AVATAR_COLORS[brand] || {
+    bg: "#EEF2F8",
+    fg: "#3A4658",
+  };
+  return {
+    letter: brand.charAt(0).toUpperCase(),
+    bg: colors.bg,
+    fg: colors.fg,
+  };
+}
+
+function formatInr(amount: number) {
+  return `₹${(Number(amount) || 0).toLocaleString("en-IN")}`;
+}
+
 function formatStockOption(stock: {
   mobileName: string;
   color: string;
   storage: string;
   ram: string;
   imei: string;
+  platform?: string | null;
+  purchasePrice?: number;
 }) {
   const ramLabel = (() => {
     if (!stock.ram) return null;
@@ -89,8 +125,13 @@ function formatStockOption(stock: {
   return {
     label: [stock.mobileName, stock.color, stock.storage, ramLabel]
       .filter(Boolean)
-      .join(" • "),
+      .join(" · "),
     description: stock.imei ? `IMEI ${stock.imei}` : undefined,
+    avatar: stockAvatar(stock.mobileName, stock.platform),
+    meta:
+      stock.purchasePrice != null && stock.purchasePrice > 0
+        ? formatInr(stock.purchasePrice)
+        : undefined,
   };
 }
 
@@ -533,6 +574,8 @@ export function CreateBillPage() {
         value: stock.id,
         label: formatted.label,
         description: formatted.description,
+        avatar: formatted.avatar,
+        meta: formatted.meta,
         badge: isUsed ? "Old" : "New",
         badgeTone: (isUsed ? "old" : "new") as "old" | "new",
         condition: stock.condition as "USED" | "NEW",
@@ -555,11 +598,14 @@ export function CreateBillPage() {
         storage: item.storage || "",
         ram: item.ram || "",
         imei: item.imei1 || "",
+        platform: item.platform,
       });
       fromStock.push({
         value: item.stockItemId,
         label: formatted.label,
         description: formatted.description,
+        avatar: formatted.avatar,
+        meta: formatted.meta,
         badge: isUsed ? "Old" : "New",
         badgeTone: (isUsed ? "old" : "new") as "old" | "new",
         condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
@@ -588,7 +634,8 @@ export function CreateBillPage() {
           value: mobile.id,
           label: [mobile.name, mobile.color, mobile.storage, ramLabel]
             .filter(Boolean)
-            .join(" • "),
+            .join(" · "),
+          avatar: stockAvatar(mobile.name, mobile.platform),
           badge: isUsed ? "Old" : "New",
           badgeTone: (isUsed ? "old" : "new") as "old" | "new",
           condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
@@ -1780,17 +1827,7 @@ export function CreateBillPage() {
                   {withGst ? (
                     <>
                       <div className="sm:col-span-2 lg:col-span-4">
-                        <div className="mb-1.5 flex items-center justify-between gap-3">
-                          <label className="label required mb-0">Phone</label>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-tide-600 hover:text-tide-700"
-                            onClick={() => setAddMobileForItem(item.key)}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add new mobile
-                          </button>
-                        </div>
+                        <label className="label required">Phone</label>
                         <div id={`phone-${item.key}`}>
                         <FieldPicker
                           value={
@@ -1819,6 +1856,10 @@ export function CreateBillPage() {
                           required
                           conditionFilters
                           options={catalogMobileOptions}
+                          footerAction={{
+                            label: "Add a new mobile to stock",
+                            onClick: () => setAddMobileForItem(item.key),
+                          }}
                         />
                         </div>
                       </div>
@@ -1863,6 +1904,10 @@ export function CreateBillPage() {
                           required
                           conditionFilters
                           options={stockOptionsForItem(item.key)}
+                          footerAction={{
+                            label: "Add a new mobile to stock",
+                            onClick: () => setAddMobileForItem(item.key),
+                          }}
                         />
                         </div>
                       </div>

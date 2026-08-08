@@ -9,9 +9,26 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import clsx from "clsx";
-import { matchesElasticFields } from "../lib/elasticSearch";
+import {
+  compactSearchText,
+  matchesElasticFields,
+  matchesElasticSearch,
+  normalizeSearchText,
+} from "../lib/elasticSearch";
+import {
+  computeMenuPosition,
+  subscribeOutsideDismiss,
+  subscribeViewportChange,
+  type MenuPosition,
+} from "../lib/floatingMenu";
+
+export type FieldPickerAvatar = {
+  letter: string;
+  bg: string;
+  fg: string;
+};
 
 export type FieldPickerOption = {
   value: string;
@@ -20,18 +37,14 @@ export type FieldPickerOption = {
   icon?: ReactNode;
   badge?: string;
   badgeTone?: "new" | "old";
-  /** Used by in-dropdown New/Old circle filters */
+  /** Right-column meta (e.g. ₹ price) */
+  meta?: string;
+  avatar?: FieldPickerAvatar;
+  /** Used by in-dropdown New/Old filters */
   condition?: "NEW" | "USED";
 };
 
 type ConditionFilter = "ALL" | "NEW" | "USED";
-
-type MenuPosition = {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
-};
 
 type Props = {
   options: FieldPickerOption[];
@@ -42,8 +55,13 @@ type Props = {
   disabled?: boolean;
   searchable?: boolean;
   searchPlaceholder?: string;
-  /** Show All / New / Old circle filters inside the open dropdown */
+  /** Show All / New / Old segment filters inside the open dropdown */
   conditionFilters?: boolean;
+  /** Footer action under the list (e.g. Add to stock) */
+  footerAction?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 export function FieldPicker({
@@ -56,6 +74,7 @@ export function FieldPicker({
   searchable = false,
   searchPlaceholder = "Search…",
   conditionFilters = false,
+  footerAction,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -68,7 +87,27 @@ export function FieldPicker({
   const listId = useId();
 
   const selected = options.find((option) => option.value === value);
-  const selectedLabel = selected?.label || placeholder;
+  const selectedLabel = selected
+    ? [
+        selected.label,
+        selected.description?.replace(/^IMEI\s+/i, ""),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+
+  const conditionCounts = useMemo(() => {
+    let all = 0;
+    let neu = 0;
+    let old = 0;
+    for (const option of options) {
+      if (!option.condition) continue;
+      all += 1;
+      if (option.condition === "NEW") neu += 1;
+      if (option.condition === "USED") old += 1;
+    }
+    return { all, neu, old };
+  }, [options]);
 
   const filteredOptions = useMemo(() => {
     return options.filter((option) => {
@@ -81,7 +120,7 @@ export function FieldPicker({
       }
       if (!query.trim()) return true;
       return matchesElasticFields(
-        [option.label, option.description, option.badge],
+        [option.label, option.description, option.badge, option.meta],
         query,
       );
     });
@@ -93,59 +132,46 @@ export function FieldPicker({
     setMenuPos(null);
   }, []);
 
+  const openMenu = useCallback(() => {
+    if (disabled) return;
+    setQuery("");
+    setOpen(true);
+  }, [disabled]);
+
   const updateMenuPosition = useCallback(() => {
     const trigger = rootRef.current;
     if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const gap = 8;
-    const spaceBelow = window.innerHeight - rect.bottom - gap - 12;
-    const spaceAbove = rect.top - gap - 12;
-    const preferBelow = spaceBelow >= 180 || spaceBelow >= spaceAbove;
-    const maxHeight = Math.max(
-      160,
-      Math.min(320, preferBelow ? spaceBelow : spaceAbove),
+    setMenuPos(
+      computeMenuPosition(trigger, {
+        gap: 8,
+        minHeight: 160,
+        maxHeightCap: 380,
+      }),
     );
-    const top = preferBelow
-      ? rect.bottom + gap
-      : Math.max(12, rect.top - gap - maxHeight);
-
-    setMenuPos({
-      top,
-      left: rect.left,
-      width: rect.width,
-      maxHeight,
-    });
   }, []);
 
   useLayoutEffect(() => {
     if (!open || disabled) return;
     updateMenuPosition();
-    function onReposition() {
-      updateMenuPosition();
-    }
-    window.addEventListener("resize", onReposition);
-    // capture scroll from any scrollable ancestor
-    window.addEventListener("scroll", onReposition, true);
-    return () => {
-      window.removeEventListener("resize", onReposition);
-      window.removeEventListener("scroll", onReposition, true);
-    };
-  }, [open, disabled, updateMenuPosition, filteredOptions.length, conditionFilter]);
+    return subscribeViewportChange(updateMenuPosition);
+  }, [
+    open,
+    disabled,
+    updateMenuPosition,
+    filteredOptions.length,
+    conditionFilter,
+    footerAction,
+  ]);
 
   useEffect(() => {
-    function onPointerDown(event: MouseEvent | TouchEvent) {
-      const target = event.target as Node;
-      if (rootRef.current?.contains(target)) return;
-      if (menuRef.current?.contains(target)) return;
-      close();
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-    };
-  }, [close]);
+    if (!open) return;
+    return subscribeOutsideDismiss((target) => {
+      const node = target as Node | null;
+      if (rootRef.current?.contains(node)) return true;
+      if (menuRef.current?.contains(node)) return true;
+      return false;
+    }, close);
+  }, [open, close]);
 
   useEffect(() => {
     if (!open) return;
@@ -166,6 +192,12 @@ export function FieldPicker({
     }
   }, [open, searchable]);
 
+  const chromeHeight =
+    (conditionFilters ? 52 : 0) + (footerAction ? 52 : 0);
+  const listMaxHeight = menuPos
+    ? Math.max(120, menuPos.maxHeight - chromeHeight)
+    : 240;
+
   const menu =
     open && !disabled && menuPos
       ? createPortal(
@@ -173,7 +205,7 @@ export function FieldPicker({
             ref={menuRef}
             id={listId}
             role="listbox"
-            className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-lift"
+            className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
             style={{
               position: "fixed",
               top: menuPos.top,
@@ -184,74 +216,127 @@ export function FieldPicker({
             }}
           >
             {conditionFilters ? (
-              <div
-                className="flex items-center gap-4 border-b border-ink-100 px-3 py-2.5"
-                role="radiogroup"
-                aria-label="Filter by condition"
-              >
-                {(
-                  [
-                    { value: "ALL", label: "All" },
-                    { value: "NEW", label: "New" },
-                    { value: "USED", label: "Old" },
-                  ] as const
-                ).map((option) => (
-                  <FilterCircle
-                    key={option.value}
-                    label={option.label}
-                    selected={conditionFilter === option.value}
-                    onSelect={() => {
-                      if (
-                        option.value !== "ALL" &&
-                        conditionFilter === option.value
-                      ) {
-                        setConditionFilter("ALL");
-                        return;
-                      }
-                      setConditionFilter(option.value);
-                    }}
-                  />
-                ))}
+              <div className="flex items-center gap-1.5 border-b border-ink-100 px-3.5 py-3">
+                <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">
+                  Show
+                </span>
+                <div
+                  className="inline-flex gap-0.5 rounded-[9px] bg-[#EEF0F3] p-0.5"
+                  role="radiogroup"
+                  aria-label="Filter by condition"
+                >
+                  {(
+                    [
+                      {
+                        value: "ALL" as const,
+                        label: "All",
+                        count: conditionCounts.all,
+                      },
+                      {
+                        value: "NEW" as const,
+                        label: "New",
+                        count: conditionCounts.neu,
+                      },
+                      {
+                        value: "USED" as const,
+                        label: "Old",
+                        count: conditionCounts.old,
+                      },
+                    ] as const
+                  ).map((option) => {
+                    const on = conditionFilter === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        className={clsx(
+                          "inline-flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12.5px] transition",
+                          on
+                            ? "bg-white font-semibold text-ink-900 shadow-soft"
+                            : "font-medium text-ink-700",
+                        )}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConditionFilter(option.value);
+                        }}
+                      >
+                        {option.label}
+                        <span className="text-[10.5px] font-bold opacity-70">
+                          {option.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="ml-auto text-[11.5px] text-ink-500">
+                  {filteredOptions.filter((o) => o.condition).length} shown
+                </span>
               </div>
             ) : null}
+
             <div
               className="overflow-y-auto overscroll-contain p-1.5"
-              style={{ maxHeight: menuPos.maxHeight - (conditionFilters ? 52 : 0) }}
+              style={{ maxHeight: listMaxHeight }}
             >
-              <PickerOption
-                active={!value}
-                label={placeholder}
-                muted
-                onSelect={() => {
-                  onChange("");
-                  close();
-                }}
-              />
-              {filteredOptions.map((option) => (
-                <PickerOption
-                  key={option.value}
-                  active={value === option.value}
-                  label={option.label}
-                  description={option.description}
-                  icon={option.icon}
-                  badge={option.badge}
-                  badgeTone={option.badgeTone}
-                  onSelect={() => {
-                    onChange(option.value);
-                    close();
-                  }}
-                />
-              ))}
               {filteredOptions.length === 0 ? (
-                <p className="px-3 py-4 text-center text-sm text-ink-400">
-                  No matching option found
-                </p>
-              ) : null}
+                <div className="px-3.5 py-7 text-center text-[13.5px] text-ink-500">
+                  {query.trim() ? (
+                    <>
+                      No matches for{" "}
+                      <b className="text-ink-900">“{query.trim()}”</b>.
+                      <br />
+                      Try a different search
+                      {footerAction ? " or add it below" : ""}.
+                    </>
+                  ) : (
+                    "No options available"
+                  )}
+                </div>
+              ) : (
+                filteredOptions.map((option) => (
+                  <PickerOption
+                    key={option.value}
+                    active={value === option.value}
+                    label={option.label}
+                    description={option.description}
+                    icon={option.icon}
+                    badge={option.badge}
+                    badgeTone={option.badgeTone}
+                    meta={option.meta}
+                    avatar={option.avatar}
+                    query={query}
+                    onSelect={() => {
+                      onChange(option.value);
+                      close();
+                    }}
+                  />
+                ))
+              )}
             </div>
+
+            {footerAction ? (
+              <div className="border-t border-ink-100 p-2">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13.5px] font-semibold text-[#0E9E76] transition hover:bg-[#E7F8F1]"
+                  onClick={() => {
+                    close();
+                    footerAction.onClick();
+                  }}
+                >
+                  <Plus className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                  {footerAction.label}
+                </button>
+              </div>
+            ) : null}
           </div>,
           document.body,
         )
       : null;
+
+  const showClear = Boolean(value) || (open && Boolean(query));
 
   return (
     <div ref={rootRef} className="relative">
@@ -272,53 +357,112 @@ export function FieldPicker({
         ))}
       </select>
 
-      {open && searchable && !disabled ? (
-        <div className="field flex min-h-[48px] items-center gap-3 border-tide-500 ring-4 ring-tide-400/20">
+      {searchable ? (
+        <div
+          className={clsx(
+            "flex min-h-[48px] items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+            open &&
+              "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+            disabled && "cursor-not-allowed opacity-55",
+          )}
+          onMouseDown={(event) => {
+            if (disabled) return;
+            if (
+              event.target instanceof HTMLElement &&
+              event.target.closest("button, input")
+            ) {
+              return;
+            }
+            if (!open) {
+              event.preventDefault();
+              openMenu();
+              requestAnimationFrame(() => searchRef.current?.focus());
+            }
+          }}
+        >
+          <Search
+            className="h-[18px] w-[18px] shrink-0 text-ink-500"
+            aria-hidden
+          />
           <input
             ref={searchRef}
-            className="min-w-0 flex-1 bg-transparent text-base text-ink-900 outline-none placeholder:text-ink-300 sm:text-sm"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
+            value={open ? query : selectedLabel}
+            readOnly={!open}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (!open) setOpen(true);
+            }}
+            onFocus={() => {
+              if (disabled) return;
+              // Fresh query on open so typing never appends into the selected label
+              // (which would break elastic match, e.g. "r" + "Redmi A13…").
+              if (!open) {
+                setQuery("");
+                setOpen(true);
+              }
+            }}
             placeholder={searchPlaceholder}
             role="combobox"
-            aria-expanded="true"
+            aria-expanded={open}
             aria-controls={listId}
             aria-autocomplete="list"
+            disabled={disabled}
+            autoComplete="off"
+            spellCheck={false}
           />
-          <button
-            type="button"
-            className="shrink-0 text-ink-500"
-            onClick={close}
-            aria-label="Close dropdown"
-          >
-            <ChevronDown className="h-5 w-5 rotate-180" />
-          </button>
+          {showClear ? (
+            <button
+              type="button"
+              className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[7px] bg-[#EEF1F5] text-ink-500"
+              aria-label="Clear"
+              disabled={disabled}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setQuery("");
+                if (value) onChange("");
+                if (!open) openMenu();
+                requestAnimationFrame(() => searchRef.current?.focus());
+              }}
+            >
+              <X className="h-3 w-3" strokeWidth={2.5} />
+            </button>
+          ) : null}
+          <ChevronDown
+            className={clsx(
+              "h-[18px] w-[18px] shrink-0 text-ink-500 transition",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
         </div>
       ) : (
         <button
           type="button"
           disabled={disabled}
           className={clsx(
-            "field flex min-h-[48px] items-start justify-between gap-3 py-2.5 text-left text-base sm:items-center sm:text-sm",
-            open && "border-tide-500 ring-4 ring-tide-400/20",
-            !value && "text-ink-300",
+            "flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 py-2.5 text-left text-base transition sm:text-[14.5px]",
+            open &&
+              "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+            !value && "text-[#9AA6B6]",
             disabled && "cursor-not-allowed opacity-55",
           )}
-          aria-haspopup={searchable ? "listbox" : undefined}
+          aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => {
-            if (!disabled) setOpen((prev) => !prev);
+            if (disabled) return;
+            if (open) close();
+            else openMenu();
           }}
         >
-          <span className="min-w-0 flex-1">
-            <span className="block whitespace-normal break-words leading-snug">
-              {selectedLabel}
-            </span>
+          <span className="min-w-0 flex-1 truncate">
+            {selectedLabel || placeholder}
           </span>
           <ChevronDown
             className={clsx(
-              "mt-0.5 h-5 w-5 shrink-0 text-ink-500 transition sm:mt-0",
+              "h-[18px] w-[18px] shrink-0 text-ink-500 transition",
               open && "rotate-180",
             )}
           />
@@ -330,38 +474,57 @@ export function FieldPicker({
   );
 }
 
-function FilterCircle({
-  label,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function HighlightText({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+
+  const lower = text.toLowerCase();
+  const qLower = q.toLowerCase();
+  const index = lower.indexOf(qLower);
+  if (index >= 0) {
+    return (
+      <>
+        {text.slice(0, index)}
+        <mark className="rounded-[3px] bg-[#FFF1B8] px-px text-inherit">
+          {text.slice(index, index + q.length)}
+        </mark>
+        {text.slice(index + q.length)}
+      </>
+    );
+  }
+
+  // Compact query ("redmia13") — highlight words that participate in the match
+  const qCompact = compactSearchText(q);
+  if (!qCompact || !matchesElasticSearch(text, q)) return <>{text}</>;
+
+  const chunks = text.split(/(\s+)/);
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      className="inline-flex items-center gap-2 text-sm font-medium text-ink-700"
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect();
-      }}
-    >
-      <span
-        className={clsx(
-          "flex h-4 w-4 items-center justify-center rounded-full border-2",
-          selected ? "border-ink-900 bg-ink-900" : "border-ink-300 bg-white",
-        )}
-      >
-        {selected ? (
-          <span className="h-1.5 w-1.5 rounded-full bg-white" />
-        ) : null}
-      </span>
-      {label}
-    </button>
+    <>
+      {chunks.map((chunk, i) => {
+        if (!chunk || /^\s+$/.test(chunk)) {
+          return <span key={i}>{chunk}</span>;
+        }
+        const chunkCompact = compactSearchText(chunk);
+        const hit =
+          chunkCompact.length > 0 &&
+          (qCompact.includes(chunkCompact) ||
+            chunkCompact.includes(qCompact) ||
+            normalizeSearchText(chunk)
+              .split(" ")
+              .filter(Boolean)
+              .every((token) => qCompact.includes(token)));
+        return hit ? (
+          <mark
+            key={i}
+            className="rounded-[3px] bg-[#FFF1B8] px-px text-inherit"
+          >
+            {chunk}
+          </mark>
+        ) : (
+          <span key={i}>{chunk}</span>
+        );
+      })}
+    </>
   );
 }
 
@@ -369,66 +532,88 @@ function PickerOption({
   label,
   description,
   active,
-  muted,
   icon,
   badge,
   badgeTone,
+  meta,
+  avatar,
+  query,
   onSelect,
 }: {
   label: string;
   description?: string;
   active?: boolean;
-  muted?: boolean;
   icon?: ReactNode;
   badge?: string;
   badgeTone?: "new" | "old";
+  meta?: string;
+  avatar?: FieldPickerAvatar;
+  query?: string;
   onSelect: () => void;
 }) {
+  const q = query || "";
   return (
     <button
       type="button"
       role="option"
       aria-selected={Boolean(active)}
       className={clsx(
-        "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-base transition sm:text-sm",
-        active
-          ? "bg-ink-900 text-white"
-          : "text-ink-800 active:bg-ink-50 hover:bg-ink-50",
-        muted && !active && "text-ink-300",
+        "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left transition",
+        active ? "bg-[#E7F8F1]" : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA]",
       )}
       onClick={onSelect}
     >
-      {icon ? <span className="shrink-0">{icon}</span> : null}
+      {avatar ? (
+        <span
+          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] text-sm font-bold"
+          style={{ background: avatar.bg, color: avatar.fg }}
+        >
+          {avatar.letter}
+        </span>
+      ) : icon ? (
+        <span className="shrink-0 text-ink-700">{icon}</span>
+      ) : null}
+
       <span className="min-w-0 flex-1">
-        <span className="block whitespace-normal break-words leading-snug">
-          {label}
+        <span className="block truncate text-sm font-semibold text-ink-900">
+          <HighlightText text={label} query={q} />
         </span>
         {description ? (
-          <span
-            className={clsx(
-              "mt-1 block break-all font-mono text-xs leading-5 tracking-wide",
-              active ? "text-white/80" : "text-ink-500",
-            )}
-          >
-            {description}
+          <span className="mt-0.5 block truncate text-xs tracking-wide text-ink-500 tabular-nums">
+            <HighlightText text={description} query={q} />
           </span>
         ) : null}
       </span>
-      {badge ? (
-        <span
-          className={clsx(
-            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide",
-            active
-              ? "bg-white/15 text-white"
-              : badgeTone === "old"
-                ? "bg-orange-100 text-ember-500"
-                : "bg-tide-100 text-tide-700",
-          )}
-        >
-          {badge}
+
+      {(badge || meta) && (
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          {badge ? (
+            <span
+              className={clsx(
+                "rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide",
+                badgeTone === "old"
+                  ? "bg-[#FEF3E2] text-[#B76E00]"
+                  : "bg-[#E7F8F1] text-[#0E9E76]",
+              )}
+            >
+              {badge}
+            </span>
+          ) : null}
+          {meta ? (
+            <span className="text-[13.5px] font-bold tabular-nums text-ink-900">
+              {meta}
+            </span>
+          ) : null}
         </span>
-      ) : null}
-      {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+      )}
+
+      <Check
+        className={clsx(
+          "h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition",
+          active ? "opacity-100" : "opacity-0",
+        )}
+        strokeWidth={2.6}
+      />
     </button>
   );
 }

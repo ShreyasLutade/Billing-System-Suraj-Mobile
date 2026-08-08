@@ -10,7 +10,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
+import clsx from "clsx";
 import { api } from "../lib/api";
+import {
+  computeMenuPosition,
+  subscribeOutsideDismiss,
+  subscribeViewportChange,
+  type MenuPosition,
+} from "../lib/floatingMenu";
 import {
   formatCapacityLabel,
   rankPhoneModels,
@@ -26,13 +33,6 @@ type Props = {
   required?: boolean;
   onChange: (value: string) => void;
   onSelectModel: (model: PhoneModel) => void;
-};
-
-type MenuPosition = {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
 };
 
 const cache: Partial<Record<"IOS" | "ANDROID", PhoneModel[]>> = {};
@@ -116,25 +116,13 @@ export function MobileNameSearch({
   const updateMenuPosition = useCallback(() => {
     const trigger = rootRef.current;
     if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const gap = 6;
-    const spaceBelow = window.innerHeight - rect.bottom - gap - 12;
-    const spaceAbove = rect.top - gap - 12;
-    const preferBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
-    const maxHeight = Math.max(
-      140,
-      Math.min(280, preferBelow ? spaceBelow : spaceAbove),
+    setMenuPos(
+      computeMenuPosition(trigger, {
+        gap: 6,
+        minHeight: 140,
+        maxHeightCap: 280,
+      }),
     );
-    const top = preferBelow
-      ? rect.bottom + gap
-      : Math.max(12, rect.top - gap - maxHeight);
-
-    setMenuPos({
-      top,
-      left: rect.left,
-      width: rect.width,
-      maxHeight,
-    });
   }, []);
 
   useEffect(() => {
@@ -151,31 +139,18 @@ export function MobileNameSearch({
       return;
     }
     updateMenuPosition();
-    function onReposition() {
-      updateMenuPosition();
-    }
-    window.addEventListener("resize", onReposition);
-    window.addEventListener("scroll", onReposition, true);
-    return () => {
-      window.removeEventListener("resize", onReposition);
-      window.removeEventListener("scroll", onReposition, true);
-    };
+    return subscribeViewportChange(updateMenuPosition);
   }, [showList, showEmpty, suggestions.length, updateMenuPosition, value]);
 
   useEffect(() => {
-    function onPointerDown(event: MouseEvent | TouchEvent) {
-      const target = event.target as Node;
-      if (rootRef.current?.contains(target)) return;
-      if (menuRef.current?.contains(target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-    };
-  }, []);
+    if (!open) return;
+    return subscribeOutsideDismiss((target) => {
+      const node = target as Node | null;
+      if (rootRef.current?.contains(node)) return true;
+      if (menuRef.current?.contains(node)) return true;
+      return false;
+    }, () => setOpen(false));
+  }, [open]);
 
   function pick(model: PhoneModel) {
     onSelectModel(model);
@@ -222,7 +197,7 @@ export function MobileNameSearch({
               <ul
                 id={listId}
                 role="listbox"
-                className="overflow-auto rounded-xl border border-ink-100 bg-white py-1 shadow-lg shadow-ink-900/10"
+                className="overflow-auto rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
                 style={{ maxHeight: menuPos.maxHeight }}
               >
                 {suggestions.map((model, index) => {
@@ -236,34 +211,22 @@ export function MobileNameSearch({
                         aria-selected={active}
                         className={
                           active
-                            ? "flex w-full items-center gap-3 px-3 py-2.5 text-left bg-ink-900 text-white"
-                            : "flex w-full items-center gap-3 px-3 py-2.5 text-left text-ink-800 hover:bg-ink-50"
+                            ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-[#E7F8F1]"
+                            : "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left hover:bg-[#F4F7FA]"
                         }
                         onMouseEnter={() => setHighlight(index)}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => pick(model)}
                       >
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
                           {model.name}
                         </span>
                         <span className="flex shrink-0 items-center gap-1.5">
-                          <span
-                            className={
-                              active
-                                ? "rounded-md bg-white/20 px-2 py-0.5 text-xs font-semibold tabular-nums text-white"
-                                : "rounded-md bg-ink-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-800"
-                            }
-                          >
+                          <span className="rounded-md bg-[#EEF0F3] px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-800">
                             {formatCapacityLabel(model.storage)}
                           </span>
                           {model.platform === "ANDROID" && model.ram ? (
-                            <span
-                              className={
-                                active
-                                  ? "rounded-md bg-white/20 px-2 py-0.5 text-xs font-semibold tabular-nums text-white"
-                                  : "rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-sky-800 ring-1 ring-sky-100"
-                              }
-                            >
+                            <span className="rounded-md bg-[#E8F0FE] px-2 py-0.5 text-xs font-semibold tabular-nums text-[#2563EB]">
                               {formatCapacityLabel(model.ram)} RAM
                             </span>
                           ) : null}
@@ -274,7 +237,7 @@ export function MobileNameSearch({
                 })}
               </ul>
             ) : (
-              <p className="rounded-xl border border-ink-100 bg-white px-3 py-2 text-xs text-ink-500 shadow-lg shadow-ink-900/10">
+              <p className="rounded-2xl border border-ink-100 bg-white px-3.5 py-3 text-[13.5px] text-ink-500 shadow-[0_10px_24px_rgba(16,25,40,.10)]">
                 {platform === "IOS"
                   ? "No iOS match — switch to Android for Redmi, Samsung, etc."
                   : "No match — keep typing; this model will be saved when you add stock."}
@@ -287,14 +250,21 @@ export function MobileNameSearch({
 
   return (
     <div ref={rootRef} className="relative">
-      <div className="relative">
+      <div
+        className={clsx(
+          "flex min-h-[48px] items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+          open &&
+            "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+          disabled && "cursor-not-allowed opacity-55",
+        )}
+      >
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300"
+          className="h-[18px] w-[18px] shrink-0 text-ink-500"
           aria-hidden
         />
         <input
           id={id}
-          className="field pl-9"
+          className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
           role="combobox"
           aria-expanded={showList}
           aria-controls={listId}
