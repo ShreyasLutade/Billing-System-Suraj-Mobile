@@ -102,6 +102,9 @@ export function PurchaseEntryModal({
   layout?: "modal" | "page";
 }) {
   const isPage = layout === "page";
+  const [stockCondition, setStockCondition] = useState<"NEW" | "USED">(
+    condition,
+  );
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierId, setSupplierId] = useState(fixedSupplier?.id || "");
   const [supplierName, setSupplierName] = useState(fixedSupplier?.name || "");
@@ -246,7 +249,7 @@ export function PurchaseEntryModal({
           : useNewSupplier
             ? supplierPhone.replace(/\D/g, "")
             : null,
-        condition,
+        condition: stockCondition,
         items: allDrafts.map((item) => ({
           platform: item.platform,
           mobileName: item.mobileName,
@@ -307,17 +310,17 @@ export function PurchaseEntryModal({
 
         <div className="mb-[18px]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-300">
-            {condition === "NEW" ? "New stock" : "Second-hand stock"}
+            {stockCondition === "NEW" ? "New stock" : "Second-hand stock"}
           </p>
           <h1 className="mt-1.5 flex flex-wrap items-center gap-3 font-display text-[30px] font-bold tracking-[-0.02em] text-ink-900">
             Add mobile
             <span
               className={clsx(
                 "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-white",
-                condition === "USED" ? "bg-[#B76E00]" : "bg-[#0E9E76]",
+                stockCondition === "USED" ? "bg-[#B76E00]" : "bg-[#0E9E76]",
               )}
             >
-              {condition === "USED" ? "Second hand" : "New"}
+              {stockCondition === "USED" ? "Second hand" : "New"}
             </span>
           </h1>
           <p className="mt-1 max-w-[60ch] text-sm text-ink-300">
@@ -460,14 +463,17 @@ export function PurchaseEntryModal({
                         setExpandedId((c) => (c === item.id ? null : item.id))
                       }
                     >
-                      <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
-                        <ChevronDown
-                          className={clsx(
-                            "h-3.5 w-3.5 shrink-0 transition",
-                            open ? "rotate-180" : "",
-                          )}
-                        />
-                        Mobile {index + 1}
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
+                          <ChevronDown
+                            className={clsx(
+                              "h-3.5 w-3.5 shrink-0 transition",
+                              open ? "rotate-180" : "",
+                            )}
+                          />
+                          Mobile {index + 1}
+                        </span>
+                        <ConditionBadge condition={stockCondition} />
                       </span>
                       {!open ? (
                         <span className="mt-2 block rounded-[10px] border border-ink-100 bg-white px-3 py-2">
@@ -500,6 +506,8 @@ export function PurchaseEntryModal({
                       disabled={saving}
                       idPrefix={`q-${item.id}`}
                       onChange={(patch) => updateQueued(item.id, patch)}
+                      condition={stockCondition}
+                      onConditionChange={setStockCondition}
                       wide
                     />
                   ) : null}
@@ -510,8 +518,11 @@ export function PurchaseEntryModal({
             {/* Current mobile */}
             <section className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5">
               <div className="mb-3.5 flex items-center justify-between gap-3">
-                <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
-                  Mobile {queued.length + 1}
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
+                    Mobile {queued.length + 1}
+                  </span>
+                  <ConditionBadge condition={stockCondition} />
                 </span>
                 {queued.length > 0 ? (
                   <button
@@ -531,6 +542,8 @@ export function PurchaseEntryModal({
                 idPrefix="current"
                 onChange={updateDraft}
                 autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
+                condition={stockCondition}
+                onConditionChange={setStockCondition}
                 wide
               />
             </section>
@@ -636,7 +649,7 @@ export function PurchaseEntryModal({
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-ink-100 bg-white px-5 py-4">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-              {condition === "NEW" ? "New stock" : "Second-hand stock"}
+              {stockCondition === "NEW" ? "New stock" : "Second-hand stock"}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <h2 className="font-display text-xl font-semibold text-ink-900">
@@ -644,12 +657,12 @@ export function PurchaseEntryModal({
               </h2>
               <span
                 className={
-                  condition === "USED"
+                  stockCondition === "USED"
                     ? "rounded-full bg-ember-500 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-soft"
                     : "rounded-full bg-tide-600 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-soft"
                 }
               >
-                {condition === "USED" ? "Second hand" : "New"}
+                {stockCondition === "USED" ? "Second hand" : "New"}
               </span>
             </div>
           </div>
@@ -783,8 +796,11 @@ export function PurchaseEntryModal({
                         }`}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-semibold text-ink-500">
-                          Mobile {index + 1}
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold text-ink-500">
+                            Mobile {index + 1}
+                          </span>
+                          <ConditionBadge condition={stockCondition} />
                         </span>
                         <span className="mt-0.5 block text-sm font-medium text-ink-900">
                           {summary.product}
@@ -803,6 +819,8 @@ export function PurchaseEntryModal({
                           disabled={saving}
                           idPrefix={`q-${item.id}`}
                           onChange={(patch) => updateQueued(item.id, patch)}
+                          condition={stockCondition}
+                          onConditionChange={setStockCondition}
                         />
                         <button
                           type="button"
@@ -823,15 +841,20 @@ export function PurchaseEntryModal({
           ) : null}
 
           <div className="rounded-xl border border-ink-200 bg-white p-3">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
-              Mobile {queued.length + 1}
-            </p>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+                Mobile {queued.length + 1}
+              </p>
+              <ConditionBadge condition={stockCondition} />
+            </div>
             <DraftFields
               draft={draft}
               disabled={saving}
               idPrefix="current"
               onChange={updateDraft}
               autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
+              condition={stockCondition}
+              onConditionChange={setStockCondition}
             />
             {queued.length > 0 ? (
               <button
@@ -909,6 +932,20 @@ export function PurchaseEntryModal({
   );
 }
 
+function ConditionBadge({ condition }: { condition: "NEW" | "USED" }) {
+  const used = condition === "USED";
+  return (
+    <span
+      className={clsx(
+        "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]",
+        used ? "bg-[#FEF3E2] text-[#B76E00]" : "bg-[#E7F8F1] text-[#0E9E76]",
+      )}
+    >
+      {used ? "Second hand" : "New"}
+    </span>
+  );
+}
+
 function DraftFields({
   draft,
   disabled,
@@ -916,6 +953,8 @@ function DraftFields({
   onChange,
   autoFocusTarget = null,
   wide = false,
+  condition,
+  onConditionChange,
 }: {
   draft: DraftMobile;
   disabled?: boolean;
@@ -923,11 +962,41 @@ function DraftFields({
   onChange: (patch: Partial<DraftMobile>) => void;
   autoFocusTarget?: "name" | "imei" | null;
   wide?: boolean;
+  condition: "NEW" | "USED";
+  onConditionChange: (value: "NEW" | "USED") => void;
 }) {
   if (wide) {
     return (
       <div className="space-y-3">
-        <div className="grid gap-3 md:grid-cols-[16rem_minmax(0,1fr)]">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <span className="label required">Condition</span>
+            <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1">
+              {(
+                [
+                  { value: "NEW", label: "New" },
+                  { value: "USED", label: "Second hand" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={clsx(
+                    "inline-flex flex-1 items-center justify-center rounded-lg px-4 py-2 text-[13px] font-medium transition",
+                    condition === option.value
+                      ? option.value === "USED"
+                        ? "bg-[#B76E00] font-semibold text-white shadow-soft"
+                        : "bg-[#0E9E76] font-semibold text-white shadow-soft"
+                      : "text-ink-500 hover:text-ink-700",
+                  )}
+                  onClick={() => onConditionChange(option.value)}
+                  disabled={disabled}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <span className="label required">Operating system</span>
             <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 sm:w-auto">
@@ -960,7 +1029,8 @@ function DraftFields({
               ))}
             </div>
           </div>
-          <div>
+        </div>
+        <div>
             <label className="label required" htmlFor={`${idPrefix}-name`}>
               Mobile name
             </label>
@@ -986,7 +1056,6 @@ function DraftFields({
                 })
               }
             />
-          </div>
         </div>
 
         <div
@@ -1079,6 +1148,34 @@ function DraftFields({
 
   return (
     <div className="space-y-3">
+      <div>
+        <span className="label required">Condition</span>
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5">
+          {(
+            [
+              { value: "NEW", label: "New" },
+              { value: "USED", label: "Second hand" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={clsx(
+                "rounded-lg px-3 py-2 text-sm font-semibold",
+                condition === option.value
+                  ? option.value === "USED"
+                    ? "bg-[#B76E00] text-white"
+                    : "bg-[#0E9E76] text-white"
+                  : "text-ink-500",
+              )}
+              onClick={() => onConditionChange(option.value)}
+              disabled={disabled}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div>
         <span className="label required">Operating system</span>
         <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5">
