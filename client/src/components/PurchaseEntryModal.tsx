@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { FieldPicker } from "./FieldPicker";
+import { SavePurchaseConfirmModal } from "./SavePurchaseConfirmModal";
 import {
   MobileNameSearch,
   invalidatePhoneModelCache,
@@ -111,6 +112,7 @@ export function PurchaseEntryModal({
   const [draft, setDraft] = useState<DraftMobile>(() => blankDraft(prefill));
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -190,7 +192,7 @@ export function PurchaseEntryModal({
     setExpandedId(null);
   }
 
-  async function submit(event: FormEvent) {
+  function requestConfirm(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
@@ -231,8 +233,14 @@ export function PurchaseEntryModal({
       }
     }
 
+    setConfirmOpen(true);
+  }
+
+  async function savePurchase() {
+    const currentImei = draft.imei.replace(/\s+/g, "");
     const allDrafts = [...queued, { ...draft, imei: currentImei }];
     setSaving(true);
+    setError(null);
     try {
       const { data } = await api.createPurchase({
         supplierId: fixedSupplier?.id || (useNewSupplier ? null : supplierId),
@@ -269,6 +277,18 @@ export function PurchaseEntryModal({
     () => [...queued, draft],
     [queued, draft],
   );
+  const confirmItems = useMemo(
+    () =>
+      allMobiles.map((item) => {
+        const parts = draftSummaryParts(item);
+        return {
+          product: parts.product,
+          imei: parts.imei.replace(/\s+/g, ""),
+          price: Number(item.purchasePrice) || 0,
+        };
+      }),
+    [allMobiles],
+  );
   const purchaseTotal = useMemo(
     () =>
       allMobiles.reduce((sum, item) => {
@@ -289,10 +309,27 @@ export function PurchaseEntryModal({
     supplierId,
   ]);
 
+  const confirmDialog = confirmOpen ? (
+    <SavePurchaseConfirmModal
+      supplierName={summarySupplierName || ""}
+      condition={condition}
+      items={confirmItems}
+      total={purchaseTotal}
+      saving={saving}
+      error={error}
+      onCancel={() => {
+        if (saving) return;
+        setConfirmOpen(false);
+      }}
+      onConfirm={() => void savePurchase()}
+    />
+  ) : null;
+
   if (isPage) {
     return (
+      <>
       <form
-        onSubmit={(event) => void submit(event)}
+        onSubmit={requestConfirm}
         className="w-full pb-10"
       >
         <button
@@ -631,6 +668,8 @@ export function PurchaseEntryModal({
           </aside>
         </div>
       </form>
+      {confirmDialog}
+      </>
     );
   }
 
@@ -895,6 +934,7 @@ export function PurchaseEntryModal({
   );
 
   return (
+    <>
     <motion.div
       className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
       initial={{ opacity: 0 }}
@@ -903,7 +943,7 @@ export function PurchaseEntryModal({
       onClick={() => !saving && onClose()}
     >
       <motion.form
-        onSubmit={(event) => void submit(event)}
+        onSubmit={requestConfirm}
         role="dialog"
         aria-modal="true"
         className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/70 bg-white shadow-lift"
@@ -915,6 +955,8 @@ export function PurchaseEntryModal({
         {formBody}
       </motion.form>
     </motion.div>
+    {confirmDialog}
+    </>
   );
 }
 
