@@ -2,6 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { runBillingReport, runScheduledReports } from "../services/dailyReports";
 import { getReportMailConfig } from "../services/reportEmail";
+import {
+  PURGE_CONFIRM,
+  purgeOperationalData,
+} from "../services/purgeOperationalData";
+import { prisma } from "../lib/prisma";
 
 export const reportsRouter = Router();
 
@@ -51,6 +56,31 @@ reportsRouter.post("/send", async (req, res, next) => {
         dateKey,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const purgeSchema = z.object({
+  confirm: z.literal(PURGE_CONFIRM),
+  apply: z.boolean().optional().default(false),
+});
+
+/** Admin-only: keep GST bills + shop 0014/0031/0032; wipe other bills/stock/suppliers. */
+reportsRouter.post("/purge-operational-data", async (req, res, next) => {
+  try {
+    const parsed = purgeSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({
+        error: `Send confirm: "${PURGE_CONFIRM}"`,
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+    const data = await purgeOperationalData(prisma, {
+      apply: parsed.data.apply,
+    });
+    res.json({ data });
   } catch (error) {
     next(error);
   }
