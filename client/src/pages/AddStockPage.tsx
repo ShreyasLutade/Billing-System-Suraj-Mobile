@@ -45,7 +45,10 @@ export function AddStockPage() {
   }, [state?.supplierId, state?.supplierName]);
 
   function goBackToStock() {
-    navigate("/stock", { replace: true, state: { condition } });
+    navigate(condition === "USED" ? "/stock?condition=USED" : "/stock", {
+      replace: true,
+      state: { condition },
+    });
   }
 
   return (

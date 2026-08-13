@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import {
   ArrowDownUp,
@@ -19,6 +19,8 @@ import {
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
+import { usePersistedTab } from "../hooks/usePersistedTab";
+import { fromState } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import {
   matchesBillSearch,
@@ -27,7 +29,6 @@ import {
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill } from "../types";
 
-type BillsTab = "shop" | "gst";
 type BillsPeriod = ActivityPeriodValue | "custom";
 type BillSortKey = "date" | "amount" | "due" | "customer";
 type SortDir = "asc" | "desc";
@@ -137,7 +138,13 @@ function isBillPaid(bill: Bill) {
 
 export function BillsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<BillsTab>("shop");
+  const location = useLocation();
+  const [tab, setTab] = usePersistedTab(
+    "tab",
+    "bills.tab",
+    ["shop", "gst"] as const,
+    "shop",
+  );
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -272,7 +279,7 @@ export function BillsPage() {
         title="Bills"
         description="Every bill with its payment split. Search by name, phone, product or IMEI — filters stack with the period."
         action={
-          <Link to="/" className="btn-primary">
+          <Link to="/" state={fromState(location)} className="btn-primary">
             <Plus className="h-4 w-4" />
             New bill
           </Link>
@@ -654,11 +661,13 @@ export function BillsPage() {
                 "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2.5 max-sm:[grid-template-areas:'who_money'_'pays_pays'_'actions_actions']",
               )}
               style={{ animationDelay: `${0.02 + index * 0.03}s` }}
-              onClick={() => navigate(`/bills/${bill.id}`)}
+              onClick={() =>
+                navigate(`/bills/${bill.id}`, { state: fromState(location) })
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  navigate(`/bills/${bill.id}`);
+                  navigate(`/bills/${bill.id}`, { state: fromState(location) });
                 }
               }}
             >

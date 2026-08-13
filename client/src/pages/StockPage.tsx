@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import {
   ArrowDownUp,
-  ArrowLeft,
   Check,
   ChevronDown,
   Plus,
@@ -13,9 +12,11 @@ import {
   Trash2,
 } from "lucide-react";
 import type { AddStockLocationState } from "./AddStockPage";
-import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { BackButton, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
+import { usePersistedTab } from "../hooks/usePersistedTab";
+import { fromState } from "../lib/navMemory";
 import { api, formatINR, round2 } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
 import type { StockItem } from "../types";
@@ -175,15 +176,49 @@ export function StockPage() {
   const locationState = (location.state || null) as {
     condition?: StockTab;
   } | null;
-  const [tab, setTab] = useState<StockTab>(
-    locationState?.condition === "USED" ? "USED" : "NEW",
+  const [tab, setTab] = usePersistedTab(
+    "condition",
+    "stock.tab",
+    ["NEW", "USED"] as const,
+    "NEW",
   );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const itemFromUrl = searchParams.get("item");
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKeyState] = useState<string | null>(
+    () => itemFromUrl,
+  );
+
+  const setSelectedKey = useCallback(
+    (key: string | null) => {
+      setSelectedKeyState(key);
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          const current = params.get("item");
+          if (key) {
+            if (current === key) return prev;
+            params.set("item", key);
+          } else if (!current) {
+            return prev;
+          } else {
+            params.delete("item");
+          }
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  useEffect(() => {
+    if (itemFromUrl) setSelectedKeyState(itemFromUrl);
+  }, [itemFromUrl]);
   const [sortKey, setSortKey] = useState<SortKey>("model");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
   const [sortOpen, setSortOpen] = useState(false);
@@ -196,7 +231,7 @@ export function StockPage() {
     ) {
       setTab(locationState.condition);
     }
-  }, [locationState?.condition]);
+  }, [locationState?.condition, setTab]);
 
   function openAddPage() {
     const state: AddStockLocationState = {
@@ -219,9 +254,15 @@ export function StockPage() {
   }
 
   useEffect(() => {
-    setSelectedKey(null);
     void loadStock(tab);
   }, [tab]);
+
+  const prevTabRef = useRef(tab);
+  useEffect(() => {
+    if (prevTabRef.current === tab) return;
+    prevTabRef.current = tab;
+    setSelectedKey(null);
+  }, [tab, setSelectedKey]);
 
   useEffect(() => {
     if (!sortOpen) return;
@@ -311,6 +352,10 @@ export function StockPage() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  if (selectedKey && loading && !selectedGroup) {
+    return <LoadingBlock label="Loading stock…" />;
   }
 
   if (selectedGroup) {
@@ -651,6 +696,7 @@ function StockProductDetail({
   onBack: () => void;
   onRemove: (unit: StockItem) => void;
 }) {
+  const location = useLocation();
   const title = formatProductLabel(group);
   const units = [...group.units].sort(
     (a, b) =>
@@ -661,14 +707,9 @@ function StockProductDetail({
   return (
     <div>
       <div className="mb-3">
-        <button
-          type="button"
-          className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-4 w-4" />
+        <BackButton className="mb-4" onClick={onBack}>
           Back to stock
-        </button>
+        </BackButton>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="font-display text-xl font-semibold leading-snug text-ink-900 sm:text-2xl">
             {title}
@@ -740,6 +781,7 @@ function StockProductDetail({
                         {" "}
                         <Link
                           to={`/suppliers/${unit.supplierId}`}
+                          state={fromState(location)}
                           className="text-xs text-[#2563EB] hover:underline"
                         >
                           ledger

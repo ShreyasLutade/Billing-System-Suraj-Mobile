@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Check, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import clsx from "clsx";
-import { EmptyState, LoadingBlock } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import type { Purchase, SupplierDetail } from "../types";
+import { usePersistedTab } from "../hooks/usePersistedTab";
+import { backLabel, fromState, readFromState } from "../lib/navMemory";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -21,10 +23,17 @@ function formatDate(value: string) {
 export function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = readFromState(location.state);
   const [data, setData] = useState<SupplierDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"purchases" | "stock">("purchases");
+  const [tab, setTab] = usePersistedTab(
+    "tab",
+    "supplier.tab",
+    ["purchases", "stock"] as const,
+    "purchases",
+  );
   const [confirmPurchase, setConfirmPurchase] = useState<Purchase | null>(null);
   const [markingPaid, setMarkingPaid] = useState(false);
 
@@ -65,10 +74,9 @@ export function SupplierDetailPage() {
   if (!data) {
     return (
       <div className="space-y-3">
-        <Link to="/suppliers" className="btn-secondary inline-flex">
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Link>
+        <BackLink to={from ?? "/suppliers"}>
+          {from ? backLabel(from) : "Back"}
+        </BackLink>
         <EmptyState
           title="Supplier not found"
           description={error || "This supplier ledger does not exist."}
@@ -79,13 +87,9 @@ export function SupplierDetailPage() {
 
   return (
     <div>
-      <Link
-        to="/suppliers"
-        className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to suppliers
-      </Link>
+      <BackLink to={from ?? "/suppliers"} className="mb-4">
+        {from ? backLabel(from) : "Back to suppliers"}
+      </BackLink>
 
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -182,7 +186,12 @@ export function SupplierDetailPage() {
                         key={p.id}
                         className="ledger-row-click"
                         onClick={() =>
-                          navigate(`/suppliers/${data.id}/purchases/${p.id}`)
+                          navigate(`/suppliers/${data.id}/purchases/${p.id}`, {
+                            state: {
+                              ...fromState(location),
+                              origin: from,
+                            },
+                          })
                         }
                       >
                         <td className="whitespace-normal text-ink-800">

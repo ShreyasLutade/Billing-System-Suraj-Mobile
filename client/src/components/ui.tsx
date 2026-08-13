@@ -1,6 +1,51 @@
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
+import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
+
+export function BackLink({
+  to,
+  state,
+  children,
+  className,
+}: {
+  to: string;
+  state?: unknown;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Link to={to} state={state} className={clsx("back-pill", className)}>
+      <ArrowLeft strokeWidth={2} />
+      {children}
+    </Link>
+  );
+}
+
+export function BackButton({
+  onClick,
+  children,
+  disabled,
+  className,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={clsx("back-pill", className)}
+    >
+      <ArrowLeft strokeWidth={2} />
+      {children}
+    </button>
+  );
+}
 
 export function PageHeader({
   eyebrow,

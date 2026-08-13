@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
 import {
-  ArrowLeft,
   ArrowLeftRight,
   Check,
   Download,
@@ -16,11 +15,16 @@ import {
 } from "lucide-react";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
-import { EmptyState, LoadingBlock } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
+import {
+  backLabel,
+  billsHomePath,
+  readFromState,
+} from "../lib/navMemory";
 
 const PAY = {
   cash: "#12B886",
@@ -48,6 +52,8 @@ function createdByLabel(bill: Bill) {
 export function BillDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = readFromState(location.state);
   const { isAdmin } = useAuth();
   const [bill, setBill] = useState<Bill | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +93,7 @@ export function BillDetailPage() {
     setDeleteError(null);
     try {
       await api.deleteBill(bill.id);
-      navigate("/bills", { replace: true });
+      navigate(from ?? billsHomePath(bill.withGst), { replace: true });
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : "Failed to delete bill",
@@ -124,13 +130,7 @@ export function BillDetailPage() {
   if (error || !bill) {
     return (
       <div className="space-y-4">
-        <Link
-          to="/bills"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#3A4658] transition hover:text-[#0E1626]"
-        >
-          <ArrowLeft className="h-[15px] w-[15px]" />
-          Back to bills
-        </Link>
+        <BackLink to={from ?? "/bills"}>{backLabel(from)}</BackLink>
         <EmptyState
           title="Bill not found"
           description={error || "This invoice may have been removed."}
@@ -161,13 +161,9 @@ export function BillDetailPage() {
 
   return (
     <div>
-      <Link
-        to="/bills"
-        className="mb-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#3A4658] transition hover:text-[#0E1626]"
-      >
-        <ArrowLeft className="h-[15px] w-[15px]" />
-        Back to bills
-      </Link>
+      <BackLink to={from ?? billsHomePath(bill.withGst)} className="mb-4">
+        {backLabel(from)}
+      </BackLink>
 
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-5">
         <div className="min-w-0">
@@ -200,6 +196,7 @@ export function BillDetailPage() {
           <div className="flex w-full gap-1.5 sm:w-auto sm:flex-wrap sm:gap-2">
             <Link
               to={`/bills/${bill.id}/edit`}
+              state={location.state}
               className="bd-action flex-1 sm:flex-none"
             >
               <Pencil className="h-[15px] w-[15px] shrink-0" />
