@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import {
-  ArrowLeft,
   Check,
   Download,
   Info,
@@ -22,7 +21,7 @@ import {
   type SaveBillSummary,
 } from "../components/SaveBillConfirmModal";
 import { MobileNameSearch } from "../components/MobileNameSearch";
-import { PageHeader, LoadingBlock } from "../components/ui";
+import { BackLink, PageHeader, LoadingBlock } from "../components/ui";
 import { FieldPicker } from "../components/FieldPicker";
 import {
   ADD_NEW_FINANCE,
@@ -37,6 +36,7 @@ import {
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
+import { billsHomePath, readFromState } from "../lib/navMemory";
 import type {
   Bill,
   BillItem,
@@ -272,6 +272,8 @@ function toDateInputValue(value: string | Date) {
 
 export function CreateBillPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = readFromState(location.state);
   const { id: editId } = useParams<{ id?: string }>();
   const isEdit = Boolean(editId);
 
@@ -1391,10 +1393,7 @@ export function CreateBillPage() {
   if (isEdit && loadError) {
     return (
       <div className="space-y-4">
-        <Link to="/bills" className="btn-secondary inline-flex">
-          <ArrowLeft className="h-4 w-4" />
-          Back to bills
-        </Link>
+        <BackLink to={from ?? "/bills"}>Back to bills</BackLink>
         <div className="glass-panel px-5 py-8 text-center text-sm text-ember-500">
           {loadError}
         </div>
@@ -1543,14 +1542,18 @@ export function CreateBillPage() {
           <button
             className="btn-secondary"
             type="button"
-            onClick={() => navigate(`/bills/${savedBillId}`)}
+            onClick={() =>
+              navigate(`/bills/${savedBillId}`, {
+                state: from ? { from } : { from: billsHomePath(withGst) },
+              })
+            }
           >
             View bill
           </button>
           <button
             className="btn-secondary"
             type="button"
-            onClick={() => navigate("/bills")}
+            onClick={() => navigate(from ?? billsHomePath(withGst))}
           >
             View all bills
           </button>
@@ -1580,10 +1583,9 @@ export function CreateBillPage() {
         }
         action={
           isEdit && editId ? (
-            <Link to={`/bills/${editId}`} className="btn-secondary">
-              <ArrowLeft className="h-4 w-4" />
+            <BackLink to={`/bills/${editId}`} state={location.state}>
               Cancel
-            </Link>
+            </BackLink>
           ) : undefined
         }
       />

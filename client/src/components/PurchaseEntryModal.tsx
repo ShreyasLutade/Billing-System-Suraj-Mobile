@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   Package,
@@ -17,6 +16,7 @@ import {
   MobileNameSearch,
   invalidatePhoneModelCache,
 } from "./MobileNameSearch";
+import { BackButton } from "./ui";
 import { api, formatINR } from "../lib/api";
 import type { PhoneModel, Purchase, Supplier } from "../types";
 import clsx from "clsx";
@@ -332,15 +332,9 @@ export function PurchaseEntryModal({
         onSubmit={requestConfirm}
         className="w-full pb-10"
       >
-        <button
-          type="button"
-          className="mb-3.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#0E9E76] hover:underline"
-          onClick={onClose}
-          disabled={saving}
-        >
-          <ArrowLeft className="h-4 w-4" />
+        <BackButton className="mb-4" onClick={onClose} disabled={saving}>
           Back to stock
-        </button>
+        </BackButton>
 
         <div className="mb-[18px]">
           <h1 className="flex flex-wrap items-center gap-3 font-display text-[30px] font-bold tracking-[-0.02em] text-ink-900">

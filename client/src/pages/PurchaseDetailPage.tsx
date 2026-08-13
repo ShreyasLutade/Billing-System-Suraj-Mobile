@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import { EmptyState, LoadingBlock } from "../components/ui";
+import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import type { Purchase } from "../types";
+import { fromState, readFromState, readOriginState } from "../lib/navMemory";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -27,6 +27,10 @@ export function PurchaseDetailPage() {
     purchaseId: string;
   }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = readFromState(location.state);
+  const origin = readOriginState(location.state);
+  const supplierState = origin ? { from: origin } : undefined;
   const { isAdmin } = useAuth();
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,13 +69,12 @@ export function PurchaseDetailPage() {
   if (!purchase) {
     return (
       <div className="space-y-3">
-        <Link
-          to={supplierId ? `/suppliers/${supplierId}` : "/suppliers"}
-          className="btn-secondary inline-flex"
+        <BackLink
+          to={from ?? (supplierId ? `/suppliers/${supplierId}` : "/suppliers")}
+          state={supplierState}
         >
-          <ArrowLeft className="h-4 w-4" />
           Back
-        </Link>
+        </BackLink>
         <EmptyState
           title="Purchase not found"
           description={error || "This purchase does not exist."}
@@ -80,18 +83,16 @@ export function PurchaseDetailPage() {
     );
   }
 
-  const backTo = `/suppliers/${purchase.supplierId}`;
+  const backTo = from ?? `/suppliers/${purchase.supplierId}`;
 
   return (
     <div>
-      <button
-        type="button"
-        className="mb-2 inline-flex items-center gap-1 text-sm font-medium text-tide-600 hover:text-tide-700 hover:underline"
-        onClick={() => navigate(backTo)}
+      <BackButton
+        className="mb-4"
+        onClick={() => navigate(backTo, { state: supplierState })}
       >
-        <ArrowLeft className="h-4 w-4" />
         Back to {purchase.supplier?.name || "supplier"}
-      </button>
+      </BackButton>
 
       <div className="mb-3">
         <h1 className="font-display text-2xl font-semibold text-ink-900">
@@ -142,7 +143,9 @@ export function PurchaseDetailPage() {
                 const sold = item.status === "SOLD";
                 const billId = item.soldBillId;
                 const openBill = () => {
-                  if (sold && billId) navigate(`/bills/${billId}`);
+                  if (sold && billId) {
+                    navigate(`/bills/${billId}`, { state: fromState(location) });
+                  }
                 };
 
                 return (
@@ -231,7 +234,9 @@ export function PurchaseDetailPage() {
                               className="block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold text-rose-600 underline decoration-rose-400/80 underline-offset-2 hover:text-rose-700"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                navigate(`/bills/${billId}`);
+                                navigate(`/bills/${billId}`, {
+                                  state: fromState(location),
+                                });
                               }}
                             >
                               Sold

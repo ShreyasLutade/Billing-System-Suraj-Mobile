@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import {
   ArrowDownUp,
@@ -20,6 +20,7 @@ import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
+import { fromState } from "../lib/navMemory";
 
 const MIX = {
   cash: { color: "#12B886", soft: "#E7F8F1", ink: "#0E9E76" },
@@ -110,6 +111,7 @@ function formatChange(pct: number | null) {
 }
 
 export function AnalyticsPage() {
+  const location = useLocation();
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -654,6 +656,7 @@ export function AnalyticsPage() {
                 <Link
                   key={bill.id}
                   to={`/bills/${bill.id}`}
+                  state={fromState(location)}
                   className={`block border-b border-ink-100 px-4 py-3.5 transition last:border-b-0 hover:bg-[#F7FAFF] sm:grid sm:items-center sm:gap-3 sm:px-5 ${billsRowGrid}`}
                 >
                   <div className="flex min-w-0 items-center gap-3">

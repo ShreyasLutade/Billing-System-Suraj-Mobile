@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
   BarChart3,
   Check,
   Filter,
@@ -17,10 +16,12 @@ import {
 } from "../components/PeriodFilter";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
-import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useAuth } from "../auth/AuthContext";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
+import { usePersistedTab } from "../hooks/usePersistedTab";
+import { fromState } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import {
   matchesDueSearch,
@@ -122,8 +123,14 @@ function financeAmountForCompany(due: FinanceDueItem, company: string | null) {
 
 export function DuesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAdmin } = useAuth();
-  const [tab, setTab] = useState<"customer" | "finance">("customer");
+  const [tab, setTab] = usePersistedTab(
+    "tab",
+    "dues.tab",
+    ["customer", "finance"] as const,
+    "customer",
+  );
   const [period, setPeriod] = useState<DuePeriodValue>("all");
   const [data, setData] = useState<DuesSummary | null>(null);
   const [financeData, setFinanceData] = useState<FinanceDuesSummary | null>(
@@ -279,10 +286,7 @@ export function DuesPage() {
         title="Dues"
         description="Pending payments from customers and financiers."
         action={
-          <Link to="/" className="btn-secondary">
-            <ArrowLeft className="h-4 w-4" />
-            Home
-          </Link>
+          <BackLink to="/">Home</BackLink>
         }
       />
 
@@ -478,11 +482,15 @@ export function DuesPage() {
                   role="link"
                   tabIndex={0}
                   className="cursor-pointer rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-sm shadow-ink-900/5 backdrop-blur-sm transition hover:border-tide-200 hover:shadow-md"
-                  onClick={() => navigate(`/bills/${due.id}`)}
+                  onClick={() =>
+                    navigate(`/bills/${due.id}`, { state: fromState(location) })
+                  }
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      navigate(`/bills/${due.id}`);
+                      navigate(`/bills/${due.id}`, {
+                        state: fromState(location),
+                      });
                     }
                   }}
                 >
@@ -658,11 +666,15 @@ export function DuesPage() {
                   role="link"
                   tabIndex={0}
                   className="cursor-pointer rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-sm shadow-ink-900/5 backdrop-blur-sm transition hover:border-tide-200 hover:shadow-md"
-                  onClick={() => navigate(`/bills/${due.id}`)}
+                  onClick={() =>
+                    navigate(`/bills/${due.id}`, { state: fromState(location) })
+                  }
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      navigate(`/bills/${due.id}`);
+                      navigate(`/bills/${due.id}`, {
+                        state: fromState(location),
+                      });
                     }
                   }}
                 >
