@@ -309,10 +309,7 @@ export function PurchaseEntryModal({
         </button>
 
         <div className="mb-[18px]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-300">
-            {stockCondition === "NEW" ? "New stock" : "Second-hand stock"}
-          </p>
-          <h1 className="mt-1.5 flex flex-wrap items-center gap-3 font-display text-[30px] font-bold tracking-[-0.02em] text-ink-900">
+          <h1 className="flex flex-wrap items-center gap-3 font-display text-[30px] font-bold tracking-[-0.02em] text-ink-900">
             Add mobile
             <span
               className={clsx(
