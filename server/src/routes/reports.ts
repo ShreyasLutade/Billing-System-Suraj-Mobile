@@ -6,6 +6,10 @@ import {
   PURGE_CONFIRM,
   purgeOperationalData,
 } from "../services/purgeOperationalData";
+import {
+  RENUMBER_SHOP_CONFIRM,
+  renumberShopBillsFrom3000,
+} from "../services/renumberShopBills";
 import { prisma } from "../lib/prisma";
 
 export const reportsRouter = Router();
@@ -78,6 +82,31 @@ reportsRouter.post("/purge-operational-data", async (req, res, next) => {
       return;
     }
     const data = await purgeOperationalData(prisma, {
+      apply: parsed.data.apply,
+    });
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const renumberSchema = z.object({
+  confirm: z.literal(RENUMBER_SHOP_CONFIRM),
+  apply: z.boolean().optional().default(false),
+});
+
+/** Admin-only: shop bills 3000+; sequence set so the next shop bill is 3004. */
+reportsRouter.post("/renumber-shop-bills", async (req, res, next) => {
+  try {
+    const parsed = renumberSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({
+        error: `Send confirm: "${RENUMBER_SHOP_CONFIRM}"`,
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+    const data = await renumberShopBillsFrom3000(prisma, {
       apply: parsed.data.apply,
     });
     res.json({ data });
