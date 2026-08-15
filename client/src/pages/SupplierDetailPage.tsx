@@ -96,9 +96,14 @@ export function SupplierDetailPage() {
           <h1 className="font-display text-2xl font-semibold text-ink-900">
             <span className="inline-flex flex-wrap items-center gap-2">
               {data.name}
-              {data.isExchange ? (
+              {data.hasExchangeIntake ? (
                 <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ember-500">
                   Exchange
+                </span>
+              ) : null}
+              {data.hasReturnIntake ? (
+                <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ember-500">
+                  Return
                 </span>
               ) : null}
             </span>
@@ -197,7 +202,13 @@ export function SupplierDetailPage() {
                         <td className="whitespace-normal text-ink-800">
                           {formatDate(p.purchaseDate)}
                           <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-wide text-ink-300">
-                            {p.condition === "USED" ? "Second hand" : "New"}
+                            {p.note?.startsWith("RETURN_INVOICE:")
+                              ? "Return"
+                              : p.note?.startsWith("EXCHANGE_INVOICE:")
+                                ? "Exchange"
+                                : p.condition === "USED"
+                                  ? "Second hand"
+                                  : "New"}
                           </span>
                         </td>
                         <td className="text-right text-base font-semibold tabular-nums text-ink-900">

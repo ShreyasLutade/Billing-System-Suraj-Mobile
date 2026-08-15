@@ -11,9 +11,21 @@ type StockLinkedItem = {
 };
 
 const EXCHANGE_NOTE_PREFIX = "EXCHANGE_INVOICE:";
+const RETURN_NOTE_PREFIX = "RETURN_INVOICE:";
 
 export function exchangePurchaseNote(invoiceNumber: string) {
   return `${EXCHANGE_NOTE_PREFIX}${invoiceNumber.trim()}`;
+}
+
+export function returnPurchaseNote(invoiceNumber: string) {
+  return `${RETURN_NOTE_PREFIX}${invoiceNumber.trim()}`;
+}
+
+export function intakeKindFromNote(note?: string | null) {
+  const value = (note || "").trim();
+  if (value.startsWith(RETURN_NOTE_PREFIX)) return "return" as const;
+  if (value.startsWith(EXCHANGE_NOTE_PREFIX)) return "exchange" as const;
+  return null;
 }
 
 /**
@@ -82,6 +94,14 @@ export async function releaseStockIds(tx: Tx, stockIds: string[]) {
   });
 }
 
+export async function deleteStockIds(tx: Tx, stockIds: string[]) {
+  const ids = [...new Set(stockIds.filter(Boolean))];
+  if (!ids.length) return;
+  await tx.stockItem.deleteMany({
+    where: { id: { in: ids } },
+  });
+}
+
 function normalizeName(name: string) {
   return name.trim().replace(/\s+/g, " ");
 }
@@ -97,13 +117,14 @@ function resolveExchangeImei(invoiceNumber: string, rawImei?: string | null) {
   return `EXC${safeInvoice}${Date.now().toString(36).toUpperCase()}`;
 }
 
-async function upsertExchangeSupplier(
+async function upsertIntakeSupplier(
   tx: Tx,
   input: {
     customerName: string;
     customerPhone: string;
     customerAddress?: string | null;
   },
+  kind: "exchange" | "return",
 ) {
   const phone = input.customerPhone.trim();
   const name = normalizeName(input.customerName);
@@ -111,16 +132,30 @@ async function upsertExchangeSupplier(
 
   const byPhone = phone
     ? await tx.supplier.findFirst({
-        where: { phone, isExchange: true },
+        where: {
+          phone,
+          OR: [
+            { isExchange: true },
+            { notes: { contains: "Customer return" } },
+            { notes: { contains: "Customer exchange" } },
+          ],
+        },
       })
     : null;
   if (byPhone) {
+    const notes =
+      kind === "return" && !/return/i.test(byPhone.notes || "")
+        ? byPhone.notes
+          ? `${byPhone.notes}; Customer return`
+          : "Customer return"
+        : byPhone.notes ||
+          (kind === "return" ? "Customer return" : "Customer exchange");
     return tx.supplier.update({
       where: { id: byPhone.id },
       data: {
         address: address ?? byPhone.address,
-        isExchange: true,
-        notes: byPhone.notes || "Customer exchange",
+        isExchange: kind === "exchange" ? true : byPhone.isExchange,
+        notes,
       },
     });
   }
@@ -130,7 +165,9 @@ async function upsertExchangeSupplier(
     where: { name: supplierName },
   });
   if (nameTaken) {
-    supplierName = phone ? `${name} (${phone})` : `${name} · exchange`;
+    supplierName = phone
+      ? `${name} (${phone})`
+      : `${name} · ${kind === "return" ? "return" : "exchange"}`;
   }
 
   return tx.supplier.create({
@@ -138,10 +175,21 @@ async function upsertExchangeSupplier(
       name: supplierName,
       phone: phone || null,
       address,
-      isExchange: true,
-      notes: "Customer exchange",
+      isExchange: kind === "exchange",
+      notes: kind === "return" ? "Customer return" : "Customer exchange",
     },
   });
+}
+
+async function upsertExchangeSupplier(
+  tx: Tx,
+  input: {
+    customerName: string;
+    customerPhone: string;
+    customerAddress?: string | null;
+  },
+) {
+  return upsertIntakeSupplier(tx, input, "exchange");
 }
 
 async function removeExchangePurchase(tx: Tx, invoiceNumber: string) {
@@ -314,4 +362,121 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
 /** Remove unused exchange stock when a bill is deleted. */
 export async function clearExchangeStock(tx: Tx, invoiceNumber: string) {
   await removeExchangePurchase(tx, invoiceNumber);
+}
+
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * After a customer return: convert sold bill phones into USED stock under the
+ * customer (same party type as an exchange), and drop the sale.
+ */
+export async function returnBillStockToCustomer(
+  tx: Tx,
+  bill: {
+    invoiceNumber: string;
+    customerName: string;
+    customerPhone: string;
+    customerAddress?: string | null;
+    items: Array<{
+      stockItemId?: string | null;
+      rate?: number | null;
+      productName?: string | null;
+      platform?: string | null;
+      color?: string | null;
+      storage?: string | null;
+      ram?: string | null;
+    }>;
+  },
+) {
+  const linked = bill.items.filter((item) => item.stockItemId);
+  if (!linked.length) return;
+
+  const supplier = await upsertIntakeSupplier(
+    tx,
+    {
+      customerName: bill.customerName,
+      customerPhone: bill.customerPhone,
+      customerAddress: bill.customerAddress,
+    },
+    "return",
+  );
+
+  const note = returnPurchaseNote(bill.invoiceNumber);
+  const existingReturn = await tx.purchase.findFirst({
+    where: { note },
+    include: { items: true },
+  });
+  if (existingReturn) {
+    await tx.purchaseItem.deleteMany({ where: { purchaseId: existingReturn.id } });
+    await tx.purchase.delete({ where: { id: existingReturn.id } });
+  }
+
+  const rows: Array<{ stockItemId: string; price: number }> = [];
+  for (const item of linked) {
+    const stockId = item.stockItemId as string;
+    const stock = await tx.stockItem.findUnique({ where: { id: stockId } });
+    if (!stock) continue;
+
+    const price =
+      Number(item.rate || 0) > 0
+        ? round2(Number(item.rate))
+        : Number(stock.purchasePrice || 0);
+    const platform =
+      item.platform === "ANDROID" || item.platform === "IOS"
+        ? item.platform
+        : stock.platform;
+
+    const link = await tx.purchaseItem.findUnique({
+      where: { stockItemId: stock.id },
+    });
+    if (link) {
+      await tx.purchaseItem.delete({ where: { id: link.id } });
+    }
+
+    await tx.stockItem.update({
+      where: { id: stock.id },
+      data: {
+        condition: "USED",
+        status: "AVAILABLE",
+        platform,
+        mobileName: item.productName?.trim() || stock.mobileName,
+        color: item.color?.trim() || stock.color,
+        storage: item.storage?.trim() || stock.storage,
+        ram:
+          platform === "ANDROID"
+            ? normalizeCapacity(item.ram || stock.ram)
+            : "",
+        purchasePrice: price,
+        suppliers: serializeSuppliers([supplier.name]),
+        supplierId: supplier.id,
+      },
+    });
+    rows.push({ stockItemId: stock.id, price });
+  }
+
+  if (!rows.length) return;
+
+  const total = round2(rows.reduce((sum, row) => sum + row.price, 0));
+  const purchaseDate = new Date();
+  const purchase = await tx.purchase.create({
+    data: {
+      supplierId: supplier.id,
+      purchaseDate,
+      note,
+      totalAmount: total,
+      condition: "USED",
+      paidAt: purchaseDate,
+    },
+  });
+
+  for (const row of rows) {
+    await tx.purchaseItem.create({
+      data: {
+        purchaseId: purchase.id,
+        stockItemId: row.stockItemId,
+      },
+    });
+  }
 }
