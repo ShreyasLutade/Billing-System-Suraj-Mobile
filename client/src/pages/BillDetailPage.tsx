@@ -16,7 +16,7 @@ import {
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
-import { api, formatFinanceCompanies, formatINR } from "../lib/api";
+import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
@@ -443,6 +443,27 @@ export function BillDetailPage() {
                 <p className="mt-1 text-[11.5px] text-[#9A7A3E]">
                   Exchange value was higher than the bill — this amount is owed
                   back.
+                </p>
+              </div>
+            ) : null}
+            {!bill.withGst && (bill.companyDiscount || 0) > 0 ? (
+              <div className="mt-3.5 rounded-xl border border-[#D8EEE4] bg-[#E7F8F1] px-3.5 py-3">
+                <SumLine
+                  label="Company cashback"
+                  value={`+ ${formatINR(bill.companyDiscount || 0)}`}
+                />
+                <div className="mt-2 flex items-baseline justify-between gap-3">
+                  <span className="text-[12.5px] font-semibold text-[#0E9E76]">
+                    Effective selling
+                  </span>
+                  <span className="font-display text-lg font-bold tabular-nums text-[#0E9E76]">
+                    {formatINR(
+                      round2(payable + Number(bill.companyDiscount || 0)),
+                    )}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11.5px] text-[#3A8F73]">
+                  Company cashback — shown on the bill as discount amount.
                 </p>
               </div>
             ) : null}

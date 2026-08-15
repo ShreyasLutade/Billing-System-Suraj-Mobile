@@ -40,6 +40,7 @@ export type Bill = {
   gstAmount: number;
   grandTotal: number;
   payableAmount: number;
+  companyDiscount?: number;
   cashAmount: number;
   onlineAmount: number;
   financeAmount: number;
@@ -94,6 +95,8 @@ export type AnalyticsSummary = {
     mixTotal: number;
     cost: number;
     profit: number;
+    accessoriesRevenue?: number;
+    accessoriesSold?: number;
     shares: {
       cash: number;
       online: number;
@@ -131,6 +134,8 @@ export type AnalyticsSummary = {
     productLabel: string;
     costPrice: number;
     sellingPrice: number;
+    companyDiscount?: number;
+    exchangeValue?: number;
     profit: number;
   }>;
 };
@@ -346,6 +351,7 @@ export type CreateBillPayload = {
   exchangeValue?: number | null;
   exchangeNotes?: string | null;
   dueDate?: string | null;
+  companyDiscount?: number;
 };
 
 export type AuthUser = {

@@ -60,7 +60,8 @@ function totalsForPersist(
   totals: ReturnType<typeof computeBillTotals>,
 ) {
   if (!input.withGst) return totals;
-  // GST invoices are submission-only — no payments, dues, exchange, or stock links
+  // GST invoices are submission-only — no payments, dues, exchange, stock links,
+  // or internal company-discount profit adjustments.
   return {
     ...totals,
     payableAmount: totals.grandTotal,
@@ -81,6 +82,15 @@ function exchangeInputForPersist<T extends { withGst?: boolean; isExchange?: boo
 ): T {
   if (!input.withGst) return input;
   return { ...input, isExchange: false };
+}
+
+function companyDiscountForPersist(input: {
+  withGst?: boolean;
+  companyDiscount?: number;
+}) {
+  if (input.withGst) return 0;
+  const value = Number(input.companyDiscount || 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 async function resolveExchangeCatalog(
@@ -380,6 +390,7 @@ billsRouter.post("/", async (req, res, next) => {
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
           payableAmount: totals.payableAmount,
+          companyDiscount: companyDiscountForPersist(input),
           cashAmount: totals.cashAmount,
           onlineAmount: totals.onlineAmount,
           financeAmount: totals.financeAmount,
@@ -621,6 +632,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
           payableAmount: totals.payableAmount,
+          companyDiscount: companyDiscountForPersist(input),
           cashAmount: totals.cashAmount,
           onlineAmount: totals.onlineAmount,
           financeAmount: totals.financeAmount,

@@ -107,6 +107,7 @@ export const createBillSchema = z
     exchangeValue: z.number().nonnegative().optional().nullable(),
     exchangeNotes: z.string().trim().optional().nullable(),
     dueDate: z.string().optional().nullable(),
+    companyDiscount: z.number().nonnegative().default(0),
   })
   .superRefine((data, ctx) => {
     const cash = data.useCash ? money(data.cashAmount) : money(0);

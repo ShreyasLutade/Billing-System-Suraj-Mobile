@@ -41,6 +41,7 @@ export type BillSnapshot = {
   dueDate: string;
   dueAmount: number;
   payableAmount: number;
+  companyDiscount: number;
   grandTotal: number;
   items: Array<{
     productName: string;
@@ -149,6 +150,7 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     dueDate,
     dueAmount: bill.dueAmount,
     payableAmount: bill.payableAmount ?? bill.grandTotal,
+    companyDiscount: bill.companyDiscount || 0,
     grandTotal: bill.grandTotal,
     items: bill.items.map((item) => ({
       productName: item.productName,
@@ -207,6 +209,7 @@ export function payloadToSnapshot(
     dueDate: payload.dueDate || "",
     dueAmount: totals.dueAmount,
     payableAmount: totals.payableAmount,
+    companyDiscount: payload.companyDiscount || 0,
     grandTotal: totals.grandTotal,
     items: payload.items.map((item, index) => ({
       productName: item.productName,
@@ -252,6 +255,12 @@ export function diffBillSnapshots(
     "Payable",
     money(before.payableAmount),
     money(after.payableAmount),
+  );
+  pushChange(
+    lines,
+    "Company cashback",
+    money(before.companyDiscount),
+    money(after.companyDiscount),
   );
 
   pushChange(lines, "Cash", money(before.cashAmount), money(after.cashAmount));

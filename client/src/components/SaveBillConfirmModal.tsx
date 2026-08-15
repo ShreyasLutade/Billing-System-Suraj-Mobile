@@ -16,6 +16,7 @@ export type SaveBillSummary = {
   dueDate?: string | null;
   isExchange: boolean;
   exchangeValue?: number | null;
+  companyDiscount?: number;
 };
 
 export function SaveBillConfirmModal({
@@ -119,6 +120,12 @@ export function SaveBillConfirmModal({
               <Row
                 label="Exchange"
                 value={`− ${formatINR(summary.exchangeValue)}`}
+              />
+            ) : null}
+            {summary.companyDiscount && summary.companyDiscount > 0 ? (
+              <Row
+                label="Company cashback"
+                value={`+ ${formatINR(summary.companyDiscount)}`}
               />
             ) : null}
             {summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (

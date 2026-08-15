@@ -30,6 +30,14 @@ function pct(part: number, total: number) {
   return round2((part / total) * 100);
 }
 
+type BillItemRow = {
+  productName: string;
+  quantity: number;
+  rate: number;
+  stockItemId: string | null;
+  stockItem: { purchasePrice: number } | null;
+};
+
 type BillRow = {
   id: string;
   invoiceNumber: string;
@@ -38,16 +46,48 @@ type BillRow = {
   billDate: Date;
   grandTotal: number;
   payableAmount: number;
+  companyDiscount?: number;
   cashAmount: number;
   onlineAmount: number;
   financeAmount: number;
   financeAmount2: number;
   dueAmount: number;
-  items: Array<{
-    productName: string;
-    stockItem: { purchasePrice: number } | null;
-  }>;
+  isExchange?: boolean;
+  exchangeValue?: number | null;
+  items: BillItemRow[];
 };
+
+function isStockMobile(item: BillItemRow) {
+  return Boolean(item.stockItemId || item.stockItem);
+}
+
+function splitBillItems(items: BillItemRow[]) {
+  let mobileSales = 0;
+  let accessorySales = 0;
+  let accessoryQty = 0;
+  let cost = 0;
+  const mobileNames: string[] = [];
+
+  for (const item of items) {
+    const amount = round2(Number(item.rate || 0) * Number(item.quantity || 1));
+    if (isStockMobile(item)) {
+      mobileSales += amount;
+      cost += Number(item.stockItem?.purchasePrice || 0);
+      if (item.productName) mobileNames.push(item.productName);
+    } else {
+      accessorySales += amount;
+      accessoryQty += Number(item.quantity || 1);
+    }
+  }
+
+  return {
+    mobileSales: round2(mobileSales),
+    accessorySales: round2(accessorySales),
+    accessoryQty,
+    cost: round2(cost),
+    mobileNames,
+  };
+}
 
 function summarizeBills(bills: BillRow[]) {
   const summary = bills.reduce(
@@ -55,18 +95,20 @@ function summarizeBills(bills: BillRow[]) {
       const finance =
         Number(bill.financeAmount || 0) + Number(bill.financeAmount2 || 0);
       const payable = bill.payableAmount || bill.grandTotal;
-      const cost = bill.items.reduce(
-        (sum, item) => sum + Number(item.stockItem?.purchasePrice || 0),
-        0,
-      );
-      acc.sales += bill.grandTotal;
+      const companyDiscount = Number(bill.companyDiscount || 0);
+      const split = splitBillItems(bill.items);
+      acc.sales += split.mobileSales;
       acc.payable += payable;
       acc.cash += bill.cashAmount;
       acc.online += bill.onlineAmount;
       acc.finance += finance;
       acc.due += bill.dueAmount;
-      acc.cost += cost;
-      acc.profit += payable - cost;
+      acc.cost += split.cost;
+      if (split.mobileSales > 0 || split.cost > 0) {
+        acc.profit += split.mobileSales + companyDiscount - split.cost;
+      }
+      acc.accessoriesRevenue += split.accessorySales;
+      acc.accessoriesSold += split.accessoryQty;
       acc.bills += 1;
       return acc;
     },
@@ -79,6 +121,8 @@ function summarizeBills(bills: BillRow[]) {
       due: 0,
       cost: 0,
       profit: 0,
+      accessoriesRevenue: 0,
+      accessoriesSold: 0,
       bills: 0,
     },
   );
@@ -95,6 +139,8 @@ function summarizeBills(bills: BillRow[]) {
     bills: summary.bills,
     cost: round2(summary.cost),
     profit: round2(summary.profit),
+    accessoriesRevenue: round2(summary.accessoriesRevenue),
+    accessoriesSold: summary.accessoriesSold,
     collected: round2(summary.cash + summary.online + summary.finance),
     mixTotal: round2(mixTotal),
     shares: {
@@ -107,34 +153,38 @@ function summarizeBills(bills: BillRow[]) {
 }
 
 function mapPeriodBills(bills: BillRow[]) {
-  return bills.map((bill) => {
-    const sellingPrice = round2(bill.payableAmount || bill.grandTotal);
-    const costPrice = round2(
-      bill.items.reduce(
-        (sum, item) => sum + Number(item.stockItem?.purchasePrice || 0),
-        0,
-      ),
-    );
-    const names = bill.items.map((item) => item.productName).filter(Boolean);
-    const productLabel =
-      names.length === 0
-        ? "—"
-        : names.length === 1
-          ? names[0]
-          : `${names[0]} +${names.length - 1} more`;
+  return bills
+    .map((bill) => {
+      const split = splitBillItems(bill.items);
+      if (split.mobileSales <= 0 && split.cost <= 0) return null;
+      const companyDiscount = round2(bill.companyDiscount || 0);
+      const sellingPrice = round2(split.mobileSales + companyDiscount);
+      const exchangeValue =
+        bill.isExchange && Number(bill.exchangeValue || 0) > 0
+          ? round2(Number(bill.exchangeValue || 0))
+          : 0;
+      const productLabel =
+        split.mobileNames.length === 0
+          ? "—"
+          : split.mobileNames.length === 1
+            ? split.mobileNames[0]
+            : `${split.mobileNames[0]} +${split.mobileNames.length - 1} more`;
 
-    return {
-      id: bill.id,
-      invoiceNumber: bill.invoiceNumber,
-      customerName: bill.customerName,
-      customerPhone: bill.customerPhone,
-      billDate: bill.billDate.toISOString(),
-      productLabel,
-      costPrice,
-      sellingPrice,
-      profit: round2(sellingPrice - costPrice),
-    };
-  });
+      return {
+        id: bill.id,
+        invoiceNumber: bill.invoiceNumber,
+        customerName: bill.customerName,
+        customerPhone: bill.customerPhone,
+        billDate: bill.billDate.toISOString(),
+        productLabel,
+        costPrice: split.cost,
+        sellingPrice,
+        companyDiscount,
+        exchangeValue,
+        profit: round2(sellingPrice - split.cost),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
 }
 
 async function loadPeriodBills(
@@ -154,14 +204,20 @@ async function loadPeriodBills(
       billDate: true,
       grandTotal: true,
       payableAmount: true,
+      companyDiscount: true,
       cashAmount: true,
       onlineAmount: true,
       financeAmount: true,
       financeAmount2: true,
       dueAmount: true,
+      isExchange: true,
+      exchangeValue: true,
       items: {
         select: {
           productName: true,
+          quantity: true,
+          rate: true,
+          stockItemId: true,
           stockItem: { select: { purchasePrice: true } },
         },
       },
@@ -328,6 +384,8 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           bills: summary.bills,
           cost: summary.cost,
           profit: summary.profit,
+          accessoriesRevenue: summary.accessoriesRevenue,
+          accessoriesSold: summary.accessoriesSold,
           collected: summary.collected,
           mixTotal: summary.mixTotal,
           shares: summary.shares,

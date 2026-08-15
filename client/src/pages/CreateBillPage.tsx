@@ -297,6 +297,8 @@ export function CreateBillPage() {
   const lastCustomerLookupPhoneRef = useRef("");
   const [notes, setNotes] = useState("");
   const [withGst, setWithGst] = useState(false);
+  const [useCompanyCashback, setUseCompanyCashback] = useState(false);
+  const [companyDiscount, setCompanyDiscount] = useState<number | "">("");
   const [useCustomBillDate, setUseCustomBillDate] = useState(false);
   const [customBillDate, setCustomBillDate] = useState(todayDateInput());
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
@@ -328,8 +330,10 @@ export function CreateBillPage() {
   const [useOnline, setUseOnline] = useState(false);
   const [useFinance, setUseFinance] = useState(false);
   const [hasDue, setHasDue] = useState(false);
+  const [dueFollowsRemaining, setDueFollowsRemaining] = useState(true);
   const [cashAmount, setCashAmount] = useState(0);
   const [onlineAmount, setOnlineAmount] = useState(0);
+  const [dueEntry, setDueEntry] = useState(0);
   const [financeEntries, setFinanceEntries] = useState<FinanceDraft[]>([
     blankFinanceEntry(),
   ]);
@@ -407,6 +411,8 @@ export function CreateBillPage() {
     setCustomerAddress("");
     setNotes("");
     setWithGst(false);
+    setUseCompanyCashback(false);
+    setCompanyDiscount("");
     setUseCustomBillDate(false);
     setCustomBillDate(todayDateInput());
     setItems([blankItem()]);
@@ -416,8 +422,10 @@ export function CreateBillPage() {
     setUseOnline(false);
     setUseFinance(false);
     setHasDue(false);
+    setDueFollowsRemaining(true);
     setCashAmount(0);
     setOnlineAmount(0);
+    setDueEntry(0);
     setFinanceEntries([blankFinanceEntry()]);
     setDueDate("");
     setSaving(false);
@@ -441,6 +449,12 @@ export function CreateBillPage() {
     setCustomerAddress(bill.customerAddress || "");
     setNotes(bill.notes || "");
     setWithGst(Boolean(bill.withGst));
+    setUseCompanyCashback(
+      !bill.withGst && Boolean(bill.companyDiscount && bill.companyDiscount > 0),
+    );
+    setCompanyDiscount(
+      bill.companyDiscount && bill.companyDiscount > 0 ? bill.companyDiscount : "",
+    );
     setUseCustomBillDate(true);
     setCustomBillDate(toDateInputValue(bill.billDate));
     setItems(
@@ -488,8 +502,13 @@ export function CreateBillPage() {
     setUseOnline(bill.onlineAmount > 0);
     setUseFinance(bill.financeAmount > 0);
     setHasDue(bill.dueAmount > 0);
+    setDueFollowsRemaining(
+      bill.dueAmount > 0 &&
+        (bill.financeAmount || 0) + (bill.financeAmount2 || 0) <= 0,
+    );
     setCashAmount(bill.cashAmount);
     setOnlineAmount(bill.onlineAmount);
+    setDueEntry(bill.dueAmount > 0 ? bill.dueAmount : 0);
     {
       const secondAmount = bill.financeAmount2 || 0;
       const firstAmount = round2(Math.max(bill.financeAmount - secondAmount, 0));
@@ -538,11 +557,31 @@ export function CreateBillPage() {
     const exchangeRefund = round2(Math.max(exchangeDeduction - grandTotal, 0));
     const cash = useCash ? cashAmount : 0;
     const online = useOnline ? onlineAmount : 0;
-    const finance = useFinance
+    const remainingAfterCashOnline = round2(
+      Math.max(payableAmount - cash - online, 0),
+    );
+    const enteredDue = hasDue
+      ? round2(Math.min(Math.max(dueEntry || 0, 0), remainingAfterCashOnline))
+      : 0;
+    const financeFromEntries = useFinance
       ? round2(financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0))
       : 0;
+    const finance = hasDue
+      ? dueFollowsRemaining || enteredDue <= 0
+        ? 0
+        : round2(Math.max(remainingAfterCashOnline - enteredDue, 0))
+      : financeFromEntries;
     const paid = round2(cash + online + finance);
-    const dueAmount = round2(Math.max(payableAmount - paid, 0));
+    const dueAmount = hasDue
+      ? dueFollowsRemaining || enteredDue <= 0
+        ? remainingAfterCashOnline
+        : enteredDue
+      : round2(Math.max(payableAmount - paid, 0));
+    const companyDiscountAmount =
+      withGst || !useCompanyCashback || companyDiscount === ""
+        ? 0
+        : round2(Number(companyDiscount) || 0);
+    const effectiveSelling = round2(payableAmount + companyDiscountAmount);
     return {
       subtotal,
       gstAmount,
@@ -550,6 +589,8 @@ export function CreateBillPage() {
       exchangeDeduction,
       exchangeRefund,
       payableAmount,
+      companyDiscountAmount,
+      effectiveSelling,
       paid,
       dueAmount,
       cash,
@@ -560,9 +601,15 @@ export function CreateBillPage() {
     items,
     isExchange,
     exchangeValue,
+    withGst,
+    useCompanyCashback,
+    companyDiscount,
     useCash,
     useOnline,
     useFinance,
+    hasDue,
+    dueFollowsRemaining,
+    dueEntry,
     cashAmount,
     onlineAmount,
     financeEntries,
@@ -665,13 +712,41 @@ export function CreateBillPage() {
   }, [hasDue, totals.dueAmount]);
 
   useEffect(() => {
+    if (!hasDue) return;
+    const remaining = round2(
+      Math.max(
+        totals.payableAmount -
+          (useCash ? cashAmount : 0) -
+          (useOnline ? onlineAmount : 0),
+        0,
+      ),
+    );
+    if (dueFollowsRemaining) {
+      if (dueEntry !== remaining) setDueEntry(remaining);
+      return;
+    }
+    if (dueEntry > remaining) setDueEntry(remaining);
+  }, [
+    hasDue,
+    dueFollowsRemaining,
+    dueEntry,
+    totals.payableAmount,
+    useCash,
+    cashAmount,
+    useOnline,
+    onlineAmount,
+  ]);
+
+  useEffect(() => {
     if (totals.exchangeRefund > 0) {
       setUseCash(false);
       setUseOnline(false);
       setUseFinance(false);
       setHasDue(false);
+      setDueFollowsRemaining(true);
       setCashAmount(0);
       setOnlineAmount(0);
+      setDueEntry(0);
       setFinanceEntries([blankFinanceEntry()]);
       return;
     }
@@ -849,11 +924,24 @@ export function CreateBillPage() {
   }
 
   function remainingAfterPayments(financeSoFar = 0) {
+    const dueSlice = hasDue
+      ? dueFollowsRemaining || dueEntry <= 0
+        ? round2(
+            Math.max(
+              totals.payableAmount -
+                (useCash ? cashAmount : 0) -
+                (useOnline ? onlineAmount : 0),
+              0,
+            ),
+          )
+        : dueEntry
+      : 0;
     return round2(
       Math.max(
         totals.payableAmount -
           (useCash ? cashAmount : 0) -
           (useOnline ? onlineAmount : 0) -
+          dueSlice -
           financeSoFar,
         0,
       ),
@@ -880,16 +968,68 @@ export function CreateBillPage() {
   function remainingForMode(mode: "cash" | "online" | "finance") {
     const cash = mode === "cash" ? 0 : useCash ? cashAmount : 0;
     const online = mode === "online" ? 0 : useOnline ? onlineAmount : 0;
+    const dueSlice =
+      hasDue && !dueFollowsRemaining && dueEntry > 0 ? dueEntry : 0;
     const finance =
-      mode === "finance"
+      hasDue || mode === "finance"
         ? 0
         : useFinance
           ? financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
           : 0;
     return round2(
-      Math.max(totals.payableAmount - cash - online - finance, 0),
+      Math.max(totals.payableAmount - cash - online - dueSlice - finance, 0),
     );
   }
+
+  function toggleHasDue(on: boolean) {
+    setHasDue(on);
+    setDueFollowsRemaining(true);
+    if (on) {
+      const remaining = round2(
+        Math.max(
+          totals.payableAmount -
+            (useCash ? cashAmount : 0) -
+            (useOnline ? onlineAmount : 0),
+          0,
+        ),
+      );
+      setDueEntry(remaining);
+      setUseFinance(false);
+      resetFinanceEntries();
+    } else {
+      setDueEntry(0);
+    }
+  }
+
+  useEffect(() => {
+    if (!hasDue || dueEntry <= 0) return;
+    const leftover = totals.finance;
+    if (leftover > 0) {
+      setUseFinance(true);
+      setFinanceEntries((prev) => {
+        if (prev.length <= 1) {
+          const entry = prev[0] ?? blankFinanceEntry();
+          if (entry.amount === leftover) return prev;
+          return [{ ...entry, amount: leftover }];
+        }
+        const others = prev
+          .slice(0, -1)
+          .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+        const lastAmount = round2(Math.max(leftover - others, 0));
+        const last = prev[prev.length - 1];
+        if (last.amount === lastAmount) return prev;
+        return [...prev.slice(0, -1), { ...last, amount: lastAmount }];
+      });
+      return;
+    }
+    setUseFinance(false);
+    setFinanceEntries((prev) => {
+      if (prev.length === 1 && prev[0].amount === 0 && !prev[0].select) {
+        return prev;
+      }
+      return [blankFinanceEntry()];
+    });
+  }, [hasDue, dueEntry, totals.finance]);
 
   function togglePayment(
     mode: "cash" | "online" | "finance",
@@ -1035,6 +1175,7 @@ export function CreateBillPage() {
         exchangeValue: null,
         exchangeNotes: null,
         dueDate: null,
+        companyDiscount: 0,
         items: items.map((item) => ({
           productName: item.productName,
           mobileCatalogId:
@@ -1154,6 +1295,7 @@ export function CreateBillPage() {
         isExchange && exchangeValue !== "" ? Number(exchangeValue) : null,
       exchangeNotes: isExchange ? exchangeNotes.trim() || null : null,
       dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
+      companyDiscount: totals.companyDiscountAmount,
       items: items.map((item) => ({
         productName: item.productName,
         mobileCatalogId:
@@ -1322,6 +1464,7 @@ export function CreateBillPage() {
             : payload.dueDate,
         isExchange: Boolean(payload.isExchange),
         exchangeValue: payload.exchangeValue,
+        companyDiscount: totals.companyDiscountAmount,
       });
       setShowSaveConfirm(true);
       setSaving(false);
@@ -1608,12 +1751,16 @@ export function CreateBillPage() {
             onChange={(on) => {
               setWithGst(on);
               if (on) {
+                setUseCompanyCashback(false);
+                setCompanyDiscount("");
                 setUseCash(false);
                 setUseOnline(false);
                 setUseFinance(false);
                 setHasDue(false);
+                setDueFollowsRemaining(true);
                 setCashAmount(0);
                 setOnlineAmount(0);
+                setDueEntry(0);
                 resetFinanceEntries();
                 setDueDate("");
                 setIsExchange(false);
@@ -2405,6 +2552,19 @@ export function CreateBillPage() {
                       strong
                     />
                   </div>
+                  {!withGst && totals.companyDiscountAmount > 0 ? (
+                    <>
+                      <SummaryRow
+                        label="Company cashback"
+                        value={`+ ${formatINR(totals.companyDiscountAmount)}`}
+                      />
+                      <SummaryRow
+                        label="Effective selling"
+                        value={formatINR(totals.effectiveSelling)}
+                        strong
+                      />
+                    </>
+                  ) : null}
                   {!withGst && totals.exchangeRefund > 0 ? (
                     <SummaryRow
                       label="Pay customer"
@@ -2419,6 +2579,48 @@ export function CreateBillPage() {
                     </p>
                   ) : null}
                 </dl>
+
+                {!withGst ? (
+                  <div className="mt-4 border-t border-ink-100 pt-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="font-display text-base font-semibold text-ink-900">
+                        Company cashback
+                      </p>
+                      <Switch
+                        checked={useCompanyCashback}
+                        aria-label="Company cashback"
+                        onChange={(on) => {
+                          setUseCompanyCashback(on);
+                          if (!on) setCompanyDiscount("");
+                        }}
+                      />
+                    </div>
+                    {useCompanyCashback ? (
+                      <div className="relative mt-3">
+                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
+                          ₹
+                        </span>
+                        <input
+                          id="companyDiscount"
+                          className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)]"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={companyDiscount}
+                          onChange={(e) =>
+                            setCompanyDiscount(
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value) || 0,
+                            )
+                          }
+                          placeholder="0"
+                          inputMode="decimal"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="mt-4 border-t border-ink-100 pt-4">
                   <label className="label" htmlFor="notes">
@@ -2464,7 +2666,9 @@ export function CreateBillPage() {
                     Payment
                   </h2>
                   <p className="mt-1 text-xs text-ink-500">
-                    Tick each mode — remaining payable fills in automatically.
+                    {hasDue
+                      ? "Cash, then online, then due — leftover goes to finance."
+                      : "Tick each mode — remaining payable fills in automatically."}
                   </p>
 
                   <div
@@ -2490,7 +2694,7 @@ export function CreateBillPage() {
                         id="hasDue"
                         checked={hasDue}
                         aria-label="This bill has due"
-                        onChange={setHasDue}
+                        onChange={toggleHasDue}
                       />
                     </label>
 
@@ -2510,12 +2714,80 @@ export function CreateBillPage() {
                       onChecked={(checked) => togglePayment("online", checked)}
                       onAmount={setOnlineAmount}
                     />
+                    {hasDue ? (
+                      <PaymentToggle
+                        label="Due"
+                        tone="due"
+                        checked
+                        amount={dueFollowsRemaining ? totals.dueAmount : dueEntry}
+                        onChecked={(checked) => toggleHasDue(checked)}
+                        onAmount={() => {}}
+                        showAmount={false}
+                      >
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
+                          <div>
+                            <label className="label required" htmlFor="dueAmount">
+                              Amount
+                            </label>
+                            <input
+                              id="dueAmount"
+                              className="field"
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={
+                                (dueFollowsRemaining
+                                  ? totals.dueAmount
+                                  : dueEntry) || ""
+                              }
+                              onChange={(e) => {
+                                const maxDue = round2(
+                                  Math.max(
+                                    totals.payableAmount -
+                                      (useCash ? cashAmount : 0) -
+                                      (useOnline ? onlineAmount : 0),
+                                    0,
+                                  ),
+                                );
+                                const next = round2(
+                                  Math.min(
+                                    Math.max(Number(e.target.value) || 0, 0),
+                                    maxDue,
+                                  ),
+                                );
+                                setDueEntry(next);
+                                setDueFollowsRemaining(next >= maxDue);
+                              }}
+                              placeholder="Amount pending from customer"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="label required" htmlFor="dueDate">
+                              Due date
+                            </label>
+                            <input
+                              id="dueDate"
+                              className="field"
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                              required
+                              aria-required="true"
+                            />
+                          </div>
+                        </div>
+                      </PaymentToggle>
+                    ) : null}
                     <PaymentToggle
                       label="Finance"
                       tone="finance"
                       checked={useFinance}
                       amount={totals.finance}
-                      onChecked={(checked) => togglePayment("finance", checked)}
+                      onChecked={(checked) => {
+                        if (hasDue && totals.finance > 0 && !checked) return;
+                        togglePayment("finance", checked);
+                      }}
                       onAmount={() => {}}
                       showAmount={false}
                     >
@@ -2683,51 +2955,6 @@ export function CreateBillPage() {
                     </div>
                   ) : null}
 
-                  <AnimatePresence>
-                    {hasDue ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="mt-3 rounded-xl border border-orange-200/80 bg-orange-50/70 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-semibold text-ember-500">
-                            Remaining due
-                          </p>
-                          <p className="font-display text-lg font-semibold text-ember-500">
-                            {formatINR(totals.dueAmount)}
-                          </p>
-                        </div>
-                        {totals.dueAmount > 0 ? (
-                          <>
-                            <label className="label required mt-3" htmlFor="dueDate">
-                              Expected collection date
-                            </label>
-                            <input
-                              id="dueDate"
-                              className="field"
-                              type="date"
-                              value={dueDate}
-                              onChange={(e) => setDueDate(e.target.value)}
-                              required
-                              aria-required="true"
-                            />
-                            {!dueDate ? (
-                              <p className="mt-2 text-xs font-medium text-ember-500">
-                                Required when due amount is pending
-                              </p>
-                            ) : null}
-                          </>
-                        ) : (
-                          <p className="mt-2 text-xs text-ink-500">
-                            The selected payments currently cover the full payable
-                            amount.
-                          </p>
-                        )}
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
                   </div>
 
                   {totals.exchangeRefund > 0 ? (
@@ -2986,6 +3213,7 @@ function FieldInfoTip({
 const PAYMENT_TONE_STYLES = {
   cash: { accent: "#12B886", ring: "ring-[#12B886]/20", bg: "bg-[#12B886]/5" },
   online: { accent: "#3B82F6", ring: "ring-[#3B82F6]/20", bg: "bg-[#3B82F6]/5" },
+  due: { accent: "#F59E0B", ring: "ring-[#F59E0B]/20", bg: "bg-[#F59E0B]/5" },
   finance: { accent: "#8B5CF6", ring: "ring-[#8B5CF6]/20", bg: "bg-[#8B5CF6]/5" },
 } as const;
 
@@ -2998,6 +3226,7 @@ function PaymentToggle({
   onAmount,
   children,
   showAmount = true,
+  amountPlaceholder,
 }: {
   label: string;
   tone: keyof typeof PAYMENT_TONE_STYLES;
@@ -3007,6 +3236,7 @@ function PaymentToggle({
   onAmount: (value: number) => void;
   children?: ReactNode;
   showAmount?: boolean;
+  amountPlaceholder?: string;
 }) {
   const styles = PAYMENT_TONE_STYLES[tone];
 
@@ -3039,7 +3269,6 @@ function PaymentToggle({
             className="overflow-hidden"
           >
             <div className="space-y-3 border-t border-ink-100/80 px-3 pb-3 pt-2.5">
-              {children}
               {showAmount ? (
                 <div>
                   <label className="label required">Amount</label>
@@ -3050,11 +3279,14 @@ function PaymentToggle({
                     step="0.01"
                     value={amount || ""}
                     onChange={(e) => onAmount(Number(e.target.value) || 0)}
-                    placeholder={`Amount paid by ${label.toLowerCase()}`}
+                    placeholder={
+                      amountPlaceholder || `Amount paid by ${label.toLowerCase()}`
+                    }
                     required={checked}
                   />
                 </div>
               ) : null}
+              {children}
             </div>
           </motion.div>
         ) : null}
