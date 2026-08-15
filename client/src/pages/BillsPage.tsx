@@ -753,6 +753,11 @@ export function BillsPage() {
                 <p className="truncate font-display text-base font-bold leading-tight tabular-nums text-ink-900 sm:text-lg">
                   {formatINR(bill.grandTotal)}
                 </p>
+                {!isGstTab && (bill.companyDiscount || 0) > 0 ? (
+                  <p className="mt-0.5 truncate text-[11px] font-medium text-[#B76E00]">
+                    incl. {formatINR(bill.companyDiscount || 0)} discount
+                  </p>
+                ) : null}
                 {isGstTab ? (
                   <p className="mt-0.5 truncate text-[11.5px] font-medium text-ink-500">
                     Tax invoice

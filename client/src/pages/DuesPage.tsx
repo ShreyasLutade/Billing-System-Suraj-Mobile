@@ -99,6 +99,16 @@ function financeTotalsByCompany(dues: FinanceDueItem[]) {
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 }
 
+function dueDateStatus(dueDate: string | null) {
+  if (!dueDate) return null;
+  const day = dueDate.slice(0, 10);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const display = format(new Date(dueDate), "dd MMM");
+  if (day < today) return { label: `Overdue · ${display}`, overdue: true };
+  if (day === today) return { label: "Due today", overdue: false };
+  return { label: `Due ${display}`, overdue: false };
+}
+
 function dueMatchesFinanceCompany(due: FinanceDueItem, company: string) {
   const name1 = due.financeCompanyName?.trim() || "";
   const name2 = due.financeCompanyName2?.trim() || "";
@@ -476,7 +486,9 @@ export function DuesPage() {
             />
           ) : (
             <div className="space-y-2">
-              {customerReveal.visibleItems.map((due) => (
+              {customerReveal.visibleItems.map((due) => {
+                const dueWhen = dueDateStatus(due.dueDate);
+                return (
                 <article
                   key={due.id}
                   role="link"
@@ -512,16 +524,26 @@ export function DuesPage() {
                         <span className="font-mono text-tide-600">
                           {due.invoiceNumber}
                         </span>
-                        <span className="text-ink-300"> · </span>
-                        {due.dueDate
-                          ? format(new Date(due.dueDate), "dd MMM")
-                          : format(new Date(due.billDate), "dd MMM")}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2.5">
-                      <p className="text-right text-base font-semibold tabular-nums text-ember-500">
-                        {formatINR(due.dueAmount)}
-                      </p>
+                      <div className="text-right">
+                        <p className="text-base font-semibold tabular-nums text-ember-500">
+                          {formatINR(due.dueAmount)}
+                        </p>
+                        <p
+                          className={clsx(
+                            "mt-0.5 text-[11.5px] font-semibold",
+                            dueWhen?.overdue
+                              ? "text-[#E5484D]"
+                              : dueWhen
+                                ? "text-[#B76E00]"
+                                : "text-ink-400",
+                          )}
+                        >
+                          {dueWhen?.label || "No due date"}
+                        </p>
+                      </div>
                       {isAdmin ? (
                         <button
                           type="button"
@@ -538,7 +560,8 @@ export function DuesPage() {
                     </div>
                   </div>
                 </article>
-              ))}
+                );
+              })}
               <LoadMoreSentinel
                 sentinelRef={customerReveal.sentinelRef}
                 hasMore={customerReveal.hasMore}

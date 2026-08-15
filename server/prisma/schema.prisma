@@ -45,6 +45,8 @@ model Bill {
   gstAmount         Float
   grandTotal        Float
   payableAmount     Float            @default(0)
+  /// Brand/company cashback — not charged to customer; lifts profit selling price.
+  companyDiscount   Float            @default(0)
   cashAmount        Float            @default(0)
   onlineAmount      Float            @default(0)
   financeAmount      Float            @default(0)

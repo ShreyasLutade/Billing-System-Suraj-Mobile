@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Headphones,
   MonitorSmartphone,
 } from "lucide-react";
 import clsx from "clsx";
@@ -510,6 +511,41 @@ export function AnalyticsPage() {
             })}
           </section>
 
+          <section
+            className="mb-8 overflow-hidden rounded-[1.125rem] border border-ink-100/80 bg-white/90 p-5 shadow-soft sm:p-6"
+            aria-label="Accessories revenue"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-5">
+              <div className="flex min-w-0 items-start gap-3.5">
+                <div
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px]"
+                  style={{ background: "#E8F0FE", color: "#2563EB" }}
+                >
+                  <Headphones className="h-5 w-5" strokeWidth={2.1} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+                    Accessories revenue
+                  </p>
+                  <p className="mt-1.5 font-display text-[clamp(1.5rem,4vw,2rem)] font-bold leading-none tracking-tight text-ink-900 tabular-nums">
+                    {formatINR(summary.accessoriesRevenue ?? 0)}
+                  </p>
+                  <p className="mt-2 text-[13px] text-ink-500">
+                    Cases, glass, chargers, earphones & more
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+                  Items sold
+                </p>
+                <p className="mt-1.5 font-display text-2xl font-bold tabular-nums text-ink-900">
+                  {summary.accessoriesSold ?? 0}
+                </p>
+              </div>
+            </div>
+          </section>
+
           {/* Period bills */}
           <div className="mb-3.5 flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -517,7 +553,8 @@ export function AnalyticsPage() {
                 Bills · {data.periodLabel}
               </h2>
               <p className="mt-0.5 text-[13px] text-ink-500">
-                Cost and selling price for each bill in this period.
+                Mobile cost vs selling price. Exchange is not deducted; cashback
+                is included. Accessories are counted separately above.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -705,6 +742,16 @@ export function AnalyticsPage() {
                       <p className="text-[14px] font-semibold tabular-nums text-ink-900 sm:text-[15px]">
                         {formatINR(bill.sellingPrice)}
                       </p>
+                      {(bill.exchangeValue || 0) > 0 ? (
+                        <p className="text-[11px] font-medium text-[#B76E00]">
+                          incl. {formatINR(bill.exchangeValue || 0)} exchange
+                        </p>
+                      ) : null}
+                      {(bill.companyDiscount || 0) > 0 ? (
+                        <p className="text-[11px] font-medium text-[#0E9E76]">
+                          incl. {formatINR(bill.companyDiscount || 0)} cashback
+                        </p>
+                      ) : null}
                     </div>
                     <div className="text-left sm:text-right">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 sm:hidden">
