@@ -116,9 +116,14 @@ export function SuppliersPage() {
                     <td className="font-semibold whitespace-normal text-ink-900">
                       <span className="inline-flex flex-wrap items-center gap-1.5">
                         {s.name}
-                        {s.isExchange ? (
+                        {s.hasExchangeIntake ? (
                           <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
                             Exchange
+                          </span>
+                        ) : null}
+                        {s.hasReturnIntake ? (
+                          <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                            Return
                           </span>
                         ) : null}
                       </span>

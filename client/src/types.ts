@@ -181,6 +181,8 @@ export type StockItem = {
   supplierName?: string | null;
   /** True when the linked supplier is from a customer phone exchange. */
   supplierIsExchange?: boolean;
+  /** How this unit entered stock — exchange or customer return. */
+  intakeKind?: "exchange" | "return" | null;
   status: "AVAILABLE" | "SOLD" | string;
   createdAt: string;
   updatedAt: string;
@@ -204,6 +206,8 @@ export type Supplier = {
   stockPurchased: number;
   /** True when this party is a customer who gave a phone in exchange. */
   isExchange?: boolean;
+  hasExchangeIntake?: boolean;
+  hasReturnIntake?: boolean;
 };
 
 export type SupplierPayment = {

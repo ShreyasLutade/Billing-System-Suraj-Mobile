@@ -8,6 +8,7 @@ import {
   Download,
   Pencil,
   Phone,
+  RotateCcw,
   Share2,
   Trash2,
   UserRound,
@@ -87,16 +88,20 @@ export function BillDetailPage() {
     void loadBill();
   }, [loadBill]);
 
-  async function confirmDelete() {
+  async function confirmDelete(mode: "delete" | "return" = "delete") {
     if (!bill || !isAdmin) return;
     setDeleting(true);
     setDeleteError(null);
     try {
-      await api.deleteBill(bill.id);
+      await api.deleteBill(bill.id, mode);
       navigate(from ?? billsHomePath(bill.withGst), { replace: true });
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete bill",
+        err instanceof Error
+          ? err.message
+          : mode === "return"
+            ? "Failed to return this bill to stock"
+            : "Failed to delete bill",
       );
     } finally {
       setDeleting(false);
@@ -702,20 +707,15 @@ export function BillDetailPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember-500">
-                    Danger
-                  </p>
-                  <h2
-                    id="delete-bill-title"
-                    className="mt-1 font-display text-xl font-semibold text-ink-900"
-                  >
-                    Delete this bill?
-                  </h2>
-                </div>
+                <h2
+                  id="delete-bill-title"
+                  className="mt-0.5 font-display text-xl font-semibold text-ink-900"
+                >
+                  Remove {bill.invoiceNumber} ({bill.customerName})?
+                </h2>
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
+                  className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
                   onClick={() => !deleting && setShowDeleteConfirm(false)}
                   aria-label="Close"
                   disabled={deleting}
@@ -725,14 +725,20 @@ export function BillDetailPage() {
               </div>
 
               <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
+                {bill.items.some((item) => item.stockItemId) ? (
+                  <p>
+                    <span className="font-semibold text-ink-800">Return</span>
+                    {" → "}mobiles go back to second-hand stock (adds a Return
+                    card).
+                  </p>
+                ) : (
+                  <p>This bill has no stock mobile to return.</p>
+                )}
                 <p>
-                  This will permanently delete{" "}
-                  <span className="font-semibold text-ink-900">
-                    {bill.invoiceNumber}
-                  </span>{" "}
-                  for {bill.customerName}.
+                  <span className="font-semibold text-ink-800">Delete</span>
+                  {" → "}invoice removed, mobiles permanently deleted from
+                  stock.
                 </p>
-                <p>This action cannot be undone.</p>
               </div>
 
               {deleteError ? (
@@ -753,12 +759,23 @@ export function BillDetailPage() {
                 <button
                   type="button"
                   className="btn-danger"
-                  onClick={() => void confirmDelete()}
+                  onClick={() => void confirmDelete("delete")}
                   disabled={deleting}
                 >
                   <Trash2 className="h-4 w-4" />
-                  {deleting ? "Deleting…" : "Delete bill"}
+                  {deleting ? "Working…" : "Delete"}
                 </button>
+                {bill.items.some((item) => item.stockItemId) ? (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => void confirmDelete("return")}
+                    disabled={deleting}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    {deleting ? "Working…" : "Return"}
+                  </button>
+                ) : null}
               </div>
             </motion.div>
           </motion.div>

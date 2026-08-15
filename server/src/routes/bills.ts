@@ -16,7 +16,8 @@ import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { upsertCustomerProfile } from "../services/customers";
 import {
   clearExchangeStock,
-  releaseStockIds,
+  deleteStockIds,
+  returnBillStockToCustomer,
   syncExchangeStock,
   syncStockForBillItems,
 } from "../services/stockSync";
@@ -777,26 +778,40 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
     const existing = await prisma.bill.findUnique({
       where: { id: req.params.id },
-      include: { items: { select: { stockItemId: true } } },
+      include: { items: true },
     });
     if (!existing) {
       res.status(404).json({ error: "Bill not found" });
       return;
     }
 
+    const mode =
+      req.body?.mode === "return" || req.query.mode === "return"
+        ? "return"
+        : "delete";
+
+    const stockIds = existing.items
+      .map((item) => item.stockItemId)
+      .filter((id): id is string => Boolean(id));
+
     await prisma.$transaction(async (tx) => {
-      await releaseStockIds(
-        tx,
-        existing.items
-          .map((item) => item.stockItemId)
-          .filter((id): id is string => Boolean(id)),
-      );
+      if (mode === "return") {
+        await returnBillStockToCustomer(tx, existing);
+        await tx.bill.delete({ where: { id: existing.id } });
+        return;
+      }
+
       await clearExchangeStock(tx, existing.invoiceNumber);
       await tx.bill.delete({ where: { id: existing.id } });
+      await deleteStockIds(tx, stockIds);
     });
 
     res.json({
-      data: { id: existing.id, invoiceNumber: existing.invoiceNumber },
+      data: {
+        id: existing.id,
+        invoiceNumber: existing.invoiceNumber,
+        mode,
+      },
     });
   } catch (error) {
     next(error);

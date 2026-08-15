@@ -151,6 +151,23 @@ function formatPurchaseDate(value: string) {
   }).format(date);
 }
 
+function StockIntakeBadge({
+  kind,
+  isExchange,
+}: {
+  kind?: "exchange" | "return" | null;
+  isExchange?: boolean;
+}) {
+  const isReturn = kind === "return";
+  const isEx = !isReturn && (kind === "exchange" || Boolean(isExchange));
+  if (!isReturn && !isEx) return null;
+  return (
+    <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+      {isReturn ? "Return" : "Exchange"}
+    </span>
+  );
+}
+
 function sortGroups(
   groups: StockGroup[],
   sortKey: SortKey,
@@ -732,10 +749,11 @@ function StockProductDetail({
               {" · "}
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 {group.supplierName}
-                {group.supplierIsExchange ? (
-                  <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
-                    Exchange
-                  </span>
+                {group.units.some((unit) => unit.intakeKind === "return") ? (
+                  <StockIntakeBadge kind="return" />
+                ) : group.supplierIsExchange ||
+                  group.units.some((unit) => unit.intakeKind === "exchange") ? (
+                  <StockIntakeBadge kind="exchange" />
                 ) : null}
               </span>
             </>
@@ -770,11 +788,10 @@ function StockProductDetail({
                   <td className="whitespace-normal text-ink-800">
                     <span className="inline-flex flex-wrap items-center gap-1.5">
                       {unit.supplierName || unit.suppliers[0] || "—"}
-                      {unit.supplierIsExchange ? (
-                        <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
-                          Exchange
-                        </span>
-                      ) : null}
+                      <StockIntakeBadge
+                        kind={unit.intakeKind}
+                        isExchange={unit.supplierIsExchange}
+                      />
                     </span>
                     {unit.supplierId ? (
                       <>

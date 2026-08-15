@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { normalizeCapacity } from "../lib/capacity";
 import { upsertSupplierByName } from "../services/suppliers";
+import { intakeKindFromNote } from "../services/stockSync";
 
 export const stockRouter = Router();
 
@@ -38,14 +39,18 @@ function mapStockItem(item: {
   createdAt: Date;
   updatedAt: Date;
   supplier?: { id: string; name: string; isExchange?: boolean } | null;
+  purchaseItem?: { purchase?: { note?: string | null } | null } | null;
 }) {
   const fromJson = parseSuppliers(item.suppliers);
   const supplierName = item.supplier?.name;
+  const note = item.purchaseItem?.purchase?.note || null;
+  const intakeKind = intakeKindFromNote(note);
   return {
     ...item,
     supplierId: item.supplierId || null,
     supplierName: supplierName || fromJson[0] || null,
     supplierIsExchange: Boolean(item.supplier?.isExchange),
+    intakeKind,
     suppliers: supplierName
       ? [supplierName]
       : fromJson.length
@@ -122,7 +127,10 @@ stockRouter.get("/", async (req, res, next) => {
             : { status: "AVAILABLE" },
         ],
       },
-      include: { supplier: { select: { id: true, name: true, isExchange: true } } },
+      include: {
+        supplier: { select: { id: true, name: true, isExchange: true } },
+        purchaseItem: { select: { purchase: { select: { note: true } } } },
+      },
       orderBy: [{ createdAt: "desc" }, { mobileName: "asc" }],
     });
 

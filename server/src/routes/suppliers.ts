@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { upsertSupplierByName } from "../services/suppliers";
+import { intakeKindFromNote } from "../services/stockSync";
 
 export const suppliersRouter = Router();
 
@@ -14,7 +15,7 @@ async function supplierLedgerStats(supplierId: string) {
     await Promise.all([
       prisma.purchase.findMany({
         where: { supplierId },
-        select: { totalAmount: true, paidAt: true },
+        select: { totalAmount: true, paidAt: true, note: true },
       }),
       prisma.stockItem.count({
         where: { supplierId, status: "AVAILABLE" },
@@ -45,6 +46,12 @@ async function supplierLedgerStats(supplierId: string) {
     stockAvailable,
     stockSold,
     stockPurchased,
+    hasExchangeIntake: purchases.some(
+      (purchase) => intakeKindFromNote(purchase.note) === "exchange",
+    ),
+    hasReturnIntake: purchases.some(
+      (purchase) => intakeKindFromNote(purchase.note) === "return",
+    ),
   };
 }
 

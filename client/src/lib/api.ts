@@ -129,10 +129,14 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  deleteBill: (id: string) =>
-    request<{ data: { id: string; invoiceNumber: string } }>(`/bills/${id}`, {
-      method: "DELETE",
-    }),
+  deleteBill: (id: string, mode: "delete" | "return" = "delete") =>
+    request<{ data: { id: string; invoiceNumber: string; mode?: string } }>(
+      `/bills/${id}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({ mode }),
+      },
+    ),
   analytics: (
     period: string = "all",
     options?: { from?: string; to?: string },
