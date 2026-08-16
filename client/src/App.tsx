@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { GuestOnly, RequireAdmin, RequireAuth } from "./auth/guards";
 import { AppShell } from "./components/AppShell";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
@@ -43,6 +44,10 @@ export default function App() {
               <Route path="suppliers/:id" element={<SupplierDetailPage />} />
               <Route element={<RequireAdmin />}>
                 <Route path="analytics" element={<AnalyticsPage />} />
+                <Route
+                  path="analytics/payments"
+                  element={<AnalyticsPaymentsPage />}
+                />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

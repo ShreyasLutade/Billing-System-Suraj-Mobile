@@ -21,7 +21,7 @@ import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useAuth } from "../auth/AuthContext";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
-import { fromState } from "../lib/navMemory";
+import { fromState, readFromState, backLabel } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import {
   matchesDueSearch,
@@ -134,6 +134,7 @@ function financeAmountForCompany(due: FinanceDueItem, company: string | null) {
 export function DuesPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const from = readFromState(location.state);
   const { isAdmin } = useAuth();
   const [tab, setTab] = usePersistedTab(
     "tab",
@@ -296,7 +297,9 @@ export function DuesPage() {
         title="Dues"
         description="Pending payments from customers and financiers."
         action={
-          <BackLink to="/">Home</BackLink>
+          <BackLink to={from ?? "/"}>
+            {from ? backLabel(from) : "Home"}
+          </BackLink>
         }
       />
 

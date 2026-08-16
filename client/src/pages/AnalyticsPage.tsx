@@ -22,6 +22,7 @@ import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
 import { fromState } from "../lib/navMemory";
+import { analyticsPaymentsPath, type PaymentMode } from "../lib/analyticsNav";
 
 const MIX = {
   cash: { color: "#12B886", soft: "#E7F8F1", ink: "#0E9E76" },
@@ -427,6 +428,7 @@ export function AnalyticsPage() {
                 </span>
                 <Link
                   to="/dues"
+                  state={fromState(location)}
                   className="font-semibold text-ink-900 transition hover:text-[#B76E00]"
                 >
                   Collect now →
@@ -475,9 +477,20 @@ export function AnalyticsPage() {
           >
             {kpis.map((kpi) => {
               const Icon = kpi.icon;
+              const to =
+                kpi.key === "due"
+                  ? "/dues"
+                  : analyticsPaymentsPath(
+                      kpi.key as PaymentMode,
+                      period,
+                      customFrom,
+                      customTo,
+                    );
               return (
-                <div
+                <Link
                   key={kpi.key}
+                  to={to}
+                  state={fromState(location)}
                   className="group rounded-2xl border border-ink-100/80 bg-white/90 p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lift"
                 >
                   <div className="mb-4 flex items-center justify-between">
@@ -506,7 +519,7 @@ export function AnalyticsPage() {
                   <p className="font-display text-2xl font-bold leading-tight tracking-tight text-ink-900 tabular-nums">
                     {formatINR(kpi.value)}
                   </p>
-                </div>
+                </Link>
               );
             })}
           </section>
