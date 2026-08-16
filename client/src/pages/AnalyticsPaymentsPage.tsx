@@ -48,7 +48,7 @@ const MODE_META: Record<
     name: string;
     verb: string;
     countLabel: string;
-    colors: (typeof MIX)["cash"];
+    colors: { color: string; soft: string; ink: string };
     icon: LucideIcon;
   }
 > = {
