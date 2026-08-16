@@ -138,6 +138,19 @@ export type AnalyticsSummary = {
     exchangeValue?: number;
     profit: number;
   }>;
+  paymentSources?: Array<{
+    id: string;
+    invoiceNumber: string;
+    customerName: string;
+    billDate: string;
+    billTotal: number;
+    cashAmount: number;
+    onlineAmount: number;
+    financeAmount: number;
+    financeLabel?: string | null;
+    dueAmount: number;
+    dueDate?: string | null;
+  }>;
 };
 
 export type FinanceCompany = {

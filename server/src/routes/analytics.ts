@@ -52,6 +52,10 @@ type BillRow = {
   financeAmount: number;
   financeAmount2: number;
   dueAmount: number;
+  dueDate?: Date | null;
+  dueSettled?: boolean;
+  financeCompanyName?: string | null;
+  financeCompanyName2?: string | null;
   isExchange?: boolean;
   exchangeValue?: number | null;
   items: BillItemRow[];
@@ -187,6 +191,33 @@ function mapPeriodBills(bills: BillRow[]) {
     .filter((row): row is NonNullable<typeof row> => Boolean(row));
 }
 
+function financeLabel(bill: BillRow) {
+  return [bill.financeCompanyName, bill.financeCompanyName2]
+    .map((name) => name?.trim())
+    .filter(Boolean)
+    .join(" + ");
+}
+
+function mapPaymentSources(bills: BillRow[]) {
+  return bills.map((bill) => {
+    const finance =
+      Number(bill.financeAmount || 0) + Number(bill.financeAmount2 || 0);
+    return {
+      id: bill.id,
+      invoiceNumber: bill.invoiceNumber,
+      customerName: bill.customerName,
+      billDate: bill.billDate.toISOString(),
+      billTotal: round2(bill.payableAmount || bill.grandTotal),
+      cashAmount: round2(bill.cashAmount || 0),
+      onlineAmount: round2(bill.onlineAmount || 0),
+      financeAmount: round2(finance),
+      financeLabel: financeLabel(bill) || null,
+      dueAmount: round2(bill.dueAmount || 0),
+      dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
+    };
+  });
+}
+
 async function loadPeriodBills(
   billDateFilter: ReturnType<typeof toDateFilter>,
 ) {
@@ -209,7 +240,10 @@ async function loadPeriodBills(
       onlineAmount: true,
       financeAmount: true,
       financeAmount2: true,
+      financeCompanyName: true,
+      financeCompanyName2: true,
       dueAmount: true,
+      dueDate: true,
       isExchange: true,
       exchangeValue: true,
       items: {
@@ -232,6 +266,7 @@ async function analyzePeriod(
   return {
     summary: summarizeBills(bills),
     periodBills: mapPeriodBills(bills),
+    paymentSources: mapPaymentSources(bills),
   };
 }
 
@@ -284,7 +319,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
 
     const billDateFilter = toDateFilter(range);
 
-    const { summary, periodBills } = await analyzePeriod(
+    const { summary, periodBills, paymentSources } = await analyzePeriod(
       period === "all" ? undefined : billDateFilter,
     );
 
@@ -409,6 +444,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           value: round2(stockAgg._sum.purchasePrice || 0),
         },
         periodBills,
+        paymentSources,
       },
     });
   } catch (error) {
