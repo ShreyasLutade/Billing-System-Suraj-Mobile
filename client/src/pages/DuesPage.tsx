@@ -496,7 +496,12 @@ export function DuesPage() {
                   key={due.id}
                   role="link"
                   tabIndex={0}
-                  className="cursor-pointer rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-sm shadow-ink-900/5 backdrop-blur-sm transition hover:border-tide-200 hover:shadow-md"
+                  className={clsx(
+                    "cursor-pointer rounded-2xl border px-3.5 py-3 shadow-sm backdrop-blur-sm transition",
+                    dueWhen?.overdue
+                      ? "border-red-500/40 bg-red-500/20 hover:border-red-500/55 hover:bg-red-500/25"
+                      : "border-ink-100/80 bg-white/90 shadow-ink-900/5 hover:border-tide-200 hover:shadow-md",
+                  )}
                   onClick={() =>
                     navigate(`/bills/${due.id}`, { state: fromState(location) })
                   }
