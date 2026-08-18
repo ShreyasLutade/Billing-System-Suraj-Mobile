@@ -173,7 +173,7 @@ export function FieldPicker({
         ref={menuRef}
         id={listId}
         role="listbox"
-        className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+        className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
       >
             {conditionFilters ? (
               <div className="flex items-center gap-1.5 border-b border-ink-100 px-3.5 py-3">
@@ -411,8 +411,17 @@ export function FieldPicker({
           aria-controls={listId}
           onClick={() => {
             if (disabled) return;
-            if (open) close();
-            else openMenu();
+            if (open) {
+              close();
+              return;
+            }
+            openMenu();
+            requestAnimationFrame(() => {
+              rootRef.current?.scrollIntoView({
+                block: "center",
+                behavior: "smooth",
+              });
+            });
           }}
         >
           <span className="min-w-0 flex-1 truncate">
