@@ -525,7 +525,7 @@ function PickerOption({
       role="option"
       aria-selected={Boolean(active)}
       className={clsx(
-        "flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-[11px] px-2.5 py-2.5 text-left transition",
+        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-[11px] py-2.5 pl-2.5 pr-1.5 text-left transition sm:gap-3 sm:px-2.5",
         active ? "bg-[#E7F8F1]" : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA]",
       )}
       onClick={onSelect}
@@ -559,7 +559,7 @@ function PickerOption({
       </span>
 
       {(badge || meta) && (
-        <span className="flex shrink-0 flex-col items-end gap-1">
+        <span className="ml-auto flex shrink-0 flex-col items-end gap-1">
           {badge ? (
             <span
               className={clsx(
@@ -582,7 +582,7 @@ function PickerOption({
 
       <Check
         className={clsx(
-          "h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition",
+          "hidden h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition sm:block",
           active ? "opacity-100" : "opacity-0",
         )}
         strokeWidth={2.6}
