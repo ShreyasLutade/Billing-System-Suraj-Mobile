@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
+import { exchangeDeductionAmount } from "./exchangeItems";
 
 export const money = (value: number | string | Decimal) =>
   new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
@@ -106,6 +107,21 @@ export const createBillSchema = z
     exchangeSerial: z.string().trim().optional().nullable(),
     exchangeValue: z.number().nonnegative().optional().nullable(),
     exchangeNotes: z.string().trim().optional().nullable(),
+    exchangeItems: z
+      .array(
+        z.object({
+          model: z.string().trim().min(1),
+          platform: z.enum(["IOS", "ANDROID"]),
+          color: z.string().trim().min(1),
+          storage: z.string().trim().min(1),
+          ram: z.string().trim().optional().nullable(),
+          imei1: z.string().trim().min(8),
+          value: z.number().nonnegative(),
+          notes: z.string().trim().optional().nullable(),
+        }),
+      )
+      .optional()
+      .default([]),
     dueDate: z.string().optional().nullable(),
     companyDiscount: z.number().nonnegative().default(0),
   })
@@ -119,62 +135,95 @@ export const createBillSchema = z
         : money(0);
     const finance = finance1.plus(finance2);
 
-    if (data.isExchange && !data.exchangeModel?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter exchange mobile name",
-        path: ["exchangeModel"],
-      });
-    }
-    if (data.isExchange && !data.exchangePlatform) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select exchange phone OS",
-        path: ["exchangePlatform"],
-      });
-    }
-    if (data.isExchange && !data.exchangeColor?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter exchange phone color",
-        path: ["exchangeColor"],
-      });
-    }
-    if (data.isExchange && !data.exchangeStorage?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter exchange phone storage",
-        path: ["exchangeStorage"],
-      });
-    }
-    if (
-      data.isExchange &&
-      data.exchangePlatform === "ANDROID" &&
-      !data.exchangeRam?.trim()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter exchange phone RAM",
-        path: ["exchangeRam"],
-      });
-    }
-    if (data.isExchange && !data.exchangeImei1?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter exchange phone IMEI",
-        path: ["exchangeImei1"],
-      });
-    }
+    if (data.isExchange) {
+      const items =
+        data.exchangeItems?.length && data.exchangeItems.some((i) => i.model.trim())
+          ? data.exchangeItems
+          : data.exchangeModel?.trim()
+            ? [
+                {
+                  model: data.exchangeModel,
+                  platform: data.exchangePlatform!,
+                  color: data.exchangeColor || "",
+                  storage: data.exchangeStorage || "",
+                  ram: data.exchangeRam,
+                  imei1: data.exchangeImei1 || "",
+                  value: data.exchangeValue ?? 0,
+                  notes: data.exchangeNotes,
+                },
+              ]
+            : [];
 
-    if (
-      data.isExchange &&
-      (data.exchangeValue == null || money(data.exchangeValue).lt(0))
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enter exchange amount",
-        path: ["exchangeValue"],
+      if (!items.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Add at least one exchange mobile",
+          path: ["exchangeModel"],
+        });
+      }
+
+      items.forEach((item, index) => {
+        if (!item.model?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter exchange mobile name",
+            path: ["exchangeItems", index, "model"],
+          });
+        }
+        if (!item.platform) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Select exchange phone OS",
+            path: ["exchangeItems", index, "platform"],
+          });
+        }
+        if (!item.color?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter exchange phone color",
+            path: ["exchangeItems", index, "color"],
+          });
+        }
+        if (!item.storage?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter exchange phone storage",
+            path: ["exchangeItems", index, "storage"],
+          });
+        }
+        if (item.platform === "ANDROID" && !item.ram?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter exchange phone RAM",
+            path: ["exchangeItems", index, "ram"],
+          });
+        }
+        if (!item.imei1?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter exchange phone IMEI",
+            path: ["exchangeItems", index, "imei1"],
+          });
+        }
+        if (item.value == null || money(item.value).lt(0)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter exchange amount",
+            path: ["exchangeItems", index, "value"],
+          });
+        }
       });
+
+      const imeis = items
+        .map((item) => item.imei1?.replace(/\s+/g, "").trim())
+        .filter(Boolean);
+      if (new Set(imeis).size !== imeis.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Each exchange phone needs a unique IMEI",
+          path: ["exchangeItems"],
+        });
+      }
     }
 
     if (data.useCash && cash.lte(0)) {
@@ -243,10 +292,7 @@ export const createBillSchema = z
       (sum, row) => sum.plus(row.amount),
       money(0),
     );
-    const exchangeDeduction =
-      data.isExchange && data.exchangeValue != null
-        ? money(data.exchangeValue)
-        : money(0);
+    const exchangeDeduction = money(exchangeDeductionAmount(data));
 
     const payableAmount = Decimal.max(grandTotal.minus(exchangeDeduction), 0);
     const paid = cash.plus(online).plus(finance);
@@ -296,10 +342,7 @@ export function computeBillTotals(input: CreateBillInput) {
   const subtotal = items.reduce((sum, item) => sum.plus(item.base), money(0));
   const gstAmount = items.reduce((sum, item) => sum.plus(item.gstAmount), money(0));
   const grandTotal = items.reduce((sum, item) => sum.plus(item.amount), money(0));
-  const exchangeDeduction =
-    input.isExchange && input.exchangeValue != null
-      ? money(input.exchangeValue)
-      : money(0);
+  const exchangeDeduction = money(exchangeDeductionAmount(input));
   const payableAmount = Decimal.max(grandTotal.minus(exchangeDeduction), 0);
 
   const cashAmount = input.useCash ? money(input.cashAmount) : money(0);

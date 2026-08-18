@@ -70,6 +70,8 @@ model Bill {
   exchangeValue      Float?
   exchangeNotes      String?
   exchangeMobileCatalogId String?
+  /// JSON array of extra exchange phones [{ model, platform, color, storage, ram, imei1, value, notes? }]
+  exchangeItemsJson  String?
   dueAmount          Float            @default(0)
   dueDate           DateTime?
   dueSettled        Boolean          @default(false)

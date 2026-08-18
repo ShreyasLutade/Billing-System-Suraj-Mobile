@@ -371,31 +371,65 @@ export function BillDetailPage() {
                 </span>
                 <h2 className="font-display text-base font-semibold text-[#0E1626]">
                   Exchange mobile
+                  {(bill.exchangeItems?.length || 0) > 1
+                    ? `s (${bill.exchangeItems?.length})`
+                    : ""}
                 </h2>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Kv label="Model" value={bill.exchangeModel || "—"} />
-                <Kv
-                  label="Exchange value"
-                  value={
-                    bill.exchangeValue != null
-                      ? formatINR(bill.exchangeValue)
-                      : "—"
-                  }
-                  highlight
-                />
-                <Kv label="IMEI" value={bill.exchangeImei1 || "—"} />
-                <Kv
-                  label="Serial"
-                  value={bill.exchangeSerial || "—"}
-                  muted={!bill.exchangeSerial}
-                />
-                <Kv
-                  label="Notes"
-                  value={bill.exchangeNotes || "—"}
-                  muted={!bill.exchangeNotes}
-                  full
-                />
+              <div className="space-y-4">
+                {(bill.exchangeItems?.length
+                  ? bill.exchangeItems
+                  : bill.exchangeModel
+                    ? [
+                        {
+                          model: bill.exchangeModel,
+                          platform:
+                            bill.exchangePlatform === "ANDROID"
+                              ? "ANDROID"
+                              : "IOS",
+                          color: bill.exchangeColor || "",
+                          storage: bill.exchangeStorage || "",
+                          ram: bill.exchangeRam,
+                          imei1: bill.exchangeImei1 || "",
+                          value: bill.exchangeValue || 0,
+                          notes: bill.exchangeNotes,
+                        },
+                      ]
+                  : []
+                ).map((item, index) => (
+                  <div
+                    key={`${item.imei1}-${index}`}
+                    className="rounded-xl border border-ink-100 bg-ink-50/40 p-4"
+                  >
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+                      Exchange {index + 1}
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Kv label="Model" value={item.model || "—"} />
+                      <Kv
+                        label="Exchange value"
+                        value={formatINR(item.value || 0)}
+                        highlight
+                      />
+                      <Kv label="IMEI" value={item.imei1 || "—"} />
+                      <Kv
+                        label="Specs"
+                        value={[
+                          item.color,
+                          item.storage,
+                          item.platform === "ANDROID" && item.ram
+                            ? item.ram
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      />
+                      {item.notes ? (
+                        <Kv label="Notes" value={item.notes} full />
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           ) : null}
