@@ -173,7 +173,7 @@ export function FieldPicker({
         ref={menuRef}
         id={listId}
         role="listbox"
-        className="mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+        className="mt-2 min-w-0 w-full overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
       >
             {conditionFilters ? (
               <div className="flex items-center gap-1.5 border-b border-ink-100 px-3.5 py-3">
@@ -236,7 +236,7 @@ export function FieldPicker({
               </div>
             ) : null}
 
-            <div className="max-h-[min(320px,45dvh)] overflow-y-auto overscroll-contain p-1.5">
+            <div className="max-h-[min(320px,45dvh)] min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain p-1.5">
               {filteredOptions.length === 0 ? (
                 <div className="px-3.5 py-7 text-center text-[13.5px] text-ink-500">
                   {query.trim() ? (
@@ -294,7 +294,7 @@ export function FieldPicker({
   const showClear = Boolean(value) || (open && Boolean(query));
 
   return (
-    <div ref={rootRef} className={clsx("relative", open && "z-20")}>
+    <div ref={rootRef} className={clsx("relative min-w-0 w-full", open && "z-20")}>
       <select
         className="sr-only"
         tabIndex={-1}
@@ -315,7 +315,7 @@ export function FieldPicker({
       {searchable ? (
         <div
           className={clsx(
-            "flex min-h-[48px] items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+            "flex min-h-[48px] min-w-0 items-center gap-2.5 overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
             open &&
               "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
             disabled && "cursor-not-allowed opacity-55",
@@ -340,7 +340,7 @@ export function FieldPicker({
           />
           <input
             ref={searchRef}
-            className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
+            className="min-w-0 flex-1 truncate bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
             value={open ? query : selectedLabel}
             onChange={(event) => {
               if (!open) {
@@ -525,7 +525,7 @@ function PickerOption({
       role="option"
       aria-selected={Boolean(active)}
       className={clsx(
-        "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left transition",
+        "flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-[11px] px-2.5 py-2.5 text-left transition",
         active ? "bg-[#E7F8F1]" : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA]",
       )}
       onClick={onSelect}
@@ -541,12 +541,18 @@ function PickerOption({
         <span className="shrink-0 text-ink-700">{icon}</span>
       ) : null}
 
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-ink-900">
+      <span className="min-w-0 flex-1 overflow-hidden">
+        <span
+          className="block overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-ink-900"
+          title={label}
+        >
           <HighlightText text={label} query={q} />
         </span>
         {description ? (
-          <span className="mt-0.5 block truncate text-xs tracking-wide text-ink-500 tabular-nums">
+          <span
+            className="mt-0.5 block overflow-hidden text-ellipsis whitespace-nowrap text-xs tracking-wide text-ink-500 tabular-nums"
+            title={description}
+          >
             <HighlightText text={description} query={q} />
           </span>
         ) : null}

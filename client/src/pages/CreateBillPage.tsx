@@ -1990,7 +1990,7 @@ export function CreateBillPage() {
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="overflow-visible rounded-xl border border-ink-100 bg-ink-50/30 p-4"
+                      className="min-w-0 overflow-visible rounded-xl border border-ink-100 bg-ink-50/30 p-4"
                     >
                       <div className="mb-4 flex items-center justify-between gap-2">
                         <span className="inline-flex rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 ring-1 ring-ink-100">
@@ -2010,12 +2010,12 @@ export function CreateBillPage() {
                   ) : null}
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {withGst ? (
                     <>
-                      <div className="sm:col-span-2 lg:col-span-4">
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-4">
                         <label className="label required">Phone</label>
-                        <div id={`phone-${item.key}`}>
+                        <div id={`phone-${item.key}`} className="min-w-0">
                         <FieldPicker
                           value={
                             item.catalogMode === "other"
@@ -2071,9 +2071,9 @@ export function CreateBillPage() {
                     </>
                   ) : (
                     <>
-                      <div className="sm:col-span-2 lg:col-span-4">
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-4">
                         <label className="label required">Phone</label>
-                        <div id={`phone-${item.key}`}>
+                        <div id={`phone-${item.key}`} className="min-w-0">
                         <FieldPicker
                           value={
                             item.catalogMode === "other"
