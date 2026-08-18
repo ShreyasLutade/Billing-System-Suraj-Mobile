@@ -1,5 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { normalizeCapacity } from "../lib/capacity";
+import type { BillExchangeItem } from "../lib/exchangeItems";
+import {
+  exchangeItemsFromInput,
+  totalExchangeValue,
+} from "../lib/exchangeItems";
 import { upsertPhoneModel } from "./phoneModels";
 
 type Tx = Prisma.TransactionClient;
@@ -218,6 +223,7 @@ export type ExchangeStockInput = {
   customerName: string;
   customerPhone: string;
   customerAddress?: string | null;
+  exchangeItems?: BillExchangeItem[];
   exchangeModel?: string | null;
   exchangePlatform?: string | null;
   exchangeColor?: string | null;
@@ -225,35 +231,25 @@ export type ExchangeStockInput = {
   exchangeRam?: string | null;
   exchangeImei1?: string | null;
   exchangeValue?: number | null;
+  exchangeNotes?: string | null;
   purchaseDate?: Date;
 };
 
 /**
- * Puts the exchange phone into second-hand (USED) stock under the customer
+ * Puts exchange phone(s) into second-hand (USED) stock under the customer
  * as an exchange-marked supplier. Idempotent per invoice number.
  */
 export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
   const invoiceNumber = input.invoiceNumber.trim();
-  if (!invoiceNumber) return null;
+  if (!invoiceNumber) return [];
 
-  if (
-    !input.isExchange ||
-    !input.exchangeModel?.trim() ||
-    !input.exchangePlatform ||
-    !input.exchangeColor?.trim() ||
-    !input.exchangeStorage?.trim()
-  ) {
+  const items = exchangeItemsFromInput(input);
+
+  if (!input.isExchange || !items.length) {
     await removeExchangePurchase(tx, invoiceNumber);
-    return null;
+    return [];
   }
 
-  const platform = input.exchangePlatform === "ANDROID" ? "ANDROID" : "IOS";
-  const mobileName = normalizeName(input.exchangeModel);
-  const storage = normalizeCapacity(input.exchangeStorage);
-  const ram =
-    platform === "ANDROID" ? normalizeCapacity(input.exchangeRam || "") : "";
-  const color = normalizeName(input.exchangeColor);
-  const purchasePrice = Number(input.exchangeValue ?? 0) || 0;
   const note = exchangePurchaseNote(invoiceNumber);
   const purchaseDate = input.purchaseDate || new Date();
 
@@ -268,28 +264,68 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     include: { items: { include: { stockItem: true } } },
   });
 
-  const existingStock = existingPurchase?.items[0]?.stockItem || null;
-  const imei = input.exchangeImei1?.replace(/\s+/g, "").trim()
-    ? resolveExchangeImei(invoiceNumber, input.exchangeImei1)
-    : existingStock?.imei || resolveExchangeImei(invoiceNumber, null);
-
-  // IMEI clash with a different stock row (not this exchange).
-  const imeiOwner = await tx.stockItem.findUnique({ where: { imei } });
-  const ownedByThisExchange = existingStock?.id === imeiOwner?.id;
-  if (imeiOwner && !ownedByThisExchange) {
-    throw new Error("EXCHANGE_IMEI_TAKEN");
+  const existingByImei = new Map<
+    string,
+    { purchaseItemId: string; stockItemId: string }
+  >();
+  for (const link of existingPurchase?.items ?? []) {
+    existingByImei.set(link.stockItem.imei, {
+      purchaseItemId: link.id,
+      stockItemId: link.stockItemId,
+    });
   }
 
-  await upsertPhoneModel(tx, {
-    platform,
-    name: mobileName,
-    storage,
-    ram,
-  });
+  const nextImeis = new Set<string>();
+  const stockIds: string[] = [];
 
-  if (existingPurchase && existingStock) {
-    const stock = await tx.stockItem.update({
-      where: { id: existingStock.id },
+  for (const item of items) {
+    const platform = item.platform === "ANDROID" ? "ANDROID" : "IOS";
+    const mobileName = normalizeName(item.model);
+    const storage = normalizeCapacity(item.storage);
+    const ram =
+      platform === "ANDROID" ? normalizeCapacity(item.ram || "") : "";
+    const color = normalizeName(item.color);
+    const purchasePrice = round2(Number(item.value) || 0);
+    const imei = item.imei1.replace(/\s+/g, "").trim();
+    if (!imei) throw new Error("EXCHANGE_IMEI_REQUIRED");
+    if (nextImeis.has(imei)) throw new Error("EXCHANGE_IMEI_DUPLICATE");
+    nextImeis.add(imei);
+
+    const existing = existingByImei.get(imei);
+    const imeiOwner = await tx.stockItem.findUnique({ where: { imei } });
+    const ownedByThisExchange = existing?.stockItemId === imeiOwner?.id;
+    if (imeiOwner && !ownedByThisExchange) {
+      throw new Error("EXCHANGE_IMEI_TAKEN");
+    }
+
+    await upsertPhoneModel(tx, {
+      platform,
+      name: mobileName,
+      storage,
+      ram,
+    });
+
+    if (existing) {
+      await tx.stockItem.update({
+        where: { id: existing.stockItemId },
+        data: {
+          condition: "USED",
+          platform,
+          mobileName,
+          storage,
+          ram,
+          color,
+          imei,
+          purchasePrice,
+          suppliers: serializeSuppliers([supplier.name]),
+          supplierId: supplier.id,
+        },
+      });
+      stockIds.push(existing.stockItemId);
+      continue;
+    }
+
+    const stock = await tx.stockItem.create({
       data: {
         condition: "USED",
         platform,
@@ -301,62 +337,74 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
         purchasePrice,
         suppliers: serializeSuppliers([supplier.name]),
         supplierId: supplier.id,
+        status: "AVAILABLE",
+        createdAt: purchaseDate,
       },
     });
+    stockIds.push(stock.id);
+  }
+
+  for (const link of existingPurchase?.items ?? []) {
+    if (nextImeis.has(link.stockItem.imei)) continue;
+    if (link.stockItem.status === "AVAILABLE") {
+      await tx.purchaseItem.delete({ where: { id: link.id } });
+      await tx.stockItem.delete({ where: { id: link.stockItemId } });
+    } else {
+      await tx.purchaseItem.delete({ where: { id: link.id } });
+    }
+  }
+
+  const totalAmount = totalExchangeValue(items);
+
+  if (existingPurchase) {
     await tx.purchase.update({
       where: { id: existingPurchase.id },
       data: {
         supplierId: supplier.id,
-        totalAmount: purchasePrice,
+        totalAmount,
         condition: "USED",
         purchaseDate,
         paidAt: purchaseDate,
         note,
       },
     });
-    return stock;
+
+    for (const stockId of stockIds) {
+      const linked = await tx.purchaseItem.findUnique({
+        where: { stockItemId: stockId },
+      });
+      if (!linked) {
+        await tx.purchaseItem.create({
+          data: {
+            purchaseId: existingPurchase.id,
+            stockItemId: stockId,
+          },
+        });
+      }
+    }
+  } else {
+    const purchase = await tx.purchase.create({
+      data: {
+        supplierId: supplier.id,
+        purchaseDate,
+        note,
+        totalAmount,
+        condition: "USED",
+        paidAt: purchaseDate,
+      },
+    });
+
+    for (const stockId of stockIds) {
+      await tx.purchaseItem.create({
+        data: {
+          purchaseId: purchase.id,
+          stockItemId: stockId,
+        },
+      });
+    }
   }
 
-  if (existingPurchase) {
-    await tx.purchase.delete({ where: { id: existingPurchase.id } });
-  }
-
-  const stock = await tx.stockItem.create({
-    data: {
-      condition: "USED",
-      platform,
-      mobileName,
-      storage,
-      ram,
-      color,
-      imei,
-      purchasePrice,
-      suppliers: serializeSuppliers([supplier.name]),
-      supplierId: supplier.id,
-      status: "AVAILABLE",
-      createdAt: purchaseDate,
-    },
-  });
-
-  const purchase = await tx.purchase.create({
-    data: {
-      supplierId: supplier.id,
-      purchaseDate,
-      note,
-      totalAmount: purchasePrice,
-      condition: "USED",
-      paidAt: purchaseDate,
-    },
-  });
-
-  await tx.purchaseItem.create({
-    data: {
-      purchaseId: purchase.id,
-      stockItemId: stock.id,
-    },
-  });
-
-  return stock;
+  return stockIds;
 }
 
 /** Remove unused exchange stock when a bill is deleted. */

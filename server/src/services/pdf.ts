@@ -4,6 +4,11 @@ import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import type { Bill, BillItem } from "@prisma/client";
 import { format } from "date-fns";
+import {
+  exchangeItemsFromInput,
+  parseExchangeItemsJson,
+  type BillExchangeItem,
+} from "../lib/exchangeItems";
 
 type BillWithItems = Bill & { items: BillItem[] };
 
@@ -48,6 +53,40 @@ function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
   doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
   doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
+}
+
+function exchangeItemsForPdf(bill: BillWithItems): BillExchangeItem[] {
+  const fromJson = parseExchangeItemsJson(bill.exchangeItemsJson);
+  if (fromJson.length) return fromJson;
+  return exchangeItemsFromInput({
+    isExchange: bill.isExchange,
+    exchangeModel: bill.exchangeModel,
+    exchangePlatform: bill.exchangePlatform,
+    exchangeColor: bill.exchangeColor,
+    exchangeStorage: bill.exchangeStorage,
+    exchangeRam: bill.exchangeRam,
+    exchangeImei1: bill.exchangeImei1,
+    exchangeValue: bill.exchangeValue,
+    exchangeNotes: bill.exchangeNotes,
+  });
+}
+
+function exchangeLineText(item: BillExchangeItem, index: number) {
+  const parts = [
+    `${index + 1}. ${item.model}`,
+    item.color,
+    item.storage,
+    item.platform === "ANDROID" && item.ram ? item.ram : null,
+    `IMEI: ${item.imei1}`,
+  ].filter(Boolean);
+  return parts.join("  ·  ");
+}
+
+function exchangeBoxHeight(bill: BillWithItems, withGst: boolean) {
+  if (withGst || !bill.isExchange || !bill.exchangeValue) return 0;
+  const items = exchangeItemsForPdf(bill);
+  const count = Math.max(items.length, 1);
+  return 18 + count * 14 + 10 + 6;
 }
 
 function money(amount: number) {
@@ -496,8 +535,7 @@ function drawItemsTable(
 
   // Reserve room below the table for totals + declaration + terms footer
   const footH = 18;
-  const exchangeBoxH =
-    !withGst && bill.isExchange && bill.exchangeValue ? 62 : 0;
+  const exchangeBoxH = exchangeBoxHeight(bill, withGst);
   const upperBoxH = withGst ? 58 : 50;
   const payCustomerAmount =
     !withGst && bill.isExchange && bill.exchangeValue
@@ -675,42 +713,70 @@ function drawExchangeBox(
 ) {
   if (!bill.isExchange || !bill.exchangeValue) return y;
 
-  const h = 56;
+  const items = exchangeItemsForPdf(bill);
+  const rows =
+    items.length > 0
+      ? items
+      : [
+          {
+            model: bill.exchangeModel || "Old phone",
+            platform:
+              bill.exchangePlatform === "ANDROID"
+                ? ("ANDROID" as const)
+                : ("IOS" as const),
+            color: bill.exchangeColor || "",
+            storage: bill.exchangeStorage || "",
+            ram: bill.exchangeRam,
+            imei1: bill.exchangeImei1 || "",
+            value: Number(bill.exchangeValue) || 0,
+            notes: bill.exchangeNotes,
+          },
+        ];
+
+  const headerH = 18;
+  const rowH = 14;
+  const h = headerH + rows.length * rowH + 10;
+
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
-  doc.rect(MARGIN, y, CONTENT_WIDTH, 18).fill(COLORS.goldSoft);
-  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, 18);
+  doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.goldSoft);
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, headerH);
   doc
     .fillColor(COLORS.ink)
     .font(FONT.bold)
     .fontSize(8)
-    .text("Exchange details", MARGIN + 8, y + 5, { lineBreak: false });
+    .text(
+      rows.length > 1 ? "Exchange details (old phones)" : "Exchange details",
+      MARGIN + 8,
+      y + 5,
+      { lineBreak: false },
+    );
   doc
     .font(FONT.bold)
-    .text(`− ${money(bill.exchangeValue)}`, MARGIN + 8, y + 5, {
+    .text(`− ${money(Number(bill.exchangeValue) || 0)}`, MARGIN + 8, y + 5, {
       width: CONTENT_WIDTH - 16,
       align: "right",
       lineBreak: false,
     });
 
-  const details = [
-    bill.exchangeModel || "Old phone",
-    bill.exchangeColor || null,
-    bill.exchangeStorage || null,
-    bill.exchangeRam || null,
-    bill.exchangeImei1 ? `IMEI: ${bill.exchangeImei1}` : null,
-    bill.exchangeImei2 ? `IMEI 2: ${bill.exchangeImei2}` : null,
-    bill.exchangeSerial ? `S/N: ${bill.exchangeSerial}` : null,
-  ]
-    .filter(Boolean)
-    .join("  ·  ");
-
-  doc
-    .fillColor(COLORS.ink)
-    .font(FONT.regular)
-    .fontSize(8)
-    .text(details, MARGIN + 8, y + 28, {
-      width: CONTENT_WIDTH - 16,
-    });
+  rows.forEach((item, index) => {
+    const rowY = y + headerH + 6 + index * rowH;
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.regular)
+      .fontSize(7.5)
+      .text(exchangeLineText(item, index), MARGIN + 8, rowY, {
+        width: CONTENT_WIDTH - 96,
+        lineBreak: false,
+        ellipsis: true,
+      });
+    doc
+      .font(FONT.bold)
+      .text(`− ${money(Number(item.value) || 0)}`, MARGIN + 8, rowY, {
+        width: CONTENT_WIDTH - 16,
+        align: "right",
+        lineBreak: false,
+      });
+  });
 
   return y + h + 6;
 }

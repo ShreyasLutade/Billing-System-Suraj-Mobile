@@ -21,6 +21,12 @@ import {
   syncExchangeStock,
   syncStockForBillItems,
 } from "../services/stockSync";
+import {
+  exchangeItemsFromInput,
+  parseExchangeItemsJson,
+  serializeExchangeItemsJson,
+  totalExchangeValue,
+} from "../lib/exchangeItems";
 import { requireAdmin } from "../middleware/auth";
 
 export const billsRouter = Router();
@@ -94,6 +100,40 @@ function companyDiscountForPersist(input: {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function exchangeFieldsForPersist(input: {
+  isExchange?: boolean;
+  exchangeItems?: Parameters<typeof exchangeItemsFromInput>[0]["exchangeItems"];
+  exchangeModel?: string | null;
+  exchangePlatform?: "IOS" | "ANDROID" | null;
+  exchangeColor?: string | null;
+  exchangeStorage?: string | null;
+  exchangeRam?: string | null;
+  exchangeImei1?: string | null;
+  exchangeImei2?: string | null;
+  exchangeSerial?: string | null;
+  exchangeValue?: number | null;
+  exchangeNotes?: string | null;
+}) {
+  const items = exchangeItemsFromInput(input);
+  const first = items[0];
+  const total = totalExchangeValue(items);
+  return {
+    exchangeItemsJson:
+      input.isExchange && items.length
+        ? serializeExchangeItemsJson(items)
+        : null,
+    exchangeModel: first?.model ?? null,
+    exchangePlatform: first?.platform ?? null,
+    exchangeColor: first?.color ?? null,
+    exchangeStorage: first?.storage ?? null,
+    exchangeRam: first?.ram ?? null,
+    exchangeImei1: first?.imei1 ?? null,
+    exchangeValue: input.isExchange ? total : null,
+    exchangeNotes: first?.notes ?? input.exchangeNotes?.trim() ?? null,
+    exchangeItems: items,
+  };
+}
+
 async function resolveExchangeCatalog(
   tx: Prisma.TransactionClient,
   input: {
@@ -151,6 +191,7 @@ function serializeBill<
     updatedAt: Date;
     dueSettledAt?: Date | null;
     financeReceivedAt?: Date | null;
+    exchangeItemsJson?: string | null;
     duePayments?: Array<{
       id: string;
       amount: number;
@@ -161,9 +202,10 @@ function serializeBill<
     }>;
   },
 >(bill: T) {
-  const { duePayments, ...rest } = bill;
+  const { duePayments, exchangeItemsJson, ...rest } = bill;
   return {
     ...rest,
+    exchangeItems: parseExchangeItemsJson(exchangeItemsJson),
     billDate: bill.billDate.toISOString(),
     dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
     dueSettledAt: bill.dueSettledAt ? bill.dueSettledAt.toISOString() : null,
@@ -364,7 +406,15 @@ billsRouter.post("/", async (req, res, next) => {
       }
 
       const persistInput = exchangeInputForPersist(input);
-      const exchange = await resolveExchangeCatalog(tx, persistInput);
+      const exchangePersist = exchangeFieldsForPersist(persistInput);
+      const exchange = await resolveExchangeCatalog(tx, {
+        ...persistInput,
+        exchangeModel: exchangePersist.exchangeModel,
+        exchangePlatform: exchangePersist.exchangePlatform as "IOS" | "ANDROID" | null,
+        exchangeColor: exchangePersist.exchangeColor,
+        exchangeStorage: exchangePersist.exchangeStorage,
+        exchangeRam: exchangePersist.exchangeRam,
+      });
 
       await syncStockForBillItems(tx, totals.items);
 
@@ -414,7 +464,7 @@ billsRouter.post("/", async (req, res, next) => {
           exchangeRam: exchange.exchangeRam,
           exchangeMobileCatalogId: exchange.exchangeMobileCatalogId,
           exchangeImei1: persistInput.isExchange
-            ? input.exchangeImei1?.trim() || null
+            ? exchangePersist.exchangeImei1
             : null,
           exchangeImei2: persistInput.isExchange
             ? input.exchangeImei2?.trim() || null
@@ -423,11 +473,12 @@ billsRouter.post("/", async (req, res, next) => {
             ? input.exchangeSerial?.trim() || null
             : null,
           exchangeValue: persistInput.isExchange
-            ? input.exchangeValue ?? null
+            ? exchangePersist.exchangeValue
             : null,
           exchangeNotes: persistInput.isExchange
-            ? input.exchangeNotes?.trim() || null
+            ? exchangePersist.exchangeNotes
             : null,
+          exchangeItemsJson: exchangePersist.exchangeItemsJson,
           dueAmount: totals.dueAmount,
           dueDate:
             totals.dueAmount > 0 && input.dueDate
@@ -466,17 +517,15 @@ billsRouter.post("/", async (req, res, next) => {
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         customerAddress: input.customerAddress,
-        exchangeModel: exchange.exchangeModel,
-        exchangePlatform: exchange.exchangePlatform,
-        exchangeColor: exchange.exchangeColor,
-        exchangeStorage: exchange.exchangeStorage,
-        exchangeRam: exchange.exchangeRam,
-        exchangeImei1: persistInput.isExchange
-          ? input.exchangeImei1?.trim() || null
-          : null,
-        exchangeValue: persistInput.isExchange
-          ? input.exchangeValue ?? null
-          : null,
+        exchangeItems: exchangePersist.exchangeItems,
+        exchangeModel: exchangePersist.exchangeModel,
+        exchangePlatform: exchangePersist.exchangePlatform,
+        exchangeColor: exchangePersist.exchangeColor,
+        exchangeStorage: exchangePersist.exchangeStorage,
+        exchangeRam: exchangePersist.exchangeRam,
+        exchangeImei1: exchangePersist.exchangeImei1,
+        exchangeValue: exchangePersist.exchangeValue,
+        exchangeNotes: exchangePersist.exchangeNotes,
         purchaseDate: billDate,
       });
 
@@ -514,6 +563,12 @@ billsRouter.post("/", async (req, res, next) => {
     if (error instanceof Error && error.message === "EXCHANGE_IMEI_TAKEN") {
       res.status(409).json({
         error: "Exchange IMEI is already in stock. Use a different IMEI.",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "EXCHANGE_IMEI_DUPLICATE") {
+      res.status(400).json({
+        error: "Each exchange phone on this bill needs a unique IMEI.",
       });
       return;
     }
@@ -603,7 +658,15 @@ billsRouter.put("/:id", async (req, res, next) => {
         existing.financeCompanyId2 === financeCompanyId2;
 
       const persistInput = exchangeInputForPersist(input);
-      const exchange = await resolveExchangeCatalog(tx, persistInput);
+      const exchangePersist = exchangeFieldsForPersist(persistInput);
+      const exchange = await resolveExchangeCatalog(tx, {
+        ...persistInput,
+        exchangeModel: exchangePersist.exchangeModel,
+        exchangePlatform: exchangePersist.exchangePlatform as "IOS" | "ANDROID" | null,
+        exchangeColor: exchangePersist.exchangeColor,
+        exchangeStorage: exchangePersist.exchangeStorage,
+        exchangeRam: exchangePersist.exchangeRam,
+      });
 
       const previousStockIds = existing.items
         .map((item) => item.stockItemId)
@@ -663,7 +726,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           exchangeRam: exchange.exchangeRam,
           exchangeMobileCatalogId: exchange.exchangeMobileCatalogId,
           exchangeImei1: persistInput.isExchange
-            ? input.exchangeImei1?.trim() || null
+            ? exchangePersist.exchangeImei1
             : null,
           exchangeImei2: persistInput.isExchange
             ? input.exchangeImei2?.trim() || null
@@ -672,11 +735,12 @@ billsRouter.put("/:id", async (req, res, next) => {
             ? input.exchangeSerial?.trim() || null
             : null,
           exchangeValue: persistInput.isExchange
-            ? input.exchangeValue ?? null
+            ? exchangePersist.exchangeValue
             : null,
           exchangeNotes: persistInput.isExchange
-            ? input.exchangeNotes?.trim() || null
+            ? exchangePersist.exchangeNotes
             : null,
+          exchangeItemsJson: exchangePersist.exchangeItemsJson,
           dueAmount: totals.dueAmount,
           dueDate:
             totals.dueAmount > 0 && input.dueDate
@@ -719,17 +783,15 @@ billsRouter.put("/:id", async (req, res, next) => {
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         customerAddress: input.customerAddress,
-        exchangeModel: exchange.exchangeModel,
-        exchangePlatform: exchange.exchangePlatform,
-        exchangeColor: exchange.exchangeColor,
-        exchangeStorage: exchange.exchangeStorage,
-        exchangeRam: exchange.exchangeRam,
-        exchangeImei1: persistInput.isExchange
-          ? input.exchangeImei1?.trim() || null
-          : null,
-        exchangeValue: persistInput.isExchange
-          ? input.exchangeValue ?? null
-          : null,
+        exchangeItems: exchangePersist.exchangeItems,
+        exchangeModel: exchangePersist.exchangeModel,
+        exchangePlatform: exchangePersist.exchangePlatform,
+        exchangeColor: exchangePersist.exchangeColor,
+        exchangeStorage: exchangePersist.exchangeStorage,
+        exchangeRam: exchangePersist.exchangeRam,
+        exchangeImei1: exchangePersist.exchangeImei1,
+        exchangeValue: exchangePersist.exchangeValue,
+        exchangeNotes: exchangePersist.exchangeNotes,
         purchaseDate: billDate,
       });
 
@@ -767,6 +829,12 @@ billsRouter.put("/:id", async (req, res, next) => {
     if (error instanceof Error && error.message === "EXCHANGE_IMEI_TAKEN") {
       res.status(409).json({
         error: "Exchange IMEI is already in stock. Use a different IMEI.",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "EXCHANGE_IMEI_DUPLICATE") {
+      res.status(400).json({
+        error: "Each exchange phone on this bill needs a unique IMEI.",
       });
       return;
     }

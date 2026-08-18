@@ -20,7 +20,12 @@ import {
   SaveBillConfirmModal,
   type SaveBillSummary,
 } from "../components/SaveBillConfirmModal";
-import { MobileNameSearch } from "../components/MobileNameSearch";
+import {
+  ExchangeMobileFields,
+  blankExchangeItem,
+  exchangeTotalValue,
+  type ExchangeDraft,
+} from "../components/ExchangeMobileFields";
 import { BackLink, PageHeader, LoadingBlock } from "../components/ui";
 import { FieldPicker } from "../components/FieldPicker";
 import {
@@ -34,7 +39,6 @@ import {
   type DiffLine,
 } from "../lib/billDiff";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
-import { formatCapacityLabel } from "../lib/phoneModelSearch";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import { billsHomePath, readFromState } from "../lib/navMemory";
 import type {
@@ -43,7 +47,6 @@ import type {
   CreateBillPayload,
   FinanceCompany,
   MobileCatalog,
-  PhoneModel,
   StockItem,
 } from "../types";
 
@@ -101,10 +104,6 @@ function stockAvatar(mobileName: string, platform?: string | null) {
   };
 }
 
-function formatInr(amount: number) {
-  return `₹${(Number(amount) || 0).toLocaleString("en-IN")}`;
-}
-
 function formatStockOption(stock: {
   mobileName: string;
   color: string;
@@ -112,7 +111,6 @@ function formatStockOption(stock: {
   ram: string;
   imei: string;
   platform?: string | null;
-  purchasePrice?: number;
 }) {
   const ramLabel = (() => {
     if (!stock.ram) return null;
@@ -128,10 +126,6 @@ function formatStockOption(stock: {
       .join(" · "),
     description: stock.imei ? `IMEI ${stock.imei}` : undefined,
     avatar: stockAvatar(stock.mobileName, stock.platform),
-    meta:
-      stock.purchasePrice != null && stock.purchasePrice > 0
-        ? formatInr(stock.purchasePrice)
-        : undefined,
   };
 }
 
@@ -303,28 +297,50 @@ export function CreateBillPage() {
   const [customBillDate, setCustomBillDate] = useState(todayDateInput());
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
   const [isExchange, setIsExchange] = useState(false);
-  const [exchangePlatform, setExchangePlatform] = useState<"IOS" | "ANDROID">(
-    "IOS",
-  );
-  const [exchangeModel, setExchangeModel] = useState("");
-  const [exchangeColor, setExchangeColor] = useState("");
-  const [exchangeStorage, setExchangeStorage] = useState("");
-  const [exchangeRam, setExchangeRam] = useState("");
-  const [exchangeImei1, setExchangeImei1] = useState("");
-  const [exchangeValue, setExchangeValue] = useState<number | "">("");
-  const [exchangeNotes, setExchangeNotes] = useState("");
+  const [exchangeItems, setExchangeItems] = useState<ExchangeDraft[]>([]);
   const [exchangePayConfirmed, setExchangePayConfirmed] = useState(false);
 
   function clearExchangeFields() {
-    setExchangePlatform("IOS");
-    setExchangeModel("");
-    setExchangeColor("");
-    setExchangeStorage("");
-    setExchangeRam("");
-    setExchangeImei1("");
-    setExchangeValue("");
-    setExchangeNotes("");
+    setExchangeItems([]);
     setExchangePayConfirmed(false);
+  }
+
+  function billToExchangeDrafts(bill: Bill): ExchangeDraft[] {
+    if (bill.exchangeItems?.length) {
+      return bill.exchangeItems.map((item) => ({
+        key: crypto.randomUUID(),
+        platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
+        model: item.model,
+        color: item.color,
+        storage: item.storage,
+        ram: item.ram || "",
+        imei1: item.imei1,
+        value: item.value,
+        notes: item.notes || "",
+      }));
+    }
+    if (bill.isExchange && bill.exchangeModel) {
+      return [
+        {
+          key: crypto.randomUUID(),
+          platform: bill.exchangePlatform === "ANDROID" ? "ANDROID" : "IOS",
+          model: bill.exchangeModel,
+          color: bill.exchangeColor || "",
+          storage: bill.exchangeStorage || "",
+          ram: bill.exchangeRam || "",
+          imei1: bill.exchangeImei1 || "",
+          value: bill.exchangeValue ?? "",
+          notes: bill.exchangeNotes || "",
+        },
+      ];
+    }
+    return [blankExchangeItem()];
+  }
+
+  function updateExchangeItem(key: string, patch: Partial<ExchangeDraft>) {
+    setExchangeItems((current) =>
+      current.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+    );
   }
   const [useCash, setUseCash] = useState(false);
   const [useOnline, setUseOnline] = useState(false);
@@ -483,16 +499,9 @@ export function CreateBillPage() {
         : [blankItem()],
     );
     setIsExchange(bill.isExchange);
-    setExchangePlatform(
-      bill.exchangePlatform === "ANDROID" ? "ANDROID" : "IOS",
+    setExchangeItems(
+      bill.isExchange ? billToExchangeDrafts(bill) : [],
     );
-    setExchangeModel(bill.exchangeModel || "");
-    setExchangeColor(bill.exchangeColor || "");
-    setExchangeStorage(bill.exchangeStorage || "");
-    setExchangeRam(bill.exchangeRam || "");
-    setExchangeImei1(bill.exchangeImei1 || "");
-    setExchangeValue(bill.exchangeValue ?? "");
-    setExchangeNotes(bill.exchangeNotes || "");
     setExchangePayConfirmed(
       Boolean(
         bill.isExchange && (bill.exchangeValue || 0) > (bill.grandTotal || 0),
@@ -551,8 +560,9 @@ export function CreateBillPage() {
     const subtotal = round2(lines.reduce((sum, line) => sum + line.base, 0));
     const gstAmount = round2(lines.reduce((sum, line) => sum + line.gst, 0));
     const grandTotal = round2(lines.reduce((sum, line) => sum + line.amount, 0));
-    const exchangeDeduction =
-      isExchange && exchangeValue !== "" ? round2(Number(exchangeValue) || 0) : 0;
+    const exchangeDeduction = isExchange
+      ? round2(exchangeTotalValue(exchangeItems))
+      : 0;
     const payableAmount = round2(Math.max(grandTotal - exchangeDeduction, 0));
     const exchangeRefund = round2(Math.max(exchangeDeduction - grandTotal, 0));
     const cash = useCash ? cashAmount : 0;
@@ -600,7 +610,7 @@ export function CreateBillPage() {
   }, [
     items,
     isExchange,
-    exchangeValue,
+    exchangeItems,
     withGst,
     useCompanyCashback,
     companyDiscount,
@@ -624,7 +634,6 @@ export function CreateBillPage() {
         label: formatted.label,
         description: formatted.description,
         avatar: formatted.avatar,
-        meta: formatted.meta,
         badge: isUsed ? "Old" : "New",
         badgeTone: (isUsed ? "old" : "new") as "old" | "new",
         condition: stock.condition as "USED" | "NEW",
@@ -654,7 +663,6 @@ export function CreateBillPage() {
         label: formatted.label,
         description: formatted.description,
         avatar: formatted.avatar,
-        meta: formatted.meta,
         badge: isUsed ? "Old" : "New",
         badgeTone: (isUsed ? "old" : "new") as "old" | "new",
         condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
@@ -1280,20 +1288,38 @@ export function CreateBillPage() {
       financeCompanyId2: useFinance ? resolvedCompanyId2 : null,
       financeCompanyName2: useFinance ? resolvedCompanyName2 : null,
       isExchange,
-      exchangeModel: isExchange ? exchangeModel.trim() : null,
-      exchangePlatform: isExchange ? exchangePlatform : null,
-      exchangeColor: isExchange ? exchangeColor.trim() : null,
-      exchangeStorage: isExchange ? exchangeStorage.trim() : null,
+      exchangeItems: isExchange
+        ? exchangeItems.map((item) => ({
+            model: item.model.trim(),
+            platform: item.platform,
+            color: item.color.trim(),
+            storage: item.storage.trim(),
+            ram:
+              item.platform === "ANDROID" ? item.ram.trim() || null : null,
+            imei1: item.imei1.trim(),
+            value: item.value === "" ? 0 : Number(item.value) || 0,
+            notes: item.notes.trim() || null,
+          }))
+        : [],
+      exchangeModel: isExchange ? exchangeItems[0]?.model.trim() || null : null,
+      exchangePlatform: isExchange ? exchangeItems[0]?.platform ?? null : null,
+      exchangeColor: isExchange ? exchangeItems[0]?.color.trim() || null : null,
+      exchangeStorage: isExchange
+        ? exchangeItems[0]?.storage.trim() || null
+        : null,
       exchangeRam:
-        isExchange && exchangePlatform === "ANDROID"
-          ? exchangeRam.trim()
+        isExchange && exchangeItems[0]?.platform === "ANDROID"
+          ? exchangeItems[0]?.ram.trim() || null
           : null,
-      exchangeImei1: isExchange ? exchangeImei1.trim() || null : null,
+      exchangeImei1: isExchange ? exchangeItems[0]?.imei1.trim() || null : null,
       exchangeImei2: null,
       exchangeSerial: null,
-      exchangeValue:
-        isExchange && exchangeValue !== "" ? Number(exchangeValue) : null,
-      exchangeNotes: isExchange ? exchangeNotes.trim() || null : null,
+      exchangeValue: isExchange
+        ? round2(exchangeTotalValue(exchangeItems))
+        : null,
+      exchangeNotes: isExchange
+        ? exchangeItems[0]?.notes.trim() || null
+        : null,
       dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
       companyDiscount: totals.companyDiscountAmount,
       items: items.map((item) => ({
@@ -1408,12 +1434,24 @@ export function CreateBillPage() {
       return;
     }
 
-    if (!withGst && isExchange && !exchangeImei1.trim()) {
-      setError("Enter exchange phone IMEI");
-      const field = document.getElementById("exchangeImei1");
-      field?.scrollIntoView({ behavior: "smooth", block: "center" });
-      field?.focus();
-      return;
+    if (!withGst && isExchange) {
+      const missingImei = exchangeItems.find((item) => !item.imei1.trim());
+      if (missingImei) {
+        setError("Enter exchange phone IMEI for every exchange mobile");
+        const field = document.getElementById(
+          `exchange-${missingImei.key}-imei`,
+        );
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        field?.focus();
+        return;
+      }
+      const imeis = exchangeItems
+        .map((item) => item.imei1.replace(/\s+/g, "").trim())
+        .filter(Boolean);
+      if (new Set(imeis).size !== imeis.length) {
+        setError("Each exchange phone needs a unique IMEI");
+        return;
+      }
     }
 
     setSaving(true);
@@ -2219,7 +2257,7 @@ export function CreateBillPage() {
             </section>
 
             {!withGst ? (
-              <section className="overflow-hidden rounded-[18px] border border-ink-100/80 bg-white shadow-soft">
+              <section className="overflow-visible rounded-[18px] border border-ink-100/80 bg-white shadow-soft">
                 <div className="flex items-center gap-3.5 px-5 py-[18px] sm:px-[22px]">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E7F8F1] text-[#0E9E76]">
                     <RefreshCw className="h-5 w-5" strokeWidth={2} />
@@ -2238,7 +2276,13 @@ export function CreateBillPage() {
                     aria-label="Mobile exchange"
                     onChange={(checked) => {
                       setIsExchange(checked);
-                      if (!checked) clearExchangeFields();
+                      if (checked) {
+                        setExchangeItems((current) =>
+                          current.length ? current : [blankExchangeItem()],
+                        );
+                      } else {
+                        clearExchangeFields();
+                      }
                     }}
                   />
                 </div>
@@ -2249,7 +2293,7 @@ export function CreateBillPage() {
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
+                      className="overflow-visible"
                     >
                       <div className="space-y-4 px-5 pb-5 sm:px-[22px] sm:pb-[22px]">
                         <div className="flex items-start gap-2.5 rounded-xl border border-[#CDEFE0] bg-[#E7F8F1] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[#0B7A5B]">
@@ -2266,227 +2310,36 @@ export function CreateBillPage() {
                           </span>
                         </div>
 
-                        <div>
-                          <span className="label required">Operating system</span>
-                          <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-[#EEF0F3] p-1.5">
-                            {(["IOS", "ANDROID"] as const).map((option) => (
-                              <button
-                                key={option}
-                                type="button"
-                                className={clsx(
-                                  "inline-flex items-center justify-center gap-2 rounded-[9px] px-3 py-2.5 text-sm font-medium transition",
-                                  exchangePlatform === option
-                                    ? "bg-ink-900 font-semibold text-white shadow-[0_4px_12px_rgba(11,31,51,.25)]"
-                                    : "text-ink-500 hover:text-ink-700",
-                                )}
-                                aria-pressed={exchangePlatform === option}
-                                onClick={() => {
-                                  if (option === exchangePlatform) return;
-                                  setExchangePlatform(option);
-                                  setExchangeModel("");
-                                  setExchangeStorage("");
-                                  setExchangeRam("");
-                                }}
-                              >
-                                {option === "IOS" ? (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    className="h-[17px] w-[17px]"
-                                    aria-hidden
-                                  >
-                                    <path
-                                      d="M16 3c0 1.7-1.4 3-3 3 0-1.7 1.4-3 3-3zM12 8c1.5 0 2 1 3.5 1S18 8 19 9c-2 1-1.5 5 .5 6-.6 1.7-2 4-3.5 4-1 0-1.4-.6-2.5-.6s-1.6.6-2.5.6C7 20 5 15 5 12c0-3 2-4 3.5-4S10.5 8 12 8z"
-                                      stroke="currentColor"
-                                      strokeWidth="1.6"
-                                      strokeLinejoin="round"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    className="h-[17px] w-[17px]"
-                                    aria-hidden
-                                  >
-                                    <path
-                                      d="M6 10a6 6 0 0 1 12 0M6 10v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6M9 7L7.5 5M15 7l1.5-2M9.5 10h.01M14.5 10h.01"
-                                      stroke="currentColor"
-                                      strokeWidth="1.7"
-                                      strokeLinecap="round"
-                                    />
-                                  </svg>
-                                )}
-                                {option === "IOS" ? "iOS" : "Android"}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <label
-                            className="label required"
-                            htmlFor="exchangeModel"
-                          >
-                            Mobile name
-                          </label>
-                          <MobileNameSearch
-                            id="exchangeModel"
-                            platform={exchangePlatform}
-                            value={exchangeModel}
-                            required={isExchange}
-                            onChange={(name) => {
-                              if (!name.trim()) {
-                                setExchangeModel("");
-                                setExchangeStorage("");
-                                setExchangeRam("");
-                                return;
-                              }
-                              setExchangeModel(name);
-                            }}
-                            onSelectModel={(model: PhoneModel) => {
-                              setExchangeModel(model.name);
-                              setExchangeStorage(
-                                formatCapacityLabel(model.storage) ||
-                                  model.storage,
-                              );
-                              setExchangeRam(
-                                exchangePlatform === "ANDROID"
-                                  ? formatCapacityLabel(model.ram) || model.ram
-                                  : "",
-                              );
-                            }}
+                        {exchangeItems.map((item, index) => (
+                          <ExchangeMobileFields
+                            key={item.key}
+                            item={item}
+                            index={index}
+                            canRemove={exchangeItems.length > 1}
+                            onChange={(patch) =>
+                              updateExchangeItem(item.key, patch)
+                            }
+                            onRemove={() =>
+                              setExchangeItems((current) =>
+                                current.filter((row) => row.key !== item.key),
+                              )
+                            }
                           />
-                        </div>
+                        ))}
 
-                        <div
-                          className={
-                            exchangePlatform === "ANDROID"
-                              ? "grid gap-3.5 sm:grid-cols-3"
-                              : "grid gap-3.5 sm:grid-cols-2"
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#BFE9D6] bg-[#E7F8F1]/40 px-4 py-3 text-sm font-semibold text-[#0B7A5B] transition hover:border-[#12B886] hover:bg-[#E7F8F1]"
+                          onClick={() =>
+                            setExchangeItems((current) => [
+                              ...current,
+                              blankExchangeItem(),
+                            ])
                           }
                         >
-                          <div>
-                            <label
-                              className="label required"
-                              htmlFor="exchangeStorage"
-                            >
-                              Storage
-                            </label>
-                            <input
-                              id="exchangeStorage"
-                              className="field"
-                              value={exchangeStorage}
-                              onChange={(e) =>
-                                setExchangeStorage(e.target.value)
-                              }
-                              placeholder="e.g. 128 GB"
-                              required={isExchange}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              className="label required"
-                              htmlFor="exchangeColor"
-                            >
-                              Color
-                            </label>
-                            <input
-                              id="exchangeColor"
-                              className="field"
-                              value={exchangeColor}
-                              onChange={(e) => setExchangeColor(e.target.value)}
-                              placeholder="e.g. Black"
-                              required={isExchange}
-                            />
-                          </div>
-                          {exchangePlatform === "ANDROID" ? (
-                            <div>
-                              <label
-                                className="label required"
-                                htmlFor="exchangeRam"
-                              >
-                                RAM
-                              </label>
-                              <input
-                                id="exchangeRam"
-                                className="field"
-                                value={exchangeRam}
-                                onChange={(e) => setExchangeRam(e.target.value)}
-                                placeholder="e.g. 8 GB"
-                                required={isExchange}
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="grid gap-3.5 sm:grid-cols-2">
-                          <div>
-                            <label
-                              className="label required"
-                              htmlFor="exchangeImei1"
-                            >
-                              IMEI
-                            </label>
-                            <input
-                              id="exchangeImei1"
-                              className="field font-mono"
-                              value={exchangeImei1}
-                              onChange={(e) => setExchangeImei1(e.target.value)}
-                              placeholder="15-digit IMEI"
-                              inputMode="numeric"
-                              required={isExchange}
-                            />
-                          </div>
-                          <div>
-                            <label
-                              className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-[0.07em] text-[#0E9E76]"
-                              htmlFor="exchangeValue"
-                            >
-                              Exchange value
-                              <span className="ml-0.5 text-[#B76E00]"> *</span>
-                            </label>
-                            <div className="relative">
-                              <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
-                                ₹
-                              </span>
-                              <input
-                                id="exchangeValue"
-                                className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)]"
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={exchangeValue}
-                                onChange={(e) =>
-                                  setExchangeValue(
-                                    e.target.value === ""
-                                      ? ""
-                                      : Number(e.target.value) || 0,
-                                  )
-                                }
-                                placeholder="Amount to deduct"
-                                inputMode="decimal"
-                                required={isExchange}
-                              />
-                            </div>
-                            <p className="mt-1 text-[11.5px] text-ink-300">
-                              Subtracted from the bill&apos;s payable amount.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="exchangeNotes">
-                            Notes
-                          </label>
-                          <textarea
-                            id="exchangeNotes"
-                            className="field min-h-[70px] resize-y"
-                            value={exchangeNotes}
-                            onChange={(e) => setExchangeNotes(e.target.value)}
-                            placeholder="Optional — screen condition, box, accessories, etc."
-                          />
-                        </div>
+                          <Plus className="h-4 w-4" />
+                          Add another exchange mobile
+                        </button>
 
                         <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-[#0E1626] to-[#1B2740] px-4 py-3.5 text-white">
                           <span className="inline-flex items-center gap-2 text-[13px] text-[#B7C3D6]">
@@ -2498,11 +2351,7 @@ export function CreateBillPage() {
                           </span>
                           <span className="font-display text-lg font-bold tabular-nums text-[#5CE0AE]">
                             −
-                            {formatINR(
-                              exchangeValue === ""
-                                ? 0
-                                : Number(exchangeValue) || 0,
-                            )}
+                            {formatINR(exchangeTotalValue(exchangeItems))}
                           </span>
                         </div>
                       </div>

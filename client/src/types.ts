@@ -27,6 +27,17 @@ export type DuePayment = {
   note?: string | null;
 };
 
+export type BillExchangeItem = {
+  model: string;
+  platform: "IOS" | "ANDROID";
+  color: string;
+  storage: string;
+  ram?: string | null;
+  imei1: string;
+  value: number;
+  notes?: string | null;
+};
+
 export type Bill = {
   id: string;
   invoiceNumber: string;
@@ -63,6 +74,7 @@ export type Bill = {
   exchangeValue?: number | null;
   exchangeNotes?: string | null;
   exchangeMobileCatalogId?: string | null;
+  exchangeItems?: BillExchangeItem[];
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;
@@ -367,6 +379,7 @@ export type CreateBillPayload = {
   exchangeSerial?: string | null;
   exchangeValue?: number | null;
   exchangeNotes?: string | null;
+  exchangeItems?: BillExchangeItem[];
   dueDate?: string | null;
   companyDiscount?: number;
 };

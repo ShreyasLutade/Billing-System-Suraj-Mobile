@@ -804,7 +804,9 @@ export function PurchaseEntryModal({
                 return (
                   <div
                     key={item.id}
-                    className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-sm"
+                    className={`rounded-xl border border-ink-200 bg-white shadow-sm ${
+                      open ? "overflow-visible" : "overflow-hidden"
+                    }`}
                   >
                     <button
                       type="button"

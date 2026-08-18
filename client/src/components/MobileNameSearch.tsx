@@ -1,23 +1,15 @@
 import {
-  useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
-import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
-import {
-  computeMenuPosition,
-  subscribeOutsideDismiss,
-  subscribeViewportChange,
-  type MenuPosition,
-} from "../lib/floatingMenu";
+import { subscribeOutsideDismiss } from "../lib/floatingMenu";
 import {
   formatCapacityLabel,
   rankPhoneModels,
@@ -88,7 +80,6 @@ export function MobileNameSearch({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,18 +104,6 @@ export function MobileNameSearch({
     [models, value],
   );
 
-  const updateMenuPosition = useCallback(() => {
-    const trigger = rootRef.current;
-    if (!trigger) return;
-    setMenuPos(
-      computeMenuPosition(trigger, {
-        gap: 6,
-        minHeight: 140,
-        maxHeightCap: 280,
-      }),
-    );
-  }, []);
-
   useEffect(() => {
     setHighlight(0);
   }, [value, platform]);
@@ -132,15 +111,6 @@ export function MobileNameSearch({
   const showList = open && value.trim().length >= 1 && suggestions.length > 0;
   const showEmpty =
     open && value.trim().length >= 1 && !loading && !suggestions.length;
-
-  useLayoutEffect(() => {
-    if (!showList && !showEmpty) {
-      setMenuPos(null);
-      return;
-    }
-    updateMenuPosition();
-    return subscribeViewportChange(updateMenuPosition);
-  }, [showList, showEmpty, suggestions.length, updateMenuPosition, value]);
 
   useEffect(() => {
     if (!open) return;
@@ -180,76 +150,8 @@ export function MobileNameSearch({
     }
   }
 
-  const menu =
-    (showList || showEmpty) && menuPos
-      ? createPortal(
-          <div
-            ref={menuRef}
-            style={{
-              position: "fixed",
-              top: menuPos.top,
-              left: menuPos.left,
-              width: menuPos.width,
-              zIndex: 80,
-            }}
-          >
-            {showList ? (
-              <ul
-                id={listId}
-                role="listbox"
-                className="overflow-auto rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
-                style={{ maxHeight: menuPos.maxHeight }}
-              >
-                {suggestions.map((model, index) => {
-                  const active = index === highlight;
-                  return (
-                    <li key={model.id} role="presentation">
-                      <button
-                        id={`${listId}-opt-${index}`}
-                        type="button"
-                        role="option"
-                        aria-selected={active}
-                        className={
-                          active
-                            ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-[#E7F8F1]"
-                            : "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left hover:bg-[#F4F7FA]"
-                        }
-                        onMouseEnter={() => setHighlight(index)}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => pick(model)}
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
-                          {model.name}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                          <span className="rounded-md bg-[#EEF0F3] px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-800">
-                            {formatCapacityLabel(model.storage)}
-                          </span>
-                          {model.platform === "ANDROID" && model.ram ? (
-                            <span className="rounded-md bg-[#E8F0FE] px-2 py-0.5 text-xs font-semibold tabular-nums text-[#2563EB]">
-                              {formatCapacityLabel(model.ram)} RAM
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="rounded-2xl border border-ink-100 bg-white px-3.5 py-3 text-[13.5px] text-ink-500 shadow-[0_10px_24px_rgba(16,25,40,.10)]">
-                {platform === "IOS"
-                  ? "No iOS match — switch to Android for Redmi, Samsung, etc."
-                  : "No match — keep typing; this model will be saved when you add stock."}
-              </p>
-            )}
-          </div>,
-          document.body,
-        )
-      : null;
-
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative z-20">
       <div
         className={clsx(
           "flex min-h-[48px] items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
@@ -291,7 +193,62 @@ export function MobileNameSearch({
           disabled={disabled}
         />
       </div>
-      {menu}
+      {showList || showEmpty ? (
+        <div
+          ref={menuRef}
+          className="absolute left-0 right-0 top-full z-50 mt-1.5"
+        >
+          {showList ? (
+            <ul
+              id={listId}
+              role="listbox"
+              className="max-h-[min(280px,45dvh)] overflow-auto overscroll-contain rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+            >
+              {suggestions.map((model, index) => {
+                const active = index === highlight;
+                return (
+                  <li key={model.id} role="presentation">
+                    <button
+                      id={`${listId}-opt-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      className={
+                        active
+                          ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-[#E7F8F1]"
+                          : "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left hover:bg-[#F4F7FA]"
+                      }
+                      onMouseEnter={() => setHighlight(index)}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pick(model)}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
+                        {model.name}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        <span className="rounded-md bg-[#EEF0F3] px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-800">
+                          {formatCapacityLabel(model.storage)}
+                        </span>
+                        {model.platform === "ANDROID" && model.ram ? (
+                          <span className="rounded-md bg-[#E8F0FE] px-2 py-0.5 text-xs font-semibold tabular-nums text-[#2563EB]">
+                            {formatCapacityLabel(model.ram)} RAM
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="rounded-2xl border border-ink-100 bg-white px-3.5 py-3 text-[13.5px] text-ink-500 shadow-[0_10px_24px_rgba(16,25,40,.10)]">
+              {platform === "IOS"
+                ? "No iOS match — switch to Android for Redmi, Samsung, etc."
+                : "No match — keep typing; this model will be saved when you add stock."}
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
