@@ -1990,7 +1990,7 @@ export function CreateBillPage() {
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="rounded-xl border border-ink-100 bg-ink-50/30 p-4"
+                      className="overflow-visible rounded-xl border border-ink-100 bg-ink-50/30 p-4"
                     >
                       <div className="mb-4 flex items-center justify-between gap-2">
                         <span className="inline-flex rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 ring-1 ring-ink-100">

@@ -2,13 +2,11 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -17,12 +15,7 @@ import {
   matchesElasticSearch,
   normalizeSearchText,
 } from "../lib/elasticSearch";
-import {
-  computeMenuPosition,
-  subscribeOutsideDismiss,
-  subscribeViewportChange,
-  type MenuPosition,
-} from "../lib/floatingMenu";
+import { subscribeOutsideDismiss } from "../lib/floatingMenu";
 
 export type FieldPickerAvatar = {
   letter: string;
@@ -80,7 +73,6 @@ export function FieldPicker({
   const [query, setQuery] = useState("");
   const [conditionFilter, setConditionFilter] =
     useState<ConditionFilter>("ALL");
-  const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -129,7 +121,6 @@ export function FieldPicker({
   const close = useCallback(() => {
     setOpen(false);
     setQuery("");
-    setMenuPos(null);
   }, []);
 
   const openMenu = useCallback(() => {
@@ -138,30 +129,14 @@ export function FieldPicker({
     setOpen(true);
   }, [disabled]);
 
-  const updateMenuPosition = useCallback(() => {
-    const trigger = rootRef.current;
-    if (!trigger) return;
-    setMenuPos(
-      computeMenuPosition(trigger, {
-        gap: 8,
-        minHeight: 160,
-        maxHeightCap: 380,
-      }),
-    );
+  const focusSearchInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      const input = searchRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
   }, []);
-
-  useLayoutEffect(() => {
-    if (!open || disabled) return;
-    updateMenuPosition();
-    return subscribeViewportChange(updateMenuPosition);
-  }, [
-    open,
-    disabled,
-    updateMenuPosition,
-    filteredOptions.length,
-    conditionFilter,
-    footerAction,
-  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -188,33 +163,18 @@ export function FieldPicker({
 
   useEffect(() => {
     if (open && searchable) {
-      requestAnimationFrame(() => searchRef.current?.focus());
+      focusSearchInput();
     }
-  }, [open, searchable]);
-
-  const chromeHeight =
-    (conditionFilters ? 52 : 0) + (footerAction ? 52 : 0);
-  const listMaxHeight = menuPos
-    ? Math.max(120, menuPos.maxHeight - chromeHeight)
-    : 240;
+  }, [open, searchable, focusSearchInput]);
 
   const menu =
-    open && !disabled && menuPos
-      ? createPortal(
-          <div
-            ref={menuRef}
-            id={listId}
-            role="listbox"
-            className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
-            style={{
-              position: "fixed",
-              top: menuPos.top,
-              left: menuPos.left,
-              width: menuPos.width,
-              maxHeight: menuPos.maxHeight,
-              zIndex: 9999,
-            }}
-          >
+    open && !disabled ? (
+      <div
+        ref={menuRef}
+        id={listId}
+        role="listbox"
+        className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+      >
             {conditionFilters ? (
               <div className="flex items-center gap-1.5 border-b border-ink-100 px-3.5 py-3">
                 <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500">
@@ -276,10 +236,7 @@ export function FieldPicker({
               </div>
             ) : null}
 
-            <div
-              className="overflow-y-auto overscroll-contain p-1.5"
-              style={{ maxHeight: listMaxHeight }}
-            >
+            <div className="max-h-[min(320px,45dvh)] overflow-y-auto overscroll-contain p-1.5">
               {filteredOptions.length === 0 ? (
                 <div className="px-3.5 py-7 text-center text-[13.5px] text-ink-500">
                   {query.trim() ? (
@@ -331,15 +288,13 @@ export function FieldPicker({
                 </button>
               </div>
             ) : null}
-          </div>,
-          document.body,
-        )
-      : null;
+          </div>
+    ) : null;
 
   const showClear = Boolean(value) || (open && Boolean(query));
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={clsx("relative", open && "z-20")}>
       <select
         className="sr-only"
         tabIndex={-1}
@@ -365,18 +320,17 @@ export function FieldPicker({
               "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
             disabled && "cursor-not-allowed opacity-55",
           )}
-          onMouseDown={(event) => {
+          onPointerDown={(event) => {
             if (disabled) return;
             if (
               event.target instanceof HTMLElement &&
-              event.target.closest("button, input")
+              event.target.closest("button")
             ) {
               return;
             }
             if (!open) {
-              event.preventDefault();
               openMenu();
-              requestAnimationFrame(() => searchRef.current?.focus());
+              focusSearchInput();
             }
           }}
         >
@@ -388,21 +342,23 @@ export function FieldPicker({
             ref={searchRef}
             className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
             value={open ? query : selectedLabel}
-            readOnly={!open}
             onChange={(event) => {
+              if (!open) {
+                setQuery(event.target.value);
+                setOpen(true);
+                return;
+              }
               setQuery(event.target.value);
-              if (!open) setOpen(true);
             }}
             onFocus={() => {
               if (disabled) return;
-              // Fresh query on open so typing never appends into the selected label
-              // (which would break elastic match, e.g. "r" + "Redmi A13…").
               if (!open) {
                 setQuery("");
                 setOpen(true);
               }
+              focusSearchInput();
             }}
-            placeholder={searchPlaceholder}
+            placeholder={open ? searchPlaceholder : selectedLabel || searchPlaceholder}
             role="combobox"
             aria-expanded={open}
             aria-controls={listId}
@@ -410,6 +366,8 @@ export function FieldPicker({
             disabled={disabled}
             autoComplete="off"
             spellCheck={false}
+            inputMode="search"
+            enterKeyHint="search"
           />
           {showClear ? (
             <button
@@ -423,7 +381,7 @@ export function FieldPicker({
                 setQuery("");
                 if (value) onChange("");
                 if (!open) openMenu();
-                requestAnimationFrame(() => searchRef.current?.focus());
+                focusSearchInput();
               }}
             >
               <X className="h-3 w-3" strokeWidth={2.5} />

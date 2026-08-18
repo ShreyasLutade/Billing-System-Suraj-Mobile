@@ -74,6 +74,7 @@ export function MobileNameSearch({
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [models, setModels] = useState<PhoneModel[]>(
     () => cache[platform] || [],
   );
@@ -165,6 +166,7 @@ export function MobileNameSearch({
           aria-hidden
         />
         <input
+          ref={inputRef}
           id={id}
           className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
           role="combobox"
@@ -179,7 +181,15 @@ export function MobileNameSearch({
             onChange(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setOpen(true);
+            requestAnimationFrame(() => {
+              inputRef.current?.scrollIntoView({
+                block: "center",
+                behavior: "smooth",
+              });
+            });
+          }}
           onKeyDown={onKeyDown}
           placeholder={
             platform === "IOS"
