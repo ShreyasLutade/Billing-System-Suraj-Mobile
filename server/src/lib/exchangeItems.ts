@@ -17,7 +17,7 @@ export function parseExchangeItemsJson(
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .map((row) => {
+      .map((row): BillExchangeItem | null => {
         if (!row || typeof row !== "object") return null;
         const item = row as Record<string, unknown>;
         const model = typeof item.model === "string" ? item.model.trim() : "";
@@ -46,9 +46,9 @@ export function parseExchangeItemsJson(
             typeof item.notes === "string" && item.notes.trim()
               ? item.notes.trim()
               : null,
-        } satisfies BillExchangeItem;
+        };
       })
-      .filter((item): item is BillExchangeItem => Boolean(item));
+      .filter((item): item is BillExchangeItem => item !== null);
   } catch {
     return [];
   }
