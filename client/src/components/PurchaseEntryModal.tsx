@@ -357,7 +357,7 @@ export function PurchaseEntryModal({
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 space-y-4">
             {/* Supplier */}
-            <section className="rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft">
+            <section className="overflow-visible rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2.5 font-display text-base font-semibold text-ink-900">
                   <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#EEF2F8] text-ink-500">

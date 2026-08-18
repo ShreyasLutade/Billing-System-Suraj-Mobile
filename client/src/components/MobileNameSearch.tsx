@@ -206,7 +206,7 @@ export function MobileNameSearch({
       {showList || showEmpty ? (
         <div
           ref={menuRef}
-          className="absolute left-0 right-0 top-full z-50 mt-1.5"
+          className="mt-1.5"
         >
           {showList ? (
             <ul

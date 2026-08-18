@@ -2507,7 +2507,7 @@ export function CreateBillPage() {
               {!withGst ? (
                 <div
                   className={clsx(
-                    "relative order-1 overflow-hidden rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft",
+                    "relative order-1 overflow-visible rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft",
                     totals.exchangeRefund > 0 && "min-h-[280px]",
                   )}
                 >
@@ -3092,7 +3092,8 @@ function PaymentToggle({
   return (
     <div
       className={clsx(
-        "overflow-hidden rounded-xl border border-ink-100 bg-white transition",
+        "rounded-xl border border-ink-100 bg-white transition",
+        checked ? "overflow-visible" : "overflow-hidden",
         checked && styles.bg,
         checked && "ring-1",
         checked && styles.ring,
@@ -3115,7 +3116,7 @@ function PaymentToggle({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+            className={checked ? "overflow-visible" : "overflow-hidden"}
           >
             <div className="space-y-3 border-t border-ink-100/80 px-3 pb-3 pt-2.5">
               {showAmount ? (
