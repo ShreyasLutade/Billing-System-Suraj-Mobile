@@ -41,4 +41,4 @@ COPY --from=build /app/server/public ./server/public
 WORKDIR /app/server
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma db push && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma generate && npx prisma db push && node dist/index.js"]

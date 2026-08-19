@@ -10,10 +10,7 @@ function createPrisma() {
 
 function isClientCurrent(client: PrismaClient) {
   // After `prisma generate`, tsx may keep an old singleton without new models.
-  return Boolean(
-    (client as { phoneModel?: unknown }).phoneModel &&
-      (client as { passwordResetOtp?: unknown }).passwordResetOtp,
-  );
+  return Boolean((client as { phoneModel?: unknown }).phoneModel);
 }
 
 const existing = globalForPrisma.prisma;

@@ -10,6 +10,12 @@ import {
   type Role,
 } from "../middleware/auth";
 import { sendPlainEmail } from "../services/reportEmail";
+import {
+  deletePasswordResetOtps,
+  findLatestPasswordResetOtp,
+  incrementPasswordResetOtpAttempts,
+  replacePasswordResetOtp,
+} from "../services/passwordResetOtp";
 
 export const authRouter = Router();
 
@@ -90,13 +96,6 @@ function otpMatches(phone: string, otp: string, storedHash: string) {
   return next.length === prev.length && timingSafeEqual(next, prev);
 }
 
-function maskEmail(email: string) {
-  const [user, domain] = email.split("@");
-  if (!user || !domain) return email;
-  const visible = user.slice(0, 1);
-  return `${visible}${"•".repeat(Math.max(3, user.length - 1))}@${domain}`;
-}
-
 authRouter.post("/forgot-password", async (req, res, next) => {
   try {
     const parsed = z.object({ phone: phoneSchema }).safeParse(req.body);
@@ -115,10 +114,7 @@ authRouter.post("/forgot-password", async (req, res, next) => {
       return;
     }
 
-    const latest = await prisma.passwordResetOtp.findFirst({
-      where: { phone },
-      orderBy: { createdAt: "desc" },
-    });
+    const latest = await findLatestPasswordResetOtp(phone);
     if (
       latest &&
       Date.now() - latest.createdAt.getTime() < OTP_RESEND_MS
@@ -131,19 +127,10 @@ authRouter.post("/forgot-password", async (req, res, next) => {
 
     const otp = String(randomInt(100000, 1000000));
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
-    await prisma.passwordResetOtp.deleteMany({ where: { phone } });
-    await prisma.passwordResetOtp.create({
-      data: {
-        phone,
-        otpHash: hashOtp(phone, otp),
-        expiresAt,
-      },
-    });
-
     const names = users.map((user) => user.name).join(", ");
     const shop = process.env.SHOP_NAME || "Suraj Mobile";
     const mail = await sendPlainEmail({
-      subject: `${shop} — password reset OTP for ${phone}`,
+      subject: `${shop} password reset OTP (${phone})`,
       text: [
         `Namaste,`,
         ``,
@@ -161,14 +148,33 @@ authRouter.post("/forgot-password", async (req, res, next) => {
         `— ${shop} Billing System`,
       ].join("\n"),
     });
+    await replacePasswordResetOtp({
+      phone,
+      otpHash: hashOtp(phone, otp),
+      expiresAt,
+    });
 
     res.json({
       data: {
         sent: true,
-        email: maskEmail(mail.to),
+        email: mail.to,
       },
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[auth] forgot-password failed:", message);
+    if (
+      /resend|smtp|email|configured|testing emails|password reset table/i.test(
+        message,
+      )
+    ) {
+      res.status(503).json({
+        error:
+          "Could not send the OTP to the shop Gmail. Open surajmobile33556@gmail.com (including Spam). If this keeps failing, the mail service on the server needs a working Resend key.",
+        detail: message,
+      });
+      return;
+    }
     next(error);
   }
 });
@@ -200,10 +206,7 @@ authRouter.post("/reset-password", async (req, res, next) => {
       return;
     }
 
-    const row = await prisma.passwordResetOtp.findFirst({
-      where: { phone },
-      orderBy: { createdAt: "desc" },
-    });
+    const row = await findLatestPasswordResetOtp(phone);
     if (!row || row.expiresAt.getTime() < Date.now()) {
       res.status(400).json({
         error: "OTP expired. Request a new code",
@@ -211,7 +214,7 @@ authRouter.post("/reset-password", async (req, res, next) => {
       return;
     }
     if (row.attempts >= OTP_MAX_ATTEMPTS) {
-      await prisma.passwordResetOtp.deleteMany({ where: { phone } });
+      await deletePasswordResetOtps(phone);
       res.status(400).json({
         error: "Too many attempts. Request a new code",
       });
@@ -219,22 +222,17 @@ authRouter.post("/reset-password", async (req, res, next) => {
     }
 
     if (!otpMatches(phone, otp, row.otpHash)) {
-      await prisma.passwordResetOtp.update({
-        where: { id: row.id },
-        data: { attempts: { increment: 1 } },
-      });
+      await incrementPasswordResetOtpAttempts(row.id);
       res.status(400).json({ error: "Incorrect OTP" });
       return;
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    await prisma.$transaction([
-      prisma.user.updateMany({
-        where: { phone },
-        data: { passwordHash },
-      }),
-      prisma.passwordResetOtp.deleteMany({ where: { phone } }),
-    ]);
+    await prisma.user.updateMany({
+      where: { phone },
+      data: { passwordHash },
+    });
+    await deletePasswordResetOtps(phone);
 
     res.json({ data: { reset: true } });
   } catch (error) {

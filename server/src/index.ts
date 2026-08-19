@@ -21,7 +21,7 @@ import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
-import { ensurePhoneModelsSeeded } from "./services/phoneModels";
+import { ensurePasswordResetOtpTable } from "./services/passwordResetOtp";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -131,6 +131,11 @@ if (serveClient) {
 async function start() {
   await seedFinanceCompanies();
   await seedUsers();
+  try {
+    await ensurePasswordResetOtpTable();
+  } catch (error) {
+    console.warn("[auth] Password reset table skipped:", error);
+  }
   try {
     await ensurePhoneModelsSeeded(prisma);
   } catch (error) {
