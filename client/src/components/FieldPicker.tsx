@@ -50,6 +50,7 @@ type Props = {
   searchPlaceholder?: string;
   /** Show All / New / Old segment filters inside the open dropdown */
   conditionFilters?: boolean;
+  autoFocus?: boolean;
   /** Footer action under the list (e.g. Add to stock) */
   footerAction?: {
     label: string;
@@ -67,6 +68,7 @@ export function FieldPicker({
   searchable = false,
   searchPlaceholder = "Search…",
   conditionFilters = false,
+  autoFocus = false,
   footerAction,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -173,7 +175,7 @@ export function FieldPicker({
         ref={menuRef}
         id={listId}
         role="listbox"
-        className="mt-2 min-w-0 w-full overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+        className="absolute left-0 right-0 top-full z-30 mt-1.5 min-w-0 w-full overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
       >
             {conditionFilters ? (
               <div className="flex items-center gap-1.5 border-b border-ink-100 px-3.5 py-3">
@@ -368,6 +370,7 @@ export function FieldPicker({
             spellCheck={false}
             inputMode="search"
             enterKeyHint="search"
+            autoFocus={autoFocus}
           />
           {showClear ? (
             <button

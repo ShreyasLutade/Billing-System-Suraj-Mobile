@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
   ChevronDown,
+  Minus,
   Package,
   Plus,
   Smartphone,
@@ -580,7 +581,7 @@ export function PurchaseEntryModal({
             })}
 
             {/* Current mobile */}
-            <section className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5">
+            <section className="overflow-visible rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5">
               <div className="mb-3.5 flex items-center justify-between gap-3">
                 <span className="inline-flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
@@ -605,7 +606,6 @@ export function PurchaseEntryModal({
                 disabled={saving}
                 idPrefix="current"
                 onChange={updateDraft}
-                autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
                 wide
               />
             </section>
@@ -653,8 +653,7 @@ export function PurchaseEntryModal({
                         className="flex items-center justify-between gap-2.5 py-1.5 text-[13px] text-ink-500"
                       >
                         <span className="min-w-0 truncate">
-                          {label}
-                          {qty > 1 ? ` × ${qty}` : ""}
+                          {label} × {qty}
                         </span>
                         <span className="shrink-0 tabular-nums font-semibold text-ink-900">
                           {Number.isFinite(price) && price > 0
@@ -920,7 +919,6 @@ export function PurchaseEntryModal({
               disabled={saving}
               idPrefix="current"
               onChange={updateDraft}
-              autoFocusTarget={prefill?.mobileName ? "imei" : "name"}
             />
             {queued.length > 0 ? (
               <button
@@ -1015,6 +1013,58 @@ function ConditionBadge({ condition }: { condition: "NEW" | "USED" }) {
   );
 }
 
+function QuantityStepper({
+  id,
+  value,
+  disabled,
+  onChange,
+}: {
+  id?: string;
+  value: number;
+  disabled?: boolean;
+  onChange: (next: number) => void;
+}) {
+  const qty = clampQty(value);
+  return (
+    <div className="inline-flex h-9 w-[6.25rem] shrink-0 items-stretch overflow-hidden rounded-[10px] border-[1.5px] border-ink-100 bg-white">
+      <button
+        type="button"
+        className="grid w-7 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
+        aria-label="Decrease quantity"
+        disabled={disabled || qty <= 1}
+        onClick={() => onChange(clampQty(qty - 1))}
+      >
+        <Minus className="h-3 w-3" strokeWidth={2.5} />
+      </button>
+      <input
+        id={id}
+        className="w-9 min-w-0 [appearance:textfield] bg-transparent text-center font-display text-[13px] font-semibold tabular-nums text-ink-900 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        type="number"
+        min={1}
+        max={MAX_QTY}
+        step={1}
+        value={qty}
+        aria-label="Quantity"
+        onChange={(e) => onChange(clampQty(Number(e.target.value)))}
+        disabled={disabled}
+      />
+      <button
+        type="button"
+        className="grid w-7 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
+        aria-label="Increase quantity"
+        disabled={disabled || qty >= MAX_QTY}
+        onClick={() => onChange(clampQty(qty + 1))}
+      >
+        <Plus className="h-3 w-3" strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+function setDraftQty(draft: DraftMobile, qty: number): Partial<DraftMobile> {
+  return { imeis: resizeImeis(draft.imeis, qty) };
+}
+
 function QuantityAndImeiFields({
   draft,
   disabled,
@@ -1030,50 +1080,27 @@ function QuantityAndImeiFields({
 }) {
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label required" htmlFor={`${idPrefix}-qty`}>
-            Quantity
-          </label>
-          <input
-            id={`${idPrefix}-qty`}
-            className="field"
-            type="number"
-            min={1}
-            max={MAX_QTY}
-            step={1}
-            value={draft.imeis.length}
-            onChange={(e) =>
-              onChange({
-                imeis: resizeImeis(draft.imeis, Number(e.target.value)),
-              })
-            }
-            required
-            disabled={disabled}
-          />
-        </div>
-        <div>
-          <label className="label required" htmlFor={`${idPrefix}-price`}>
-            Purchase price
-          </label>
-          <input
-            id={`${idPrefix}-price`}
-            className="field"
-            type="number"
-            min="1"
-            step="0.01"
-            value={draft.purchasePrice}
-            onChange={(e) => onChange({ purchasePrice: e.target.value })}
-            required
-            disabled={disabled}
-          />
-          {draft.imeis.length > 1 && Number(draft.purchasePrice) > 0 ? (
-            <p className="mt-1 text-[11.5px] text-ink-400">
-              Per unit · total{" "}
-              {formatINR(Number(draft.purchasePrice) * draft.imeis.length)}
-            </p>
-          ) : null}
-        </div>
+      <div>
+        <label className="label required" htmlFor={`${idPrefix}-price`}>
+          Purchase price
+        </label>
+        <input
+          id={`${idPrefix}-price`}
+          className="field"
+          type="number"
+          min="1"
+          step="0.01"
+          value={draft.purchasePrice}
+          onChange={(e) => onChange({ purchasePrice: e.target.value })}
+          required
+          disabled={disabled}
+        />
+        {draft.imeis.length > 1 && Number(draft.purchasePrice) > 0 ? (
+          <p className="mt-1 text-[11.5px] text-ink-400">
+            Per unit · total{" "}
+            {formatINR(Number(draft.purchasePrice) * draft.imeis.length)}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-3">
@@ -1158,32 +1185,47 @@ function DraftFields({
               ))}
             </div>
           </div>
-          <div>
-            <label className="label required" htmlFor={`${idPrefix}-name`}>
-              Mobile name
-            </label>
-            <MobileNameSearch
-              id={`${idPrefix}-name`}
-              platform={draft.platform}
-              value={draft.mobileName}
-              required
-              autoFocus={autoFocusTarget === "name"}
-              disabled={disabled}
-              onChange={(mobileName) =>
-                onChange(
-                  mobileName.trim()
-                    ? { mobileName }
-                    : { mobileName: "", storage: "", ram: "" },
-                )
-              }
-              onSelectModel={(model: PhoneModel) =>
-                onChange({
-                  mobileName: model.name,
-                  storage: model.storage,
-                  ram: draft.platform === "ANDROID" ? model.ram : "",
-                })
-              }
-            />
+          <div className="flex min-w-0 items-end gap-2.5">
+            <div className="relative z-30 min-w-0 flex-1">
+              <label className="label required" htmlFor={`${idPrefix}-name`}>
+                Mobile name
+              </label>
+              <MobileNameSearch
+                id={`${idPrefix}-name`}
+                platform={draft.platform}
+                value={draft.mobileName}
+                required
+                autoFocus={autoFocusTarget === "name"}
+                disabled={disabled}
+                onChange={(mobileName) =>
+                  onChange(
+                    mobileName.trim()
+                      ? { mobileName }
+                      : { mobileName: "", storage: "", ram: "" },
+                  )
+                }
+                onSelectModel={(model: PhoneModel) =>
+                  onChange({
+                    mobileName: model.name,
+                    storage: model.storage,
+                    ram: draft.platform === "ANDROID" ? model.ram : "",
+                  })
+                }
+              />
+            </div>
+            {draft.mobileName.trim() ? (
+              <div className="shrink-0">
+                <label className="label required" htmlFor={`${idPrefix}-qty`}>
+                  Qty
+                </label>
+                <QuantityStepper
+                  id={`${idPrefix}-qty`}
+                  value={draft.imeis.length}
+                  disabled={disabled}
+                  onChange={(qty) => onChange(setDraftQty(draft, qty))}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1283,32 +1325,47 @@ function DraftFields({
           ))}
         </div>
       </div>
-      <div>
-        <label className="label required" htmlFor={`${idPrefix}-name`}>
-          Mobile name
-        </label>
-        <MobileNameSearch
-          id={`${idPrefix}-name`}
-          platform={draft.platform}
-          value={draft.mobileName}
-          required
-          autoFocus={autoFocusTarget === "name"}
-          disabled={disabled}
-          onChange={(mobileName) =>
-            onChange(
-              mobileName.trim()
-                ? { mobileName }
-                : { mobileName: "", storage: "", ram: "" },
-            )
-          }
-          onSelectModel={(model: PhoneModel) =>
-            onChange({
-              mobileName: model.name,
-              storage: model.storage,
-              ram: draft.platform === "ANDROID" ? model.ram : "",
-            })
-          }
-        />
+      <div className="flex min-w-0 items-end gap-2.5">
+        <div className="relative z-30 min-w-0 flex-1">
+          <label className="label required" htmlFor={`${idPrefix}-name`}>
+            Mobile name
+          </label>
+          <MobileNameSearch
+            id={`${idPrefix}-name`}
+            platform={draft.platform}
+            value={draft.mobileName}
+            required
+            autoFocus={autoFocusTarget === "name"}
+            disabled={disabled}
+            onChange={(mobileName) =>
+              onChange(
+                mobileName.trim()
+                  ? { mobileName }
+                  : { mobileName: "", storage: "", ram: "" },
+              )
+            }
+            onSelectModel={(model: PhoneModel) =>
+              onChange({
+                mobileName: model.name,
+                storage: model.storage,
+                ram: draft.platform === "ANDROID" ? model.ram : "",
+              })
+            }
+          />
+        </div>
+        {draft.mobileName.trim() ? (
+          <div className="shrink-0">
+            <label className="label required" htmlFor={`${idPrefix}-qty`}>
+              Qty
+            </label>
+            <QuantityStepper
+              id={`${idPrefix}-qty`}
+              value={draft.imeis.length}
+              disabled={disabled}
+              onChange={(qty) => onChange(setDraftQty(draft, qty))}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
