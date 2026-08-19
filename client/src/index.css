@@ -757,6 +757,40 @@ body {
   text-align: center;
 }
 
+.login-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 16px;
+}
+
+.login-text-btn {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--login-online);
+  cursor: pointer;
+  padding: 0;
+}
+
+.login-text-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-text-btn-center {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.login-inp-plain {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
 .login-field {
   display: flex;
   flex-direction: column;
@@ -875,6 +909,12 @@ body {
   width: 16px;
   height: 16px;
   flex: none;
+}
+
+.login-alert-ok {
+  background: #e7f8f1;
+  color: #0e9e76;
+  border: 1px solid #bfe9d6;
 }
 
 .login-btn {

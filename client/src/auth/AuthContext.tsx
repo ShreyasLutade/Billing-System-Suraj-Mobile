@@ -7,7 +7,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, clearAuthToken, getAuthToken, setAuthToken } from "../lib/api";
+import {
+  api,
+  ApiError,
+  clearAuthToken,
+  getAuthToken,
+  readSessionFromToken,
+  setAuthToken,
+} from "../lib/api";
 import type { AuthUser } from "../types";
 
 type AuthContextValue = {
@@ -35,12 +42,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
+
+      const cached = readSessionFromToken(token);
+      if (!cached) {
+        clearAuthToken();
+        if (active) {
+          setUser(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         const { data } = await api.me();
         if (active) setUser(data.user);
-      } catch {
-        clearAuthToken();
-        if (active) setUser(null);
+      } catch (err) {
+        const status = err instanceof ApiError ? err.status : 0;
+        if (status === 401) {
+          clearAuthToken();
+          if (active) setUser(null);
+        } else if (active) {
+          setUser(cached);
+        }
       } finally {
         if (active) setLoading(false);
       }
