@@ -21,6 +21,7 @@ import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
+import { ensurePhoneModelsSeeded } from "./services/phoneModels";
 import { ensurePasswordResetOtpTable } from "./services/passwordResetOtp";
 
 const app = express();
