@@ -40,9 +40,36 @@ type DraftMobile = {
   storage: string;
   ram: string;
   color: string;
-  imei: string;
+  imeis: string[];
   purchasePrice: string;
 };
+
+const MAX_QTY = 30;
+
+function clampQty(value: number) {
+  return Math.min(MAX_QTY, Math.max(1, Math.floor(value) || 1));
+}
+
+function resizeImeis(imeis: string[], qty: number) {
+  const n = clampQty(qty);
+  if (n === imeis.length) return imeis;
+  if (n < imeis.length) return imeis.slice(0, n);
+  return [...imeis, ...Array.from({ length: n - imeis.length }, () => "")];
+}
+
+function cleanImei(value: string) {
+  return value.replace(/\s+/g, "").trim();
+}
+
+function draftImeis(draft: DraftMobile) {
+  return draft.imeis.map(cleanImei);
+}
+
+function expandDrafts(drafts: DraftMobile[]) {
+  return drafts.flatMap((item) =>
+    draftImeis(item).map((imei) => ({ ...item, imei })),
+  );
+}
 
 function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
   return {
@@ -52,7 +79,7 @@ function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
     storage: prefill?.storage || "",
     ram: prefill?.platform === "IOS" ? "" : prefill?.ram || "",
     color: prefill?.color || "",
-    imei: "",
+    imeis: [""],
     purchasePrice: "",
   };
 }
@@ -66,8 +93,12 @@ function draftSummaryParts(draft: DraftMobile) {
   ]
     .filter(Boolean)
     .join(" · ");
-  const imei = draft.imei.trim();
-  return { product, imei };
+  const imeis = draftImeis(draft).filter(Boolean);
+  const imei =
+    imeis.length > 1
+      ? `${imeis.length} IMEIs`
+      : imeis[0] || "";
+  return { product, imei, qty: draft.imeis.length };
 }
 
 function validateDraft(draft: DraftMobile): string | null {
@@ -77,8 +108,12 @@ function validateDraft(draft: DraftMobile): string | null {
   if (draft.platform === "ANDROID" && !draft.ram.trim()) {
     return "RAM is required for Android mobiles";
   }
-  if (!draft.imei.trim() || draft.imei.trim().length < 8) {
-    return "Enter a valid IMEI number";
+  const imeis = draftImeis(draft);
+  if (imeis.some((imei) => imei.length < 8)) {
+    return "Enter a valid IMEI for every unit";
+  }
+  if (new Set(imeis).size !== imeis.length) {
+    return "Each IMEI on this mobile must be unique";
   }
   const price = Number(draft.purchasePrice);
   if (!Number.isFinite(price) || price <= 0) {
@@ -173,12 +208,14 @@ export function PurchaseEntryModal({
       setError(issue);
       return;
     }
-    const imei = draft.imei.replace(/\s+/g, "");
-    if (queued.some((item) => item.imei.replace(/\s+/g, "") === imei)) {
-      setError("This IMEI is already in the list above");
+    const imeis = draftImeis(draft);
+    const queuedImeis = queued.flatMap((item) => draftImeis(item));
+    const clash = imeis.find((imei) => queuedImeis.includes(imei));
+    if (clash) {
+      setError(`IMEI ${clash} is already in the list above`);
       return;
     }
-    setQueued((current) => [...current, { ...draft, imei }]);
+    setQueued((current) => [...current, { ...draft, imeis }]);
     setExpandedId(null);
     setDraft(blankDraft());
   }
@@ -218,9 +255,11 @@ export function PurchaseEntryModal({
       return;
     }
 
-    const currentImei = draft.imei.replace(/\s+/g, "");
-    if (queued.some((item) => item.imei.replace(/\s+/g, "") === currentImei)) {
-      setError("This IMEI is already in the list above");
+    const currentImeis = draftImeis(draft);
+    const queuedImeis = queued.flatMap((item) => draftImeis(item));
+    const clash = currentImeis.find((imei) => queuedImeis.includes(imei));
+    if (clash) {
+      setError(`IMEI ${clash} is already in the list above`);
       return;
     }
 
@@ -237,8 +276,8 @@ export function PurchaseEntryModal({
   }
 
   async function savePurchase() {
-    const currentImei = draft.imei.replace(/\s+/g, "");
-    const allDrafts = [...queued, { ...draft, imei: currentImei }];
+    const allDrafts = [...queued, { ...draft, imeis: draftImeis(draft) }];
+    const units = expandDrafts(allDrafts);
     setSaving(true);
     setError(null);
     try {
@@ -255,7 +294,7 @@ export function PurchaseEntryModal({
             ? supplierPhone.replace(/\D/g, "")
             : null,
         condition,
-        items: allDrafts.map((item) => ({
+        items: units.map((item) => ({
           platform: item.platform,
           mobileName: item.mobileName,
           storage: item.storage,
@@ -279,21 +318,23 @@ export function PurchaseEntryModal({
   );
   const confirmItems = useMemo(
     () =>
-      allMobiles.map((item) => {
+      expandDrafts(allMobiles).map((item) => {
         const parts = draftSummaryParts(item);
         return {
           product: parts.product,
-          imei: parts.imei.replace(/\s+/g, ""),
+          imei: item.imei,
           price: Number(item.purchasePrice) || 0,
         };
       }),
     [allMobiles],
   );
+  const unitCount = confirmItems.length;
   const purchaseTotal = useMemo(
     () =>
       allMobiles.reduce((sum, item) => {
         const price = Number(item.purchasePrice);
-        return sum + (Number.isFinite(price) ? price : 0);
+        const qty = item.imeis.length || 1;
+        return sum + (Number.isFinite(price) ? price * qty : 0);
       }, 0),
     [allMobiles],
   );
@@ -603,6 +644,7 @@ export function PurchaseEntryModal({
                 <div className="space-y-0">
                   {allMobiles.map((item, index) => {
                     const price = Number(item.purchasePrice);
+                    const qty = item.imeis.length || 1;
                     const label =
                       item.mobileName.trim() || `Mobile ${index + 1}`;
                     return (
@@ -610,10 +652,13 @@ export function PurchaseEntryModal({
                         key={item.id}
                         className="flex items-center justify-between gap-2.5 py-1.5 text-[13px] text-ink-500"
                       >
-                        <span className="min-w-0 truncate">{label}</span>
+                        <span className="min-w-0 truncate">
+                          {label}
+                          {qty > 1 ? ` × ${qty}` : ""}
+                        </span>
                         <span className="shrink-0 tabular-nums font-semibold text-ink-900">
                           {Number.isFinite(price) && price > 0
-                            ? formatINR(price)
+                            ? formatINR(price * qty)
                             : "₹0.00"}
                         </span>
                       </div>
@@ -632,7 +677,7 @@ export function PurchaseEntryModal({
 
                 <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-2.5 py-1 text-xs font-semibold text-[#0E9E76]">
                   <Smartphone className="h-3.5 w-3.5" />
-                  {allMobiles.length} unit{allMobiles.length === 1 ? "" : "s"}
+                  {unitCount} unit{unitCount === 1 ? "" : "s"}
                 </span>
               </div>
 
@@ -646,7 +691,7 @@ export function PurchaseEntryModal({
                   {saving
                     ? "Saving…"
                     : queued.length
-                      ? `Save ${queued.length + 1} mobiles`
+                      ? `Save ${unitCount} mobiles`
                       : "Save purchase"}
                 </button>
                 <button
@@ -921,7 +966,7 @@ export function PurchaseEntryModal({
               {saving
                 ? "Saving…"
                 : queued.length
-                  ? `Save ${queued.length + 1} mobiles`
+                  ? `Save ${unitCount} mobiles`
                   : "Save purchase"}
             </button>
           </div>
@@ -967,6 +1012,98 @@ function ConditionBadge({ condition }: { condition: "NEW" | "USED" }) {
     >
       {used ? "Second hand" : "New"}
     </span>
+  );
+}
+
+function QuantityAndImeiFields({
+  draft,
+  disabled,
+  idPrefix,
+  onChange,
+  autoFocusTarget,
+}: {
+  draft: DraftMobile;
+  disabled?: boolean;
+  idPrefix: string;
+  onChange: (patch: Partial<DraftMobile>) => void;
+  autoFocusTarget?: "name" | "imei" | null;
+}) {
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-qty`}>
+            Quantity
+          </label>
+          <input
+            id={`${idPrefix}-qty`}
+            className="field"
+            type="number"
+            min={1}
+            max={MAX_QTY}
+            step={1}
+            value={draft.imeis.length}
+            onChange={(e) =>
+              onChange({
+                imeis: resizeImeis(draft.imeis, Number(e.target.value)),
+              })
+            }
+            required
+            disabled={disabled}
+          />
+        </div>
+        <div>
+          <label className="label required" htmlFor={`${idPrefix}-price`}>
+            Purchase price
+          </label>
+          <input
+            id={`${idPrefix}-price`}
+            className="field"
+            type="number"
+            min="1"
+            step="0.01"
+            value={draft.purchasePrice}
+            onChange={(e) => onChange({ purchasePrice: e.target.value })}
+            required
+            disabled={disabled}
+          />
+          {draft.imeis.length > 1 && Number(draft.purchasePrice) > 0 ? (
+            <p className="mt-1 text-[11.5px] text-ink-400">
+              Per unit · total{" "}
+              {formatINR(Number(draft.purchasePrice) * draft.imeis.length)}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {draft.imeis.map((imei, index) => (
+          <div key={`${idPrefix}-imei-${index}`}>
+            <label
+              className="label required"
+              htmlFor={`${idPrefix}-imei-${index}`}
+            >
+              {draft.imeis.length > 1 ? `IMEI ${index + 1}` : "IMEI"}
+            </label>
+            <input
+              id={`${idPrefix}-imei-${index}`}
+              className="field font-mono"
+              value={imei}
+              onChange={(e) => {
+                const next = [...draft.imeis];
+                next[index] = e.target.value;
+                onChange({ imeis: next });
+              }}
+              placeholder="15-digit IMEI"
+              inputMode="numeric"
+              required
+              autoFocus={autoFocusTarget === "imei" && index === 0}
+              disabled={disabled}
+            />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -1102,38 +1239,13 @@ function DraftFields({
           ) : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label required" htmlFor={`${idPrefix}-imei`}>
-              IMEI
-            </label>
-            <input
-              id={`${idPrefix}-imei`}
-              className="field font-mono"
-              value={draft.imei}
-              onChange={(e) => onChange({ imei: e.target.value })}
-              required
-              autoFocus={autoFocusTarget === "imei"}
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="label required" htmlFor={`${idPrefix}-price`}>
-              Purchase price
-            </label>
-            <input
-              id={`${idPrefix}-price`}
-              className="field"
-              type="number"
-              min="1"
-              step="0.01"
-              value={draft.purchasePrice}
-              onChange={(e) => onChange({ purchasePrice: e.target.value })}
-              required
-              disabled={disabled}
-            />
-          </div>
-        </div>
+        <QuantityAndImeiFields
+          draft={draft}
+          disabled={disabled}
+          idPrefix={idPrefix}
+          onChange={onChange}
+          autoFocusTarget={autoFocusTarget}
+        />
       </div>
     );
   }
@@ -1243,38 +1355,13 @@ function DraftFields({
           />
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label required" htmlFor={`${idPrefix}-imei`}>
-            IMEI
-          </label>
-          <input
-            id={`${idPrefix}-imei`}
-            className="field font-mono"
-            value={draft.imei}
-            onChange={(e) => onChange({ imei: e.target.value })}
-            required
-            autoFocus={autoFocusTarget === "imei"}
-            disabled={disabled}
-          />
-        </div>
-        <div>
-          <label className="label required" htmlFor={`${idPrefix}-price`}>
-            Purchase price
-          </label>
-          <input
-            id={`${idPrefix}-price`}
-            className="field"
-            type="number"
-            min="1"
-            step="0.01"
-            value={draft.purchasePrice}
-            onChange={(e) => onChange({ purchasePrice: e.target.value })}
-            required
-            disabled={disabled}
-          />
-        </div>
-      </div>
+      <QuantityAndImeiFields
+        draft={draft}
+        disabled={disabled}
+        idPrefix={idPrefix}
+        onChange={onChange}
+        autoFocusTarget={autoFocusTarget}
+      />
     </div>
   );
 }
