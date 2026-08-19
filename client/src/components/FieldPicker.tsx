@@ -296,7 +296,7 @@ export function FieldPicker({
   const showClear = Boolean(value) || (open && Boolean(query));
 
   return (
-    <div ref={rootRef} className={clsx("relative min-w-0 w-full", open && "z-20")}>
+    <div ref={rootRef} className={clsx("relative min-w-0 w-full", open && "z-50")}>
       <select
         className="sr-only"
         tabIndex={-1}

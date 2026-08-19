@@ -19,6 +19,16 @@ import type {
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "suraj_billing_token";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status = 0) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -29,6 +39,32 @@ export function setAuthToken(token: string) {
 
 export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function readSessionFromToken(token: string): AuthUser | null {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(json) as {
+      sub?: string;
+      phone?: string;
+      name?: string;
+      role?: string;
+      exp?: number;
+    };
+    if (!payload.sub || !payload.phone || !payload.exp) return null;
+    if (payload.exp * 1000 <= Date.now()) return null;
+    if (payload.role !== "ADMIN" && payload.role !== "STAFF") return null;
+    return {
+      id: String(payload.sub),
+      phone: String(payload.phone),
+      name: String(payload.name || ""),
+      role: payload.role,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -44,12 +80,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     });
   } catch {
-    throw new Error(
+    throw new ApiError(
       "Cannot reach the server. Make sure the API is running on port 4000.",
+      0,
     );
   }
 
-  if (response.status === 401 && !path.startsWith("/auth/login")) {
+  if (
+    response.status === 401 &&
+    !path.startsWith("/auth/login") &&
+    !path.startsWith("/auth/forgot-password") &&
+    !path.startsWith("/auth/reset-password") &&
+    !path.startsWith("/auth/me")
+  ) {
     clearAuthToken();
     if (!window.location.pathname.startsWith("/login")) {
       window.location.assign("/login");
@@ -78,7 +121,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         message = "API route not found. Restart the server.";
       }
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   return response.json() as Promise<T>;
@@ -90,6 +133,19 @@ export const api = {
     request<{ data: { token: string; user: AuthUser } }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ phone, password }),
+    }),
+  requestPasswordOtp: (phone: string) =>
+    request<{ data: { sent: boolean; email: string } }>(
+      "/auth/forgot-password",
+      {
+        method: "POST",
+        body: JSON.stringify({ phone }),
+      },
+    ),
+  resetPassword: (phone: string, otp: string, password: string) =>
+    request<{ data: { reset: boolean } }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ phone, otp, password }),
     }),
   me: () => request<{ data: { user: AuthUser } }>("/auth/me"),
   listBills: (

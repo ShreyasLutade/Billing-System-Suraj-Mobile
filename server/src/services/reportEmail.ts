@@ -189,8 +189,8 @@ async function sendWithResend(input: {
   to: string;
   subject: string;
   text: string;
-  filename: string;
-  buffer: Buffer;
+  filename?: string;
+  buffer?: Buffer;
 }) {
   const apiKey = resendApiKey();
   if (!apiKey) {
@@ -208,12 +208,16 @@ async function sendWithResend(input: {
       to: [input.to],
       subject: input.subject,
       text: input.text,
-      attachments: [
-        {
-          filename: input.filename,
-          content: input.buffer.toString("base64"),
-        },
-      ],
+      ...(input.filename && input.buffer
+        ? {
+            attachments: [
+              {
+                filename: input.filename,
+                content: input.buffer.toString("base64"),
+              },
+            ],
+          }
+        : {}),
     }),
   });
 
@@ -294,6 +298,41 @@ export async function verifyReportSmtp() {
     "[reports] Tip: Railway blocks SMTP. Create a free Resend key at https://resend.com and set RESEND_API_KEY.",
   );
   return false;
+}
+
+export async function sendPlainEmail(input: {
+  subject: string;
+  text: string;
+}) {
+  const { to, from, configured, provider } = getReportMailConfig();
+  if (!configured || !provider) {
+    throw new Error(
+      "Email is not configured. Set REPORT_EMAIL_TO and either RESEND_API_KEY or SMTP_USER/SMTP_PASS.",
+    );
+  }
+
+  if (provider === "resend") {
+    const info = await sendWithResend({
+      from,
+      to,
+      subject: input.subject,
+      text: input.text,
+    });
+    return { messageId: info.messageId, to, subject: input.subject };
+  }
+
+  const info = await sendWithSmtp({
+    from,
+    to,
+    subject: input.subject,
+    text: input.text,
+  });
+
+  return {
+    messageId: info.messageId,
+    to,
+    subject: input.subject,
+  };
 }
 
 export async function sendReportEmail(report: ReportMailAttachment) {

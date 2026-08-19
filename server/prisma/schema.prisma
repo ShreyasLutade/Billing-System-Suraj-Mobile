@@ -21,6 +21,17 @@ model User {
   @@unique([phone, role])
 }
 
+model PasswordResetOtp {
+  id        String   @id @default(cuid())
+  phone     String
+  otpHash   String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
 /// Latest known customer profile by phone — used for bill autofill.
 model Customer {
   id        String   @id @default(cuid())

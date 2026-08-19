@@ -103,7 +103,7 @@ export function ExchangeMobileFields({
         </div>
       </div>
 
-      <div className="relative z-30">
+      <div>
         <label className="label required" htmlFor={`${idPrefix}-model`}>
           Mobile name
         </label>

@@ -399,7 +399,7 @@ export function PurchaseEntryModal({
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 space-y-4">
             {/* Supplier */}
-            <section className="overflow-visible rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft">
+            <section className="relative z-10 overflow-visible rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2.5 font-display text-base font-semibold text-ink-900">
                   <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#EEF2F8] text-ink-500">
@@ -756,7 +756,7 @@ export function PurchaseEntryModal({
               ) : null}
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="relative z-10 space-y-2">
               <div className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5">
                 <button
                   type="button"
@@ -1026,19 +1026,19 @@ function QuantityStepper({
 }) {
   const qty = clampQty(value);
   return (
-    <div className="inline-flex h-9 w-[6.25rem] shrink-0 items-stretch overflow-hidden rounded-[10px] border-[1.5px] border-ink-100 bg-white">
+    <div className="inline-flex h-12 min-h-[48px] w-[7.25rem] shrink-0 items-stretch overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white">
       <button
         type="button"
-        className="grid w-7 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
+        className="grid w-9 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
         aria-label="Decrease quantity"
         disabled={disabled || qty <= 1}
         onClick={() => onChange(clampQty(qty - 1))}
       >
-        <Minus className="h-3 w-3" strokeWidth={2.5} />
+        <Minus className="h-3.5 w-3.5" strokeWidth={2.4} />
       </button>
       <input
         id={id}
-        className="w-9 min-w-0 [appearance:textfield] bg-transparent text-center font-display text-[13px] font-semibold tabular-nums text-ink-900 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-11 min-w-0 [appearance:textfield] bg-transparent text-center font-display text-sm font-semibold tabular-nums text-ink-900 outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         type="number"
         min={1}
         max={MAX_QTY}
@@ -1050,12 +1050,12 @@ function QuantityStepper({
       />
       <button
         type="button"
-        className="grid w-7 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
+        className="grid w-9 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
         aria-label="Increase quantity"
         disabled={disabled || qty >= MAX_QTY}
         onClick={() => onChange(clampQty(qty + 1))}
       >
-        <Plus className="h-3 w-3" strokeWidth={2.5} />
+        <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
       </button>
     </div>
   );
@@ -1186,7 +1186,7 @@ function DraftFields({
             </div>
           </div>
           <div className="flex min-w-0 items-end gap-2.5">
-            <div className="relative z-30 min-w-0 flex-1">
+            <div className="relative min-w-0 flex-1">
               <label className="label required" htmlFor={`${idPrefix}-name`}>
                 Mobile name
               </label>
@@ -1326,7 +1326,7 @@ function DraftFields({
         </div>
       </div>
       <div className="flex min-w-0 items-end gap-2.5">
-        <div className="relative z-30 min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
           <label className="label required" htmlFor={`${idPrefix}-name`}>
             Mobile name
           </label>

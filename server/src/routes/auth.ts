@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { createHash, randomInt, timingSafeEqual } from "crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import {
@@ -8,6 +9,7 @@ import {
   type AuthUser,
   type Role,
 } from "../middleware/auth";
+import { sendPlainEmail } from "../services/reportEmail";
 
 export const authRouter = Router();
 
@@ -63,6 +65,178 @@ authRouter.post("/login", async (req, res, next) => {
     const user = publicUser(matched);
     const token = signToken(user);
     res.json({ data: { token, user } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{10}$/, "Enter a valid 10-digit phone number");
+
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_RESEND_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+
+function hashOtp(phone: string, otp: string) {
+  const secret = process.env.JWT_SECRET || "change-me-in-production";
+  return createHash("sha256").update(`${phone}:${otp}:${secret}`).digest("hex");
+}
+
+function otpMatches(phone: string, otp: string, storedHash: string) {
+  const next = Buffer.from(hashOtp(phone, otp));
+  const prev = Buffer.from(storedHash);
+  return next.length === prev.length && timingSafeEqual(next, prev);
+}
+
+function maskEmail(email: string) {
+  const [user, domain] = email.split("@");
+  if (!user || !domain) return email;
+  const visible = user.slice(0, 1);
+  return `${visible}${"•".repeat(Math.max(3, user.length - 1))}@${domain}`;
+}
+
+authRouter.post("/forgot-password", async (req, res, next) => {
+  try {
+    const parsed = z.object({ phone: phoneSchema }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Enter a valid 10-digit phone number",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { phone } = parsed.data;
+    const users = await prisma.user.findMany({ where: { phone } });
+    if (!users.length) {
+      res.status(404).json({ error: "No account found for this number" });
+      return;
+    }
+
+    const latest = await prisma.passwordResetOtp.findFirst({
+      where: { phone },
+      orderBy: { createdAt: "desc" },
+    });
+    if (
+      latest &&
+      Date.now() - latest.createdAt.getTime() < OTP_RESEND_MS
+    ) {
+      res.status(429).json({
+        error: "Please wait a minute before requesting another code",
+      });
+      return;
+    }
+
+    const otp = String(randomInt(100000, 1000000));
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+    await prisma.passwordResetOtp.deleteMany({ where: { phone } });
+    await prisma.passwordResetOtp.create({
+      data: {
+        phone,
+        otpHash: hashOtp(phone, otp),
+        expiresAt,
+      },
+    });
+
+    const names = users.map((user) => user.name).join(", ");
+    const shop = process.env.SHOP_NAME || "Suraj Mobile";
+    const mail = await sendPlainEmail({
+      subject: `${shop} — password reset OTP for ${phone}`,
+      text: [
+        `Namaste,`,
+        ``,
+        `A password reset was requested for ${shop} billing.`,
+        ``,
+        `Account phone: ${phone}`,
+        `Staff: ${names}`,
+        `OTP: ${otp}`,
+        ``,
+        `This code expires in 10 minutes.`,
+        `Share it only with the person who requested the reset.`,
+        ``,
+        `If you did not expect this, ignore the email.`,
+        ``,
+        `— ${shop} Billing System`,
+      ].join("\n"),
+    });
+
+    res.json({
+      data: {
+        sent: true,
+        email: maskEmail(mail.to),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/reset-password", async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({
+        phone: phoneSchema,
+        otp: z
+          .string()
+          .trim()
+          .regex(/^\d{6}$/, "Enter the 6-digit OTP"),
+        password: z.string().min(8, "Password must be at least 8 characters"),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Check the OTP and new password",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const { phone, otp, password } = parsed.data;
+    const users = await prisma.user.findMany({ where: { phone } });
+    if (!users.length) {
+      res.status(404).json({ error: "No account found for this number" });
+      return;
+    }
+
+    const row = await prisma.passwordResetOtp.findFirst({
+      where: { phone },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!row || row.expiresAt.getTime() < Date.now()) {
+      res.status(400).json({
+        error: "OTP expired. Request a new code",
+      });
+      return;
+    }
+    if (row.attempts >= OTP_MAX_ATTEMPTS) {
+      await prisma.passwordResetOtp.deleteMany({ where: { phone } });
+      res.status(400).json({
+        error: "Too many attempts. Request a new code",
+      });
+      return;
+    }
+
+    if (!otpMatches(phone, otp, row.otpHash)) {
+      await prisma.passwordResetOtp.update({
+        where: { id: row.id },
+        data: { attempts: { increment: 1 } },
+      });
+      res.status(400).json({ error: "Incorrect OTP" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.$transaction([
+      prisma.user.updateMany({
+        where: { phone },
+        data: { passwordHash },
+      }),
+      prisma.passwordResetOtp.deleteMany({ where: { phone } }),
+    ]);
+
+    res.json({ data: { reset: true } });
   } catch (error) {
     next(error);
   }
@@ -131,23 +305,10 @@ export async function seedUsers() {
       continue;
     }
 
-    const passwordOk = await bcrypt.compare(
-      seed.password,
-      existing.passwordHash,
-    );
-    const needsUpdate =
-      !passwordOk || existing.name !== seed.name || existing.phone !== seed.phone;
-
-    if (needsUpdate) {
+    if (existing.name !== seed.name) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: {
-          name: seed.name,
-          phone: seed.phone,
-          passwordHash: passwordOk
-            ? existing.passwordHash
-            : await bcrypt.hash(seed.password, 10),
-        },
+        data: { name: seed.name },
       });
     }
   }
