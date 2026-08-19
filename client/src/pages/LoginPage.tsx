@@ -184,11 +184,11 @@ export function LoginPage() {
     view === "login"
       ? "Sign in to continue to billing."
       : view === "forgot-phone"
-        ? "Enter the account mobile number. We will email an OTP to the shop inbox."
-        : `Enter the OTP sent to ${otpEmail || "the shop email"}, then choose a new password.`;
+        ? "Enter the account mobile. OTP goes to the shop Gmail."
+        : `OTP sent to ${otpEmail || "the shop Gmail"}.`;
 
   return (
-    <div className="login-page">
+    <div className={view === "login" ? "login-page" : "login-page login-page-forgot"}>
       {/* Mobile hero — hidden on desktop */}
       <div className="login-mobile-top">
         <header className="login-mobile-hero">
@@ -673,7 +673,7 @@ export function LoginPage() {
           ) : null}
 
           {view === "forgot-reset" ? (
-            <form onSubmit={handleResetPassword} noValidate>
+            <form className="login-reset-form" onSubmit={handleResetPassword} noValidate>
               <div className="login-field">
                 <label htmlFor="login-otp">
                   OTP
@@ -698,55 +698,52 @@ export function LoginPage() {
                 </div>
               </div>
 
-              <div className="login-field">
-                <label htmlFor="login-new-password">
-                  New password
-                  <span className="login-req">*</span>
-                </label>
-                <div className="login-inp">
-                  <input
-                    id="login-new-password"
-                    className="login-inp-plain"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    placeholder="At least 8 characters"
-                    value={newPassword}
-                    onChange={(e) => {
-                      setNewPassword(e.target.value);
-                      clearAuthError();
-                    }}
-                    required
-                  />
+              <div className="login-reset-passwords">
+                <div className="login-field">
+                  <label htmlFor="login-new-password">
+                    New password
+                    <span className="login-req">*</span>
+                  </label>
+                  <div className="login-inp">
+                    <input
+                      id="login-new-password"
+                      className="login-inp-plain"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="Min. 8 characters"
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        clearAuthError();
+                      }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="login-field">
+                  <label htmlFor="login-confirm-password">
+                    Confirm
+                    <span className="login-req">*</span>
+                  </label>
+                  <div className="login-inp">
+                    <input
+                      id="login-confirm-password"
+                      className="login-inp-plain"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="Re-enter"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        clearAuthError();
+                      }}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="login-field">
-                <label htmlFor="login-confirm-password">
-                  Confirm password
-                  <span className="login-req">*</span>
-                </label>
-                <div className="login-inp">
-                  <input
-                    id="login-confirm-password"
-                    className="login-inp-plain"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    placeholder="Re-enter new password"
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      clearAuthError();
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-
-              {info ? (
-                <div className="login-alert login-alert-ok" role="status">
-                  {info}
-                </div>
-              ) : null}
               {error ? (
                 <div className="login-alert" role="alert">
                   {error}
@@ -765,24 +762,26 @@ export function LoginPage() {
               >
                 {submitting ? "Updating…" : "Update password"}
               </button>
-              <button
-                type="button"
-                className="login-text-btn login-text-btn-center"
-                disabled={submitting}
-                onClick={() => void sendOtp()}
-              >
-                Resend OTP
-              </button>
-              <button
-                type="button"
-                className="login-text-btn login-text-btn-center"
-                onClick={() => {
-                  resetForgotState();
-                  setView("login");
-                }}
-              >
-                Back to sign in
-              </button>
+              <div className="login-reset-links">
+                <button
+                  type="button"
+                  className="login-text-btn"
+                  disabled={submitting}
+                  onClick={() => void sendOtp()}
+                >
+                  Resend OTP
+                </button>
+                <button
+                  type="button"
+                  className="login-text-btn"
+                  onClick={() => {
+                    resetForgotState();
+                    setView("login");
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </div>
             </form>
           ) : null}
         </section>
