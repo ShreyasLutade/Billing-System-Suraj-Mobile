@@ -152,7 +152,7 @@ export function MobileNameSearch({
   }
 
   return (
-    <div ref={rootRef} className="relative z-20">
+    <div ref={rootRef} className="relative z-30">
       <div
         className={clsx(
           "flex min-h-[48px] items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
@@ -206,7 +206,7 @@ export function MobileNameSearch({
       {showList || showEmpty ? (
         <div
           ref={menuRef}
-          className="mt-1.5"
+          className="absolute left-0 right-0 top-full z-30 mt-1.5"
         >
           {showList ? (
             <ul
