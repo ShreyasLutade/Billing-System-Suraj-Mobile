@@ -41,11 +41,29 @@ function smtpReady() {
   );
 }
 
+function isRailway() {
+  return Boolean(
+    cleanEnv(process.env.RAILWAY_ENVIRONMENT) ||
+      cleanEnv(process.env.RAILWAY_ENVIRONMENT_NAME) ||
+      cleanEnv(process.env.RAILWAY_PROJECT_ID),
+  );
+}
+
+function resendFromAddress() {
+  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  return (
+    cleanEnv(process.env.RESEND_FROM) ||
+    `${shop} <onboarding@resend.dev>`
+  );
+}
+
 function emailProvider(): MailProvider | null {
   const to = cleanEnv(process.env.REPORT_EMAIL_TO);
   if (!to) return null;
-  // Prefer Resend on Railway — outbound SMTP (465/587) is often firewalled.
+  // Prefer Resend on Railway — outbound SMTP (465/587) is often firewalled
+  // and Gmail app passwords here are frequently stale.
   if (resendApiKey()) return "resend";
+  if (isRailway()) return null;
   if (smtpReady()) return "smtp";
   return null;
 }
@@ -58,10 +76,9 @@ export function getReportMailConfig() {
   const shop = process.env.SHOP_NAME || "Suraj Mobile";
   const from =
     cleanEnv(process.env.RESEND_FROM) ||
-    cleanEnv(process.env.SMTP_FROM) ||
     (provider === "resend"
-      ? `${shop} Reports <onboarding@resend.dev>`
-      : `"${shop} Reports" <${user}>`);
+      ? resendFromAddress()
+      : cleanEnv(process.env.SMTP_FROM) || `"${shop} Reports" <${user}>`);
 
   return {
     user,
@@ -304,35 +321,58 @@ export async function sendPlainEmail(input: {
   subject: string;
   text: string;
 }) {
-  const { to, from, configured, provider } = getReportMailConfig();
-  if (!configured || !provider) {
+  const to = cleanEnv(process.env.REPORT_EMAIL_TO);
+  if (!to) {
+    throw new Error("REPORT_EMAIL_TO is not set");
+  }
+
+  // Always use Resend when a key exists — same path as backup Excel emails.
+  // Do not fall back to Gmail SMTP (stale app passwords, Railway blocks).
+  if (resendApiKey()) {
+    const info = await sendWithResend({
+      from: resendFromAddress(),
+      to,
+      subject: input.subject,
+      text: input.text,
+    });
+    console.log(`[auth-mail] Resend OTP mail → ${to}`);
+    return { messageId: info.messageId, to, subject: input.subject };
+  }
+
+  if (isRailway()) {
     throw new Error(
-      "Email is not configured. Set REPORT_EMAIL_TO and either RESEND_API_KEY or SMTP_USER/SMTP_PASS.",
+      "OTP email uses Resend on the server, the same as full backup emails. Set RESEND_API_KEY on Railway. Gmail SMTP is not used (Google rejected the stored SMTP password).",
     );
   }
 
-  if (provider === "resend") {
-    const info = await sendWithResend({
+  const { configured, provider, from } = getReportMailConfig();
+  if (!configured || provider !== "smtp") {
+    throw new Error(
+      "Email is not configured. Set REPORT_EMAIL_TO and RESEND_API_KEY (or local SMTP_USER/SMTP_PASS).",
+    );
+  }
+
+  try {
+    const info = await sendWithSmtp({
       from,
       to,
       subject: input.subject,
       text: input.text,
     });
-    return { messageId: info.messageId, to, subject: input.subject };
+    return {
+      messageId: info.messageId,
+      to,
+      subject: input.subject,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/535|BadCredentials|Username and Password not accepted/i.test(message)) {
+      throw new Error(
+        "Gmail rejected the SMTP password. Create a Google App Password, or set RESEND_API_KEY like production backups.",
+      );
+    }
+    throw error;
   }
-
-  const info = await sendWithSmtp({
-    from,
-    to,
-    subject: input.subject,
-    text: input.text,
-  });
-
-  return {
-    messageId: info.messageId,
-    to,
-    subject: input.subject,
-  };
 }
 
 export async function sendReportEmail(report: ReportMailAttachment) {
@@ -377,7 +417,7 @@ export async function sendReportEmail(report: ReportMailAttachment) {
 
   if (provider === "resend") {
     const info = await sendWithResend({
-      from,
+      from: resendFromAddress(),
       to,
       subject,
       text: body,
