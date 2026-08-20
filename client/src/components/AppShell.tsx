@@ -14,46 +14,10 @@ import {
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 
-/** Keep fixed bottom nav above Chrome’s mobile browser chrome when it reappears. */
-function useBottomChromeInset() {
-  const [inset, setInset] = useState(0);
-
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    function update() {
-      const viewport = window.visualViewport;
-      if (!viewport) {
-        setInset(0);
-        return;
-      }
-      const obscured = Math.max(
-        0,
-        Math.round(window.innerHeight - (viewport.height + viewport.offsetTop)),
-      );
-      setInset(obscured);
-    }
-
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    window.addEventListener("resize", update);
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  return inset;
-}
-
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const bottomChromeInset = useBottomChromeInset();
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);
@@ -174,13 +138,7 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-2 backdrop-blur-xl md:hidden"
-        style={{
-          bottom: bottomChromeInset,
-          paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))",
-        }}
-      >
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 py-2 backdrop-blur-xl md:hidden">
         <div
           className={clsx(
             "mx-auto grid max-w-lg gap-1",
@@ -213,13 +171,7 @@ export function AppShell() {
           ))}
         </div>
       </nav>
-      <div
-        className="md:hidden"
-        style={{
-          height: `calc(5rem + env(safe-area-inset-bottom, 0px) + ${bottomChromeInset}px)`,
-        }}
-        aria-hidden
-      />
+      <div className="h-20 md:hidden" />
 
       <AnimatePresence>
         {showLogoutConfirm ? (
