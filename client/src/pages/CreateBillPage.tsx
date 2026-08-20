@@ -1086,6 +1086,23 @@ export function CreateBillPage() {
   }
 
   function selectCatalogMobile(key: string, value: string) {
+    if (!value) {
+      updateItem(key, {
+        catalogMode: "mobile",
+        productName: "",
+        mobileCatalogId: null,
+        stockItemId: null,
+        platform: null,
+        color: "",
+        storage: "",
+        ram: "",
+        condition: null,
+        imei1: "",
+        rate: 0,
+      });
+      return;
+    }
+
     if (value === "__other__") {
       updateItem(key, {
         catalogMode: "other",
@@ -1124,6 +1141,23 @@ export function CreateBillPage() {
   }
 
   function selectMobile(key: string, value: string) {
+    if (!value) {
+      updateItem(key, {
+        catalogMode: "mobile",
+        productName: "",
+        mobileCatalogId: null,
+        stockItemId: null,
+        platform: null,
+        color: "",
+        storage: "",
+        ram: "",
+        condition: null,
+        imei1: "",
+        rate: 0,
+      });
+      return;
+    }
+
     if (value === "__other__") {
       updateItem(key, {
         catalogMode: "other",
@@ -2118,22 +2152,6 @@ export function CreateBillPage() {
                       ) : null}
                     </>
                   )}
-                  <div>
-                    <label className="label required" htmlFor={`qty-${item.key}`}>Qty</label>
-                    <input
-                      id={`qty-${item.key}`}
-                      className="field"
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateItem(item.key, {
-                          quantity: Number(e.target.value) || 1,
-                        })
-                      }
-                      required
-                    />
-                  </div>
                   <div>
                     <label className="label required" htmlFor={`rate-${item.key}`}>Rate (₹)</label>
                     <input

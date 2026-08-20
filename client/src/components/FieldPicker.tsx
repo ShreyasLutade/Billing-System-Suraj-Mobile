@@ -383,8 +383,7 @@ export function FieldPicker({
                 event.stopPropagation();
                 setQuery("");
                 if (value) onChange("");
-                if (!open) openMenu();
-                focusSearchInput();
+                close();
               }}
             >
               <X className="h-3 w-3" strokeWidth={2.5} />
