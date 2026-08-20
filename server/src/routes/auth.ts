@@ -266,6 +266,12 @@ const SEED_USERS: Array<{
     role: "ADMIN",
   },
   {
+    phone: "7038006342",
+    password: "Shreyas@123",
+    name: "Shreyas Admin",
+    role: "ADMIN",
+  },
+  {
     phone: "6265086510",
     password: "Shop@123",
     name: "Anuj",
