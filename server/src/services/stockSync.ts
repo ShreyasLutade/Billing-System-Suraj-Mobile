@@ -269,10 +269,12 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     { purchaseItemId: string; stockItemId: string }
   >();
   for (const link of existingPurchase?.items ?? []) {
-    existingByImei.set(link.stockItem.imei, {
-      purchaseItemId: link.id,
-      stockItemId: link.stockItemId,
-    });
+    if (link.stockItem.imei) {
+      existingByImei.set(link.stockItem.imei, {
+        purchaseItemId: link.id,
+        stockItemId: link.stockItemId,
+      });
+    }
   }
 
   const nextImeis = new Set<string>();
@@ -294,7 +296,10 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     const existing = existingByImei.get(imei);
     const imeiOwner = await tx.stockItem.findUnique({ where: { imei } });
     const ownedByThisExchange = existing?.stockItemId === imeiOwner?.id;
-    if (imeiOwner && !ownedByThisExchange) {
+
+    // Only block IMEIs that are still AVAILABLE in shop stock.
+    // Sold units may come back as exchange (same IMEI) — reuse that row.
+    if (imeiOwner && !ownedByThisExchange && imeiOwner.status === "AVAILABLE") {
       throw new Error("EXCHANGE_IMEI_TAKEN");
     }
 
@@ -310,6 +315,7 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
         where: { id: existing.stockItemId },
         data: {
           condition: "USED",
+          status: "AVAILABLE",
           platform,
           mobileName,
           storage,
@@ -322,6 +328,33 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
         },
       });
       stockIds.push(existing.stockItemId);
+      continue;
+    }
+
+    if (imeiOwner && !ownedByThisExchange) {
+      const oldLink = await tx.purchaseItem.findUnique({
+        where: { stockItemId: imeiOwner.id },
+      });
+      if (oldLink) {
+        await tx.purchaseItem.delete({ where: { id: oldLink.id } });
+      }
+      await tx.stockItem.update({
+        where: { id: imeiOwner.id },
+        data: {
+          condition: "USED",
+          status: "AVAILABLE",
+          platform,
+          mobileName,
+          storage,
+          ram,
+          color,
+          imei,
+          purchasePrice,
+          suppliers: serializeSuppliers([supplier.name]),
+          supplierId: supplier.id,
+        },
+      });
+      stockIds.push(imeiOwner.id);
       continue;
     }
 
@@ -345,7 +378,7 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
   }
 
   for (const link of existingPurchase?.items ?? []) {
-    if (nextImeis.has(link.stockItem.imei)) continue;
+    if (link.stockItem.imei && nextImeis.has(link.stockItem.imei)) continue;
     if (link.stockItem.status === "AVAILABLE") {
       await tx.purchaseItem.delete({ where: { id: link.id } });
       await tx.stockItem.delete({ where: { id: link.stockItemId } });

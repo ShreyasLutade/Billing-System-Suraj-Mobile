@@ -15,6 +15,10 @@ function serializeSuppliers(names: string[]) {
   return JSON.stringify(names.map((n) => n.trim()).filter(Boolean));
 }
 
+function cleanId(value: string | undefined | null) {
+  return (value || "").replace(/\s+/g, "").trim();
+}
+
 const purchaseItemSchema = z
   .object({
     platform: z.enum(["IOS", "ANDROID"]),
@@ -22,7 +26,8 @@ const purchaseItemSchema = z
     storage: z.string().trim().min(1).max(30),
     ram: z.string().trim().max(30).optional().default(""),
     color: z.string().trim().min(1).max(50),
-    imei: z.string().trim().min(8).max(20),
+    imei: z.string().trim().max(20).optional().default(""),
+    serialNumber: z.string().trim().max(40).optional().default(""),
     purchasePrice: z.coerce.number().positive(),
   })
   .superRefine((data, ctx) => {
@@ -31,6 +36,29 @@ const purchaseItemSchema = z
         code: z.ZodIssueCode.custom,
         message: "RAM is required for Android mobiles",
         path: ["ram"],
+      });
+    }
+    const imei = cleanId(data.imei);
+    const serial = cleanId(data.serialNumber);
+    if (!imei && !serial) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter IMEI or serial number",
+        path: ["imei"],
+      });
+    }
+    if (imei && imei.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "IMEI must be at least 8 characters",
+        path: ["imei"],
+      });
+    }
+    if (serial && serial.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Serial number looks too short",
+        path: ["serialNumber"],
       });
     }
   });
@@ -62,6 +90,7 @@ purchasesRouter.get("/", async (req, res, next) => {
                 id: true,
                 mobileName: true,
                 imei: true,
+                serialNumber: true,
                 purchasePrice: true,
                 status: true,
               },
@@ -84,6 +113,7 @@ const stockItemSelect = {
   ram: true,
   color: true,
   imei: true,
+  serialNumber: true,
   purchasePrice: true,
   status: true,
   platform: true,
@@ -171,21 +201,51 @@ purchasesRouter.post("/", async (req, res, next) => {
     }
 
     const data = parsed.data;
-    const imeis = data.items.map((item) => item.imei.replace(/\s+/g, ""));
+    const units = data.items.map((item) => ({
+      imei: cleanId(item.imei) || null,
+      serialNumber: cleanId(item.serialNumber) || null,
+    }));
+    const imeis = units.map((u) => u.imei).filter((v): v is string => Boolean(v));
+    const serials = units
+      .map((u) => u.serialNumber)
+      .filter((v): v is string => Boolean(v));
+
     if (new Set(imeis).size !== imeis.length) {
       res.status(400).json({ error: "Duplicate IMEI numbers in this purchase" });
       return;
     }
-
-    const existing = await prisma.stockItem.findMany({
-      where: { imei: { in: imeis } },
-      select: { imei: true },
-    });
-    if (existing.length) {
-      res.status(409).json({
-        error: `IMEI already in stock: ${existing.map((e) => e.imei).join(", ")}`,
-      });
+    if (new Set(serials).size !== serials.length) {
+      res
+        .status(400)
+        .json({ error: "Duplicate serial numbers in this purchase" });
       return;
+    }
+
+    if (imeis.length) {
+      const existingImei = await prisma.stockItem.findMany({
+        where: { imei: { in: imeis } },
+        select: { imei: true },
+      });
+      if (existingImei.length) {
+        res.status(409).json({
+          error: `IMEI already in stock: ${existingImei.map((e) => e.imei).join(", ")}`,
+        });
+        return;
+      }
+    }
+    if (serials.length) {
+      const existingSerial = await prisma.stockItem.findMany({
+        where: { serialNumber: { in: serials } },
+        select: { serialNumber: true },
+      });
+      if (existingSerial.length) {
+        res.status(409).json({
+          error: `Serial already in stock: ${existingSerial
+            .map((e) => e.serialNumber)
+            .join(", ")}`,
+        });
+        return;
+      }
     }
 
     let supplier =
@@ -227,8 +287,9 @@ purchasesRouter.post("/", async (req, res, next) => {
       });
 
       const stockItems = [];
-      for (const item of data.items) {
-        const imei = item.imei.replace(/\s+/g, "");
+      for (let i = 0; i < data.items.length; i++) {
+        const item = data.items[i];
+        const ids = units[i];
         const stock = await tx.stockItem.create({
           data: {
             condition: data.condition,
@@ -240,7 +301,8 @@ purchasesRouter.post("/", async (req, res, next) => {
                 ? normalizeCapacity(item.ram)
                 : "",
             color: item.color.trim(),
-            imei,
+            imei: ids.imei,
+            serialNumber: ids.serialNumber,
             purchasePrice: item.purchasePrice,
             suppliers: serializeSuppliers([supplier!.name]),
             supplierId: supplier!.id,

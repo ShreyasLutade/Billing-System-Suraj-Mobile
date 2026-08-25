@@ -31,7 +31,8 @@ function mapStockItem(item: {
   storage: string;
   ram: string;
   color: string;
-  imei: string;
+  imei: string | null;
+  serialNumber?: string | null;
   purchasePrice: number;
   suppliers: string;
   supplierId?: string | null;
@@ -47,6 +48,8 @@ function mapStockItem(item: {
   const intakeKind = intakeKindFromNote(note);
   return {
     ...item,
+    imei: item.imei || null,
+    serialNumber: item.serialNumber || null,
     supplierId: item.supplierId || null,
     supplierName: supplierName || fromJson[0] || null,
     supplierIsExchange: Boolean(item.supplier?.isExchange),
@@ -59,6 +62,10 @@ function mapStockItem(item: {
   };
 }
 
+function cleanId(value: string | undefined | null) {
+  return (value || "").replace(/\s+/g, "").trim();
+}
+
 const createStockSchema = z
   .object({
     condition: z.enum(["NEW", "USED"]),
@@ -67,11 +74,8 @@ const createStockSchema = z
     storage: z.string().trim().min(1, "Storage is required").max(30),
     ram: z.string().trim().max(30).optional().default(""),
     color: z.string().trim().min(1, "Color is required").max(50),
-    imei: z
-      .string()
-      .trim()
-      .min(8, "IMEI number is required")
-      .max(20, "IMEI looks too long"),
+    imei: z.string().trim().max(20).optional().default(""),
+    serialNumber: z.string().trim().max(40).optional().default(""),
     purchasePrice: z.coerce
       .number({ invalid_type_error: "Purchase price is required" })
       .positive("Purchase price must be greater than 0"),
@@ -95,6 +99,29 @@ const createStockSchema = z
         code: z.ZodIssueCode.custom,
         message: "Supplier is required",
         path: ["supplierId"],
+      });
+    }
+    const imei = cleanId(data.imei);
+    const serial = cleanId(data.serialNumber);
+    if (!imei && !serial) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter IMEI or serial number",
+        path: ["imei"],
+      });
+    }
+    if (imei && imei.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "IMEI must be at least 8 characters",
+        path: ["imei"],
+      });
+    }
+    if (serial && serial.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Serial number looks too short",
+        path: ["serialNumber"],
       });
     }
   });
@@ -223,12 +250,26 @@ stockRouter.post("/", async (req, res, next) => {
     }
 
     const data = parsed.data;
-    const imei = data.imei.replace(/\s+/g, "");
+    const imei = cleanId(data.imei) || null;
+    const serialNumber = cleanId(data.serialNumber) || null;
 
-    const existing = await prisma.stockItem.findUnique({ where: { imei } });
-    if (existing) {
-      res.status(409).json({ error: `IMEI ${imei} is already in stock` });
-      return;
+    if (imei) {
+      const existingImei = await prisma.stockItem.findUnique({ where: { imei } });
+      if (existingImei) {
+        res.status(409).json({ error: `IMEI ${imei} is already in stock` });
+        return;
+      }
+    }
+    if (serialNumber) {
+      const existingSerial = await prisma.stockItem.findUnique({
+        where: { serialNumber },
+      });
+      if (existingSerial) {
+        res
+          .status(409)
+          .json({ error: `Serial ${serialNumber} is already in stock` });
+        return;
+      }
     }
 
     let supplier = data.supplierId
@@ -264,9 +305,10 @@ stockRouter.post("/", async (req, res, next) => {
             data.platform === "ANDROID"
               ? normalizeCapacity(data.ram)
               : "",
-          color: data.color.trim(),
-          imei,
-          purchasePrice: data.purchasePrice,
+            color: data.color.trim(),
+            imei,
+            serialNumber,
+            purchasePrice: data.purchasePrice,
           suppliers: serializeSuppliers([supplier!.name]),
           supplierId: supplier!.id,
           status: "AVAILABLE",

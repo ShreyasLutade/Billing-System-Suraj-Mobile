@@ -562,7 +562,7 @@ billsRouter.post("/", async (req, res, next) => {
     }
     if (error instanceof Error && error.message === "EXCHANGE_IMEI_TAKEN") {
       res.status(409).json({
-        error: "Exchange IMEI is already in stock. Use a different IMEI.",
+        error: "Exchange IMEI is already in available stock. Use a different IMEI.",
       });
       return;
     }
@@ -828,7 +828,7 @@ billsRouter.put("/:id", async (req, res, next) => {
     }
     if (error instanceof Error && error.message === "EXCHANGE_IMEI_TAKEN") {
       res.status(409).json({
-        error: "Exchange IMEI is already in stock. Use a different IMEI.",
+        error: "Exchange IMEI is already in available stock. Use a different IMEI.",
       });
       return;
     }

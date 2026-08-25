@@ -261,7 +261,8 @@ export const api = {
     storage: string;
     ram?: string;
     color: string;
-    imei: string;
+    imei?: string;
+    serialNumber?: string;
     purchasePrice: number;
     suppliers?: string[];
     supplierId?: string | null;
@@ -331,7 +332,8 @@ export const api = {
       storage: string;
       ram?: string;
       color: string;
-      imei: string;
+      imei?: string;
+      serialNumber?: string;
       purchasePrice: number;
     }>;
   }) =>
@@ -389,6 +391,17 @@ export function formatINR(amount: number) {
     currency: "INR",
     maximumFractionDigits: 2,
   }).format(amount || 0);
+}
+
+/** Display IMEI and/or serial for a stock unit. */
+export function formatStockUnitId(item: {
+  imei?: string | null;
+  serialNumber?: string | null;
+}) {
+  if (item.imei && item.serialNumber) {
+    return `${item.imei} · SN ${item.serialNumber}`;
+  }
+  return item.imei || item.serialNumber || "—";
 }
 
 export function formatFinanceCompanies(

@@ -47,6 +47,18 @@ body {
     @apply w-full rounded-2xl border border-ink-100 bg-white/90 px-4 py-3 text-base text-ink-900 outline-none transition focus:border-tide-500 focus:ring-4 focus:ring-tide-400/20 sm:text-sm;
   }
 
+  /* Hide number spinner arrows — keep a normal text-like input */
+  .field[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .field[type="number"]::-webkit-inner-spin-button,
+  .field[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   .field-select {
     @apply field appearance-none bg-[length:1rem] bg-[right_1rem_center] bg-no-repeat pr-11;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234A657A'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");

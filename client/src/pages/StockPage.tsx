@@ -17,7 +17,7 @@ import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { fromState } from "../lib/navMemory";
-import { api, formatINR, round2 } from "../lib/api";
+import { api, formatINR, formatStockUnitId, round2 } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
 import type { StockItem } from "../types";
 
@@ -132,7 +132,9 @@ function groupStockByProduct(items: StockItem[]): StockGroup[] {
         quantity,
         avgPrice: quantity ? round2(totalValue / quantity) : 0,
         totalValue: round2(totalValue),
-        units: [...units].sort((a, b) => a.imei.localeCompare(b.imei)),
+        units: [...units].sort((a, b) =>
+          formatStockUnitId(a).localeCompare(formatStockUnitId(b)),
+        ),
       };
     })
     .sort((a, b) =>
@@ -312,6 +314,7 @@ export function StockPage() {
           item.storage,
           item.ram,
           item.imei,
+          item.serialNumber || "",
           item.platform,
           item.supplierName || "",
           ...item.suppliers,
@@ -349,7 +352,9 @@ export function StockPage() {
 
   async function removeItem(item: StockItem) {
     if (
-      !window.confirm(`Remove ${item.mobileName} (${item.imei}) from stock?`)
+      !window.confirm(
+        `Remove ${item.mobileName} (${formatStockUnitId(item)}) from stock?`,
+      )
     ) {
       return;
     }
@@ -775,7 +780,7 @@ function StockProductDetail({
                 <th>Purchase date</th>
                 <th>Supplier name</th>
                 <th className="text-right">Price</th>
-                <th>IMEI</th>
+                <th>IMEI / Serial</th>
                 <th className="text-right">Action</th>
               </tr>
             </thead>
@@ -809,7 +814,9 @@ function StockProductDetail({
                   <td className="text-right tabular-nums text-ink-800">
                     {formatINR(unit.purchasePrice)}
                   </td>
-                  <td className="font-mono text-ink-800">{unit.imei}</td>
+                  <td className="font-mono text-ink-800">
+                    {formatStockUnitId(unit)}
+                  </td>
                   <td className="text-right">
                     <button
                       type="button"
