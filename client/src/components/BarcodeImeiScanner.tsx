@@ -9,72 +9,114 @@ import { DecodeHintType, BarcodeFormat } from "@zxing/library";
 import { ScanBarcode, X, Flashlight } from "lucide-react";
 import clsx from "clsx";
 
-/* ------------------------------------------------------------------ */
-/*  IMEI helpers                                                       */
-/* ------------------------------------------------------------------ */
+/**
+ * Fast IMEI barcode scanner — same approach as sites like
+ * https://www.barcodestalk.com/free-online-barcode-scanner :
+ * use the browser's native BarcodeDetector on every camera frame and
+ * accept the first valid decode immediately (milliseconds).
+ */
 
 export function normalizeScannedImei(raw: string) {
   const trimmed = raw.replace(/\s+/g, "").trim();
   const digits = trimmed.replace(/\D/g, "");
+  const fifteen = digits.match(/\d{15}/);
+  if (fifteen) return fifteen[0];
   if (digits.length >= 15) return digits.slice(0, 15);
   if (digits.length >= 8) return digits;
   return trimmed;
 }
 
-/** 15 digits + Luhn check. Rejects misreads and the serial-number
- *  barcode that also sits on the box, so we lock onto the real IMEI. */
-export function isValidImei(value: string) {
-  const s = value.replace(/\D/g, "");
-  if (!/^\d{15}$/.test(s)) return false;
-  let sum = 0;
-  for (let i = 0; i < 15; i++) {
-    let d = Number(s[i]);
-    if (i % 2 === 1) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-  }
-  return sum % 10 === 0;
-}
+const NATIVE_FORMATS = [
+  "code_128",
+  "code_39",
+  "code_93",
+  "ean_13",
+  "ean_8",
+  "upc_a",
+  "upc_e",
+  "itf",
+  "codabar",
+] as const;
 
-/** Only the 1D formats phone boxes actually use — massively faster. */
 const ZXING_HINTS = new Map<DecodeHintType, unknown>([
   [
     DecodeHintType.POSSIBLE_FORMATS,
-    [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.EAN_13],
+    [
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.ITF,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+    ],
   ],
 ]);
-const NATIVE_FORMATS = ["code_128", "code_39", "ean_13"] as const;
 
-/* Minimal typing for the native BarcodeDetector (not in TS lib yet). */
 type NativeDetector = {
   detect: (source: CanvasImageSource) => Promise<{ rawValue: string }[]>;
 };
 type NativeDetectorCtor = {
-  new (opts?: { formats?: readonly string[] }): NativeDetector;
+  new (opts?: { formats?: string[] }): NativeDetector;
   getSupportedFormats?: () => Promise<string[]>;
 };
 
-/* ------------------------------------------------------------------ */
-/*  Modal                                                              */
-/* ------------------------------------------------------------------ */
+function getBarcodeDetector(): NativeDetectorCtor | null {
+  return (
+    (window as unknown as { BarcodeDetector?: NativeDetectorCtor })
+      .BarcodeDetector ?? null
+  );
+}
+
+async function openRearCamera(): Promise<MediaStream> {
+  const attempts: MediaStreamConstraints[] = [
+    {
+      audio: false,
+      video: {
+        facingMode: { exact: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    { audio: false, video: { facingMode: "environment" } },
+    { audio: false, video: true },
+  ];
+
+  let lastError: unknown;
+  for (const constraints of attempts) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Could not open camera");
+}
 
 function ImeiScannerModal({
   onClose,
   onScan,
-  /** If your labels are noisy, require a valid 15-digit IMEI before accepting.
-   *  Set false to accept any 8+ digit code. */
-  requireValidImei = true,
 }: {
   onClose: () => void;
   onScan: (imei: string) => void;
-  requireValidImei?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const zxingControls = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const busyRef = useRef(false);
   const handledRef = useRef(false);
 
   const onScanRef = useRef(onScan);
@@ -94,24 +136,27 @@ function ImeiScannerModal({
     return () => window.clearTimeout(t);
   }, []);
 
-  const accept = (raw: string) => {
-    if (handledRef.current) return;
-    const value = normalizeScannedImei(raw);
-    if (requireValidImei ? !isValidImei(value) : value.length < 8) return; // keep scanning
-    handledRef.current = true;
-    navigator.vibrate?.(60);
-    stopAll();
-    onScanRef.current(value);
-    onCloseRef.current();
-  };
-
   const stopAll = () => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     zxingControls.current?.stop();
     zxingControls.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+  };
+
+  /** Accept immediately on first usable decode — same as fast online scanners. */
+  const accept = (raw: string) => {
+    if (handledRef.current) return;
+    const value = normalizeScannedImei(raw);
+    if (value.replace(/\D/g, "").length < 8) return;
+    handledRef.current = true;
+    navigator.vibrate?.(40);
+    stopAll();
+    onScanRef.current(value);
+    onCloseRef.current();
   };
 
   useEffect(() => {
@@ -124,73 +169,79 @@ function ImeiScannerModal({
       const video = videoRef.current;
 
       try {
-        const Detector = (window as unknown as {
-          BarcodeDetector?: NativeDetectorCtor;
-        }).BarcodeDetector;
+        const Detector = getBarcodeDetector();
+        let formats: string[] = [...NATIVE_FORMATS];
+        let useNative = Boolean(Detector);
 
-        // ---------- Path A: native BarcodeDetector (fast) ----------
-        let useNative = false;
-        if (Detector) {
+        if (Detector?.getSupportedFormats) {
           try {
-            const supported = (await Detector.getSupportedFormats?.()) ?? [];
-            useNative =
-              supported.length === 0 ||
-              supported.some((f) => NATIVE_FORMATS.includes(f as never));
+            const supported = await Detector.getSupportedFormats();
+            const overlap = formats.filter((f) => supported.includes(f));
+            if (overlap.length) formats = overlap;
+            else if (supported.length) {
+              // Device has a detector but not our 1D list — still try its formats.
+              formats = supported.filter((f) =>
+                NATIVE_FORMATS.includes(f as (typeof NATIVE_FORMATS)[number]),
+              );
+              if (!formats.length) useNative = false;
+            }
           } catch {
-            useNative = true; // assume ok if query fails
+            /* keep defaults */
           }
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        });
+        const stream = await openRearCamera();
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         streamRef.current = stream;
         video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        video.muted = true;
         await video.play().catch(() => {});
 
-        // torch capability
         const track = stream.getVideoTracks()[0];
         const caps = track?.getCapabilities?.() as
           | { torch?: boolean }
           | undefined;
         if (caps && "torch" in caps) setTorchable(true);
 
+        // Native path — detect on the live <video> every frame (fastest).
         if (useNative && Detector) {
-          const detector = new Detector({ formats: NATIVE_FORMATS });
+          const detector = new Detector({ formats });
           setEngine("native");
           setStarting(false);
-          const loop = async () => {
+
+          const loop = () => {
             if (cancelled || handledRef.current) return;
-            try {
-              const codes = await detector.detect(video);
-              if (codes[0]) accept(codes[0].rawValue);
-            } catch {
-              /* transient frame errors — ignore */
-            }
-            if (!cancelled && !handledRef.current)
-              rafRef.current = requestAnimationFrame(loop);
+            rafRef.current = requestAnimationFrame(loop);
+            if (busyRef.current) return;
+            if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+
+            busyRef.current = true;
+            detector
+              .detect(video)
+              .then((codes) => {
+                if (cancelled || handledRef.current) return;
+                const hit = codes.find((c) => c.rawValue?.trim());
+                if (hit) accept(hit.rawValue);
+              })
+              .catch(() => {})
+              .finally(() => {
+                busyRef.current = false;
+              });
           };
           rafRef.current = requestAnimationFrame(loop);
           return;
         }
 
-        // ---------- Path B: ZXing fallback (hinted) ----------
+        // ZXing fallback when BarcodeDetector is missing (e.g. Firefox).
         setEngine("zxing");
         const reader = new BrowserMultiFormatReader(ZXING_HINTS);
-        const controls = await reader.decodeFromVideoElement(
-          video,
-          (result) => {
-            if (result) accept(result.getText());
-          },
-        );
+        const controls = await reader.decodeFromVideoElement(video, (result) => {
+          if (result) accept(result.getText());
+        });
         if (cancelled) {
           controls.stop();
           return;
@@ -202,11 +253,13 @@ function ImeiScannerModal({
         setStarting(false);
         const msg =
           err instanceof Error ? err.message : "Could not open camera";
-        if (/NotAllowedError|Permission/i.test(msg))
+        if (/NotAllowedError|Permission/i.test(msg)) {
           setError("Camera permission denied. Allow camera access to scan.");
-        else if (/NotFoundError|DevicesNotFound|No camera/i.test(msg))
+        } else if (/NotFoundError|DevicesNotFound|No camera/i.test(msg)) {
           setError("No camera found on this device.");
-        else setError(msg);
+        } else {
+          setError(msg);
+        }
       }
     })();
 
@@ -253,7 +306,12 @@ function ImeiScannerModal({
         <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-              Scanner {engine === "native" ? "· fast" : ""}
+              Scanner
+              {engine === "native"
+                ? " · native"
+                : engine === "zxing"
+                  ? " · fallback"
+                  : ""}
             </p>
             <h2
               id="imei-scanner-title"
@@ -262,7 +320,7 @@ function ImeiScannerModal({
               Scan IMEI barcode
             </h2>
             <p className="mt-1 text-sm text-ink-500">
-              Align the barcode with the red line in the center.
+              Hold the barcode under the red line — it fills instantly when read.
             </p>
           </div>
           <button
@@ -291,7 +349,7 @@ function ImeiScannerModal({
           </div>
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-[16%] z-10 border border-white/20"
+            className="pointer-events-none absolute inset-[14%] z-10 border border-white/25"
           >
             <span className="absolute -left-0.5 -top-0.5 h-7 w-7 border-l-[3px] border-t-[3px] border-red-500" />
             <span className="absolute -right-0.5 -top-0.5 h-7 w-7 border-r-[3px] border-t-[3px] border-red-500" />
@@ -315,7 +373,7 @@ function ImeiScannerModal({
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-ink-100 px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-50"
-              onClick={toggleTorch}
+              onClick={() => void toggleTorch()}
             >
               <Flashlight className="h-4 w-4" />
               {torchOn ? "Torch off" : "Torch on"}
