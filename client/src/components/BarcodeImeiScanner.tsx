@@ -44,6 +44,17 @@ function ImeiScannerModal({
     let cancelled = false;
     const reader = new BrowserMultiFormatReader();
 
+    const onDecode = (result: { getText: () => string } | undefined) => {
+      if (!result || handledRef.current || cancelled) return;
+      const value = normalizeScannedImei(result.getText());
+      if (value.length < 8) return;
+      handledRef.current = true;
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+      onScanRef.current(value);
+      onCloseRef.current();
+    };
+
     (async () => {
       // Let the video element attach before starting the stream.
       await new Promise<void>((resolve) => {
@@ -52,39 +63,62 @@ function ImeiScannerModal({
       if (cancelled || !videoRef.current) return;
 
       try {
-        // Prefer laptop webcam (user-facing); fall back to any camera.
-        let controls: IScannerControls;
+        let controls: IScannerControls | null = null;
+
+        // 1) Prefer rear / environment camera (phones).
         try {
           controls = await reader.decodeFromConstraints(
-            { video: { facingMode: "user" } },
+            { video: { facingMode: { exact: "environment" } } },
             videoRef.current,
-            (result) => {
-              if (!result || handledRef.current || cancelled) return;
-              const value = normalizeScannedImei(result.getText());
-              if (value.length < 8) return;
-              handledRef.current = true;
-              controlsRef.current?.stop();
-              controlsRef.current = null;
-              onScanRef.current(value);
-              onCloseRef.current();
-            },
+            onDecode,
           );
         } catch {
-          if (cancelled || !videoRef.current) return;
+          // ignore — try softer preference next
+        }
+
+        // 2) Soft preference for environment, then match by device label.
+        if (!controls && !cancelled && videoRef.current) {
+          try {
+            controls = await reader.decodeFromConstraints(
+              { video: { facingMode: { ideal: "environment" } } },
+              videoRef.current,
+              onDecode,
+            );
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!controls && !cancelled && videoRef.current) {
+          try {
+            const devices =
+              await BrowserMultiFormatReader.listVideoInputDevices();
+            const backCam = devices.find((device) =>
+              /back|rear|environment|trás|arrière|後|후면/i.test(
+                device.label || "",
+              ),
+            );
+            controls = await reader.decodeFromVideoDevice(
+              backCam?.deviceId,
+              videoRef.current,
+              onDecode,
+            );
+          } catch {
+            // ignore
+          }
+        }
+
+        // 3) Last resort: any available camera (e.g. laptop webcam).
+        if (!controls && !cancelled && videoRef.current) {
           controls = await reader.decodeFromVideoDevice(
             undefined,
             videoRef.current,
-            (result) => {
-              if (!result || handledRef.current || cancelled) return;
-              const value = normalizeScannedImei(result.getText());
-              if (value.length < 8) return;
-              handledRef.current = true;
-              controlsRef.current?.stop();
-              controlsRef.current = null;
-              onScanRef.current(value);
-              onCloseRef.current();
-            },
+            onDecode,
           );
+        }
+
+        if (!controls) {
+          throw new Error("No camera found on this device.");
         }
 
         if (cancelled) {
@@ -100,7 +134,7 @@ function ImeiScannerModal({
           err instanceof Error ? err.message : "Could not open camera";
         if (/NotAllowedError|Permission/i.test(message)) {
           setError("Camera permission denied. Allow camera access to scan.");
-        } else if (/NotFoundError|DevicesNotFound/i.test(message)) {
+        } else if (/NotFoundError|DevicesNotFound|No camera/i.test(message)) {
           setError("No camera found on this device.");
         } else {
           setError(message);
