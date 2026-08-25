@@ -32,11 +32,15 @@ const serveClient = fs.existsSync(path.join(clientDist, "index.html"));
 
 const allowedOrigins = (
   process.env.CLIENT_ORIGIN ||
-  "http://localhost:5173,http://127.0.0.1:5173"
+  "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
 )
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+function isLocalViteOrigin(origin: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1):(517\d|518\d)$/.test(origin);
+}
 
 app.use(
   cors({
@@ -45,7 +49,8 @@ app.use(
         !origin ||
         allowedOrigins.includes(origin) ||
         allowedOrigins.includes("*") ||
-        (isProduction && serveClient)
+        (isProduction && serveClient) ||
+        (!isProduction && isLocalViteOrigin(origin))
       ) {
         callback(null, true);
         return;

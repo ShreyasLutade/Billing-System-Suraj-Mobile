@@ -133,6 +133,7 @@ suppliersRouter.get("/:id", async (req, res, next) => {
                     id: true,
                     mobileName: true,
                     imei: true,
+                    serialNumber: true,
                     purchasePrice: true,
                     status: true,
                     color: true,

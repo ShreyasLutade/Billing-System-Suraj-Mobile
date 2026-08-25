@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, X } from "lucide-react";
 import clsx from "clsx";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
-import { api, formatINR } from "../lib/api";
+import { api, formatINR, formatStockUnitId } from "../lib/api";
 import type { Purchase, SupplierDetail } from "../types";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { backLabel, fromState, readFromState } from "../lib/navMemory";
@@ -262,7 +262,7 @@ export function SupplierDetailPage() {
                 <thead>
                   <tr>
                     <th>Product</th>
-                    <th>IMEI</th>
+                    <th>IMEI / Serial</th>
                     <th className="text-right">Price</th>
                   </tr>
                 </thead>
@@ -279,7 +279,9 @@ export function SupplierDetailPage() {
                           .filter(Boolean)
                           .join(" · ")}
                       </td>
-                      <td className="font-mono text-ink-500">{item.imei}</td>
+                      <td className="font-mono text-ink-500">
+                        {formatStockUnitId(item)}
+                      </td>
                       <td className="text-right tabular-nums font-bold text-ink-900">
                         {formatINR(item.purchasePrice)}
                       </td>

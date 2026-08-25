@@ -15,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { AddMobileModal } from "../components/AddMobileModal";
+import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
 import { BillChangeConfirmModal } from "../components/BillChangeConfirmModal";
 import {
   SaveBillConfirmModal,
@@ -109,7 +110,8 @@ function formatStockOption(stock: {
   color: string;
   storage: string;
   ram: string;
-  imei: string;
+  imei: string | null;
+  serialNumber?: string | null;
   platform?: string | null;
 }) {
   const ramLabel = (() => {
@@ -120,11 +122,16 @@ function formatStockOption(stock: {
       : `${stock.ram} RAM`;
   })();
 
+  const idParts = [
+    stock.imei ? `IMEI ${stock.imei}` : null,
+    stock.serialNumber ? `SN ${stock.serialNumber}` : null,
+  ].filter(Boolean);
+
   return {
     label: [stock.mobileName, stock.color, stock.storage, ramLabel]
       .filter(Boolean)
       .join(" · "),
-    description: stock.imei ? `IMEI ${stock.imei}` : undefined,
+    description: idParts.length ? idParts.join(" · ") : undefined,
     avatar: stockAvatar(stock.mobileName, stock.platform),
   };
 }
@@ -1135,7 +1142,8 @@ export function CreateBillPage() {
       storage: stock.storage,
       ram: stock.platform === "ANDROID" ? stock.ram : "",
       condition: stock.condition || "NEW",
-      imei1: stock.imei,
+      imei1: stock.imei || "",
+      serialNumber: stock.serialNumber || "",
       quantity: 1,
     });
   }
@@ -1153,6 +1161,7 @@ export function CreateBillPage() {
         ram: "",
         condition: null,
         imei1: "",
+        serialNumber: "",
         rate: 0,
       });
       return;
@@ -1170,6 +1179,7 @@ export function CreateBillPage() {
         ram: "",
         condition: null,
         imei1: "",
+        serialNumber: "",
       });
       return;
     }
@@ -2044,10 +2054,10 @@ export function CreateBillPage() {
                   ) : null}
                 </div>
 
-                <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.1fr)_4.5rem_minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
                   {withGst ? (
                     <>
-                      <div className="min-w-0 sm:col-span-2 lg:col-span-4">
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-5">
                         <label className="label required">Phone</label>
                         <div id={`phone-${item.key}`} className="min-w-0">
                         <FieldPicker
@@ -2086,7 +2096,7 @@ export function CreateBillPage() {
                       </div>
 
                       {item.catalogMode === "other" ? (
-                        <div className="sm:col-span-2 lg:col-span-4">
+                        <div className="sm:col-span-2 lg:col-span-5">
                           <label className="label required" htmlFor={`productName-${item.key}`}>Product name</label>
                           <input
                             id={`productName-${item.key}`}
@@ -2105,7 +2115,7 @@ export function CreateBillPage() {
                     </>
                   ) : (
                     <>
-                      <div className="min-w-0 sm:col-span-2 lg:col-span-4">
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-5">
                         <label className="label required">Phone</label>
                         <div id={`phone-${item.key}`} className="min-w-0">
                         <FieldPicker
@@ -2134,7 +2144,7 @@ export function CreateBillPage() {
                       </div>
 
                       {item.catalogMode === "other" ? (
-                        <div className="sm:col-span-2 lg:col-span-4">
+                        <div className="sm:col-span-2 lg:col-span-5">
                           <label className="label required" htmlFor={`productName-${item.key}`}>Product name</label>
                           <input
                             id={`productName-${item.key}`}
@@ -2169,16 +2179,16 @@ export function CreateBillPage() {
                       required
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label
                       className={withGst ? "label required" : "label"}
                       htmlFor={`gstPercent-${item.key}`}
                     >
-                      GST % (incl.)
+                      GST %
                     </label>
                     <input
                       id={`gstPercent-${item.key}`}
-                      className="field"
+                      className="field px-2"
                       type="number"
                       min={withGst ? 0.01 : 0}
                       max={100}
@@ -2190,44 +2200,79 @@ export function CreateBillPage() {
                         })
                       }
                       required={withGst}
-                      placeholder={withGst ? "e.g. 18" : "0"}
+                      placeholder={withGst ? "18" : "0"}
+                      title="GST % (incl.)"
                     />
                   </div>
                   <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                     <label className="label">IMEI</label>
-                    <input
-                      className={
-                        item.stockItemId && !withGst
-                          ? "field min-w-0 cursor-default border-ink-200 bg-ink-100/80 font-mono text-sm tracking-wide text-ink-600"
-                          : "field min-w-0 font-mono text-sm tracking-wide"
-                      }
-                      value={item.imei1 || ""}
-                      onChange={(e) =>
-                        updateItem(item.key, { imei1: e.target.value })
-                      }
-                      placeholder={
-                        item.stockItemId
-                          ? "From stock"
-                          : withGst
-                            ? "Optional"
-                            : "Optional"
-                      }
-                      readOnly={Boolean(item.stockItemId) && !withGst}
-                    />
+                    <div className="flex items-stretch gap-2">
+                      <input
+                        className={
+                          item.stockItemId && !withGst && item.imei1?.trim()
+                            ? "field min-w-0 flex-1 cursor-default border-ink-200 bg-ink-100/80 font-mono text-sm tracking-wide text-ink-600"
+                            : "field min-w-0 flex-1 font-mono text-sm tracking-wide"
+                        }
+                        value={item.imei1 || ""}
+                        onChange={(e) =>
+                          updateItem(item.key, { imei1: e.target.value })
+                        }
+                        placeholder={
+                          item.imei1?.trim()
+                            ? undefined
+                            : item.serialNumber?.trim()
+                              ? "Optional"
+                              : undefined
+                        }
+                        readOnly={
+                          Boolean(item.stockItemId) &&
+                          !withGst &&
+                          Boolean(item.imei1?.trim())
+                        }
+                      />
+                      {!(
+                        item.stockItemId &&
+                        !withGst &&
+                        item.imei1?.trim()
+                      ) ? (
+                        <ImeiScanFieldButton
+                          onScan={(imei) =>
+                            updateItem(item.key, { imei1: imei })
+                          }
+                        />
+                      ) : null}
+                    </div>
                   </div>
                   <div>
                     <label className="label">Serial</label>
                     <input
-                      className="field font-mono"
+                      className={
+                        item.stockItemId &&
+                        !withGst &&
+                        item.serialNumber?.trim()
+                          ? "field cursor-default border-ink-200 bg-ink-100/80 font-mono text-ink-600"
+                          : "field font-mono"
+                      }
                       value={item.serialNumber || ""}
                       onChange={(e) =>
                         updateItem(item.key, { serialNumber: e.target.value })
                       }
-                      placeholder="Optional"
+                      placeholder={
+                        item.serialNumber?.trim()
+                          ? undefined
+                          : item.imei1?.trim()
+                            ? "Optional"
+                            : undefined
+                      }
+                      readOnly={
+                        Boolean(item.stockItemId) &&
+                        !withGst &&
+                        Boolean(item.serialNumber?.trim())
+                      }
                     />
                   </div>
                   <div>
-                    <label className="label">Warranty (months)</label>
+                    <label className="label">Warranty</label>
                     <input
                       className="field"
                       type="number"
@@ -2240,7 +2285,7 @@ export function CreateBillPage() {
                             : undefined,
                         })
                       }
-                      placeholder="Optional"
+                      placeholder="Months"
                     />
                   </div>
                 </div>

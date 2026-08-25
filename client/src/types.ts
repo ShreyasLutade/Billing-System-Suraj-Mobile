@@ -199,7 +199,8 @@ export type StockItem = {
   storage: string;
   ram: string;
   color: string;
-  imei: string;
+  imei: string | null;
+  serialNumber?: string | null;
   purchasePrice: number;
   suppliers: string[];
   supplierId?: string | null;
@@ -248,7 +249,8 @@ export type SupplierPayment = {
 export type PurchaseStockRef = {
   id: string;
   mobileName: string;
-  imei: string;
+  imei: string | null;
+  serialNumber?: string | null;
   purchasePrice: number;
   status: string;
   color?: string;

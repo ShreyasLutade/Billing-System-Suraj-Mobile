@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
-import { api, formatINR } from "../lib/api";
+import { api, formatINR, formatStockUnitId } from "../lib/api";
 import type { Purchase } from "../types";
 import { fromState, readFromState, readOriginState } from "../lib/navMemory";
 
@@ -131,7 +131,7 @@ export function PurchaseDetailPage() {
                 <div className="border-r border-[#EEF1F5] px-3 py-2">Storage</div>
                 <div className="border-r border-[#EEF1F5] px-3 py-2">RAM</div>
                 <div className="border-r border-[#EEF1F5] px-3 py-2">Color</div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2">IMEI</div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2">IMEI / Serial</div>
                 <div className="border-r border-[#EEF1F5] px-3 py-2 text-right">
                   Purchase price
                 </div>
@@ -215,7 +215,7 @@ export function PurchaseDetailPage() {
                         sold ? "text-ink-400" : "text-ink-500",
                       )}
                     >
-                      {item.imei}
+                      {formatStockUnitId(item)}
                     </div>
                     <div
                       className={clsx(

@@ -211,7 +211,7 @@ model ReportSendLog {
   @@index([dateKey])
 }
 
-/// Shop inventory unit (one phone = one IMEI).
+/// Shop inventory unit (one phone = one IMEI and/or serial).
 model StockItem {
   id            String   @id @default(cuid())
   /// NEW | USED
@@ -223,7 +223,10 @@ model StockItem {
   /// Required for ANDROID; empty for IOS
   ram           String   @default("")
   color         String
-  imei          String   @unique
+  /// Optional when serialNumber is set
+  imei          String?  @unique
+  /// Optional when imei is set
+  serialNumber  String?  @unique
   purchasePrice Float
   /// Legacy JSON string array of supplier names (kept for old rows)
   suppliers     String   @default("[]")

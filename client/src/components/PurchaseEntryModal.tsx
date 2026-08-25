@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
   ChevronDown,
+  Info,
   Minus,
   Package,
   Plus,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { FieldPicker } from "./FieldPicker";
 import { SavePurchaseConfirmModal } from "./SavePurchaseConfirmModal";
+import { ImeiScanFieldButton } from "./BarcodeImeiScanner";
 import {
   MobileNameSearch,
   invalidatePhoneModelCache,
@@ -34,6 +36,11 @@ export type PurchasePrefill = Partial<
   >
 >;
 
+type DraftUnit = {
+  imei: string;
+  serialNumber: string;
+};
+
 type DraftMobile = {
   id: string;
   platform: "IOS" | "ANDROID";
@@ -41,34 +48,41 @@ type DraftMobile = {
   storage: string;
   ram: string;
   color: string;
-  imeis: string[];
+  units: DraftUnit[];
   purchasePrice: string;
 };
 
 const MAX_QTY = 30;
+const blankUnit = (): DraftUnit => ({ imei: "", serialNumber: "" });
 
 function clampQty(value: number) {
   return Math.min(MAX_QTY, Math.max(1, Math.floor(value) || 1));
 }
 
-function resizeImeis(imeis: string[], qty: number) {
+function resizeUnits(units: DraftUnit[], qty: number) {
   const n = clampQty(qty);
-  if (n === imeis.length) return imeis;
-  if (n < imeis.length) return imeis.slice(0, n);
-  return [...imeis, ...Array.from({ length: n - imeis.length }, () => "")];
+  if (n === units.length) return units;
+  if (n < units.length) return units.slice(0, n);
+  return [
+    ...units,
+    ...Array.from({ length: n - units.length }, () => blankUnit()),
+  ];
 }
 
-function cleanImei(value: string) {
+function cleanId(value: string) {
   return value.replace(/\s+/g, "").trim();
 }
 
-function draftImeis(draft: DraftMobile) {
-  return draft.imeis.map(cleanImei);
+function draftUnits(draft: DraftMobile) {
+  return draft.units.map((unit) => ({
+    imei: cleanId(unit.imei),
+    serialNumber: cleanId(unit.serialNumber),
+  }));
 }
 
 function expandDrafts(drafts: DraftMobile[]) {
   return drafts.flatMap((item) =>
-    draftImeis(item).map((imei) => ({ ...item, imei })),
+    draftUnits(item).map((unit) => ({ ...item, ...unit })),
   );
 }
 
@@ -80,9 +94,16 @@ function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
     storage: prefill?.storage || "",
     ram: prefill?.platform === "IOS" ? "" : prefill?.ram || "",
     color: prefill?.color || "",
-    imeis: [""],
+    units: [blankUnit()],
     purchasePrice: "",
   };
+}
+
+function unitLabel(unit: { imei: string; serialNumber: string }) {
+  if (unit.imei && unit.serialNumber) {
+    return `${unit.imei} · SN ${unit.serialNumber}`;
+  }
+  return unit.imei || unit.serialNumber || "";
 }
 
 function draftSummaryParts(draft: DraftMobile) {
@@ -94,31 +115,94 @@ function draftSummaryParts(draft: DraftMobile) {
   ]
     .filter(Boolean)
     .join(" · ");
-  const imeis = draftImeis(draft).filter(Boolean);
-  const imei =
-    imeis.length > 1
-      ? `${imeis.length} IMEIs`
-      : imeis[0] || "";
-  return { product, imei, qty: draft.imeis.length };
+  const units = draftUnits(draft);
+  const labeled = units.map(unitLabel).filter(Boolean);
+  const idLabel =
+    labeled.length > 1
+      ? `${labeled.length} units`
+      : labeled[0] || "";
+  return { product, imei: idLabel, qty: draft.units.length };
 }
 
-function validateDraft(draft: DraftMobile): string | null {
-  if (!draft.mobileName.trim()) return "Mobile name is required";
-  if (!draft.storage.trim()) return "Storage is required";
-  if (!draft.color.trim()) return "Color is required";
+type DraftIssue =
+  | { type: "missing_id"; unitIndex: number }
+  | { type: "error"; message: string };
+
+function validateDraft(draft: DraftMobile): DraftIssue | null {
+  if (!draft.mobileName.trim()) {
+    return { type: "error", message: "Mobile name is required" };
+  }
+  if (!draft.storage.trim()) {
+    return { type: "error", message: "Storage is required" };
+  }
+  if (!draft.color.trim()) {
+    return { type: "error", message: "Color is required" };
+  }
   if (draft.platform === "ANDROID" && !draft.ram.trim()) {
-    return "RAM is required for Android mobiles";
+    return { type: "error", message: "RAM is required for Android mobiles" };
   }
-  const imeis = draftImeis(draft);
-  if (imeis.some((imei) => imei.length < 8)) {
-    return "Enter a valid IMEI for every unit";
+  const units = draftUnits(draft);
+  for (let i = 0; i < units.length; i++) {
+    const { imei, serialNumber } = units[i];
+    if (!imei && !serialNumber) {
+      return { type: "missing_id", unitIndex: i };
+    }
+    if (imei && imei.length < 8) {
+      return {
+        type: "error",
+        message:
+          units.length > 1
+            ? `IMEI ${i + 1} must be at least 8 characters`
+            : "IMEI must be at least 8 characters",
+      };
+    }
+    if (serialNumber && serialNumber.length < 3) {
+      return {
+        type: "error",
+        message:
+          units.length > 1
+            ? `Serial ${i + 1} looks too short`
+            : "Serial number looks too short",
+      };
+    }
   }
+  const imeis = units.map((u) => u.imei).filter(Boolean);
+  const serials = units.map((u) => u.serialNumber).filter(Boolean);
   if (new Set(imeis).size !== imeis.length) {
-    return "Each IMEI on this mobile must be unique";
+    return { type: "error", message: "Each IMEI on this mobile must be unique" };
+  }
+  if (new Set(serials).size !== serials.length) {
+    return {
+      type: "error",
+      message: "Each serial on this mobile must be unique",
+    };
   }
   const price = Number(draft.purchasePrice);
   if (!Number.isFinite(price) || price <= 0) {
-    return "Enter a valid purchase price";
+    return { type: "error", message: "Enter a valid purchase price" };
+  }
+  return null;
+}
+
+function collectClash(
+  current: DraftMobile,
+  others: DraftMobile[],
+): string | null {
+  const currentUnits = draftUnits(current);
+  const otherUnits = others.flatMap((item) => draftUnits(item));
+  const otherImeis = new Set(
+    otherUnits.map((u) => u.imei).filter(Boolean),
+  );
+  const otherSerials = new Set(
+    otherUnits.map((u) => u.serialNumber).filter(Boolean),
+  );
+  for (const unit of currentUnits) {
+    if (unit.imei && otherImeis.has(unit.imei)) {
+      return `IMEI ${unit.imei} is already in the list above`;
+    }
+    if (unit.serialNumber && otherSerials.has(unit.serialNumber)) {
+      return `Serial ${unit.serialNumber} is already in the list above`;
+    }
   }
   return null;
 }
@@ -150,6 +234,10 @@ export function PurchaseEntryModal({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [idHint, setIdHint] = useState<{
+    draftKey: string;
+    unitIndex: number;
+  } | null>(null);
 
   useEffect(() => {
     if (fixedSupplier) return;
@@ -177,18 +265,48 @@ export function PurchaseEntryModal({
     [suppliers],
   );
 
+  function clearIdHint() {
+    setIdHint(null);
+  }
+
+  function promptMissingId(draftKey: string, unitIndex: number, idPrefix: string) {
+    setError(null);
+    setIdHint({ draftKey, unitIndex });
+    if (draftKey !== "current") {
+      setExpandedId(draftKey);
+    }
+    window.setTimeout(() => {
+      const field = document.getElementById(`${idPrefix}-imei-${unitIndex}`);
+      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (field instanceof HTMLInputElement) field.focus();
+    }, 80);
+  }
+
   function updateDraft(patch: Partial<DraftMobile>) {
     setDraft((current) => ({ ...current, ...patch }));
+    if (idHint?.draftKey === "current" && patch.units) {
+      const unit = patch.units[idHint.unitIndex];
+      if (unit && (cleanId(unit.imei) || cleanId(unit.serialNumber))) {
+        clearIdHint();
+      }
+    }
   }
 
   function updateQueued(id: string, patch: Partial<DraftMobile>) {
     setQueued((current) =>
       current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
+    if (idHint?.draftKey === id && patch.units) {
+      const unit = patch.units[idHint.unitIndex];
+      if (unit && (cleanId(unit.imei) || cleanId(unit.serialNumber))) {
+        clearIdHint();
+      }
+    }
   }
 
   function addAnother() {
     setError(null);
+    clearIdHint();
     if (!fixedSupplier && useNewSupplier && !supplierName.trim()) {
       setError("Supplier name is required");
       return;
@@ -205,18 +323,23 @@ export function PurchaseEntryModal({
       return;
     }
     const issue = validateDraft(draft);
-    if (issue) {
-      setError(issue);
+    if (issue?.type === "missing_id") {
+      promptMissingId("current", issue.unitIndex, "current");
       return;
     }
-    const imeis = draftImeis(draft);
-    const queuedImeis = queued.flatMap((item) => draftImeis(item));
-    const clash = imeis.find((imei) => queuedImeis.includes(imei));
+    if (issue?.type === "error") {
+      setError(issue.message);
+      return;
+    }
+    const clash = collectClash(draft, queued);
     if (clash) {
-      setError(`IMEI ${clash} is already in the list above`);
+      setError(clash);
       return;
     }
-    setQueued((current) => [...current, { ...draft, imeis }]);
+    setQueued((current) => [
+      ...current,
+      { ...draft, units: draftUnits(draft) },
+    ]);
     setExpandedId(null);
     setDraft(blankDraft());
   }
@@ -224,6 +347,7 @@ export function PurchaseEntryModal({
   function removeCurrentMobile() {
     if (queued.length === 0) return;
     setError(null);
+    clearIdHint();
     const previous = queued[queued.length - 1];
     setQueued((current) => current.slice(0, -1));
     setDraft(previous);
@@ -233,6 +357,7 @@ export function PurchaseEntryModal({
   function requestConfirm(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    clearIdHint();
 
     if (!fixedSupplier && useNewSupplier && !supplierName.trim()) {
       setError("Supplier name is required");
@@ -251,23 +376,29 @@ export function PurchaseEntryModal({
     }
 
     const issue = validateDraft(draft);
-    if (issue) {
-      setError(issue);
+    if (issue?.type === "missing_id") {
+      promptMissingId("current", issue.unitIndex, "current");
+      return;
+    }
+    if (issue?.type === "error") {
+      setError(issue.message);
       return;
     }
 
-    const currentImeis = draftImeis(draft);
-    const queuedImeis = queued.flatMap((item) => draftImeis(item));
-    const clash = currentImeis.find((imei) => queuedImeis.includes(imei));
+    const clash = collectClash(draft, queued);
     if (clash) {
-      setError(`IMEI ${clash} is already in the list above`);
+      setError(clash);
       return;
     }
 
     for (const item of queued) {
       const queuedIssue = validateDraft(item);
-      if (queuedIssue) {
-        setError(`Queued mobile: ${queuedIssue}`);
+      if (queuedIssue?.type === "missing_id") {
+        promptMissingId(item.id, queuedIssue.unitIndex, `q-${item.id}`);
+        return;
+      }
+      if (queuedIssue?.type === "error") {
+        setError(`Queued mobile: ${queuedIssue.message}`);
         setExpandedId(item.id);
         return;
       }
@@ -277,7 +408,7 @@ export function PurchaseEntryModal({
   }
 
   async function savePurchase() {
-    const allDrafts = [...queued, { ...draft, imeis: draftImeis(draft) }];
+    const allDrafts = [...queued, { ...draft, units: draftUnits(draft) }];
     const units = expandDrafts(allDrafts);
     setSaving(true);
     setError(null);
@@ -302,6 +433,7 @@ export function PurchaseEntryModal({
           ram: item.platform === "ANDROID" ? item.ram : "",
           color: item.color,
           imei: item.imei,
+          serialNumber: item.serialNumber,
           purchasePrice: Number(item.purchasePrice),
         })),
       });
@@ -323,7 +455,7 @@ export function PurchaseEntryModal({
         const parts = draftSummaryParts(item);
         return {
           product: parts.product,
-          imei: item.imei,
+          imei: unitLabel(item),
           price: Number(item.purchasePrice) || 0,
         };
       }),
@@ -334,7 +466,7 @@ export function PurchaseEntryModal({
     () =>
       allMobiles.reduce((sum, item) => {
         const price = Number(item.purchasePrice);
-        const qty = item.imeis.length || 1;
+        const qty = item.units.length || 1;
         return sum + (Number.isFinite(price) ? price * qty : 0);
       }, 0),
     [allMobiles],
@@ -549,7 +681,7 @@ export function PurchaseEntryModal({
                           </span>
                           {summary.imei ? (
                             <span className="mt-1 block break-all font-mono text-[12px] font-medium leading-snug text-ink-500">
-                              IMEI {summary.imei}
+                              {summary.imei}
                             </span>
                           ) : null}
                         </span>
@@ -573,6 +705,9 @@ export function PurchaseEntryModal({
                       disabled={saving}
                       idPrefix={`q-${item.id}`}
                       onChange={(patch) => updateQueued(item.id, patch)}
+                      forceIdHintUnit={
+                        idHint?.draftKey === item.id ? idHint.unitIndex : null
+                      }
                       wide
                     />
                   ) : null}
@@ -606,6 +741,9 @@ export function PurchaseEntryModal({
                 disabled={saving}
                 idPrefix="current"
                 onChange={updateDraft}
+                forceIdHintUnit={
+                  idHint?.draftKey === "current" ? idHint.unitIndex : null
+                }
                 wide
               />
             </section>
@@ -644,7 +782,7 @@ export function PurchaseEntryModal({
                 <div className="space-y-0">
                   {allMobiles.map((item, index) => {
                     const price = Number(item.purchasePrice);
-                    const qty = item.imeis.length || 1;
+                    const qty = item.units.length || 1;
                     const label =
                       item.mobileName.trim() || `Mobile ${index + 1}`;
                     return (
@@ -876,7 +1014,7 @@ export function PurchaseEntryModal({
                         </span>
                         {summary.imei ? (
                           <span className="mt-0.5 block break-all font-mono text-xs text-ink-500">
-                            IMEI {summary.imei}
+                            {summary.imei}
                           </span>
                         ) : null}
                       </span>
@@ -888,6 +1026,11 @@ export function PurchaseEntryModal({
                           disabled={saving}
                           idPrefix={`q-${item.id}`}
                           onChange={(patch) => updateQueued(item.id, patch)}
+                          forceIdHintUnit={
+                            idHint?.draftKey === item.id
+                              ? idHint.unitIndex
+                              : null
+                          }
                         />
                         <button
                           type="button"
@@ -919,6 +1062,9 @@ export function PurchaseEntryModal({
               disabled={saving}
               idPrefix="current"
               onChange={updateDraft}
+              forceIdHintUnit={
+                idHint?.draftKey === "current" ? idHint.unitIndex : null
+              }
             />
             {queued.length > 0 ? (
               <button
@@ -1062,7 +1208,7 @@ function QuantityStepper({
 }
 
 function setDraftQty(draft: DraftMobile, qty: number): Partial<DraftMobile> {
-  return { imeis: resizeImeis(draft.imeis, qty) };
+  return { units: resizeUnits(draft.units, qty) };
 }
 
 function QuantityAndImeiFields({
@@ -1071,12 +1217,14 @@ function QuantityAndImeiFields({
   idPrefix,
   onChange,
   autoFocusTarget,
+  forceIdHintUnit = null,
 }: {
   draft: DraftMobile;
   disabled?: boolean;
   idPrefix: string;
   onChange: (patch: Partial<DraftMobile>) => void;
   autoFocusTarget?: "name" | "imei" | null;
+  forceIdHintUnit?: number | null;
 }) {
   return (
     <>
@@ -1095,40 +1243,110 @@ function QuantityAndImeiFields({
           required
           disabled={disabled}
         />
-        {draft.imeis.length > 1 && Number(draft.purchasePrice) > 0 ? (
+        {draft.units.length > 1 && Number(draft.purchasePrice) > 0 ? (
           <p className="mt-1 text-[11.5px] text-ink-400">
             Per unit · total{" "}
-            {formatINR(Number(draft.purchasePrice) * draft.imeis.length)}
+            {formatINR(Number(draft.purchasePrice) * draft.units.length)}
           </p>
         ) : null}
       </div>
 
       <div className="space-y-3">
-        {draft.imeis.map((imei, index) => (
-          <div key={`${idPrefix}-imei-${index}`}>
-            <label
-              className="label required"
-              htmlFor={`${idPrefix}-imei-${index}`}
-            >
-              {draft.imeis.length > 1 ? `IMEI ${index + 1}` : "IMEI"}
-            </label>
-            <input
-              id={`${idPrefix}-imei-${index}`}
-              className="field font-mono"
-              value={imei}
-              onChange={(e) => {
-                const next = [...draft.imeis];
-                next[index] = e.target.value;
-                onChange({ imeis: next });
-              }}
-              placeholder="15-digit IMEI"
-              inputMode="numeric"
-              required
-              autoFocus={autoFocusTarget === "imei" && index === 0}
-              disabled={disabled}
-            />
+        {draft.units.map((unit, index) => {
+          const showIdHint = forceIdHintUnit === index;
+          return (
+          <div key={`${idPrefix}-unit-${index}`} className="space-y-2">
+            {draft.units.length > 1 ? (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+                Unit {index + 1}
+              </p>
+            ) : null}
+            <div className="group/ids relative grid gap-2 sm:grid-cols-2">
+              <div
+                role="tooltip"
+                className={clsx(
+                  "pointer-events-none absolute bottom-[calc(100%+6px)] left-0 z-20 max-w-[min(100%,18rem)] transition duration-150",
+                  showIdHint
+                    ? "translate-y-0 opacity-100"
+                    : "-translate-y-0.5 opacity-0 group-hover/ids:translate-y-0 group-hover/ids:opacity-100 group-focus-within/ids:translate-y-0 group-focus-within/ids:opacity-100",
+                )}
+              >
+                <div className="flex items-start gap-2 rounded-xl border border-[#93C5FD] bg-[#E8F0FE] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
+                  <span>Enter IMEI or serial number</span>
+                </div>
+                <span
+                  aria-hidden
+                  className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
+                />
+              </div>
+              <div>
+                <label
+                  className="label"
+                  htmlFor={`${idPrefix}-imei-${index}`}
+                >
+                  IMEI
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id={`${idPrefix}-imei-${index}`}
+                    className={clsx(
+                      "field min-w-0 flex-1 font-mono",
+                      showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                    )}
+                    value={unit.imei}
+                    onChange={(e) => {
+                      const next = draft.units.map((row, i) =>
+                        i === index ? { ...row, imei: e.target.value } : row,
+                      );
+                      onChange({ units: next });
+                    }}
+                    placeholder="15-digit IMEI"
+                    inputMode="numeric"
+                    autoFocus={autoFocusTarget === "imei" && index === 0}
+                    disabled={disabled}
+                  />
+                  <ImeiScanFieldButton
+                    disabled={disabled}
+                    onScan={(imei) => {
+                      const next = draft.units.map((row, i) =>
+                        i === index ? { ...row, imei } : row,
+                      );
+                      onChange({ units: next });
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label
+                  className="label"
+                  htmlFor={`${idPrefix}-serial-${index}`}
+                >
+                  Serial number
+                </label>
+                <input
+                  id={`${idPrefix}-serial-${index}`}
+                  className={clsx(
+                    "field font-mono",
+                    showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                  )}
+                  value={unit.serialNumber}
+                  onChange={(e) => {
+                    const next = draft.units.map((row, i) =>
+                      i === index
+                        ? { ...row, serialNumber: e.target.value }
+                        : row,
+                    );
+                    onChange({ units: next });
+                  }}
+                  placeholder="Serial / S/N"
+                  disabled={disabled}
+                />
+              </div>
+            </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -1141,6 +1359,7 @@ function DraftFields({
   onChange,
   autoFocusTarget = null,
   wide = false,
+  forceIdHintUnit = null,
 }: {
   draft: DraftMobile;
   disabled?: boolean;
@@ -1148,6 +1367,7 @@ function DraftFields({
   onChange: (patch: Partial<DraftMobile>) => void;
   autoFocusTarget?: "name" | "imei" | null;
   wide?: boolean;
+  forceIdHintUnit?: number | null;
 }) {
   if (wide) {
     return (
@@ -1220,7 +1440,7 @@ function DraftFields({
                 </label>
                 <QuantityStepper
                   id={`${idPrefix}-qty`}
-                  value={draft.imeis.length}
+                  value={draft.units.length}
                   disabled={disabled}
                   onChange={(qty) => onChange(setDraftQty(draft, qty))}
                 />
@@ -1287,6 +1507,7 @@ function DraftFields({
           idPrefix={idPrefix}
           onChange={onChange}
           autoFocusTarget={autoFocusTarget}
+          forceIdHintUnit={forceIdHintUnit}
         />
       </div>
     );
@@ -1360,7 +1581,7 @@ function DraftFields({
             </label>
             <QuantityStepper
               id={`${idPrefix}-qty`}
-              value={draft.imeis.length}
+              value={draft.units.length}
               disabled={disabled}
               onChange={(qty) => onChange(setDraftQty(draft, qty))}
             />
@@ -1418,6 +1639,7 @@ function DraftFields({
         idPrefix={idPrefix}
         onChange={onChange}
         autoFocusTarget={autoFocusTarget}
+        forceIdHintUnit={forceIdHintUnit}
       />
     </div>
   );
