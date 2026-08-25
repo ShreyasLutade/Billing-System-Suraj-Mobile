@@ -1,11 +1,18 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
-import { ScanBarcode, X } from "lucide-react";
+import {
+  BrowserMultiFormatReader,
+  type IScannerControls,
+} from "@zxing/browser";
+import { DecodeHintType, BarcodeFormat } from "@zxing/library";
+import { ScanBarcode, X, Flashlight } from "lucide-react";
 import clsx from "clsx";
 
-/** Prefer digits for IMEI barcodes; keep cleaned text as fallback. */
+/* ------------------------------------------------------------------ */
+/*  IMEI helpers                                                       */
+/* ------------------------------------------------------------------ */
+
 export function normalizeScannedImei(raw: string) {
   const trimmed = raw.replace(/\s+/g, "").trim();
   const digits = trimmed.replace(/\D/g, "");
@@ -14,158 +21,225 @@ export function normalizeScannedImei(raw: string) {
   return trimmed;
 }
 
+/** 15 digits + Luhn check. Rejects misreads and the serial-number
+ *  barcode that also sits on the box, so we lock onto the real IMEI. */
+export function isValidImei(value: string) {
+  const s = value.replace(/\D/g, "");
+  if (!/^\d{15}$/.test(s)) return false;
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    let d = Number(s[i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
+/** Only the 1D formats phone boxes actually use — massively faster. */
+const ZXING_HINTS = new Map<DecodeHintType, unknown>([
+  [
+    DecodeHintType.POSSIBLE_FORMATS,
+    [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.EAN_13],
+  ],
+]);
+const NATIVE_FORMATS = ["code_128", "code_39", "ean_13"] as const;
+
+/* Minimal typing for the native BarcodeDetector (not in TS lib yet). */
+type NativeDetector = {
+  detect: (source: CanvasImageSource) => Promise<{ rawValue: string }[]>;
+};
+type NativeDetectorCtor = {
+  new (opts?: { formats?: readonly string[] }): NativeDetector;
+  getSupportedFormats?: () => Promise<string[]>;
+};
+
+/* ------------------------------------------------------------------ */
+/*  Modal                                                              */
+/* ------------------------------------------------------------------ */
+
 function ImeiScannerModal({
   onClose,
   onScan,
+  /** If your labels are noisy, require a valid 15-digit IMEI before accepting.
+   *  Set false to accept any 8+ digit code. */
+  requireValidImei = true,
 }: {
   onClose: () => void;
   onScan: (imei: string) => void;
+  requireValidImei?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
+  const zxingControls = useRef<IScannerControls | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number | null>(null);
   const handledRef = useRef(false);
+
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
-  const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(true);
-  /** Ignore backdrop clicks from the same gesture that opened the modal. */
-  const [canCloseOnBackdrop, setCanCloseOnBackdrop] = useState(false);
-
   onScanRef.current = onScan;
   onCloseRef.current = onClose;
 
+  const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(true);
+  const [engine, setEngine] = useState<"native" | "zxing" | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchable, setTorchable] = useState(false);
+  const [canCloseOnBackdrop, setCanCloseOnBackdrop] = useState(false);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setCanCloseOnBackdrop(true), 400);
-    return () => window.clearTimeout(timer);
+    const t = window.setTimeout(() => setCanCloseOnBackdrop(true), 400);
+    return () => window.clearTimeout(t);
   }, []);
+
+  const accept = (raw: string) => {
+    if (handledRef.current) return;
+    const value = normalizeScannedImei(raw);
+    if (requireValidImei ? !isValidImei(value) : value.length < 8) return; // keep scanning
+    handledRef.current = true;
+    navigator.vibrate?.(60);
+    stopAll();
+    onScanRef.current(value);
+    onCloseRef.current();
+  };
+
+  const stopAll = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    zxingControls.current?.stop();
+    zxingControls.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  };
 
   useEffect(() => {
     handledRef.current = false;
     let cancelled = false;
-    const reader = new BrowserMultiFormatReader();
-
-    const onDecode = (result: { getText: () => string } | undefined) => {
-      if (!result || handledRef.current || cancelled) return;
-      const value = normalizeScannedImei(result.getText());
-      if (value.length < 8) return;
-      handledRef.current = true;
-      controlsRef.current?.stop();
-      controlsRef.current = null;
-      onScanRef.current(value);
-      onCloseRef.current();
-    };
 
     (async () => {
-      // Let the video element attach before starting the stream.
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
       if (cancelled || !videoRef.current) return;
+      const video = videoRef.current;
 
       try {
-        let controls: IScannerControls | null = null;
+        const Detector = (window as unknown as {
+          BarcodeDetector?: NativeDetectorCtor;
+        }).BarcodeDetector;
 
-        // 1) Prefer rear / environment camera (phones).
-        try {
-          controls = await reader.decodeFromConstraints(
-            { video: { facingMode: { exact: "environment" } } },
-            videoRef.current,
-            onDecode,
-          );
-        } catch {
-          // ignore — try softer preference next
-        }
-
-        // 2) Soft preference for environment, then match by device label.
-        if (!controls && !cancelled && videoRef.current) {
+        // ---------- Path A: native BarcodeDetector (fast) ----------
+        let useNative = false;
+        if (Detector) {
           try {
-            controls = await reader.decodeFromConstraints(
-              { video: { facingMode: { ideal: "environment" } } },
-              videoRef.current,
-              onDecode,
-            );
+            const supported = (await Detector.getSupportedFormats?.()) ?? [];
+            useNative =
+              supported.length === 0 ||
+              supported.some((f) => NATIVE_FORMATS.includes(f as never));
           } catch {
-            // ignore
+            useNative = true; // assume ok if query fails
           }
         }
 
-        if (!controls && !cancelled && videoRef.current) {
-          try {
-            const devices =
-              await BrowserMultiFormatReader.listVideoInputDevices();
-            const backCam = devices.find((device) =>
-              /back|rear|environment|trás|arrière|後|후면/i.test(
-                device.label || "",
-              ),
-            );
-            controls = await reader.decodeFromVideoDevice(
-              backCam?.deviceId,
-              videoRef.current,
-              onDecode,
-            );
-          } catch {
-            // ignore
-          }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        video.srcObject = stream;
+        await video.play().catch(() => {});
+
+        // torch capability
+        const track = stream.getVideoTracks()[0];
+        const caps = track?.getCapabilities?.() as
+          | { torch?: boolean }
+          | undefined;
+        if (caps && "torch" in caps) setTorchable(true);
+
+        if (useNative && Detector) {
+          const detector = new Detector({ formats: NATIVE_FORMATS });
+          setEngine("native");
+          setStarting(false);
+          const loop = async () => {
+            if (cancelled || handledRef.current) return;
+            try {
+              const codes = await detector.detect(video);
+              if (codes[0]) accept(codes[0].rawValue);
+            } catch {
+              /* transient frame errors — ignore */
+            }
+            if (!cancelled && !handledRef.current)
+              rafRef.current = requestAnimationFrame(loop);
+          };
+          rafRef.current = requestAnimationFrame(loop);
+          return;
         }
 
-        // 3) Last resort: any available camera (e.g. laptop webcam).
-        if (!controls && !cancelled && videoRef.current) {
-          controls = await reader.decodeFromVideoDevice(
-            undefined,
-            videoRef.current,
-            onDecode,
-          );
-        }
-
-        if (!controls) {
-          throw new Error("No camera found on this device.");
-        }
-
+        // ---------- Path B: ZXing fallback (hinted) ----------
+        setEngine("zxing");
+        const reader = new BrowserMultiFormatReader(ZXING_HINTS);
+        const controls = await reader.decodeFromVideoElement(
+          video,
+          (result) => {
+            if (result) accept(result.getText());
+          },
+        );
         if (cancelled) {
           controls.stop();
           return;
         }
-        controlsRef.current = controls;
+        zxingControls.current = controls;
         setStarting(false);
       } catch (err) {
         if (cancelled) return;
         setStarting(false);
-        const message =
+        const msg =
           err instanceof Error ? err.message : "Could not open camera";
-        if (/NotAllowedError|Permission/i.test(message)) {
+        if (/NotAllowedError|Permission/i.test(msg))
           setError("Camera permission denied. Allow camera access to scan.");
-        } else if (/NotFoundError|DevicesNotFound|No camera/i.test(message)) {
+        else if (/NotFoundError|DevicesNotFound|No camera/i.test(msg))
           setError("No camera found on this device.");
-        } else {
-          setError(message);
-        }
+        else setError(msg);
       }
     })();
 
     return () => {
       cancelled = true;
-      controlsRef.current?.stop();
-      controlsRef.current = null;
-      // Do not call releaseAllStreams() here — React Strict Mode remounts
-      // and that kills the freshly started laptop webcam stream.
+      stopAll();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function requestClose() {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    try {
+      await track?.applyConstraints({
+        advanced: [{ torch: !torchOn } as MediaTrackConstraintSet],
+      });
+      setTorchOn((v) => !v);
+    } catch {
+      /* unsupported */
+    }
+  };
+
+  const requestClose = () => {
+    stopAll();
     onCloseRef.current();
-  }
+  };
 
   return createPortal(
     <motion.div
       className="fixed inset-0 z-[90] flex items-end justify-center bg-ink-950/55 p-4 sm:items-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      onClick={() => {
-        if (!canCloseOnBackdrop) return;
-        requestClose();
-      }}
+      onClick={() => canCloseOnBackdrop && requestClose()}
     >
       <motion.div
         role="dialog"
@@ -174,12 +248,12 @@ function ImeiScannerModal({
         className="flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift"
         initial={{ opacity: 0, y: 24, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-              Scanner
+              Scanner {engine === "native" ? "· fast" : ""}
             </p>
             <h2
               id="imei-scanner-title"
@@ -236,7 +310,19 @@ function ImeiScannerModal({
           ) : null}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-ink-100 px-5 py-4">
+        <div className="flex items-center justify-between gap-2 border-t border-ink-100 px-5 py-4">
+          {torchable ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl border border-ink-100 px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-50"
+              onClick={toggleTorch}
+            >
+              <Flashlight className="h-4 w-4" />
+              {torchOn ? "Torch off" : "Torch on"}
+            </button>
+          ) : (
+            <span />
+          )}
           <button type="button" className="btn-secondary" onClick={requestClose}>
             Cancel
           </button>
@@ -271,19 +357,16 @@ export function ImeiScanFieldButton({
         aria-label="Scan IMEI barcode"
         title="Scan IMEI barcode"
         disabled={disabled}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
           setOpen(true);
         }}
       >
         <ScanBarcode className="h-[18px] w-[18px]" strokeWidth={2.2} />
       </button>
       {open ? (
-        <ImeiScannerModal
-          onClose={() => setOpen(false)}
-          onScan={onScan}
-        />
+        <ImeiScannerModal onClose={() => setOpen(false)} onScan={onScan} />
       ) : null}
     </>
   );
