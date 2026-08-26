@@ -1,11 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
+import { HTMLCanvasElementLuminanceSource } from "@zxing/browser";
 import {
-  BrowserMultiFormatOneDReader,
-  type IScannerControls,
-} from "@zxing/browser";
-import { DecodeHintType, BarcodeFormat } from "@zxing/library";
+  BinaryBitmap,
+  DecodeHintType,
+  BarcodeFormat,
+  HybridBinarizer,
+  MultiFormatOneDReader,
+  NotFoundException,
+} from "@zxing/library";
 import { ScanBarcode, X, Flashlight } from "lucide-react";
 import clsx from "clsx";
 
@@ -23,10 +27,10 @@ export const IMEI_BARCODE_FORMATS = {
 
 /** ~18 detect attempts/sec — fast enough without saturating mobile CPU. */
 const NATIVE_DETECT_INTERVAL_MS = 55;
-const ZXING_SCAN_OPTIONS = {
-  delayBetweenScanAttempts: NATIVE_DETECT_INTERVAL_MS,
-  delayBetweenScanSuccess: 200,
-} as const;
+/** ZXing on iPhone needs a bit more time per frame; still much faster than 500ms default. */
+const ZXING_DETECT_INTERVAL_MS = 70;
+/** Decode a horizontal band around the red guide line (1D barcodes). */
+const ZXING_BAND_HEIGHT_RATIO = 0.42;
 
 /* ------------------------------------------------------------------ */
 /*  IMEI helpers                                                       */
@@ -90,7 +94,7 @@ function describeBarcodeDetectorSupport() {
     return "unavailable in Firefox (ZXing is expected)";
   }
   if (/iPhone|iPad/i.test(ua)) {
-    return "unavailable — requires iOS 17.4+ Safari for native path; otherwise ZXing";
+    return "disabled by default on iPhone Safari/Chrome (WebKit) — ZXing is the normal path";
   }
   return "unavailable on this browser/platform — using ZXing fallback";
 }
@@ -133,7 +137,61 @@ async function resolveNativeFormats(
 
 const zxingHints = new Map<DecodeHintType, unknown>([
   [DecodeHintType.POSSIBLE_FORMATS, [...IMEI_BARCODE_FORMATS.zxing]],
+  // Helps thin/distant IMEI bars on phone boxes without scanning every format.
+  [DecodeHintType.TRY_HARDER, true],
 ]);
+
+/**
+ * Draw the center horizontal band of the live video into a canvas.
+ * Full-frame ZXing is slower and noisier for Code 128 IMEI labels.
+ */
+function drawCenterBand(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+) {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return false;
+
+  const bandH = Math.max(48, Math.round(vh * ZXING_BAND_HEIGHT_RATIO));
+  const sy = Math.max(0, Math.round((vh - bandH) / 2));
+  const maxW = 1280;
+  const dw = Math.min(vw, maxW);
+  const dh = Math.round(bandH * (dw / vw));
+
+  if (canvas.width !== dw || canvas.height !== dh) {
+    canvas.width = dw;
+    canvas.height = dh;
+  }
+
+  ctx.drawImage(video, 0, sy, vw, bandH, 0, 0, dw, dh);
+  return true;
+}
+
+function tryDecodeZxingFromCanvas(
+  reader: MultiFormatOneDReader,
+  canvas: HTMLCanvasElement,
+): string | null {
+  try {
+    const luminance = new HTMLCanvasElementLuminanceSource(canvas);
+    const bitmap = new BinaryBitmap(new HybridBinarizer(luminance));
+    const result = reader.decode(bitmap, zxingHints);
+    const text = result?.getText()?.trim();
+    return text || null;
+  } catch (err) {
+    // NotFound / checksum / format = keep scanning silently.
+    if (
+      err instanceof NotFoundException ||
+      (err as { name?: string } | null)?.name === "NotFoundException" ||
+      (err as { name?: string } | null)?.name === "ChecksumException" ||
+      (err as { name?: string } | null)?.name === "FormatException"
+    ) {
+      return null;
+    }
+    return null;
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Camera                                                             */
@@ -233,11 +291,11 @@ function ImeiScannerModal({
   onScan: (imei: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const zxingControls = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectTimerRef = useRef<number | null>(null);
   const isDetectingRef = useRef(false);
   const handledRef = useRef(false);
+  const zxingCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
@@ -272,8 +330,6 @@ function ImeiScannerModal({
       window.clearTimeout(detectTimerRef.current);
       detectTimerRef.current = null;
     }
-    zxingControls.current?.stop();
-    zxingControls.current = null;
 
     const video = videoRef.current;
     if (video) {
@@ -284,6 +340,7 @@ function ImeiScannerModal({
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     isDetectingRef.current = false;
+    zxingCanvasRef.current = null;
   };
 
   /** Step 2: barcode detected → normalize → Luhn → accept or continue. */
@@ -435,30 +492,58 @@ function ImeiScannerModal({
           return;
         }
 
-        // ---- ZXing fallback (Windows/Linux desktop Chrome, Firefox, older iOS) ----
+        // ---- ZXing fallback (iPhone Safari/Chrome WebKit, Windows Chrome, Firefox) ----
+        // On iPhone, BarcodeDetector exists but is OFF by default — ZXing is expected.
         setEngine("zxing");
-        logDev("Scanner engine: ZXing (Code 128 / 1D reader)");
+        logDev("Scanner engine: ZXing (Code 128 / center-band)");
         if (DEV) {
           setDevInfo((prev) => ({ ...prev, engine: "zxing" }));
         }
 
-        // Use 1D-only reader — avoids MultiFormatReader console spam on every
-        // NotFoundException and skips QR/PDF417 decoders we don't need.
-        // Call scan() directly; video is already playing (decodeFromVideoElement
-        // would call play() again and warn "already playing").
-        const reader = new BrowserMultiFormatOneDReader(
-          zxingHints,
-          ZXING_SCAN_OPTIONS,
-        );
-        const controls = reader.scan(video, (result) => {
-          if (result) onBarcodeRaw(result.getText());
-        });
-        if (cancelled) {
-          controls.stop();
-          return;
+        const reader = new MultiFormatOneDReader(zxingHints);
+        const canvas = document.createElement("canvas");
+        zxingCanvasRef.current = canvas;
+        const ctx =
+          canvas.getContext("2d", { willReadFrequently: true }) ??
+          canvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("Could not create scanner canvas");
         }
-        zxingControls.current = controls;
+
+        const scheduleNext = () => {
+          if (cancelled || handledRef.current) return;
+          detectTimerRef.current = window.setTimeout(
+            tick,
+            ZXING_DETECT_INTERVAL_MS,
+          );
+        };
+
+        const tick = () => {
+          if (cancelled || handledRef.current) return;
+          if (isDetectingRef.current) {
+            scheduleNext();
+            return;
+          }
+          if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+            scheduleNext();
+            return;
+          }
+
+          isDetectingRef.current = true;
+          try {
+            if (drawCenterBand(video, canvas, ctx)) {
+              const text = tryDecodeZxingFromCanvas(reader, canvas);
+              if (text) onBarcodeRaw(text);
+            }
+          } finally {
+            isDetectingRef.current = false;
+            if (!cancelled && !handledRef.current) scheduleNext();
+          }
+        };
+
         setStarting(false);
+        scheduleNext();
+        return;
       } catch (err) {
         if (cancelled) return;
         setStarting(false);
@@ -522,7 +607,7 @@ function ImeiScannerModal({
               {engine === "native"
                 ? " · native"
                 : engine === "zxing"
-                  ? " · fallback"
+                  ? " · ZXing"
                   : ""}
             </p>
             <h2
