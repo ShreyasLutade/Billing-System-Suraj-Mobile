@@ -167,6 +167,39 @@ stockRouter.get("/", async (req, res, next) => {
   }
 });
 
+/** Look up one AVAILABLE stock unit by IMEI (for create-bill scan autofill). */
+stockRouter.get("/lookup", async (req, res, next) => {
+  try {
+    const raw =
+      typeof req.query.imei === "string" ? req.query.imei.trim() : "";
+    const imei = raw.replace(/\D/g, "");
+    if (imei.length < 8) {
+      res.status(400).json({ error: "IMEI is required" });
+      return;
+    }
+
+    const item = await prisma.stockItem.findFirst({
+      where: {
+        status: "AVAILABLE",
+        imei,
+      },
+      include: {
+        supplier: { select: { id: true, name: true, isExchange: true } },
+        purchaseItem: { select: { purchase: { select: { note: true } } } },
+      },
+    });
+
+    if (!item) {
+      res.status(404).json({ error: "No mobile found" });
+      return;
+    }
+
+    res.json({ data: mapStockItem(item) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 stockRouter.get("/:id/history", async (req, res, next) => {
   try {
     const item = await prisma.stockItem.findUnique({

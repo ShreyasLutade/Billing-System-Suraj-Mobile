@@ -79,7 +79,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
       ...init,
     });
-  } catch {
+  } catch (err) {
+    if (
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError")
+    ) {
+      throw err;
+    }
     throw new ApiError(
       "Cannot reach the server. Make sure the API is running on port 4000.",
       0,
@@ -253,6 +259,12 @@ export const api = {
     return request<{ data: StockItem[] }>(
       `/stock${query ? `?${query}` : ""}`,
     );
+  },
+  findAvailableStockByImei: (imei: string, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ imei: imei.replace(/\D/g, "") });
+    return request<{ data: StockItem }>(`/stock/lookup?${params}`, {
+      signal,
+    });
   },
   createStockItem: (payload: {
     condition: "NEW" | "USED";
