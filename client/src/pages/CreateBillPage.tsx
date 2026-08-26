@@ -8,6 +8,7 @@ import {
   Download,
   Info,
   ListOrdered,
+  Loader2,
   Plus,
   RefreshCw,
   Share2,
@@ -39,7 +40,7 @@ import {
   payloadToSnapshot,
   type DiffLine,
 } from "../lib/billDiff";
-import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { ApiError, api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import { billsHomePath, readFromState } from "../lib/navMemory";
 import type {
@@ -364,6 +365,14 @@ export function CreateBillPage() {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [mobileCatalog, setMobileCatalog] = useState<MobileCatalog[]>([]);
   const [addMobileForItem, setAddMobileForItem] = useState<string | null>(null);
+  const [stockImeiLookup, setStockImeiLookup] = useState<{
+    itemKey: string;
+    imei: string;
+  } | null>(null);
+  const stockImeiLookupAbortRef = useRef<AbortController | null>(null);
+  const [imeiFieldErrors, setImeiFieldErrors] = useState<
+    Record<string, string>
+  >({});
   const [savingFinanceKey, setSavingFinanceKey] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -861,6 +870,12 @@ export function CreateBillPage() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      stockImeiLookupAbortRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!editId) {
       resetBlankForm();
       return;
@@ -1146,6 +1161,79 @@ export function CreateBillPage() {
       serialNumber: stock.serialNumber || "",
       quantity: 1,
     });
+  }
+
+  function cancelStockImeiLookup() {
+    stockImeiLookupAbortRef.current?.abort();
+    stockImeiLookupAbortRef.current = null;
+    setStockImeiLookup(null);
+  }
+
+  async function lookupStockFromImeiScan(itemKey: string, imei: string) {
+    const cleaned = imei.replace(/\D/g, "");
+    updateItem(itemKey, { imei1: cleaned });
+    setImeiFieldErrors((prev) => {
+      if (!prev[itemKey]) return prev;
+      const next = { ...prev };
+      delete next[itemKey];
+      return next;
+    });
+
+    stockImeiLookupAbortRef.current?.abort();
+    const ac = new AbortController();
+    stockImeiLookupAbortRef.current = ac;
+    setStockImeiLookup({ itemKey, imei: cleaned });
+
+    try {
+      const { data: stock } = await api.findAvailableStockByImei(
+        cleaned,
+        ac.signal,
+      );
+      if (ac.signal.aborted) return;
+
+      const usedElsewhere = items.some(
+        (row) => row.key !== itemKey && row.stockItemId === stock.id,
+      );
+      if (usedElsewhere) {
+        setImeiFieldErrors((prev) => ({
+          ...prev,
+          [itemKey]: "This mobile is already added on another line",
+        }));
+        return;
+      }
+
+      setStockItems((prev) =>
+        prev.some((entry) => entry.id === stock.id)
+          ? prev
+          : [stock, ...prev],
+      );
+      applyStockMobile(itemKey, stock);
+      setImeiFieldErrors((prev) => {
+        if (!prev[itemKey]) return prev;
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
+    } catch (err) {
+      if (
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && err.name === "AbortError")
+      ) {
+        return;
+      }
+      const message =
+        err instanceof ApiError && err.status === 404
+          ? "No mobile found"
+          : err instanceof Error
+            ? err.message
+            : "No mobile found";
+      setImeiFieldErrors((prev) => ({ ...prev, [itemKey]: message }));
+    } finally {
+      if (stockImeiLookupAbortRef.current === ac) {
+        stockImeiLookupAbortRef.current = null;
+        setStockImeiLookup(null);
+      }
+    }
   }
 
   function selectMobile(key: string, value: string) {
@@ -2211,12 +2299,23 @@ export function CreateBillPage() {
                         className={
                           item.stockItemId && !withGst && item.imei1?.trim()
                             ? "field min-w-0 flex-1 cursor-default border-ink-200 bg-ink-100/80 font-mono text-sm tracking-wide text-ink-600"
-                            : "field min-w-0 flex-1 font-mono text-sm tracking-wide"
+                            : clsx(
+                                "field min-w-0 flex-1 font-mono text-sm tracking-wide",
+                                imeiFieldErrors[item.key] &&
+                                  "border-red-400 focus:border-red-500 focus:ring-red-200",
+                              )
                         }
                         value={item.imei1 || ""}
-                        onChange={(e) =>
-                          updateItem(item.key, { imei1: e.target.value })
-                        }
+                        onChange={(e) => {
+                          updateItem(item.key, { imei1: e.target.value });
+                          if (imeiFieldErrors[item.key]) {
+                            setImeiFieldErrors((prev) => {
+                              const next = { ...prev };
+                              delete next[item.key];
+                              return next;
+                            });
+                          }
+                        }}
                         placeholder={
                           item.imei1?.trim()
                             ? undefined
@@ -2229,6 +2328,7 @@ export function CreateBillPage() {
                           !withGst &&
                           Boolean(item.imei1?.trim())
                         }
+                        aria-invalid={Boolean(imeiFieldErrors[item.key])}
                       />
                       {!(
                         item.stockItemId &&
@@ -2236,12 +2336,18 @@ export function CreateBillPage() {
                         item.imei1?.trim()
                       ) ? (
                         <ImeiScanFieldButton
+                          disabled={Boolean(stockImeiLookup)}
                           onScan={(imei) =>
-                            updateItem(item.key, { imei1: imei })
+                            void lookupStockFromImeiScan(item.key, imei)
                           }
                         />
                       ) : null}
                     </div>
+                    {imeiFieldErrors[item.key] ? (
+                      <p className="mt-1.5 text-xs font-medium text-red-600">
+                        {imeiFieldErrors[item.key]}
+                      </p>
+                    ) : null}
                   </div>
                   <div>
                     <label className="label">Serial</label>
@@ -3016,6 +3122,44 @@ export function CreateBillPage() {
           onConfirm={() => void confirmUpdate()}
         />
       ) : null}
+
+      {stockImeiLookup
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[95] flex items-center justify-center bg-ink-950/50 p-4"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="stock-imei-lookup-title"
+              aria-busy="true"
+            >
+              <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-lift">
+                <div className="flex flex-col items-center text-center">
+                  <Loader2 className="h-9 w-9 animate-spin text-tide-600" />
+                  <h2
+                    id="stock-imei-lookup-title"
+                    className="mt-4 font-display text-lg font-semibold text-ink-900"
+                  >
+                    Looking up mobile…
+                  </h2>
+                  <p className="mt-1.5 text-sm text-ink-500">
+                    Checking stock for IMEI{" "}
+                    <span className="font-mono text-ink-700">
+                      {stockImeiLookup.imei}
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-secondary mt-5 min-w-[140px]"
+                    onClick={cancelStockImeiLookup}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
