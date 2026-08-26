@@ -2,58 +2,102 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import {
-  BrowserMultiFormatReader,
+  BrowserMultiFormatOneDReader,
   type IScannerControls,
 } from "@zxing/browser";
 import { DecodeHintType, BarcodeFormat } from "@zxing/library";
 import { ScanBarcode, X, Flashlight } from "lucide-react";
 import clsx from "clsx";
 
-/**
- * Fast IMEI barcode scanner — same approach as sites like
- * https://www.barcodestalk.com/free-online-barcode-scanner :
- * use the browser's native BarcodeDetector on every camera frame and
- * accept the first valid decode immediately (milliseconds).
- */
+/* ------------------------------------------------------------------ */
+/*  Config — MobileII / IMEI on phone boxes is typically Code 128      */
+/* ------------------------------------------------------------------ */
 
+const DEV = import.meta.env.DEV;
+
+/** Primary format for IMEI labels; extend only if you confirm other formats. */
+export const IMEI_BARCODE_FORMATS = {
+  native: ["code_128"] as const,
+  zxing: [BarcodeFormat.CODE_128] as const,
+};
+
+/** ~18 detect attempts/sec — fast enough without saturating mobile CPU. */
+const NATIVE_DETECT_INTERVAL_MS = 55;
+const ZXING_SCAN_OPTIONS = {
+  delayBetweenScanAttempts: NATIVE_DETECT_INTERVAL_MS,
+  delayBetweenScanSuccess: 200,
+} as const;
+
+/* ------------------------------------------------------------------ */
+/*  IMEI helpers                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Extract a 15-digit IMEI run from a barcode payload. */
 export function normalizeScannedImei(raw: string) {
   const trimmed = raw.replace(/\s+/g, "").trim();
   const digits = trimmed.replace(/\D/g, "");
-  const fifteen = digits.match(/\d{15}/);
-  if (fifteen) return fifteen[0];
+  const embedded = digits.match(/\d{15}/);
+  if (embedded) return embedded[0];
   if (digits.length >= 15) return digits.slice(0, 15);
-  if (digits.length >= 8) return digits;
-  return trimmed;
+  return digits;
 }
 
-const NATIVE_FORMATS = [
-  "code_128",
-  "code_39",
-  "code_93",
-  "ean_13",
-  "ean_8",
-  "upc_a",
-  "upc_e",
-  "itf",
-  "codabar",
-] as const;
+/** 15 digits + Luhn checksum (GSMA IMEI). */
+export function isValidImei(value: string) {
+  const s = value.replace(/\D/g, "");
+  if (!/^\d{15}$/.test(s)) return false;
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    let d = Number(s[i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
 
-const ZXING_HINTS = new Map<DecodeHintType, unknown>([
-  [
-    DecodeHintType.POSSIBLE_FORMATS,
-    [
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.CODE_93,
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.ITF,
-      BarcodeFormat.CODABAR,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-    ],
-  ],
-]);
+type ScanEngine = "native" | "zxing";
+
+type DevDiagnostics = {
+  engine: ScanEngine | "starting";
+  barcodeDetectorAvailable: boolean;
+  barcodeDetectorNote: string;
+  supportedFormats: string[];
+  cameraResolution: string;
+  frameRate: string;
+  lastDetected: boolean;
+  lastValidImei: boolean;
+  rejectReason: string | null;
+};
+
+function logDev(...args: unknown[]) {
+  if (DEV) console.log("[ImeiScanner]", ...args);
+}
+
+/** Why BarcodeDetector may be missing — helps avoid false alarms during dev. */
+function describeBarcodeDetectorSupport() {
+  if ("BarcodeDetector" in window) return "available";
+  const ua = navigator.userAgent;
+  if (/Windows/i.test(ua)) {
+    return "unavailable on Windows Chrome/Edge (platform has no native API — ZXing is expected)";
+  }
+  if (/Linux/i.test(ua)) {
+    return "unavailable on Linux Chrome (platform has no native API — ZXing is expected)";
+  }
+  if (/Firefox/i.test(ua)) {
+    return "unavailable in Firefox (ZXing is expected)";
+  }
+  if (/iPhone|iPad/i.test(ua)) {
+    return "unavailable — requires iOS 17.4+ Safari for native path; otherwise ZXing";
+  }
+  return "unavailable on this browser/platform — using ZXing fallback";
+}
+
+/* ------------------------------------------------------------------ */
+/*  BarcodeDetector typing (not in all TS libs)                        */
+/* ------------------------------------------------------------------ */
 
 type NativeDetector = {
   detect: (source: CanvasImageSource) => Promise<{ rawValue: string }[]>;
@@ -63,21 +107,47 @@ type NativeDetectorCtor = {
   getSupportedFormats?: () => Promise<string[]>;
 };
 
-function getBarcodeDetector(): NativeDetectorCtor | null {
+function getBarcodeDetectorCtor(): NativeDetectorCtor | null {
   return (
     (window as unknown as { BarcodeDetector?: NativeDetectorCtor })
       .BarcodeDetector ?? null
   );
 }
 
+async function resolveNativeFormats(
+  Detector: NativeDetectorCtor,
+): Promise<string[]> {
+  const preferred = [...IMEI_BARCODE_FORMATS.native];
+  if (!Detector.getSupportedFormats) return preferred;
+  try {
+    const supported = await Detector.getSupportedFormats();
+    logDev("BarcodeDetector formats:", supported);
+    const overlap = preferred.filter((f) => supported.includes(f));
+    if (overlap.length) return overlap;
+    if (supported.includes("code_128")) return ["code_128"];
+    return supported.length ? supported : preferred;
+  } catch {
+    return preferred;
+  }
+}
+
+const zxingHints = new Map<DecodeHintType, unknown>([
+  [DecodeHintType.POSSIBLE_FORMATS, [...IMEI_BARCODE_FORMATS.zxing]],
+]);
+
+/* ------------------------------------------------------------------ */
+/*  Camera                                                             */
+/* ------------------------------------------------------------------ */
+
 async function openRearCamera(): Promise<MediaStream> {
   const attempts: MediaStreamConstraints[] = [
     {
       audio: false,
       video: {
-        facingMode: { exact: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30, max: 30 },
       },
     },
     {
@@ -86,9 +156,13 @@ async function openRearCamera(): Promise<MediaStream> {
         facingMode: { ideal: "environment" },
         width: { ideal: 1280 },
         height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 30 },
       },
     },
-    { audio: false, video: { facingMode: "environment" } },
+    {
+      audio: false,
+      video: { facingMode: { ideal: "environment" } },
+    },
     { audio: false, video: true },
   ];
 
@@ -105,6 +179,52 @@ async function openRearCamera(): Promise<MediaStream> {
     : new Error("Could not open camera");
 }
 
+/** Apply continuous autofocus / zoom only when the browser exposes them. */
+async function applyCameraEnhancements(track: MediaStreamTrack) {
+  const caps = track.getCapabilities?.() as
+    | {
+        focusMode?: string[];
+        torch?: boolean;
+        zoom?: { min?: number; max?: number };
+      }
+    | undefined;
+  if (!caps) return;
+
+  const advanced: MediaTrackConstraintSet[] = [];
+  if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
+    advanced.push({ focusMode: "continuous" } as MediaTrackConstraintSet);
+  }
+  if (advanced.length) {
+    try {
+      await track.applyConstraints({ advanced });
+      logDev("Applied focus constraints");
+    } catch {
+      /* optional */
+    }
+  }
+}
+
+function logCameraTrack(track: MediaStreamTrack) {
+  if (!DEV) return;
+  logDev("Camera settings:", track.getSettings?.());
+  logDev("Camera capabilities:", track.getCapabilities?.());
+}
+
+function formatTrackSettings(track: MediaStreamTrack | undefined) {
+  const s = track?.getSettings?.();
+  if (!s?.width || !s?.height) return "—";
+  return `${s.width}×${s.height}`;
+}
+
+function formatTrackFrameRate(track: MediaStreamTrack | undefined) {
+  const fps = track?.getSettings?.().frameRate;
+  return fps ? `${Math.round(fps)} fps` : "—";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Modal                                                              */
+/* ------------------------------------------------------------------ */
+
 function ImeiScannerModal({
   onClose,
   onScan,
@@ -115,8 +235,8 @@ function ImeiScannerModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const zxingControls = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const busyRef = useRef(false);
+  const detectTimerRef = useRef<number | null>(null);
+  const isDetectingRef = useRef(false);
   const handledRef = useRef(false);
 
   const onScanRef = useRef(onScan);
@@ -126,10 +246,21 @@ function ImeiScannerModal({
 
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
-  const [engine, setEngine] = useState<"native" | "zxing" | null>(null);
+  const [engine, setEngine] = useState<ScanEngine | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const [torchable, setTorchable] = useState(false);
   const [canCloseOnBackdrop, setCanCloseOnBackdrop] = useState(false);
+  const [devInfo, setDevInfo] = useState<DevDiagnostics>({
+    engine: "starting",
+    barcodeDetectorAvailable: false,
+    barcodeDetectorNote: "—",
+    supportedFormats: [],
+    cameraResolution: "—",
+    frameRate: "—",
+    lastDetected: false,
+    lastValidImei: false,
+    rejectReason: null,
+  });
 
   useEffect(() => {
     const t = window.setTimeout(() => setCanCloseOnBackdrop(true), 400);
@@ -137,25 +268,56 @@ function ImeiScannerModal({
   }, []);
 
   const stopAll = () => {
-    if (rafRef.current != null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+    if (detectTimerRef.current != null) {
+      window.clearTimeout(detectTimerRef.current);
+      detectTimerRef.current = null;
     }
     zxingControls.current?.stop();
     zxingControls.current = null;
+
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = null;
+      video.removeAttribute("src");
+    }
+
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    isDetectingRef.current = false;
   };
 
-  /** Accept immediately on first usable decode — same as fast online scanners. */
-  const accept = (raw: string) => {
+  /** Step 2: barcode detected → normalize → Luhn → accept or continue. */
+  const onBarcodeRaw = (raw: string) => {
     if (handledRef.current) return;
-    const value = normalizeScannedImei(raw);
-    if (value.replace(/\D/g, "").length < 8) return;
+
+    const trimmed = raw?.trim();
+    if (!trimmed) return;
+
+    logDev("Barcode detected (raw length):", trimmed.length);
+
+    const normalized = normalizeScannedImei(trimmed);
+    const valid = isValidImei(normalized);
+
+    logDev("Normalized digit length:", normalized.length);
+    logDev("IMEI valid:", valid);
+
+    if (DEV) {
+      setDevInfo((prev) => ({
+        ...prev,
+        lastDetected: true,
+        lastValidImei: valid,
+        rejectReason: valid ? null : "IMEI Luhn check failed",
+      }));
+    }
+
+    if (!valid) {
+      return; // keep scanning — barcode was read but not a valid IMEI
+    }
+
     handledRef.current = true;
     navigator.vibrate?.(40);
     stopAll();
-    onScanRef.current(value);
+    onScanRef.current(normalized);
     onCloseRef.current();
   };
 
@@ -163,31 +325,38 @@ function ImeiScannerModal({
     handledRef.current = false;
     let cancelled = false;
 
+    const barcodeDetectorAvailable = "BarcodeDetector" in window;
+    const barcodeDetectorNote = describeBarcodeDetectorSupport();
+    logDev("BarcodeDetector available:", barcodeDetectorAvailable);
+    logDev("BarcodeDetector note:", barcodeDetectorNote);
+    logDev("Secure context:", window.isSecureContext);
+
     (async () => {
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       if (cancelled || !videoRef.current) return;
       const video = videoRef.current;
 
       try {
-        const Detector = getBarcodeDetector();
-        let formats: string[] = [...NATIVE_FORMATS];
-        let useNative = Boolean(Detector);
+        const DetectorCtor = getBarcodeDetectorCtor();
+        let nativeFormats: string[] = [];
+        let useNative = Boolean(DetectorCtor);
 
-        if (Detector?.getSupportedFormats) {
-          try {
-            const supported = await Detector.getSupportedFormats();
-            const overlap = formats.filter((f) => supported.includes(f));
-            if (overlap.length) formats = overlap;
-            else if (supported.length) {
-              // Device has a detector but not our 1D list — still try its formats.
-              formats = supported.filter((f) =>
-                NATIVE_FORMATS.includes(f as (typeof NATIVE_FORMATS)[number]),
-              );
-              if (!formats.length) useNative = false;
-            }
-          } catch {
-            /* keep defaults */
+        if (DetectorCtor) {
+          nativeFormats = await resolveNativeFormats(DetectorCtor);
+          if (!nativeFormats.includes("code_128") && nativeFormats.length) {
+            logDev("code_128 not in supported list; using:", nativeFormats);
           }
+        } else {
+          useNative = false;
+        }
+
+        if (DEV) {
+          setDevInfo((prev) => ({
+            ...prev,
+            barcodeDetectorAvailable,
+            barcodeDetectorNote,
+            supportedFormats: nativeFormats,
+          }));
         }
 
         const stream = await openRearCamera();
@@ -202,45 +371,87 @@ function ImeiScannerModal({
         await video.play().catch(() => {});
 
         const track = stream.getVideoTracks()[0];
+        logCameraTrack(track);
+        await applyCameraEnhancements(track);
+
         const caps = track?.getCapabilities?.() as
           | { torch?: boolean }
           | undefined;
         if (caps && "torch" in caps) setTorchable(true);
 
-        // Native path — detect on the live <video> every frame (fastest).
-        if (useNative && Detector) {
-          const detector = new Detector({ formats });
+        if (DEV) {
+          setDevInfo((prev) => ({
+            ...prev,
+            cameraResolution: formatTrackSettings(track),
+            frameRate: formatTrackFrameRate(track),
+          }));
+        }
+
+        // ---- Native BarcodeDetector (fast path — iOS 17.4+ Safari, Android/macOS Chrome) ----
+        if (useNative && DetectorCtor) {
+          const detector = new DetectorCtor({ formats: nativeFormats });
           setEngine("native");
+          logDev("Scanner engine: BarcodeDetector");
+          if (DEV) {
+            setDevInfo((prev) => ({ ...prev, engine: "native" }));
+          }
           setStarting(false);
 
-          const loop = () => {
+          const scheduleNext = () => {
             if (cancelled || handledRef.current) return;
-            rafRef.current = requestAnimationFrame(loop);
-            if (busyRef.current) return;
-            if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+            detectTimerRef.current = window.setTimeout(
+              tick,
+              NATIVE_DETECT_INTERVAL_MS,
+            );
+          };
 
-            busyRef.current = true;
+          const tick = () => {
+            if (cancelled || handledRef.current) return;
+            if (isDetectingRef.current) {
+              scheduleNext();
+              return;
+            }
+            if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+              scheduleNext();
+              return;
+            }
+
+            isDetectingRef.current = true;
             detector
               .detect(video)
               .then((codes) => {
                 if (cancelled || handledRef.current) return;
                 const hit = codes.find((c) => c.rawValue?.trim());
-                if (hit) accept(hit.rawValue);
+                if (hit) onBarcodeRaw(hit.rawValue);
               })
               .catch(() => {})
               .finally(() => {
-                busyRef.current = false;
+                isDetectingRef.current = false;
+                if (!cancelled && !handledRef.current) scheduleNext();
               });
           };
-          rafRef.current = requestAnimationFrame(loop);
+
+          scheduleNext();
           return;
         }
 
-        // ZXing fallback when BarcodeDetector is missing (e.g. Firefox).
+        // ---- ZXing fallback (Windows/Linux desktop Chrome, Firefox, older iOS) ----
         setEngine("zxing");
-        const reader = new BrowserMultiFormatReader(ZXING_HINTS);
-        const controls = await reader.decodeFromVideoElement(video, (result) => {
-          if (result) accept(result.getText());
+        logDev("Scanner engine: ZXing (Code 128 / 1D reader)");
+        if (DEV) {
+          setDevInfo((prev) => ({ ...prev, engine: "zxing" }));
+        }
+
+        // Use 1D-only reader — avoids MultiFormatReader console spam on every
+        // NotFoundException and skips QR/PDF417 decoders we don't need.
+        // Call scan() directly; video is already playing (decodeFromVideoElement
+        // would call play() again and warn "already playing").
+        const reader = new BrowserMultiFormatOneDReader(
+          zxingHints,
+          ZXING_SCAN_OPTIONS,
+        );
+        const controls = reader.scan(video, (result) => {
+          if (result) onBarcodeRaw(result.getText());
         });
         if (cancelled) {
           controls.stop();
@@ -253,6 +464,7 @@ function ImeiScannerModal({
         setStarting(false);
         const msg =
           err instanceof Error ? err.message : "Could not open camera";
+        logDev("Camera error:", msg);
         if (/NotAllowedError|Permission/i.test(msg)) {
           setError("Camera permission denied. Allow camera access to scan.");
         } else if (/NotFoundError|DevicesNotFound|No camera/i.test(msg)) {
@@ -320,7 +532,8 @@ function ImeiScannerModal({
               Scan IMEI barcode
             </h2>
             <p className="mt-1 text-sm text-ink-500">
-              Hold the barcode under the red line — it fills instantly when read.
+              Align the barcode inside the frame on the red line. Scanning starts
+              automatically.
             </p>
           </div>
           <button
@@ -364,6 +577,25 @@ function ImeiScannerModal({
           {error ? (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-ink-950/80 p-6 text-center text-sm font-medium text-white">
               {error}
+            </div>
+          ) : null}
+          {DEV && !starting && !error ? (
+            <div className="pointer-events-none absolute bottom-2 left-2 right-2 z-30 rounded-lg bg-black/70 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-white/90">
+              <div>
+                engine: {devInfo.engine} · BD:{" "}
+                {devInfo.barcodeDetectorAvailable ? "yes" : "no"}
+              </div>
+              {!devInfo.barcodeDetectorAvailable ? (
+                <div className="text-white/70">{devInfo.barcodeDetectorNote}</div>
+              ) : null}
+              <div>
+                cam: {devInfo.cameraResolution} @ {devInfo.frameRate}
+              </div>
+              <div>
+                detected: {devInfo.lastDetected ? "yes" : "no"} · valid IMEI:{" "}
+                {devInfo.lastValidImei ? "yes" : "no"}
+                {devInfo.rejectReason ? ` · ${devInfo.rejectReason}` : ""}
+              </div>
             </div>
           ) : null}
         </div>
