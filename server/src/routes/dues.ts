@@ -214,6 +214,61 @@ duesRouter.patch("/finance/:id/receive", requireAdmin, async (req, res, next) =>
   }
 });
 
+duesRouter.patch(
+  "/finance/:id/unreceive",
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const bill = await prisma.bill.findUnique({
+        where: { id: req.params.id },
+        select: {
+          id: true,
+          financeAmount: true,
+          financeAmount2: true,
+          financeReceived: true,
+        },
+      });
+
+      if (!bill) {
+        res.status(404).json({ error: "Bill not found" });
+        return;
+      }
+      const financeTotal = (bill.financeAmount || 0) + (bill.financeAmount2 || 0);
+      if (financeTotal <= 0) {
+        res.status(400).json({ error: "This bill has no finance amount" });
+        return;
+      }
+      if (!bill.financeReceived) {
+        res.status(400).json({ error: "Finance amount is already pending" });
+        return;
+      }
+
+      const updated = await prisma.bill.update({
+        where: { id: bill.id },
+        data: {
+          financeReceived: false,
+          financeReceivedAt: null,
+        },
+        include: { items: true },
+      });
+
+      res.json({
+        data: {
+          ...updated,
+          billDate: updated.billDate.toISOString(),
+          dueDate: updated.dueDate?.toISOString() ?? null,
+          dueSettledAt: updated.dueSettledAt?.toISOString() ?? null,
+          financeReceivedAt: null,
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 const settleSchema = z
   .object({
     mode: z.enum(["full", "custom"]).default("full"),

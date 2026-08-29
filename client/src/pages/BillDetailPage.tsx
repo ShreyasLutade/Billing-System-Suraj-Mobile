@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Share2,
   Trash2,
+  Undo2,
   UserRound,
   X,
 } from "lucide-react";
@@ -66,6 +67,9 @@ export function BillDetailPage() {
   const [markingFinance, setMarkingFinance] = useState(false);
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [showFinanceConfirm, setShowFinanceConfirm] = useState(false);
+  const [financeConfirmMode, setFinanceConfirmMode] = useState<
+    "receive" | "undo"
+  >("receive");
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
@@ -122,6 +126,27 @@ export function BillDetailPage() {
         err instanceof Error
           ? err.message
           : "Failed to mark finance amount as received",
+      );
+    } finally {
+      setMarkingFinance(false);
+    }
+  }
+
+  async function unmarkFinanceReceived() {
+    const financeTotal =
+      (bill?.financeAmount || 0) + (bill?.financeAmount2 || 0);
+    if (!isAdmin || !bill || financeTotal <= 0 || !bill.financeReceived) return;
+    setMarkingFinance(true);
+    setFinanceError(null);
+    try {
+      const { data } = await api.unmarkFinanceReceived(bill.id);
+      setBill(data);
+      setShowFinanceConfirm(false);
+    } catch (err) {
+      setFinanceError(
+        err instanceof Error
+          ? err.message
+          : "Failed to undo finance received status",
       );
     } finally {
       setMarkingFinance(false);
@@ -576,17 +601,34 @@ export function BillDetailPage() {
               />
 
               {bill.financeAmount > 0 ? (
-                <p
-                  className={`mt-3 text-xs font-semibold ${
-                    bill.financeReceived ? "text-[#0E9E76]" : "text-[#B76E00]"
-                  }`}
-                >
-                  Finance status ·{" "}
-                  {bill.financeReceived ? "Received" : "Pending"}
-                  {bill.financeReceivedAt
-                    ? ` · ${format(new Date(bill.financeReceivedAt), "dd MMM yyyy")}`
-                    : ""}
-                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <p
+                    className={`text-xs font-semibold ${
+                      bill.financeReceived ? "text-[#0E9E76]" : "text-[#B76E00]"
+                    }`}
+                  >
+                    Finance status ·{" "}
+                    {bill.financeReceived ? "Received" : "Pending"}
+                    {bill.financeReceivedAt
+                      ? ` · ${format(new Date(bill.financeReceivedAt), "dd MMM yyyy")}`
+                      : ""}
+                  </p>
+                  {bill.financeReceived && isAdmin ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11px] font-semibold text-ink-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 disabled:opacity-50"
+                      disabled={markingFinance}
+                      onClick={() => {
+                        setFinanceError(null);
+                        setFinanceConfirmMode("undo");
+                        setShowFinanceConfirm(true);
+                      }}
+                    >
+                      <Undo2 className="h-3 w-3" />
+                      Undo
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
 
               {bill.financeAmount > 0 && !bill.financeReceived && isAdmin ? (
@@ -596,6 +638,7 @@ export function BillDetailPage() {
                   disabled={markingFinance}
                   onClick={() => {
                     setFinanceError(null);
+                    setFinanceConfirmMode("receive");
                     setShowFinanceConfirm(true);
                   }}
                 >
@@ -703,12 +746,17 @@ export function BillDetailPage() {
       <AnimatePresence>
         {showFinanceConfirm && bill.financeAmount > 0 ? (
           <FinanceReceivedConfirmModal
+            mode={financeConfirmMode}
             invoiceNumber={bill.invoiceNumber}
             financeCompanyName={formatFinanceCompanies(
               bill.financeCompanyName,
               bill.financeCompanyName2,
             )}
-            amount={bill.financeAmount}
+            amount={
+              financeConfirmMode === "undo"
+                ? (bill.financeAmount || 0) + (bill.financeAmount2 || 0)
+                : bill.financeAmount
+            }
             saving={markingFinance}
             error={financeError}
             onCancel={() => {
@@ -716,7 +764,11 @@ export function BillDetailPage() {
               setShowFinanceConfirm(false);
               setFinanceError(null);
             }}
-            onConfirm={() => void markFinanceReceived()}
+            onConfirm={() =>
+              void (financeConfirmMode === "undo"
+                ? unmarkFinanceReceived()
+                : markFinanceReceived())
+            }
           />
         ) : null}
       </AnimatePresence>

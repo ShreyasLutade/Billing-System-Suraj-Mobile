@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
-import { Building2, Check, X } from "lucide-react";
+import { Building2, Check, Undo2, X } from "lucide-react";
 import { formatINR } from "../lib/api";
 
 export function FinanceReceivedConfirmModal({
+  mode = "receive",
   invoiceNumber,
   financeCompanyName,
   amount,
@@ -11,6 +12,7 @@ export function FinanceReceivedConfirmModal({
   onCancel,
   onConfirm,
 }: {
+  mode?: "receive" | "undo";
   invoiceNumber: string;
   financeCompanyName?: string | null;
   amount: number;
@@ -19,6 +21,8 @@ export function FinanceReceivedConfirmModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const isUndo = mode === "undo";
+
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
@@ -39,8 +43,18 @@ export function FinanceReceivedConfirmModal({
       >
         <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
           <div className="flex items-start gap-3">
-            <span className="rounded-xl bg-tide-100 p-2 text-tide-600">
-              <Building2 className="h-5 w-5" />
+            <span
+              className={
+                isUndo
+                  ? "rounded-xl bg-amber-100 p-2 text-amber-700"
+                  : "rounded-xl bg-tide-100 p-2 text-tide-600"
+              }
+            >
+              {isUndo ? (
+                <Undo2 className="h-5 w-5" />
+              ) : (
+                <Building2 className="h-5 w-5" />
+              )}
             </span>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
@@ -50,7 +64,7 @@ export function FinanceReceivedConfirmModal({
                 id="finance-received-title"
                 className="mt-1 font-display text-xl font-semibold text-ink-900"
               >
-                Mark as received?
+                {isUndo ? "Undo received status?" : "Mark as received?"}
               </h2>
             </div>
           </div>
@@ -78,14 +92,30 @@ export function FinanceReceivedConfirmModal({
               {financeCompanyName || "Finance company"}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-2xl bg-tide-100/70 px-4 py-3">
-            <span className="font-medium text-tide-600">Amount received</span>
+          <div
+            className={
+              isUndo
+                ? "flex items-center justify-between gap-4 rounded-2xl bg-amber-50 px-4 py-3"
+                : "flex items-center justify-between gap-4 rounded-2xl bg-tide-100/70 px-4 py-3"
+            }
+          >
+            <span
+              className={
+                isUndo
+                  ? "font-medium text-amber-800"
+                  : "font-medium text-tide-600"
+              }
+            >
+              {isUndo ? "Finance amount" : "Amount received"}
+            </span>
             <span className="font-display text-xl font-semibold text-ink-900">
               {formatINR(amount)}
             </span>
           </div>
           <p className="text-xs leading-relaxed text-ink-500">
-            Confirm only after the full finance amount has reached your account.
+            {isUndo
+              ? "This will set finance status back to Pending so it appears in finance dues again."
+              : "Confirm only after the full finance amount has reached your account."}
           </p>
         </div>
 
@@ -106,12 +136,20 @@ export function FinanceReceivedConfirmModal({
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className={isUndo ? "btn-secondary border-amber-300 text-amber-800 hover:bg-amber-50" : "btn-primary"}
             onClick={onConfirm}
             disabled={saving}
           >
-            <Check className="h-4 w-4" />
-            {saving ? "Saving…" : "Yes, mark received"}
+            {isUndo ? (
+              <Undo2 className="h-4 w-4" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            {saving
+              ? "Saving…"
+              : isUndo
+                ? "Yes, undo received"
+                : "Yes, mark received"}
           </button>
         </div>
       </motion.div>
