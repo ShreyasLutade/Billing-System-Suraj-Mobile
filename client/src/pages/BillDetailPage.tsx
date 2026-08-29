@@ -133,9 +133,8 @@ export function BillDetailPage() {
   }
 
   async function unmarkFinanceReceived() {
-    const financeTotal =
-      (bill?.financeAmount || 0) + (bill?.financeAmount2 || 0);
-    if (!isAdmin || !bill || financeTotal <= 0 || !bill.financeReceived) return;
+    if (!isAdmin || !bill || !(bill.financeAmount > 0) || !bill.financeReceived)
+      return;
     setMarkingFinance(true);
     setFinanceError(null);
     try {
@@ -752,11 +751,7 @@ export function BillDetailPage() {
               bill.financeCompanyName,
               bill.financeCompanyName2,
             )}
-            amount={
-              financeConfirmMode === "undo"
-                ? (bill.financeAmount || 0) + (bill.financeAmount2 || 0)
-                : bill.financeAmount
-            }
+            amount={bill.financeAmount}
             saving={markingFinance}
             error={financeError}
             onCancel={() => {
