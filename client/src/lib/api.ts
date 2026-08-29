@@ -377,6 +377,10 @@ export const api = {
     request<{ data: Bill }>(`/dues/finance/${id}/receive`, {
       method: "PATCH",
     }),
+  unmarkFinanceReceived: (id: string) =>
+    request<{ data: Bill }>(`/dues/finance/${id}/unreceive`, {
+      method: "PATCH",
+    }),
   settleDue: (
     id: string,
     payload: {
