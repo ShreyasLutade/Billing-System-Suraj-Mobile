@@ -233,8 +233,7 @@ duesRouter.patch(
         res.status(404).json({ error: "Bill not found" });
         return;
       }
-      const financeTotal = (bill.financeAmount || 0) + (bill.financeAmount2 || 0);
-      if (financeTotal <= 0) {
+      if ((bill.financeAmount || 0) <= 0) {
         res.status(400).json({ error: "This bill has no finance amount" });
         return;
       }
