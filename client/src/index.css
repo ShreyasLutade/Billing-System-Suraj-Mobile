@@ -342,7 +342,7 @@ body {
   }
 
   .tb-search {
-    @apply flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[13px] border-[1.5px] border-[#E7EAF0] bg-[#F6F8FC] px-[13px] transition focus-within:border-[#3B82F6] focus-within:bg-white focus-within:shadow-[0_0_0_3px_#E8F0FE] dark:border-[rgb(var(--color-line))] dark:bg-surface-muted dark:focus-within:border-tide-400 dark:focus-within:bg-surface-elevated dark:focus-within:shadow-[0_0_0_3px_rgba(45,212,191,0.2)];
+    @apply flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[13px] border-[1.5px] border-[#E7EAF0] bg-[#F6F8FC] px-[13px] transition focus-within:border-[#3B82F6] focus-within:bg-white focus-within:shadow-[0_0_0_3px_#E8F0FE] dark:border-[rgb(var(--color-line))] dark:bg-surface-muted dark:focus-within:border-tide-400 dark:focus-within:bg-surface-muted dark:focus-within:shadow-[0_0_0_3px_rgba(45,212,191,0.2)];
   }
 
   .tb-search input {
@@ -375,6 +375,18 @@ body {
 
   .tb-pop-narrow {
     @apply w-[min(210px,calc(100vw-32px))] rounded-[14px] p-3;
+  }
+
+  /* Clickable list cards — subtle bg tint + lift on hover */
+  .interactive-card {
+    @apply cursor-pointer outline-none transition-[transform,box-shadow,background-color] duration-200 ease-out;
+    @apply hover:-translate-y-0.5 hover:shadow-lift;
+    @apply focus:outline-none focus-visible:-translate-y-0.5 focus-visible:shadow-lift;
+  }
+
+  .interactive-card-row {
+    @apply block transition-[background-color,transform] duration-200 ease-out;
+    @apply hover:-translate-y-px focus-visible:outline-none;
   }
 
   /* Compact ledger tables (Stock / Suppliers / Purchases) */
@@ -453,6 +465,35 @@ html.dark .bg-white\/75 {
 html.dark .bg-white\/70 {
   background-color: rgb(var(--color-surface) / 0.7) !important;
 }
+
+/* Interactive card hover — unlayered so it beats dark bg-white overrides */
+.interactive-card:hover,
+.interactive-card:focus-visible {
+  background-color: #f0f4fa !important;
+}
+
+html.dark .interactive-card:hover,
+html.dark .interactive-card:focus-visible {
+  background-color: rgb(var(--color-surface-muted)) !important;
+}
+
+.interactive-card.interactive-card-danger:hover,
+.interactive-card.interactive-card-danger:focus-visible,
+html.dark .interactive-card.interactive-card-danger:hover,
+html.dark .interactive-card.interactive-card-danger:focus-visible {
+  background-color: rgb(239 68 68 / 0.4) !important;
+}
+
+.interactive-card-row:hover,
+.interactive-card-row:focus-visible {
+  background-color: #f7faff !important;
+}
+
+html.dark .interactive-card-row:hover,
+html.dark .interactive-card-row:focus-visible {
+  background-color: rgb(var(--color-surface-muted)) !important;
+}
+
 html.dark .border-white\/70,
 html.dark .border-white\/60,
 html.dark .border-white\/50 {
@@ -603,8 +644,12 @@ html.dark .bg-tide-100\/70 {
 html.dark .bg-amber-50 {
   background-color: rgb(69 39 12 / 0.45) !important;
 }
-html.dark .bg-rose-50 {
+html.dark .bg-rose-50,
+html.dark .bg-rose-50\/70 {
   background-color: rgb(76 5 25 / 0.45) !important;
+}
+html.dark .hover\:bg-rose-50:hover {
+  background-color: rgb(76 5 25 / 0.6) !important;
 }
 html.dark .bg-emerald-50,
 html.dark .bg-emerald-50\/80 {
@@ -670,6 +715,10 @@ html.dark .border-amber-300 {
   --login-muted: #7a8699;
   --login-line: #e7eaf0;
   --login-field: #f7f9fc;
+  --login-field-focus: #fff;
+  --login-placeholder: #9aa6b6;
+  --login-eye-hover: #eef2f7;
+  --login-field-err-bg: #fff6f6;
   --login-cash: #12b886;
   --login-online: #3b82f6;
   --login-finance: #8b5cf6;
@@ -695,6 +744,10 @@ html.dark .login-page {
   --login-muted: #94a3b8;
   --login-line: #2a3648;
   --login-field: #161e2e;
+  --login-field-focus: #1e293b;
+  --login-placeholder: #64748b;
+  --login-eye-hover: #243044;
+  --login-field-err-bg: rgba(76, 5, 25, 0.45);
   --login-online-soft: #1e3a5f;
   --login-loss-soft: #4c0519;
   background: #0b1220;
@@ -1289,13 +1342,13 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-inp input::placeholder {
-  color: #9aa6b6;
+  color: var(--login-placeholder);
 }
 
 .login-inp input:focus {
   border-color: var(--login-online);
   box-shadow: 0 0 0 4px var(--login-online-soft);
-  background: #fff;
+  background: var(--login-field-focus);
 }
 
 .login-inp input[aria-invalid="true"] {
@@ -1318,7 +1371,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-eye:hover {
-  background: #eef2f7;
+  background: var(--login-eye-hover);
   color: var(--login-ink);
 }
 
@@ -1336,7 +1389,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 
 .login-field-err .login-inp input {
   border-color: var(--login-loss);
-  background: #fff6f6;
+  background: var(--login-field-err-bg);
 }
 
 .login-alert {
@@ -1673,7 +1726,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
     font-size: 15px;
     border-radius: 14px;
     padding: 15px 48px 15px 44px;
-    background: #f6f8fc;
+    background: var(--login-field);
   }
 
   .login-lead {
@@ -1798,10 +1851,45 @@ html.dark .login-form-pane {
   background: #0f172a !important;
 }
 
-html.dark .login-inp,
-html.dark .login-inp-plain,
+html.dark .login-inp input,
+html.dark .login-inp-plain {
+  background: var(--login-field) !important;
+  border-color: var(--login-line) !important;
+  color: var(--login-ink) !important;
+}
+
+html.dark .login-inp input:focus,
+html.dark .login-inp-plain:focus {
+  background: var(--login-field-focus) !important;
+  border-color: var(--login-online) !important;
+  box-shadow: 0 0 0 4px var(--login-online-soft) !important;
+}
+
+html.dark .login-inp input::placeholder,
+html.dark .login-inp-plain::placeholder {
+  color: var(--login-placeholder) !important;
+}
+
+html.dark .login-field-err .login-inp input {
+  background: var(--login-field-err-bg) !important;
+}
+
+html.dark .login-eye:hover {
+  background: var(--login-eye-hover) !important;
+  color: var(--login-ink) !important;
+}
+
+html.dark .login-inp input:-webkit-autofill,
+html.dark .login-inp input:-webkit-autofill:hover,
+html.dark .login-inp input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--login-field) inset !important;
+  -webkit-text-fill-color: var(--login-ink) !important;
+  caret-color: var(--login-ink);
+  transition: background-color 9999s ease-out 0s;
+}
+
 html.dark .login-otp-box {
-  background: #161e2e !important;
+  background: var(--login-field) !important;
   border-color: var(--login-line) !important;
   color: var(--login-ink) !important;
 }

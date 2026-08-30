@@ -455,15 +455,15 @@ export function StockPage() {
       </div>
 
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="flex items-center justify-between gap-3 rounded-[12px] bg-ink-900 px-3.5 py-2 shadow-soft">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55">
+        <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#0E1626] px-3.5 py-2 shadow-soft dark:border dark:border-ink-100 dark:!bg-surface-elevated">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55 dark:!text-ink-500">
             Stock value
           </p>
-          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-white">
+          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-white dark:!text-[#F8FAFC]">
             {loading ? "…" : formatINR(summaryValue)}
           </p>
         </div>
-        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft">
+        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft dark:border-ink-100 dark:!bg-surface">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
             Units in stock
           </p>
@@ -471,7 +471,7 @@ export function StockPage() {
             {loading ? "…" : summaryUnits}
           </p>
         </div>
-        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft">
+        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft dark:border-ink-100 dark:!bg-surface">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
             Distinct models
           </p>

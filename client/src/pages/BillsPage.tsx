@@ -656,7 +656,7 @@ export function BillsPage() {
               role="link"
               tabIndex={0}
               className={clsx(
-                "relative grid cursor-pointer items-center gap-x-3 overflow-hidden rounded-[14px] border border-ink-100/80 bg-white/90 py-3 pl-[18px] pr-3.5 shadow-soft transition hover:-translate-y-0.5 hover:border-[#DCE1EA] hover:shadow-lift sm:gap-x-4 sm:pr-4",
+                "interactive-card relative grid items-center gap-x-3 overflow-hidden rounded-[14px] border border-ink-100/80 bg-white/90 py-3 pl-[18px] pr-3.5 shadow-soft sm:gap-x-4 sm:pr-4",
                 "grid-cols-1 max-[420px]:gap-y-2.5 sm:grid-cols-[minmax(160px,1.25fr)_minmax(120px,1.35fr)_148px_74px]",
                 "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2.5 max-sm:[grid-template-areas:'who_money'_'pays_pays'_'actions_actions']",
               )}
@@ -783,7 +783,7 @@ export function BillsPage() {
               <div className="flex justify-start gap-1 max-sm:[grid-area:actions] max-sm:justify-end sm:justify-end">
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center rounded-[9px] border border-ink-100 bg-white text-ink-500 transition hover:border-ink-300 hover:bg-[#F7F8FA] hover:text-ink-900 disabled:opacity-50"
+                  className="grid h-8 w-8 place-items-center rounded-[9px] border border-ink-100 bg-white text-ink-500 outline-none transition hover:border-ink-300 hover:bg-[#F7F8FA] hover:text-ink-900 focus:outline-none focus-visible:shadow-soft disabled:opacity-50 dark:border-ink-100 dark:bg-surface-elevated dark:hover:bg-surface-muted"
                   aria-label="Share"
                   disabled={sharingId === bill.id}
                   onClick={(e) => {
@@ -808,7 +808,7 @@ export function BillsPage() {
                 </button>
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center rounded-[9px] border border-ink-100 bg-white text-ink-500 transition hover:border-ink-300 hover:bg-[#F7F8FA] hover:text-ink-900"
+                  className="grid h-8 w-8 place-items-center rounded-[9px] border border-ink-100 bg-white text-ink-500 outline-none transition hover:border-ink-300 hover:bg-[#F7F8FA] hover:text-ink-900 focus:outline-none focus-visible:shadow-soft dark:border-ink-100 dark:bg-surface-elevated dark:hover:bg-surface-muted"
                   aria-label="Download PDF"
                   onClick={(e) => {
                     e.preventDefault();

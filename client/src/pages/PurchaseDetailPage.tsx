@@ -166,10 +166,13 @@ export function PurchaseDetailPage() {
                     }}
                     className={clsx(
                       COLS,
-                      "relative isolate overflow-hidden border-b border-[#EEF1F5] text-[13px]",
+                      "relative isolate overflow-hidden border-b border-[#EEF1F5] text-[13px] dark:border-[rgb(var(--color-line))]",
                       !sold && (index % 2 === 0 ? "bg-white" : "bg-[#FAFBFC]"),
-                      sold && "bg-rose-50/70",
-                      sold && billId && "cursor-pointer hover:bg-rose-50",
+                      sold &&
+                        "bg-rose-50/70 dark:!bg-rose-950/45 dark:hover:!bg-rose-950/60",
+                      sold &&
+                        billId &&
+                        "cursor-pointer hover:bg-rose-50 dark:hover:!bg-rose-950/60",
                     )}
                     title={
                       sold && billId
@@ -179,48 +182,48 @@ export function PurchaseDetailPage() {
                   >
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 font-semibold",
-                        sold ? "text-ink-400" : "text-ink-900",
+                        "border-r border-[#EEF1F5] px-3 py-1 font-semibold dark:border-[rgb(var(--color-line))]",
+                        sold ? "text-ink-500 dark:!text-rose-200/80" : "text-ink-900",
                       )}
                     >
                       {item.mobileName}
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums",
-                        sold ? "text-ink-400" : "text-ink-500",
+                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums dark:border-[rgb(var(--color-line))]",
+                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
                       {item.storage || "—"}
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums",
-                        sold ? "text-ink-400" : "text-ink-500",
+                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums dark:border-[rgb(var(--color-line))]",
+                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
                       {item.platform === "ANDROID" && item.ram ? item.ram : "—"}
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1",
-                        sold ? "text-ink-400" : "text-ink-500",
+                        "border-r border-[#EEF1F5] px-3 py-1 dark:border-[rgb(var(--color-line))]",
+                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
                       {item.color || "—"}
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 font-mono text-xs sm:text-[13px]",
-                        sold ? "text-ink-400" : "text-ink-500",
+                        "border-r border-[#EEF1F5] px-3 py-1 font-mono text-xs sm:text-[13px] dark:border-[rgb(var(--color-line))]",
+                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
                       {formatStockUnitId(item)}
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 text-right tabular-nums",
-                        sold ? "text-ink-400" : "text-ink-500",
+                        "border-r border-[#EEF1F5] px-3 py-1 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
+                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
                       {formatINR(item.purchasePrice)}
@@ -270,7 +273,7 @@ export function PurchaseDetailPage() {
                         className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
                       >
                         <span
-                          className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm sm:text-xs"
+                          className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm dark:border-rose-400/40 dark:!bg-rose-500/15 dark:!text-rose-300/80 sm:text-xs"
                           style={{ transform: "rotate(-12deg)" }}
                         >
                           Sold
