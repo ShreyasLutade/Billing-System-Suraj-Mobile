@@ -373,13 +373,15 @@ export const api = {
     ),
   listFinanceDues: () =>
     request<{ data: FinanceDuesSummary }>("/dues/finance"),
-  markFinanceReceived: (id: string) =>
+  markFinanceReceived: (id: string, slots: Array<1 | 2>) =>
     request<{ data: Bill }>(`/dues/finance/${id}/receive`, {
       method: "PATCH",
+      body: JSON.stringify({ slots }),
     }),
-  unmarkFinanceReceived: (id: string) =>
+  unmarkFinanceReceived: (id: string, slots: Array<1 | 2>) =>
     request<{ data: Bill }>(`/dues/finance/${id}/unreceive`, {
       method: "PATCH",
+      body: JSON.stringify({ slots }),
     }),
   settleDue: (
     id: string,

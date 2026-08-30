@@ -18,7 +18,15 @@ import {
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
-import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { api, formatINR, round2 } from "../lib/api";
+import {
+  financeSlotAmounts,
+  financeSlotOptions,
+  hasPendingFinance,
+  hasReceivedFinance,
+  isFinanceFullyReceived,
+  type FinanceSlot,
+} from "../lib/financeSlots";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import type { Bill, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
@@ -70,6 +78,9 @@ export function BillDetailPage() {
   const [financeConfirmMode, setFinanceConfirmMode] = useState<
     "receive" | "undo"
   >("receive");
+  const [financeConfirmInitialSlots, setFinanceConfirmInitialSlots] = useState<
+    FinanceSlot[] | undefined
+  >(undefined);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
@@ -112,13 +123,13 @@ export function BillDetailPage() {
     }
   }
 
-  async function markFinanceReceived() {
-    if (!isAdmin || !bill || bill.financeAmount <= 0 || bill.financeReceived)
+  async function markFinanceReceived(slots: FinanceSlot[]) {
+    if (!isAdmin || !bill || !hasPendingFinance(bill) || slots.length === 0)
       return;
     setMarkingFinance(true);
     setFinanceError(null);
     try {
-      const { data } = await api.markFinanceReceived(bill.id);
+      const { data } = await api.markFinanceReceived(bill.id, slots);
       setBill(data);
       setShowFinanceConfirm(false);
     } catch (err) {
@@ -132,13 +143,13 @@ export function BillDetailPage() {
     }
   }
 
-  async function unmarkFinanceReceived() {
-    if (!isAdmin || !bill || !(bill.financeAmount > 0) || !bill.financeReceived)
+  async function unmarkFinanceReceived(slots: FinanceSlot[]) {
+    if (!isAdmin || !bill || !hasReceivedFinance(bill) || slots.length === 0)
       return;
     setMarkingFinance(true);
     setFinanceError(null);
     try {
-      const { data } = await api.unmarkFinanceReceived(bill.id);
+      const { data } = await api.unmarkFinanceReceived(bill.id, slots);
       setBill(data);
       setShowFinanceConfirm(false);
     } catch (err) {
@@ -600,37 +611,78 @@ export function BillDetailPage() {
               />
 
               {bill.financeAmount > 0 ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <p
-                    className={`text-xs font-semibold ${
-                      bill.financeReceived ? "text-[#0E9E76]" : "text-[#B76E00]"
-                    }`}
-                  >
-                    Finance status ·{" "}
-                    {bill.financeReceived ? "Received" : "Pending"}
-                    {bill.financeReceivedAt
-                      ? ` · ${format(new Date(bill.financeReceivedAt), "dd MMM yyyy")}`
-                      : ""}
-                  </p>
-                  {bill.financeReceived && isAdmin ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11px] font-semibold text-ink-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 disabled:opacity-50"
-                      disabled={markingFinance}
-                      onClick={() => {
-                        setFinanceError(null);
-                        setFinanceConfirmMode("undo");
-                        setShowFinanceConfirm(true);
-                      }}
-                    >
-                      <Undo2 className="h-3 w-3" />
-                      Undo
-                    </button>
-                  ) : null}
+                <div className="mt-3 space-y-2">
+                  {(() => {
+                    const { amount1, amount2 } = financeSlotAmounts(bill);
+                    const rows: Array<{
+                      key: string;
+                      label: string;
+                      received: boolean;
+                      receivedAt?: string | null;
+                      slot: FinanceSlot;
+                    }> = [];
+                    if (amount1 > 0) {
+                      rows.push({
+                        key: "f1",
+                        label:
+                          bill.financeCompanyName?.trim() ||
+                          (amount2 > 0 ? "Finance 1" : "Finance"),
+                        received: Boolean(bill.financeReceived),
+                        receivedAt: bill.financeReceivedAt,
+                        slot: 1,
+                      });
+                    }
+                    if (amount2 > 0) {
+                      rows.push({
+                        key: "f2",
+                        label:
+                          bill.financeCompanyName2?.trim() || "Finance 2",
+                        received: Boolean(bill.financeReceived2),
+                        receivedAt: bill.financeReceivedAt2,
+                        slot: 2,
+                      });
+                    }
+                    return rows.map((row) => (
+                      <div
+                        key={row.key}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <p
+                          className={`text-xs font-semibold ${
+                            row.received ? "text-[#0E9E76]" : "text-[#B76E00]"
+                          }`}
+                        >
+                          {row.label} ·{" "}
+                          {row.received ? "Received" : "Pending"}
+                          {row.received && row.receivedAt
+                            ? ` · ${format(new Date(row.receivedAt), "dd MMM yyyy")}`
+                            : ""}
+                        </p>
+                        {row.received && isAdmin ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11px] font-semibold text-ink-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 disabled:opacity-50"
+                            disabled={markingFinance}
+                            onClick={() => {
+                              setFinanceError(null);
+                              setFinanceConfirmMode("undo");
+                              setFinanceConfirmInitialSlots([row.slot]);
+                              setShowFinanceConfirm(true);
+                            }}
+                          >
+                            <Undo2 className="h-3 w-3" />
+                            Undo
+                          </button>
+                        ) : null}
+                      </div>
+                    ));
+                  })()}
                 </div>
               ) : null}
 
-              {bill.financeAmount > 0 && !bill.financeReceived && isAdmin ? (
+              {bill.financeAmount > 0 &&
+              hasPendingFinance(bill) &&
+              isAdmin ? (
                 <button
                   type="button"
                   className="btn-primary mt-4 w-full !rounded-[11px]"
@@ -638,11 +690,18 @@ export function BillDetailPage() {
                   onClick={() => {
                     setFinanceError(null);
                     setFinanceConfirmMode("receive");
+                    setFinanceConfirmInitialSlots(undefined);
                     setShowFinanceConfirm(true);
                   }}
                 >
                   <Check className="h-4 w-4" />
-                  {markingFinance ? "Saving…" : "Mark finance as received"}
+                  {markingFinance
+                    ? "Saving…"
+                    : isFinanceFullyReceived(bill)
+                      ? "Mark finance as received"
+                      : hasReceivedFinance(bill)
+                        ? "Mark remaining finance as received"
+                        : "Mark finance as received"}
                 </button>
               ) : null}
               {financeError ? (
@@ -747,11 +806,15 @@ export function BillDetailPage() {
           <FinanceReceivedConfirmModal
             mode={financeConfirmMode}
             invoiceNumber={bill.invoiceNumber}
-            financeCompanyName={formatFinanceCompanies(
-              bill.financeCompanyName,
-              bill.financeCompanyName2,
-            )}
-            amount={bill.financeAmount}
+            options={
+              financeConfirmMode === "undo" &&
+              financeConfirmInitialSlots?.length === 1
+                ? financeSlotOptions(bill, "undo").filter((option) =>
+                    financeConfirmInitialSlots.includes(option.slot),
+                  )
+                : financeSlotOptions(bill, financeConfirmMode)
+            }
+            initialSlots={financeConfirmInitialSlots}
             saving={markingFinance}
             error={financeError}
             onCancel={() => {
@@ -759,10 +822,10 @@ export function BillDetailPage() {
               setShowFinanceConfirm(false);
               setFinanceError(null);
             }}
-            onConfirm={() =>
+            onConfirm={(slots) =>
               void (financeConfirmMode === "undo"
-                ? unmarkFinanceReceived()
-                : markFinanceReceived())
+                ? unmarkFinanceReceived(slots)
+                : markFinanceReceived(slots))
             }
           />
         ) : null}

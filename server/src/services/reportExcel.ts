@@ -76,6 +76,8 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "financeCompanyName2", key: "financeCompanyName2", width: 18 },
     { header: "financeReceived", key: "financeReceived", width: 14 },
     { header: "financeReceivedAt", key: "financeReceivedAt", width: 24 },
+    { header: "financeReceived2", key: "financeReceived2", width: 14 },
+    { header: "financeReceivedAt2", key: "financeReceivedAt2", width: 24 },
     { header: "isExchange", key: "isExchange", width: 10 },
     { header: "exchangeModel", key: "exchangeModel", width: 18 },
     { header: "exchangePlatform", key: "exchangePlatform", width: 14 },
@@ -131,6 +133,8 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
       financeCompanyName2: bill.financeCompanyName2 || "",
       financeReceived: yesNo(bill.financeReceived),
       financeReceivedAt: iso(bill.financeReceivedAt),
+      financeReceived2: yesNo(bill.financeReceived2),
+      financeReceivedAt2: iso(bill.financeReceivedAt2),
       isExchange: yesNo(bill.isExchange),
       exchangeModel: bill.exchangeModel || "",
       exchangePlatform: bill.exchangePlatform || "",
@@ -347,9 +351,13 @@ async function addOutstandingDuesSheet(wb: ExcelJS.Workbook) {
 async function addFinanceDuesSheet(wb: ExcelJS.Workbook) {
   const dues = await prisma.bill.findMany({
     where: {
+      withGst: false,
+      financeAmount: { gt: 0 },
       OR: [
-        { financeAmount: { gt: 0 }, financeReceived: false },
-        { financeAmount2: { gt: 0 }, financeReceived: false },
+        { financeReceived: false },
+        {
+          AND: [{ financeAmount2: { gt: 0 } }, { financeReceived2: false }],
+        },
       ],
     },
     orderBy: { billDate: "asc" },
@@ -363,15 +371,20 @@ async function addFinanceDuesSheet(wb: ExcelJS.Workbook) {
     { header: "Finance Co. 2", key: "financeCompanyName2", width: 22 },
     { header: "Customer", key: "customerName", width: 22 },
     { header: "Phone", key: "customerPhone", width: 14 },
-    { header: "Finance 1", key: "financeAmount", width: 12 },
-    { header: "Finance 2", key: "financeAmount2", width: 12 },
+    { header: "Finance 1 Pending", key: "finance1Pending", width: 14 },
+    { header: "Finance 2 Pending", key: "finance2Pending", width: 14 },
     { header: "Total Pending", key: "totalPending", width: 14 },
+    { header: "Finance 1 Received", key: "financeReceived", width: 14 },
+    { header: "Finance 2 Received", key: "financeReceived2", width: 14 },
   ];
   styleHeader(sheet);
 
   for (const bill of dues) {
-    const f1 = money(bill.financeAmount);
-    const f2 = money(bill.financeAmount2);
+    const amount2 = money(bill.financeAmount2);
+    const amount1 = Math.max(money(bill.financeAmount) - amount2, 0);
+    const f1Pending = bill.financeReceived ? 0 : amount1;
+    const f2Pending =
+      amount2 > 0 && !bill.financeReceived2 ? amount2 : 0;
     sheet.addRow({
       invoiceNumber: bill.invoiceNumber,
       billDate: formatISTDate(bill.billDate),
@@ -379,9 +392,11 @@ async function addFinanceDuesSheet(wb: ExcelJS.Workbook) {
       financeCompanyName2: bill.financeCompanyName2 || "",
       customerName: bill.customerName,
       customerPhone: bill.customerPhone,
-      financeAmount: f1,
-      financeAmount2: f2,
-      totalPending: f1 + f2,
+      finance1Pending: f1Pending,
+      finance2Pending: f2Pending,
+      totalPending: f1Pending + f2Pending,
+      financeReceived: yesNo(bill.financeReceived),
+      financeReceived2: yesNo(bill.financeReceived2),
     });
   }
   return dues.length;

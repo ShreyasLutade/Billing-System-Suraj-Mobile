@@ -191,6 +191,7 @@ function serializeBill<
     updatedAt: Date;
     dueSettledAt?: Date | null;
     financeReceivedAt?: Date | null;
+    financeReceivedAt2?: Date | null;
     exchangeItemsJson?: string | null;
     duePayments?: Array<{
       id: string;
@@ -211,6 +212,9 @@ function serializeBill<
     dueSettledAt: bill.dueSettledAt ? bill.dueSettledAt.toISOString() : null,
     financeReceivedAt: bill.financeReceivedAt
       ? bill.financeReceivedAt.toISOString()
+      : null,
+    financeReceivedAt2: bill.financeReceivedAt2
+      ? bill.financeReceivedAt2.toISOString()
       : null,
     createdAt: bill.createdAt.toISOString(),
     updatedAt: bill.updatedAt.toISOString(),
@@ -717,6 +721,12 @@ billsRouter.put("/:id", async (req, res, next) => {
           financeReceivedAt:
             financeDetailsUnchanged && existing.financeReceived
               ? existing.financeReceivedAt
+              : null,
+          financeReceived2:
+            financeDetailsUnchanged && existing.financeReceived2,
+          financeReceivedAt2:
+            financeDetailsUnchanged && existing.financeReceived2
+              ? existing.financeReceivedAt2
               : null,
           isExchange: Boolean(persistInput.isExchange),
           exchangeModel: exchange.exchangeModel,

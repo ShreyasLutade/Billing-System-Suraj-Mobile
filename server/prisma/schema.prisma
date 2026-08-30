@@ -66,8 +66,12 @@ model Bill {
   financeAmount2     Float            @default(0)
   financeCompanyId2  String?
   financeCompanyName2 String?
+  /// Company 1 (or sole finance) received
   financeReceived    Boolean          @default(false)
   financeReceivedAt  DateTime?
+  /// Company 2 received (only when financeAmount2 > 0)
+  financeReceived2   Boolean          @default(false)
+  financeReceivedAt2 DateTime?
   isExchange         Boolean          @default(false)
   exchangeModel      String?
   /// IOS | ANDROID — used when adding exchange phone to catalog as USED

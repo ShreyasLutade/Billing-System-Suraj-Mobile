@@ -4,6 +4,10 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../middleware/auth";
 import {
+  financeSlotAmounts,
+  pendingFinanceAmount,
+} from "../lib/financeSlots";
+import {
   getPeriodRange,
   isDuePeriod,
   periodLabel,
@@ -19,6 +23,13 @@ function parseDateInput(value: string) {
   }
   return new Date(value);
 }
+
+const financeSlotsSchema = z.object({
+  slots: z
+    .array(z.union([z.literal(1), z.literal(2)]))
+    .min(1, "Select at least one finance payment")
+    .max(2),
+});
 
 duesRouter.get("/", async (req, res, next) => {
   try {
@@ -104,7 +115,12 @@ duesRouter.get("/finance", async (_req, res, next) => {
       where: {
         withGst: false,
         financeAmount: { gt: 0 },
-        financeReceived: false,
+        OR: [
+          { financeReceived: false },
+          {
+            AND: [{ financeAmount2: { gt: 0 } }, { financeReceived2: false }],
+          },
+        ],
       },
       orderBy: [{ billDate: "asc" }],
       select: {
@@ -119,6 +135,8 @@ duesRouter.get("/finance", async (_req, res, next) => {
         financeCompanyName2: true,
         financeReceived: true,
         financeReceivedAt: true,
+        financeReceived2: true,
+        financeReceivedAt2: true,
         items: {
           select: {
             productName: true,
@@ -132,32 +150,36 @@ duesRouter.get("/finance", async (_req, res, next) => {
       },
     });
 
-    const totalFinanceDue = dues.reduce(
-      (sum, bill) => sum + bill.financeAmount,
+    const mapped = dues.map(({ items, ...bill }) => ({
+      ...bill,
+      billDate: bill.billDate.toISOString(),
+      financeReceivedAt: bill.financeReceivedAt?.toISOString() ?? null,
+      financeReceivedAt2: bill.financeReceivedAt2?.toISOString() ?? null,
+      pendingFinanceAmount: pendingFinanceAmount(bill),
+      productLabels: items
+        .map((item) =>
+          [item.productName, item.color, item.storage, item.ram]
+            .filter(Boolean)
+            .join(" "),
+        )
+        .filter(Boolean),
+      imeiNumbers: items.flatMap((item) =>
+        [item.imei1, item.imei2].filter(
+          (imei): imei is string => Boolean(imei),
+        ),
+      ),
+    }));
+
+    const totalFinanceDue = mapped.reduce(
+      (sum, bill) => sum + bill.pendingFinanceAmount,
       0,
     );
 
     res.json({
       data: {
         totalFinanceDue: Number(totalFinanceDue.toFixed(2)),
-        count: dues.length,
-        dues: dues.map(({ items, ...bill }) => ({
-          ...bill,
-          billDate: bill.billDate.toISOString(),
-          financeReceivedAt: bill.financeReceivedAt?.toISOString() ?? null,
-          productLabels: items
-            .map((item) =>
-              [item.productName, item.color, item.storage, item.ram]
-                .filter(Boolean)
-                .join(" "),
-            )
-            .filter(Boolean),
-          imeiNumbers: items.flatMap((item) =>
-            [item.imei1, item.imei2].filter(
-              (imei): imei is string => Boolean(imei),
-            ),
-          ),
-        })),
+        count: mapped.length,
+        dues: mapped,
       },
     });
   } catch (error) {
@@ -165,14 +187,48 @@ duesRouter.get("/finance", async (_req, res, next) => {
   }
 });
 
+function serializeUpdatedBill(updated: {
+  billDate: Date;
+  dueDate: Date | null;
+  dueSettledAt: Date | null;
+  financeReceivedAt: Date | null;
+  financeReceivedAt2: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  [key: string]: unknown;
+}) {
+  return {
+    ...updated,
+    billDate: updated.billDate.toISOString(),
+    dueDate: updated.dueDate?.toISOString() ?? null,
+    dueSettledAt: updated.dueSettledAt?.toISOString() ?? null,
+    financeReceivedAt: updated.financeReceivedAt?.toISOString() ?? null,
+    financeReceivedAt2: updated.financeReceivedAt2?.toISOString() ?? null,
+    createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}
+
 duesRouter.patch("/finance/:id/receive", requireAdmin, async (req, res, next) => {
   try {
+    const parsed = financeSlotsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Select which finance payment(s) to mark received",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const slots = [...new Set(parsed.data.slots)];
     const bill = await prisma.bill.findUnique({
       where: { id: req.params.id },
       select: {
         id: true,
         financeAmount: true,
+        financeAmount2: true,
         financeReceived: true,
+        financeReceived2: true,
       },
     });
 
@@ -180,35 +236,55 @@ duesRouter.patch("/finance/:id/receive", requireAdmin, async (req, res, next) =>
       res.status(404).json({ error: "Bill not found" });
       return;
     }
-    if (bill.financeAmount <= 0) {
+
+    const { amount1, amount2 } = financeSlotAmounts(bill);
+    if (amount1 <= 0 && amount2 <= 0) {
       res.status(400).json({ error: "This bill has no finance amount" });
       return;
     }
-    if (bill.financeReceived) {
-      res.status(400).json({ error: "Finance amount is already received" });
-      return;
+
+    const now = new Date();
+    const data: Prisma.BillUpdateInput = {};
+
+    for (const slot of slots) {
+      if (slot === 1) {
+        if (amount1 <= 0) {
+          res.status(400).json({ error: "This bill has no first finance amount" });
+          return;
+        }
+        if (bill.financeReceived) {
+          res.status(400).json({
+            error: "First finance payment is already received",
+          });
+          return;
+        }
+        data.financeReceived = true;
+        data.financeReceivedAt = now;
+      } else {
+        if (amount2 <= 0) {
+          res.status(400).json({
+            error: "This bill has no second finance amount",
+          });
+          return;
+        }
+        if (bill.financeReceived2) {
+          res.status(400).json({
+            error: "Second finance payment is already received",
+          });
+          return;
+        }
+        data.financeReceived2 = true;
+        data.financeReceivedAt2 = now;
+      }
     }
 
     const updated = await prisma.bill.update({
       where: { id: bill.id },
-      data: {
-        financeReceived: true,
-        financeReceivedAt: new Date(),
-      },
+      data,
       include: { items: true },
     });
 
-    res.json({
-      data: {
-        ...updated,
-        billDate: updated.billDate.toISOString(),
-        dueDate: updated.dueDate?.toISOString() ?? null,
-        dueSettledAt: updated.dueSettledAt?.toISOString() ?? null,
-        financeReceivedAt: updated.financeReceivedAt?.toISOString() ?? null,
-        createdAt: updated.createdAt.toISOString(),
-        updatedAt: updated.updatedAt.toISOString(),
-      },
-    });
+    res.json({ data: serializeUpdatedBill(updated) });
   } catch (error) {
     next(error);
   }
@@ -219,6 +295,16 @@ duesRouter.patch(
   requireAdmin,
   async (req, res, next) => {
     try {
+      const parsed = financeSlotsSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({
+          error: "Select which finance payment(s) to undo",
+          details: parsed.error.flatten(),
+        });
+        return;
+      }
+
+      const slots = [...new Set(parsed.data.slots)];
       const bill = await prisma.bill.findUnique({
         where: { id: req.params.id },
         select: {
@@ -226,6 +312,7 @@ duesRouter.patch(
           financeAmount: true,
           financeAmount2: true,
           financeReceived: true,
+          financeReceived2: true,
         },
       });
 
@@ -233,35 +320,56 @@ duesRouter.patch(
         res.status(404).json({ error: "Bill not found" });
         return;
       }
-      if ((bill.financeAmount || 0) <= 0) {
+
+      const { amount1, amount2 } = financeSlotAmounts(bill);
+      if (amount1 <= 0 && amount2 <= 0) {
         res.status(400).json({ error: "This bill has no finance amount" });
         return;
       }
-      if (!bill.financeReceived) {
-        res.status(400).json({ error: "Finance amount is already pending" });
-        return;
+
+      const data: Prisma.BillUpdateInput = {};
+
+      for (const slot of slots) {
+        if (slot === 1) {
+          if (amount1 <= 0) {
+            res.status(400).json({
+              error: "This bill has no first finance amount",
+            });
+            return;
+          }
+          if (!bill.financeReceived) {
+            res.status(400).json({
+              error: "First finance payment is already pending",
+            });
+            return;
+          }
+          data.financeReceived = false;
+          data.financeReceivedAt = null;
+        } else {
+          if (amount2 <= 0) {
+            res.status(400).json({
+              error: "This bill has no second finance amount",
+            });
+            return;
+          }
+          if (!bill.financeReceived2) {
+            res.status(400).json({
+              error: "Second finance payment is already pending",
+            });
+            return;
+          }
+          data.financeReceived2 = false;
+          data.financeReceivedAt2 = null;
+        }
       }
 
       const updated = await prisma.bill.update({
         where: { id: bill.id },
-        data: {
-          financeReceived: false,
-          financeReceivedAt: null,
-        },
+        data,
         include: { items: true },
       });
 
-      res.json({
-        data: {
-          ...updated,
-          billDate: updated.billDate.toISOString(),
-          dueDate: updated.dueDate?.toISOString() ?? null,
-          dueSettledAt: updated.dueSettledAt?.toISOString() ?? null,
-          financeReceivedAt: null,
-          createdAt: updated.createdAt.toISOString(),
-          updatedAt: updated.updatedAt.toISOString(),
-        },
-      });
+      res.json({ data: serializeUpdatedBill(updated) });
     } catch (error) {
       next(error);
     }
@@ -386,6 +494,8 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
         dueSettledAt: updated.dueSettledAt
           ? updated.dueSettledAt.toISOString()
           : null,
+        financeReceivedAt: updated.financeReceivedAt?.toISOString() ?? null,
+        financeReceivedAt2: updated.financeReceivedAt2?.toISOString() ?? null,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
         duePayments: updated.duePayments.map((payment) => ({

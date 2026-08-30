@@ -23,6 +23,7 @@ import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
 import { ensurePhoneModelsSeeded } from "./services/phoneModels";
 import { ensurePasswordResetOtpTable } from "./services/passwordResetOtp";
+import { backfillFinanceReceived2 } from "./services/backfillFinanceReceived2";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -156,6 +157,16 @@ async function start() {
     }
   } catch (error) {
     console.warn("[suppliers] Backfill skipped:", error);
+  }
+  try {
+    const count = await backfillFinanceReceived2(prisma);
+    if (count > 0) {
+      console.log(
+        `[finance] Backfill: set financeReceived2 on ${count} dual-finance bill(s)`,
+      );
+    }
+  } catch (error) {
+    console.warn("[finance] Received2 backfill skipped:", error);
   }
   startDailyReportScheduler();
   const server = app.listen(port, "0.0.0.0", () => {
