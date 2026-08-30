@@ -485,7 +485,7 @@ export function AnalyticsPage() {
                   key={kpi.key}
                   to={to}
                   state={fromState(location)}
-                  className="group rounded-2xl border border-ink-100/80 bg-white/90 p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lift"
+                  className="interactive-card group rounded-2xl border border-ink-100/80 bg-white/90 p-5 shadow-soft"
                 >
                   <div className="mb-4 flex items-center justify-between">
                     <div
@@ -695,7 +695,7 @@ export function AnalyticsPage() {
                   key={bill.id}
                   to={`/bills/${bill.id}`}
                   state={fromState(location)}
-                  className={`block border-b border-ink-100 px-4 py-3.5 transition last:border-b-0 hover:bg-[#F7FAFF] dark:hover:bg-surface-muted sm:grid sm:items-center sm:gap-3 sm:px-5 ${billsRowGrid}`}
+                  className={`interactive-card-row border-b border-ink-100 px-4 py-3.5 last:border-b-0 sm:grid sm:items-center sm:gap-3 sm:px-5 ${billsRowGrid}`}
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div

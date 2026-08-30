@@ -241,8 +241,8 @@ export function AnalyticsPaymentsPage() {
               type="button"
               onClick={() => setMode(key)}
               className={clsx(
-                "rounded-[14px] border-[1.5px] bg-white/90 p-3.5 text-left shadow-soft transition hover:-translate-y-0.5",
-                on ? "shadow-lift" : "border-ink-100 hover:border-[#DCE2EA]",
+                "interactive-card rounded-[14px] border-[1.5px] bg-white/90 p-3.5 text-left shadow-soft",
+                on ? "shadow-lift" : "border-ink-100",
               )}
               style={on ? { borderColor: item.colors.color } : undefined}
             >
@@ -266,7 +266,7 @@ export function AnalyticsPaymentsPage() {
         <button
           type="button"
           onClick={goDue}
-          className="rounded-[14px] border-[1.5px] border-ink-100 bg-white/90 p-3.5 text-left shadow-soft transition hover:-translate-y-0.5 hover:border-[#DCE2EA]"
+          className="interactive-card rounded-[14px] border-[1.5px] border-ink-100 bg-white/90 p-3.5 text-left shadow-soft"
         >
           <div className="mb-2.5 flex items-center gap-2">
             <span
@@ -392,7 +392,7 @@ export function AnalyticsPaymentsPage() {
                     pathname: location.pathname,
                     search: location.search,
                   })}
-                  className="relative flex cursor-pointer items-center gap-3.5 overflow-hidden rounded-[14px] border border-ink-100/80 bg-white/90 px-4 py-3.5 shadow-soft transition hover:-translate-y-0.5 hover:border-[#DCE2EA]"
+                  className="interactive-card relative flex items-center gap-3.5 overflow-hidden rounded-[14px] border border-ink-100/80 bg-white/90 px-4 py-3.5 shadow-soft"
                 >
                   <span
                     aria-hidden
