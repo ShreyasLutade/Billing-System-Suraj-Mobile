@@ -219,14 +219,14 @@ export function SupplierDetailPage() {
                         </td>
                         <td className="text-right">
                           {paid ? (
-                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600">
+                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-400">
                               <Check className="h-3.5 w-3.5" />
                               Paid
                             </span>
                           ) : (
                             <button
                               type="button"
-                              className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
+                              className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-300"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setConfirmPurchase(p);

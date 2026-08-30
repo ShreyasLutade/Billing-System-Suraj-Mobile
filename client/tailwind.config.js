@@ -1,33 +1,41 @@
 import type { Config } from "tailwindcss";
 
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
         ink: {
-          950: "#07111C",
-          900: "#0B1F33",
-          800: "#143049",
-          700: "#1E3F5A",
-          500: "#4A657A",
-          300: "#8FA3B5",
-          100: "#D7E2EC",
-          50: "#F3F7FB",
+          950: "rgb(var(--color-ink-950) / <alpha-value>)",
+          900: "rgb(var(--color-ink-900) / <alpha-value>)",
+          800: "rgb(var(--color-ink-800) / <alpha-value>)",
+          700: "rgb(var(--color-ink-700) / <alpha-value>)",
+          600: "rgb(var(--color-ink-600) / <alpha-value>)",
+          500: "rgb(var(--color-ink-500) / <alpha-value>)",
+          400: "rgb(var(--color-ink-400) / <alpha-value>)",
+          300: "rgb(var(--color-ink-300) / <alpha-value>)",
+          100: "rgb(var(--color-ink-100) / <alpha-value>)",
+          50: "rgb(var(--color-ink-50) / <alpha-value>)",
         },
         tide: {
-          600: "#0F766E",
-          500: "#0D9488",
-          400: "#2DD4BF",
-          100: "#CCFBF1",
+          600: "rgb(var(--color-tide-600) / <alpha-value>)",
+          500: "rgb(var(--color-tide-500) / <alpha-value>)",
+          400: "rgb(var(--color-tide-400) / <alpha-value>)",
+          100: "rgb(var(--color-tide-100) / <alpha-value>)",
         },
         sand: {
-          50: "#F7F4EF",
-          100: "#EFE8DE",
+          50: "rgb(var(--color-sand-50) / <alpha-value>)",
+          100: "rgb(var(--color-sand-100) / <alpha-value>)",
         },
         ember: {
-          500: "#C2410C",
-          400: "#EA580C",
+          500: "rgb(var(--color-ember-500) / <alpha-value>)",
+          400: "rgb(var(--color-ember-400) / <alpha-value>)",
+        },
+        surface: {
+          DEFAULT: "rgb(var(--color-surface) / <alpha-value>)",
+          muted: "rgb(var(--color-surface-muted) / <alpha-value>)",
+          elevated: "rgb(var(--color-surface-elevated) / <alpha-value>)",
         },
       },
       fontFamily: {
@@ -36,12 +44,11 @@ export default {
         mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
       },
       boxShadow: {
-        soft: "0 18px 50px rgba(11, 31, 51, 0.08)",
-        lift: "0 10px 30px rgba(11, 31, 51, 0.12)",
+        soft: "var(--shadow-soft)",
+        lift: "var(--shadow-lift)",
       },
       backgroundImage: {
-        mesh:
-          "radial-gradient(1200px 600px at 10% -10%, rgba(45, 212, 191, 0.18), transparent 55%), radial-gradient(900px 500px at 100% 0%, rgba(14, 116, 144, 0.14), transparent 50%), linear-gradient(180deg, #F4F7FB 0%, #EEF3F8 45%, #F7F4EF 100%)",
+        mesh: "var(--bg-mesh)",
       },
       keyframes: {
         float: {

@@ -23,13 +23,8 @@ import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
 import { fromState } from "../lib/navMemory";
 import { analyticsPaymentsPath, type PaymentMode } from "../lib/analyticsNav";
-
-const MIX = {
-  cash: { color: "#12B886", soft: "#E7F8F1", ink: "#0E9E76" },
-  online: { color: "#3B82F6", soft: "#E8F0FE", ink: "#2563EB" },
-  finance: { color: "#8B5CF6", soft: "#F0EBFE", ink: "#7C3AED" },
-  due: { color: "#F59E0B", soft: "#FEF3E2", ink: "#B76E00" },
-} as const;
+import { MIX, mixSurface } from "../lib/analyticsMix";
+import { useTheme } from "../theme/ThemeContext";
 
 const AVATAR_COLORS = [
   MIX.cash.color,
@@ -114,6 +109,8 @@ function formatChange(pct: number | null) {
 
 export function AnalyticsPage() {
   const location = useLocation();
+  const { theme } = useTheme();
+  const dark = theme === "dark";
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -412,10 +409,7 @@ export function AnalyticsPage() {
               </p>
               <span
                 className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={{
-                  background: MIX.due.soft,
-                  color: MIX.due.ink,
-                }}
+                style={mixSurface(MIX.due, dark)}
               >
                 ● Pending across {data.outstandingDue.count} bill
                 {data.outstandingDue.count === 1 ? "" : "s"}
@@ -496,19 +490,13 @@ export function AnalyticsPage() {
                   <div className="mb-4 flex items-center justify-between">
                     <div
                       className="grid h-[34px] w-[34px] place-items-center rounded-[10px]"
-                      style={{
-                        background: kpi.colors.soft,
-                        color: kpi.colors.ink,
-                      }}
+                      style={mixSurface(kpi.colors, dark)}
                     >
                       <Icon className="h-[17px] w-[17px]" strokeWidth={2.25} />
                     </div>
                     <span
                       className="rounded-full px-2.5 py-0.5 text-xs font-bold"
-                      style={{
-                        background: kpi.colors.soft,
-                        color: kpi.colors.ink,
-                      }}
+                      style={mixSurface(kpi.colors, dark)}
                     >
                       {formatShare(kpi.share)}
                     </span>
@@ -532,7 +520,7 @@ export function AnalyticsPage() {
               <div className="flex min-w-0 items-start gap-3.5">
                 <div
                   className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px]"
-                  style={{ background: "#E8F0FE", color: "#2563EB" }}
+                  style={mixSurface(MIX.online, dark)}
                 >
                   <Headphones className="h-5 w-5" strokeWidth={2.1} />
                 </div>
@@ -675,7 +663,7 @@ export function AnalyticsPage() {
 
               <Link
                 to="/bills"
-                className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[13px] font-semibold text-ink-900 transition hover:bg-ink-50"
+                className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[13px] font-semibold text-ink-900 transition hover:bg-ink-50 dark:hover:bg-surface-muted"
               >
                 View all →
               </Link>
@@ -707,7 +695,7 @@ export function AnalyticsPage() {
                   key={bill.id}
                   to={`/bills/${bill.id}`}
                   state={fromState(location)}
-                  className={`block border-b border-ink-100 px-4 py-3.5 transition last:border-b-0 hover:bg-[#F7FAFF] sm:grid sm:items-center sm:gap-3 sm:px-5 ${billsRowGrid}`}
+                  className={`block border-b border-ink-100 px-4 py-3.5 transition last:border-b-0 hover:bg-[#F7FAFF] dark:hover:bg-surface-muted sm:grid sm:items-center sm:gap-3 sm:px-5 ${billsRowGrid}`}
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div

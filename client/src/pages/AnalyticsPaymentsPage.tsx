@@ -21,13 +21,8 @@ import { type PaymentMode } from "../lib/analyticsNav";
 import { fromState } from "../lib/navMemory";
 import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
-
-const MIX = {
-  cash: { color: "#12B886", soft: "#E7F8F1", ink: "#0E9E76" },
-  online: { color: "#3B82F6", soft: "#E8F0FE", ink: "#2563EB" },
-  finance: { color: "#8B5CF6", soft: "#F0EBFE", ink: "#7C3AED" },
-  due: { color: "#F59E0B", soft: "#FEF3E2", ink: "#B76E00" },
-} as const;
+import { MIX, mixSurface } from "../lib/analyticsMix";
+import { useTheme } from "../theme/ThemeContext";
 
 const AVATAR_COLORS = [
   MIX.cash.color,
@@ -118,6 +113,8 @@ function readMode(search: URLSearchParams): PaymentMode {
 export function AnalyticsPaymentsPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const dark = theme === "dark";
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = readMode(searchParams);
   const { period, customFrom, customTo } = readPeriod(searchParams);
@@ -252,10 +249,7 @@ export function AnalyticsPaymentsPage() {
               <div className="mb-2.5 flex items-center gap-2">
                 <span
                   className="grid h-7 w-7 place-items-center rounded-[8px]"
-                  style={{
-                    background: item.colors.soft,
-                    color: item.colors.ink,
-                  }}
+                  style={mixSurface(item.colors, dark)}
                 >
                   <Icon className="h-[15px] w-[15px]" strokeWidth={2.2} />
                 </span>
@@ -277,7 +271,7 @@ export function AnalyticsPaymentsPage() {
           <div className="mb-2.5 flex items-center gap-2">
             <span
               className="grid h-7 w-7 place-items-center rounded-[8px]"
-              style={{ background: MIX.due.soft, color: MIX.due.ink }}
+              style={mixSurface(MIX.due, dark)}
             >
               <Clock3 className="h-[15px] w-[15px]" strokeWidth={2.2} />
             </span>
@@ -301,16 +295,15 @@ export function AnalyticsPaymentsPage() {
               aria-hidden
               className="pointer-events-none absolute -right-10 -top-10 h-[170px] w-[170px] rounded-full opacity-50"
               style={{
-                background: `radial-gradient(circle, ${meta.colors.soft}, transparent 70%)`,
+                background: `radial-gradient(circle, ${
+                  dark ? meta.colors.softDark : meta.colors.soft
+                }, transparent 70%)`,
               }}
             />
             <div className="relative flex flex-wrap items-center gap-5">
               <span
                 className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[15px]"
-                style={{
-                  background: meta.colors.soft,
-                  color: meta.colors.ink,
-                }}
+                style={mixSurface(meta.colors, dark)}
               >
                 <ModeIcon className="h-[26px] w-[26px]" strokeWidth={2.1} />
               </span>
@@ -320,7 +313,7 @@ export function AnalyticsPaymentsPage() {
                 </p>
                 <p
                   className="mt-1 font-display text-[32px] font-bold leading-none tabular-nums"
-                  style={{ color: meta.colors.ink }}
+                  style={{ color: dark ? meta.colors.inkDark : meta.colors.ink }}
                 >
                   {formatINR(modeTotal)}
                 </p>
