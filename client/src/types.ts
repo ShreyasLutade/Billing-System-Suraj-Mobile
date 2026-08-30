@@ -62,6 +62,8 @@ export type Bill = {
   financeCompanyName2?: string | null;
   financeReceived: boolean;
   financeReceivedAt?: string | null;
+  financeReceived2?: boolean;
+  financeReceivedAt2?: string | null;
   isExchange: boolean;
   exchangeModel?: string | null;
   exchangePlatform?: "IOS" | "ANDROID" | string | null;
@@ -341,6 +343,9 @@ export type FinanceDueItem = {
   financeCompanyName2?: string | null;
   financeReceived: boolean;
   financeReceivedAt?: string | null;
+  financeReceived2?: boolean;
+  financeReceivedAt2?: string | null;
+  pendingFinanceAmount?: number;
   productLabels?: string[];
   imeiNumbers?: string[];
 };

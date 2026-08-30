@@ -24,6 +24,13 @@ import { usePersistedTab } from "../hooks/usePersistedTab";
 import { fromState, readFromState, backLabel } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import {
+  financeSlotAmounts,
+  financeSlotOptions,
+  pendingFinanceAmount,
+  slotsMatchingCompany,
+  type FinanceSlot,
+} from "../lib/financeSlots";
+import {
   matchesDueSearch,
   type BillSearchScope,
 } from "../lib/billSearch";
@@ -75,22 +82,24 @@ function financeTotalsByCompany(dues: FinanceDueItem[]) {
   const totals = new Map<string, number>();
 
   for (const due of dues) {
-    const amount2 = due.financeAmount2 || 0;
-    const amount1 = round2(Math.max((due.financeAmount || 0) - amount2, 0));
+    const { amount1, amount2 } = financeSlotAmounts(due);
     const name1 = due.financeCompanyName?.trim();
     const name2 = due.financeCompanyName2?.trim();
 
-    if (name1 && amount1 > 0) {
+    if (name1 && amount1 > 0 && !due.financeReceived) {
       totals.set(name1, round2((totals.get(name1) || 0) + amount1));
     }
-    if (name2 && amount2 > 0) {
+    if (name2 && amount2 > 0 && !due.financeReceived2) {
       totals.set(name2, round2((totals.get(name2) || 0) + amount2));
     }
-    if (!name1 && !name2 && due.financeAmount > 0) {
-      totals.set(
-        "Unknown company",
-        round2((totals.get("Unknown company") || 0) + due.financeAmount),
-      );
+    if (!name1 && !name2) {
+      const pending = pendingFinanceAmount(due);
+      if (pending > 0) {
+        totals.set(
+          "Unknown company",
+          round2((totals.get("Unknown company") || 0) + pending),
+        );
+      }
     }
   }
 
@@ -110,24 +119,30 @@ function dueDateStatus(dueDate: string | null) {
 }
 
 function dueMatchesFinanceCompany(due: FinanceDueItem, company: string) {
+  const { amount1, amount2 } = financeSlotAmounts(due);
   const name1 = due.financeCompanyName?.trim() || "";
   const name2 = due.financeCompanyName2?.trim() || "";
   if (company === "Unknown company") {
-    return !name1 && !name2 && due.financeAmount > 0;
+    return !name1 && !name2 && pendingFinanceAmount(due) > 0;
   }
-  return name1 === company || name2 === company;
+  if (name1 === company && amount1 > 0 && !due.financeReceived) return true;
+  if (name2 === company && amount2 > 0 && !due.financeReceived2) return true;
+  return false;
 }
 
 function financeAmountForCompany(due: FinanceDueItem, company: string | null) {
-  if (!company) return due.financeAmount;
-  const amount2 = due.financeAmount2 || 0;
-  const amount1 = round2(Math.max((due.financeAmount || 0) - amount2, 0));
+  if (!company) return pendingFinanceAmount(due);
+  const { amount1, amount2 } = financeSlotAmounts(due);
   const name1 = due.financeCompanyName?.trim() || "";
   const name2 = due.financeCompanyName2?.trim() || "";
-  if (company === "Unknown company") return due.financeAmount;
+  if (company === "Unknown company") return pendingFinanceAmount(due);
   let total = 0;
-  if (name1 === company) total = round2(total + amount1);
-  if (name2 === company) total = round2(total + amount2);
+  if (name1 === company && amount1 > 0 && !due.financeReceived) {
+    total = round2(total + amount1);
+  }
+  if (name2 === company && amount2 > 0 && !due.financeReceived2) {
+    total = round2(total + amount2);
+  }
   return total;
 }
 
@@ -254,7 +269,10 @@ export function DuesPage() {
       );
       return match?.amount ?? 0;
     }
-    return filteredFinanceDues.reduce((sum, due) => sum + due.financeAmount, 0);
+    return filteredFinanceDues.reduce(
+      (sum, due) => sum + pendingFinanceAmount(due),
+      0,
+    );
   }, [financeCompanyFilter, financeCompanyTotals, filteredFinanceDues]);
 
   const customerReveal = useInfiniteReveal(
@@ -272,11 +290,15 @@ export function DuesPage() {
     setFinanceCompanyFilter(null);
   };
 
-  async function markFinanceReceived(due: FinanceDueItem) {
+  async function markFinanceReceived(
+    due: FinanceDueItem,
+    slots: FinanceSlot[],
+  ) {
+    if (slots.length === 0) return;
     setReceivingId(due.id);
     setError(null);
     try {
-      await api.markFinanceReceived(due.id);
+      await api.markFinanceReceived(due.id, slots);
       setSelectedFinanceDue(null);
       await loadFinanceDues();
     } catch (err) {
@@ -712,10 +734,16 @@ export function DuesPage() {
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-semibold text-ink-900">
-                        {formatFinanceCompanies(
-                          due.financeCompanyName,
-                          due.financeCompanyName2,
-                        ) || "Finance company"}
+                        {financeCompanyFilter
+                          ? financeCompanyFilter
+                          : formatFinanceCompanies(
+                              due.financeReceived
+                                ? null
+                                : due.financeCompanyName,
+                              due.financeReceived2
+                                ? null
+                                : due.financeCompanyName2,
+                            ) || "Finance company"}
                       </h3>
                       <p className="mt-0.5 truncate text-xs text-ink-500">
                         {due.customerName}
@@ -776,13 +804,25 @@ export function DuesPage() {
         {selectedFinanceDue && isAdmin ? (
           <FinanceReceivedConfirmModal
             invoiceNumber={selectedFinanceDue.invoiceNumber}
-            financeCompanyName={
-              formatFinanceCompanies(
-                selectedFinanceDue.financeCompanyName,
-                selectedFinanceDue.financeCompanyName2,
-              ) || selectedFinanceDue.financeCompanyName
+            options={(() => {
+              const pending = financeSlotOptions(selectedFinanceDue, "receive");
+              if (!financeCompanyFilter) return pending;
+              const allowed = new Set(
+                slotsMatchingCompany(
+                  selectedFinanceDue,
+                  financeCompanyFilter,
+                ),
+              );
+              return pending.filter((option) => allowed.has(option.slot));
+            })()}
+            initialSlots={
+              financeCompanyFilter
+                ? slotsMatchingCompany(
+                    selectedFinanceDue,
+                    financeCompanyFilter,
+                  )
+                : undefined
             }
-            amount={selectedFinanceDue.financeAmount}
             saving={receivingId === selectedFinanceDue.id}
             error={error}
             onCancel={() => {
@@ -790,7 +830,9 @@ export function DuesPage() {
               setSelectedFinanceDue(null);
               setError(null);
             }}
-            onConfirm={() => void markFinanceReceived(selectedFinanceDue)}
+            onConfirm={(slots) =>
+              void markFinanceReceived(selectedFinanceDue, slots)
+            }
           />
         ) : null}
       </AnimatePresence>
