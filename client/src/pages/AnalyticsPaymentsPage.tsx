@@ -21,7 +21,7 @@ import { type PaymentMode } from "../lib/analyticsNav";
 import { fromState } from "../lib/navMemory";
 import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
-import { MIX, mixSurface } from "../lib/analyticsMix";
+import { MIX, mixSurface, type MixTone } from "../lib/analyticsMix";
 import { useTheme } from "../theme/ThemeContext";
 
 const AVATAR_COLORS = [
@@ -43,7 +43,7 @@ const MODE_META: Record<
     name: string;
     verb: string;
     countLabel: string;
-    colors: { color: string; soft: string; ink: string };
+    colors: MixTone;
     icon: LucideIcon;
   }
 > = {
