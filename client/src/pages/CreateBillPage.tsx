@@ -16,7 +16,12 @@ import {
   UserRound,
 } from "lucide-react";
 import { AddMobileModal } from "../components/AddMobileModal";
-import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
+import {
+  ImeiScanFieldButton,
+  SerialScanFieldButton,
+  ScanFieldShell,
+  scanFieldInputClass,
+} from "../components/BarcodeImeiScanner";
 import { BillChangeConfirmModal } from "../components/BillChangeConfirmModal";
 import {
   SaveBillConfirmModal,
@@ -2294,17 +2299,24 @@ export function CreateBillPage() {
                   </div>
                   <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                     <label className="label">IMEI</label>
-                    <div className="flex items-stretch gap-2">
+                    <ScanFieldShell
+                      className={clsx(
+                        item.stockItemId && !withGst && item.imei1?.trim()
+                          ? "cursor-default border-ink-200 bg-ink-100/80"
+                          : null,
+                        imeiFieldErrors[item.key] &&
+                          "border-red-400 focus-within:border-red-500 focus-within:ring-red-200",
+                      )}
+                    >
                       <input
-                        className={
-                          item.stockItemId && !withGst && item.imei1?.trim()
-                            ? "field min-w-0 flex-1 cursor-default border-ink-200 bg-ink-100/80 font-mono text-sm tracking-wide text-ink-600"
-                            : clsx(
-                                "field min-w-0 flex-1 font-mono text-sm tracking-wide",
-                                imeiFieldErrors[item.key] &&
-                                  "border-red-400 focus:border-red-500 focus:ring-red-200",
-                              )
-                        }
+                        className={clsx(
+                          scanFieldInputClass,
+                          "text-sm tracking-wide",
+                          item.stockItemId &&
+                            !withGst &&
+                            item.imei1?.trim() &&
+                            "cursor-default text-ink-600",
+                        )}
                         value={item.imei1 || ""}
                         onChange={(e) => {
                           updateItem(item.key, { imei1: e.target.value });
@@ -2342,7 +2354,7 @@ export function CreateBillPage() {
                           }
                         />
                       ) : null}
-                    </div>
+                    </ScanFieldShell>
                     {imeiFieldErrors[item.key] ? (
                       <p className="mt-1.5 text-xs font-medium text-red-600">
                         {imeiFieldErrors[item.key]}
@@ -2351,31 +2363,53 @@ export function CreateBillPage() {
                   </div>
                   <div>
                     <label className="label">Serial</label>
-                    <input
+                    <ScanFieldShell
                       className={
                         item.stockItemId &&
                         !withGst &&
                         item.serialNumber?.trim()
-                          ? "field cursor-default border-ink-200 bg-ink-100/80 font-mono text-ink-600"
-                          : "field font-mono"
+                          ? "cursor-default border-ink-200 bg-ink-100/80"
+                          : undefined
                       }
-                      value={item.serialNumber || ""}
-                      onChange={(e) =>
-                        updateItem(item.key, { serialNumber: e.target.value })
-                      }
-                      placeholder={
-                        item.serialNumber?.trim()
-                          ? undefined
-                          : item.imei1?.trim()
-                            ? "Optional"
-                            : undefined
-                      }
-                      readOnly={
-                        Boolean(item.stockItemId) &&
+                    >
+                      <input
+                        className={clsx(
+                          scanFieldInputClass,
+                          item.stockItemId &&
+                            !withGst &&
+                            item.serialNumber?.trim() &&
+                            "cursor-default text-ink-600",
+                        )}
+                        value={item.serialNumber || ""}
+                        onChange={(e) =>
+                          updateItem(item.key, { serialNumber: e.target.value })
+                        }
+                        placeholder={
+                          item.serialNumber?.trim()
+                            ? undefined
+                            : item.imei1?.trim()
+                              ? "Optional"
+                              : undefined
+                        }
+                        readOnly={
+                          Boolean(item.stockItemId) &&
+                          !withGst &&
+                          Boolean(item.serialNumber?.trim())
+                        }
+                      />
+                      {!(
+                        item.stockItemId &&
                         !withGst &&
-                        Boolean(item.serialNumber?.trim())
-                      }
-                    />
+                        item.serialNumber?.trim()
+                      ) ? (
+                        <SerialScanFieldButton
+                          disabled={Boolean(stockImeiLookup)}
+                          onScan={(serial) =>
+                            updateItem(item.key, { serialNumber: serial })
+                          }
+                        />
+                      ) : null}
+                    </ScanFieldShell>
                   </div>
                   <div>
                     <label className="label">Warranty</label>

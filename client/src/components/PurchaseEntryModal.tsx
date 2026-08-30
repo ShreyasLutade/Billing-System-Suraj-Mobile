@@ -14,7 +14,12 @@ import {
 } from "lucide-react";
 import { FieldPicker } from "./FieldPicker";
 import { SavePurchaseConfirmModal } from "./SavePurchaseConfirmModal";
-import { ImeiScanFieldButton } from "./BarcodeImeiScanner";
+import {
+  ImeiScanFieldButton,
+  SerialScanFieldButton,
+  ScanFieldShell,
+  scanFieldInputClass,
+} from "./BarcodeImeiScanner";
 import {
   MobileNameSearch,
   invalidatePhoneModelCache,
@@ -1274,69 +1279,82 @@ function QuantityAndImeiFields({
                   className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
                 />
               </div>
-              <div>
-                <label
-                  className="label"
-                  htmlFor={`${idPrefix}-imei-${index}`}
-                >
-                  IMEI
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id={`${idPrefix}-imei-${index}`}
+                <div>
+                  <label
+                    className="label"
+                    htmlFor={`${idPrefix}-imei-${index}`}
+                  >
+                    IMEI
+                  </label>
+                  <ScanFieldShell
                     className={clsx(
-                      "field min-w-0 flex-1 font-mono",
                       showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
                     )}
-                    value={unit.imei}
-                    onChange={(e) => {
-                      const next = draft.units.map((row, i) =>
-                        i === index ? { ...row, imei: e.target.value } : row,
-                      );
-                      onChange({ units: next });
-                    }}
-                    placeholder="15-digit IMEI"
-                    inputMode="numeric"
-                    autoFocus={autoFocusTarget === "imei" && index === 0}
-                    disabled={disabled}
-                  />
-                  <ImeiScanFieldButton
-                    disabled={disabled}
-                    onScan={(imei) => {
-                      const next = draft.units.map((row, i) =>
-                        i === index ? { ...row, imei } : row,
-                      );
-                      onChange({ units: next });
-                    }}
-                  />
+                  >
+                    <input
+                      id={`${idPrefix}-imei-${index}`}
+                      className={scanFieldInputClass}
+                      value={unit.imei}
+                      onChange={(e) => {
+                        const next = draft.units.map((row, i) =>
+                          i === index ? { ...row, imei: e.target.value } : row,
+                        );
+                        onChange({ units: next });
+                      }}
+                      placeholder="15-digit IMEI"
+                      inputMode="numeric"
+                      autoFocus={autoFocusTarget === "imei" && index === 0}
+                      disabled={disabled}
+                    />
+                    <ImeiScanFieldButton
+                      disabled={disabled}
+                      onScan={(imei) => {
+                        const next = draft.units.map((row, i) =>
+                          i === index ? { ...row, imei } : row,
+                        );
+                        onChange({ units: next });
+                      }}
+                    />
+                  </ScanFieldShell>
                 </div>
-              </div>
-              <div>
-                <label
-                  className="label"
-                  htmlFor={`${idPrefix}-serial-${index}`}
-                >
-                  Serial number
-                </label>
-                <input
-                  id={`${idPrefix}-serial-${index}`}
-                  className={clsx(
-                    "field font-mono",
-                    showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
-                  )}
-                  value={unit.serialNumber}
-                  onChange={(e) => {
-                    const next = draft.units.map((row, i) =>
-                      i === index
-                        ? { ...row, serialNumber: e.target.value }
-                        : row,
-                    );
-                    onChange({ units: next });
-                  }}
-                  placeholder="Serial / S/N"
-                  disabled={disabled}
-                />
-              </div>
+                <div>
+                  <label
+                    className="label"
+                    htmlFor={`${idPrefix}-serial-${index}`}
+                  >
+                    Serial number
+                  </label>
+                  <ScanFieldShell
+                    className={clsx(
+                      showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                    )}
+                  >
+                    <input
+                      id={`${idPrefix}-serial-${index}`}
+                      className={scanFieldInputClass}
+                      value={unit.serialNumber}
+                      onChange={(e) => {
+                        const next = draft.units.map((row, i) =>
+                          i === index
+                            ? { ...row, serialNumber: e.target.value }
+                            : row,
+                        );
+                        onChange({ units: next });
+                      }}
+                      placeholder="Serial / S/N"
+                      disabled={disabled}
+                    />
+                    <SerialScanFieldButton
+                      disabled={disabled}
+                      onScan={(serial) => {
+                        const next = draft.units.map((row, i) =>
+                          i === index ? { ...row, serialNumber: serial } : row,
+                        );
+                        onChange({ units: next });
+                      }}
+                    />
+                  </ScanFieldShell>
+                </div>
             </div>
           </div>
           );

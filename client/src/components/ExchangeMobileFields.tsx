@@ -1,7 +1,11 @@
 import clsx from "clsx";
 import { Trash2 } from "lucide-react";
 import { MobileNameSearch } from "./MobileNameSearch";
-import { ImeiScanFieldButton } from "./BarcodeImeiScanner";
+import {
+  ImeiScanFieldButton,
+  ScanFieldShell,
+  scanFieldInputClass,
+} from "./BarcodeImeiScanner";
 import { formatINR } from "../lib/api";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
 import type { PhoneModel } from "../types";
@@ -190,18 +194,20 @@ export function ExchangeMobileFields({
             IMEI
           </label>
           <div className="flex items-center gap-2">
-            <input
-              id={`${idPrefix}-imei`}
-              className="field min-w-0 flex-1 font-mono"
-              value={item.imei1}
-              onChange={(e) => onChange({ imei1: e.target.value })}
-              placeholder="15-digit IMEI"
-              inputMode="numeric"
-              required
-            />
-            <ImeiScanFieldButton
-              onScan={(imei) => onChange({ imei1: imei })}
-            />
+            <ScanFieldShell className="min-w-0 flex-1">
+              <input
+                id={`${idPrefix}-imei`}
+                className={scanFieldInputClass}
+                value={item.imei1}
+                onChange={(e) => onChange({ imei1: e.target.value })}
+                placeholder="15-digit IMEI"
+                inputMode="numeric"
+                required
+              />
+              <ImeiScanFieldButton
+                onScan={(imei) => onChange({ imei1: imei })}
+              />
+            </ScanFieldShell>
           </div>
         </div>
         <div>
