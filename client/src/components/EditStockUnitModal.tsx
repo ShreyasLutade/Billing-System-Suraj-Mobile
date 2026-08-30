@@ -191,7 +191,7 @@ export function EditStockUnitModal({
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+        className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-3 sm:items-center sm:p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -204,45 +204,45 @@ export function EditStockUnitModal({
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
-          className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/70 bg-white p-5 shadow-lift dark:border-ink-100 dark:bg-surface-elevated sm:p-6"
+          className="w-full max-w-lg rounded-2xl border border-white/70 bg-white p-4 shadow-lift dark:border-ink-100 dark:bg-surface-elevated [&_.field]:rounded-xl [&_.field]:px-3 [&_.field]:py-2 [&_.label]:mb-1"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-tide-600">
+          <div className="mb-2.5 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-tide-600">
                 Edit unit
               </p>
               <h2
                 id="edit-stock-title"
-                className="mt-1 font-display text-xl font-semibold text-ink-900"
+                className="mt-0.5 truncate font-display text-lg font-semibold leading-snug text-ink-900"
               >
                 {unitHeading}
               </h2>
-              <p className="mt-1 font-mono text-xs text-ink-500">
+              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-500">
                 {formatStockUnitId(unit)}
               </p>
             </div>
             <button
               type="button"
-              className="rounded-xl p-2 text-ink-500 hover:bg-ink-50 dark:hover:bg-surface-muted"
+              className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-50 dark:hover:bg-surface-muted"
               onClick={onClose}
               disabled={saving}
               aria-label="Close"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="space-y-3.5">
+          <div className="space-y-2">
             <div>
               <span className="label required">Operating system</span>
-              <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 dark:bg-surface-muted">
+              <div className="inline-flex w-full gap-0.5 rounded-[10px] bg-[#EBEDF1] p-0.5 dark:bg-surface-muted">
                 {(["IOS", "ANDROID"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
                     className={clsx(
-                      "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] transition",
+                      "inline-flex flex-1 items-center justify-center rounded-lg px-3 py-1.5 text-[13px] transition",
                       platform === option ? "segment-on" : "segment-off",
                     )}
                     onClick={() => switchPlatform(option)}
@@ -263,6 +263,7 @@ export function EditStockUnitModal({
                 platform={platform}
                 value={mobileName}
                 trailingHint={capacityHint || null}
+                compact
                 disabled={saving}
                 required
                 onChange={(next) => {
@@ -284,72 +285,77 @@ export function EditStockUnitModal({
               />
             </div>
 
-            <div>
-              <label className="label required" htmlFor="edit-stock-color">
-                Color
-              </label>
-              <input
-                id="edit-stock-color"
-                className="field"
-                value={color}
-                onChange={(event) => setColor(event.target.value)}
-                disabled={saving}
-                placeholder="e.g. Black"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="label required" htmlFor="edit-stock-price">
-                Purchase price
-              </label>
-              <input
-                id="edit-stock-price"
-                className="field"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={purchasePrice}
-                onChange={(event) => setPurchasePrice(event.target.value)}
-                disabled={saving}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="label required" htmlFor="edit-stock-imei">
-                IMEI
-              </label>
-              <div className="flex items-stretch gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label required" htmlFor="edit-stock-color">
+                  Color
+                </label>
                 <input
-                  id="edit-stock-imei"
-                  className="field min-w-0 flex-1 font-mono"
-                  value={imei}
-                  onChange={(event) => setImei(event.target.value)}
+                  id="edit-stock-color"
+                  className="field"
+                  value={color}
+                  onChange={(event) => setColor(event.target.value)}
                   disabled={saving}
-                  placeholder="Enter IMEI"
-                  inputMode="numeric"
+                  placeholder="e.g. Black"
+                  required
                 />
-                <ImeiScanFieldButton
+              </div>
+
+              <div>
+                <label className="label required" htmlFor="edit-stock-price">
+                  Purchase price
+                </label>
+                <input
+                  id="edit-stock-price"
+                  className="field"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={purchasePrice}
+                  onChange={(event) => setPurchasePrice(event.target.value)}
                   disabled={saving}
-                  onScan={setImei}
+                  required
                 />
               </div>
             </div>
 
-            <div>
-              <label className="label" htmlFor="edit-stock-serial">
-                Serial number
-              </label>
-              <input
-                id="edit-stock-serial"
-                className="field font-mono"
-                value={serialNumber}
-                onChange={(event) => setSerialNumber(event.target.value)}
-                disabled={saving}
-                placeholder="Optional if IMEI is set"
-              />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="label required" htmlFor="edit-stock-imei">
+                  IMEI
+                </label>
+                <div className="flex items-stretch gap-1.5">
+                  <input
+                    id="edit-stock-imei"
+                    className="field min-w-0 flex-1 font-mono"
+                    value={imei}
+                    onChange={(event) => setImei(event.target.value)}
+                    disabled={saving}
+                    placeholder="Enter IMEI"
+                    inputMode="numeric"
+                  />
+                  <ImeiScanFieldButton
+                    disabled={saving}
+                    onScan={setImei}
+                    className="min-h-[40px] w-10 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label" htmlFor="edit-stock-serial">
+                  Serial number
+                </label>
+                <input
+                  id="edit-stock-serial"
+                  className="field font-mono"
+                  value={serialNumber}
+                  onChange={(event) => setSerialNumber(event.target.value)}
+                  disabled={saving}
+                  placeholder="Optional if IMEI is set"
+                />
+              </div>
             </div>
 
             {allowSupplierEdit ? (
@@ -374,15 +380,15 @@ export function EditStockUnitModal({
           </div>
 
           {error ? (
-            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">
+            <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">
               {error}
             </p>
           ) : null}
 
-          <div className="mt-5 flex gap-2">
+          <div className="mt-3 flex gap-2">
             <button
               type="button"
-              className="btn-secondary flex-1"
+              className="btn-secondary flex-1 !py-2.5"
               onClick={onClose}
               disabled={saving}
             >
@@ -390,7 +396,7 @@ export function EditStockUnitModal({
             </button>
             <button
               type="button"
-              className="btn-primary flex-1"
+              className="btn-primary flex-1 !py-2.5"
               onClick={() => void save()}
               disabled={saving}
             >

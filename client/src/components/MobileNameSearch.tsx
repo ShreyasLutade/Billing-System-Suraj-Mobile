@@ -22,6 +22,8 @@ type Props = {
   value: string;
   /** Shown in the same field after the name, e.g. "128 GB · 8 GB". */
   trailingHint?: string | null;
+  /** Tighter field height for dense dialogs. */
+  compact?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
   required?: boolean;
@@ -68,6 +70,7 @@ export function MobileNameSearch({
   platform,
   value,
   trailingHint,
+  compact,
   disabled,
   autoFocus,
   required,
@@ -161,7 +164,8 @@ export function MobileNameSearch({
     >
       <div
         className={clsx(
-          "flex min-h-[48px] cursor-text items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+          "flex cursor-text items-center gap-2 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+          compact ? "min-h-[40px]" : "min-h-[48px] gap-2.5",
           open &&
             "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
           disabled && "cursor-not-allowed opacity-55",
@@ -183,7 +187,8 @@ export function MobileNameSearch({
             ref={inputRef}
             id={id}
             className={clsx(
-              "bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]",
+              "bg-transparent text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]",
+              compact ? "py-2" : "py-3",
               trailingHint?.trim()
                 ? "min-w-[3ch] max-w-full [field-sizing:content]"
                 : "min-w-0 flex-1",
@@ -228,7 +233,10 @@ export function MobileNameSearch({
           />
           {trailingHint?.trim() ? (
             <span
-              className="pointer-events-none shrink-0 whitespace-nowrap py-3 text-base font-semibold tabular-nums text-ink-600 sm:text-[14.5px]"
+              className={clsx(
+                "pointer-events-none shrink-0 whitespace-nowrap text-base font-semibold tabular-nums text-ink-600 sm:text-[14.5px]",
+                compact ? "py-2" : "py-3",
+              )}
               aria-hidden
             >
               · {trailingHint.trim()}
