@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { normalizeCapacity } from "../lib/capacity";
+import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { intakeKindFromNote } from "../services/stockSync";
 
@@ -357,6 +358,186 @@ stockRouter.post("/", async (req, res, next) => {
     });
 
     res.status(201).json({ data: mapStockItem(result) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const updateStockSchema = z
+  .object({
+    mobileName: z.string().trim().min(2, "Mobile name is required").max(100),
+    purchasePrice: z.coerce
+      .number({ invalid_type_error: "Purchase price is required" })
+      .positive("Purchase price must be greater than 0"),
+    imei: z.string().trim().max(20).optional().default(""),
+    serialNumber: z.string().trim().max(40).optional().default(""),
+    supplierId: z.string().trim().optional().nullable(),
+    suppliers: z
+      .array(z.string().trim().min(1).max(80))
+      .max(1)
+      .optional()
+      .default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.supplierId?.trim() && !data.suppliers?.[0]?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Supplier is required",
+        path: ["supplierId"],
+      });
+    }
+    const imei = cleanId(data.imei);
+    const serial = cleanId(data.serialNumber);
+    if (!imei && !serial) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter IMEI or serial number",
+        path: ["imei"],
+      });
+    }
+    if (imei && imei.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "IMEI must be at least 8 characters",
+        path: ["imei"],
+      });
+    }
+    if (serial && serial.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Serial number looks too short",
+        path: ["serialNumber"],
+      });
+    }
+  });
+
+stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const existing = await prisma.stockItem.findUnique({
+      where: { id: req.params.id },
+      include: {
+        purchaseItem: {
+          select: {
+            purchaseId: true,
+            purchase: { select: { id: true, supplierId: true } },
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Stock item not found" });
+      return;
+    }
+
+    const parsed = updateStockSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const data = parsed.data;
+    const imei = cleanId(data.imei) || null;
+    const serialNumber = cleanId(data.serialNumber) || null;
+
+    if (imei) {
+      const clash = await prisma.stockItem.findFirst({
+        where: { imei, NOT: { id: existing.id } },
+        select: { id: true },
+      });
+      if (clash) {
+        res.status(409).json({ error: `IMEI ${imei} is already in stock` });
+        return;
+      }
+    }
+    if (serialNumber) {
+      const clash = await prisma.stockItem.findFirst({
+        where: { serialNumber, NOT: { id: existing.id } },
+        select: { id: true },
+      });
+      if (clash) {
+        res
+          .status(409)
+          .json({ error: `Serial ${serialNumber} is already in stock` });
+        return;
+      }
+    }
+
+    let supplier = data.supplierId
+      ? await prisma.supplier.findUnique({ where: { id: data.supplierId } })
+      : null;
+
+    if (!supplier && data.suppliers?.[0]) {
+      supplier = await upsertSupplierByName(prisma, data.suppliers[0]);
+    }
+
+    if (!supplier) {
+      res.status(400).json({ error: "Supplier is required" });
+      return;
+    }
+
+    const mobileName = data.mobileName.trim();
+    const purchasePrice = data.purchasePrice;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await tx.stockItem.update({
+        where: { id: existing.id },
+        data: {
+          mobileName,
+          purchasePrice,
+          imei,
+          serialNumber,
+          suppliers: serializeSuppliers([supplier!.name]),
+          supplierId: supplier!.id,
+        },
+        include: {
+          supplier: { select: { id: true, name: true, isExchange: true } },
+          purchaseItem: {
+            select: { purchase: { select: { note: true } } },
+          },
+        },
+      });
+
+      const purchaseId = existing.purchaseItem?.purchaseId;
+      if (purchaseId) {
+        const siblings = await tx.purchaseItem.findMany({
+          where: { purchaseId },
+          include: { stockItem: { select: { id: true, purchasePrice: true } } },
+        });
+        const totalAmount = siblings.reduce((sum, row) => {
+          const price =
+            row.stockItemId === existing.id
+              ? purchasePrice
+              : row.stockItem.purchasePrice;
+          return sum + price;
+        }, 0);
+
+        await tx.purchase.update({
+          where: { id: purchaseId },
+          data: {
+            supplierId: supplier!.id,
+            totalAmount,
+          },
+        });
+      }
+
+      // Keep sold bills in sync when identity fields change.
+      await tx.billItem.updateMany({
+        where: { stockItemId: existing.id },
+        data: {
+          productName: mobileName,
+          imei1: imei,
+          serialNumber,
+        },
+      });
+
+      return item;
+    });
+
+    res.json({ data: mapStockItem(result) });
   } catch (error) {
     next(error);
   }
