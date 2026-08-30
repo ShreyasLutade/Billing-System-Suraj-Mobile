@@ -16,6 +16,7 @@ import {
   normalizeSearchText,
 } from "../lib/elasticSearch";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
+import { useTheme } from "../theme/ThemeContext";
 
 export type FieldPickerAvatar = {
   letter: string;
@@ -71,6 +72,8 @@ export function FieldPicker({
   autoFocus = false,
   footerAction,
 }: Props) {
+  const { theme } = useTheme();
+  const dark = theme === "dark";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [conditionFilter, setConditionFilter] =
@@ -175,7 +178,7 @@ export function FieldPicker({
         ref={menuRef}
         id={listId}
         role="listbox"
-        className="absolute left-0 right-0 top-full z-30 mt-1.5 min-w-0 w-full overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+        className="absolute left-0 right-0 top-full z-30 mt-1.5 min-w-0 w-full overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)] dark:border-ink-100 dark:bg-surface-elevated dark:shadow-lift"
       >
             {conditionFilters ? (
               <div className="flex items-center gap-1.5 border-b border-ink-100 px-3.5 py-3">
@@ -183,7 +186,7 @@ export function FieldPicker({
                   Show
                 </span>
                 <div
-                  className="inline-flex gap-0.5 rounded-[9px] bg-[#EEF0F3] p-0.5"
+                  className="inline-flex gap-0.5 rounded-[9px] bg-[#EEF0F3] p-0.5 dark:bg-surface-muted"
                   role="radiogroup"
                   aria-label="Filter by condition"
                 >
@@ -215,9 +218,7 @@ export function FieldPicker({
                         aria-checked={on}
                         className={clsx(
                           "inline-flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12.5px] transition",
-                          on
-                            ? "bg-white font-semibold text-ink-900 shadow-soft"
-                            : "font-medium text-ink-700",
+                          on ? "segment-on" : "segment-off",
                         )}
                         onClick={(event) => {
                           event.stopPropagation();
@@ -266,6 +267,7 @@ export function FieldPicker({
                     meta={option.meta}
                     avatar={option.avatar}
                     query={query}
+                    dark={dark}
                     onSelect={() => {
                       onChange(option.value);
                       close();
@@ -279,7 +281,7 @@ export function FieldPicker({
               <div className="border-t border-ink-100 p-2">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13.5px] font-semibold text-[#0E9E76] transition hover:bg-[#E7F8F1]"
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13.5px] font-semibold text-[#0E9E76] transition hover:bg-[#E7F8F1] dark:text-tide-400 dark:hover:bg-tide-100/40"
                   onClick={() => {
                     close();
                     footerAction.onClick();
@@ -317,7 +319,7 @@ export function FieldPicker({
       {searchable ? (
         <div
           className={clsx(
-            "flex min-h-[48px] min-w-0 items-center gap-2.5 overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+            "flex min-h-[48px] min-w-0 items-center gap-2.5 overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition dark:border-ink-100 dark:bg-surface-elevated",
             open &&
               "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
             disabled && "cursor-not-allowed opacity-55",
@@ -402,7 +404,7 @@ export function FieldPicker({
           type="button"
           disabled={disabled}
           className={clsx(
-            "flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 py-2.5 text-left text-base transition sm:text-[14.5px]",
+            "flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 py-2.5 text-left text-base transition dark:border-ink-100 dark:bg-surface-elevated dark:text-ink-900 sm:text-[14.5px]",
             open &&
               "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
             !value && "text-[#9AA6B6]",
@@ -454,7 +456,7 @@ function HighlightText({ text, query }: { text: string; query: string }) {
     return (
       <>
         {text.slice(0, index)}
-        <mark className="rounded-[3px] bg-[#FFF1B8] px-px text-inherit">
+        <mark className="rounded-[3px] bg-[#FFF1B8] px-px text-inherit dark:bg-amber-400/30 dark:text-ink-900">
           {text.slice(index, index + q.length)}
         </mark>
         {text.slice(index + q.length)}
@@ -485,7 +487,7 @@ function HighlightText({ text, query }: { text: string; query: string }) {
         return hit ? (
           <mark
             key={i}
-            className="rounded-[3px] bg-[#FFF1B8] px-px text-inherit"
+            className="rounded-[3px] bg-[#FFF1B8] px-px text-inherit dark:bg-amber-400/30 dark:text-ink-900"
           >
             {chunk}
           </mark>
@@ -495,6 +497,19 @@ function HighlightText({ text, query }: { text: string; query: string }) {
       })}
     </>
   );
+}
+
+function pickerAvatarStyle(
+  avatar: FieldPickerAvatar,
+  dark: boolean,
+): { background: string; color: string } {
+  if (!dark) {
+    return { background: avatar.bg, color: avatar.fg };
+  }
+  return {
+    background: `color-mix(in srgb, ${avatar.fg} 22%, rgb(30 41 59))`,
+    color: `color-mix(in srgb, ${avatar.fg} 55%, white)`,
+  };
 }
 
 function PickerOption({
@@ -507,6 +522,7 @@ function PickerOption({
   meta,
   avatar,
   query,
+  dark,
   onSelect,
 }: {
   label: string;
@@ -518,6 +534,7 @@ function PickerOption({
   meta?: string;
   avatar?: FieldPickerAvatar;
   query?: string;
+  dark: boolean;
   onSelect: () => void;
 }) {
   const q = query || "";
@@ -528,14 +545,16 @@ function PickerOption({
       aria-selected={Boolean(active)}
       className={clsx(
         "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-[11px] py-2.5 pl-2.5 pr-1.5 text-left transition sm:gap-3 sm:px-2.5",
-        active ? "bg-[#E7F8F1]" : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA]",
+        active
+          ? "bg-[#E7F8F1] dark:bg-tide-100/40"
+          : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA] dark:hover:bg-surface-muted dark:active:bg-surface-muted",
       )}
       onClick={onSelect}
     >
       {avatar ? (
         <span
-          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] text-sm font-bold"
-          style={{ background: avatar.bg, color: avatar.fg }}
+          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] text-sm font-bold ring-1 ring-black/5 dark:ring-white/10"
+          style={pickerAvatarStyle(avatar, dark)}
         >
           {avatar.letter}
         </span>
@@ -567,8 +586,8 @@ function PickerOption({
               className={clsx(
                 "rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide",
                 badgeTone === "old"
-                  ? "bg-[#FEF3E2] text-[#B76E00]"
-                  : "bg-[#E7F8F1] text-[#0E9E76]",
+                  ? "bg-[#FEF3E2] text-[#B76E00] dark:bg-amber-500/20 dark:text-amber-400"
+                  : "bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-400/20 dark:text-tide-400",
               )}
             >
               {badge}
@@ -584,7 +603,7 @@ function PickerOption({
 
       <Check
         className={clsx(
-          "hidden h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition sm:block",
+          "hidden h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition dark:text-tide-400 sm:block",
           active ? "opacity-100" : "opacity-0",
         )}
         strokeWidth={2.6}

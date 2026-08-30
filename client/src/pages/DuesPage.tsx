@@ -405,8 +405,8 @@ export function DuesPage() {
                           className={clsx(
                             "rounded-full border px-2.5 py-1.5 text-[12.5px] transition",
                             on
-                              ? "border-ink-900 bg-ink-900 font-semibold text-white"
-                              : "border-ink-100 bg-white text-ink-500 hover:border-ink-300",
+                              ? "segment-on border-transparent"
+                              : "border-ink-100 bg-white text-ink-500 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
                           )}
                           onClick={() => setSearchScope(chip.value)}
                         >
@@ -436,8 +436,8 @@ export function DuesPage() {
                             className={clsx(
                               "rounded-full border px-1 py-1.5 text-center text-[11px] transition sm:text-[12px]",
                               on
-                                ? "border-ink-900 bg-ink-900 font-semibold text-white"
-                                : "border-ink-100 bg-white text-ink-500 hover:border-ink-300",
+                                ? "segment-on border-transparent"
+                                : "border-ink-100 bg-white text-ink-500 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
                             )}
                             onClick={() => {
                               setPeriod(option.value);
@@ -462,7 +462,7 @@ export function DuesPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-[9px] bg-ink-900 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-black"
+                    className="rounded-[9px] bg-ink-900 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-black dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
                     onClick={() => setFilterOpen(false)}
                   >
                     Done
@@ -577,7 +577,7 @@ export function DuesPage() {
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800"
+                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
                           onClick={(event) => {
                             event.stopPropagation();
                             setSelectedDue(due);
@@ -629,15 +629,17 @@ export function DuesPage() {
                   className={clsx(
                     "min-w-[5.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition",
                     !financeCompanyFilter
-                      ? "border-ink-900 bg-ink-900 text-white"
-                      : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300",
+                      ? "border-ink-900 bg-ink-900 dark:border-tide-400 dark:bg-tide-400"
+                      : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
                   )}
                   onClick={() => setFinanceCompanyFilter(null)}
                 >
                   <p
                     className={clsx(
                       "truncate text-xs",
-                      !financeCompanyFilter ? "text-white/70" : "text-ink-500",
+                      !financeCompanyFilter
+                        ? "text-white/70 dark:!text-slate-700"
+                        : "text-ink-500",
                     )}
                   >
                     All
@@ -645,7 +647,9 @@ export function DuesPage() {
                   <p
                     className={clsx(
                       "mt-0.5 text-sm font-semibold tabular-nums",
-                      !financeCompanyFilter ? "text-white" : "text-ember-500",
+                      !financeCompanyFilter
+                        ? "text-white dark:!text-slate-900"
+                        : "text-ember-500",
                     )}
                   >
                     {formatINR(
@@ -665,8 +669,8 @@ export function DuesPage() {
                       className={clsx(
                         "min-w-[9.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition",
                         on
-                          ? "border-ink-900 bg-ink-900 text-white"
-                          : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300",
+                          ? "border-ink-900 bg-ink-900 dark:border-tide-400 dark:bg-tide-400"
+                          : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
                       )}
                       aria-pressed={on}
                       onClick={() =>
@@ -676,7 +680,7 @@ export function DuesPage() {
                       <p
                         className={clsx(
                           "truncate text-xs",
-                          on ? "text-white/70" : "text-ink-500",
+                          on ? "text-white/70 dark:!text-slate-700" : "text-ink-500",
                         )}
                       >
                         {company.name}
@@ -684,7 +688,7 @@ export function DuesPage() {
                       <p
                         className={clsx(
                           "mt-0.5 text-sm font-semibold tabular-nums",
-                          on ? "text-white" : "text-ember-500",
+                          on ? "text-white dark:!text-slate-900" : "text-ember-500",
                         )}
                       >
                         {formatINR(company.amount)}
@@ -764,7 +768,7 @@ export function DuesPage() {
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 disabled:opacity-50"
+                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 disabled:opacity-50 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
                           disabled={receivingId === due.id}
                           onClick={(event) => {
                             event.stopPropagation();

@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
+import { useTheme } from "../theme/ThemeContext";
 
 /** Phone + sunrise mark — transparent, stroke via currentColor */
 function SurajMark({ className }: { className?: string }) {
@@ -55,6 +57,7 @@ function SurajMark({ className }: { className?: string }) {
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const from =
@@ -189,6 +192,17 @@ export function LoginPage() {
 
   return (
     <div className={view === "login" ? "login-page" : "login-page login-page-forgot"}>
+      <button
+        type="button"
+        className="login-theme-toggle"
+        onClick={toggleTheme}
+        title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+        aria-label={
+          theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+        }
+      >
+        {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      </button>
       {/* Mobile hero — hidden on desktop */}
       <div className="login-mobile-top">
         <header className="login-mobile-hero">

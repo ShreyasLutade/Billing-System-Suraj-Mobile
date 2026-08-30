@@ -531,23 +531,21 @@ export function PurchaseEntryModal({
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 space-y-4">
             {/* Supplier */}
-            <section className="relative z-10 overflow-visible rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft">
+            <section className="relative z-10 overflow-visible rounded-[16px] border border-ink-100 bg-white p-5 shadow-soft dark:border-ink-100 dark:bg-surface">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2.5 font-display text-base font-semibold text-ink-900">
-                  <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#EEF2F8] text-ink-500">
+                  <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#EEF2F8] text-ink-500 dark:bg-surface-muted">
                     <Store className="h-[15px] w-[15px]" />
                   </span>
                   Supplier
                 </h2>
                 {!fixedSupplier ? (
-                  <div className="inline-flex gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1">
+                  <div className="inline-flex gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 dark:bg-surface-muted">
                     <button
                       type="button"
                       className={clsx(
-                        "rounded-lg px-4 py-2 text-[13px] font-medium transition",
-                        !useNewSupplier
-                          ? "bg-white font-semibold text-ink-900 shadow-soft"
-                          : "text-ink-500 hover:text-ink-700",
+                        "rounded-lg px-4 py-2 text-[13px] transition",
+                        !useNewSupplier ? "segment-on" : "segment-off",
                       )}
                       onClick={() => setUseNewSupplier(false)}
                       disabled={saving}
@@ -557,10 +555,8 @@ export function PurchaseEntryModal({
                     <button
                       type="button"
                       className={clsx(
-                        "rounded-lg px-4 py-2 text-[13px] font-medium transition",
-                        useNewSupplier
-                          ? "bg-white font-semibold text-ink-900 shadow-soft"
-                          : "text-ink-500 hover:text-ink-700",
+                        "rounded-lg px-4 py-2 text-[13px] transition",
+                        useNewSupplier ? "segment-on" : "segment-off",
                       )}
                       onClick={() => setUseNewSupplier(true)}
                       disabled={saving}
@@ -572,7 +568,7 @@ export function PurchaseEntryModal({
               </div>
 
               {fixedSupplier ? (
-                <p className="rounded-[10px] border border-ink-100 bg-[#FBFCFD] px-3.5 py-3 text-sm text-ink-700">
+                <p className="rounded-[10px] border border-ink-100 bg-[#FBFCFD] px-3.5 py-3 text-sm text-ink-700 dark:border-ink-100 dark:bg-surface-muted">
                   <span className="font-semibold text-ink-900">
                     {fixedSupplier.name}
                   </span>
@@ -647,7 +643,7 @@ export function PurchaseEntryModal({
               return (
                 <section
                   key={item.id}
-                  className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5"
+                  className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft dark:border-ink-100 dark:bg-surface-elevated sm:p-5"
                 >
                   <div
                     className={clsx(
@@ -663,7 +659,7 @@ export function PurchaseEntryModal({
                       }
                     >
                       <span className="inline-flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500 dark:bg-surface-muted">
                           <ChevronDown
                             className={clsx(
                               "h-3.5 w-3.5 shrink-0 transition",
@@ -675,7 +671,7 @@ export function PurchaseEntryModal({
                         <ConditionBadge condition={condition} />
                       </span>
                       {!open ? (
-                        <span className="mt-2 block rounded-[10px] border border-ink-100 bg-white px-3 py-2">
+                        <span className="mt-2 block rounded-[10px] border border-ink-100 bg-white px-3 py-2 dark:border-ink-100 dark:bg-surface-muted">
                           <span className="block text-[13px] font-semibold leading-snug text-ink-900">
                             {summary.product}
                           </span>
@@ -716,10 +712,10 @@ export function PurchaseEntryModal({
             })}
 
             {/* Current mobile */}
-            <section className="overflow-visible rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft sm:p-5">
+            <section className="overflow-visible rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft dark:border-ink-100 dark:bg-surface-elevated sm:p-5">
               <div className="mb-3.5 flex items-center justify-between gap-3">
                 <span className="inline-flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500">
+                  <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500 dark:bg-surface-muted">
                     Mobile {queued.length + 1}
                   </span>
                   <ConditionBadge condition={condition} />
@@ -750,7 +746,7 @@ export function PurchaseEntryModal({
 
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-[#0E9E76] hover:bg-[#E7F8F1] hover:text-[#0E9E76]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-[#0E9E76] hover:bg-[#E7F8F1] hover:text-[#0E9E76] dark:border-ink-300 dark:hover:border-tide-400 dark:hover:bg-tide-100/40 dark:hover:text-tide-400"
               onClick={addAnother}
               disabled={saving}
             >
@@ -767,7 +763,7 @@ export function PurchaseEntryModal({
 
           {/* Purchase summary rail */}
           <aside className="lg:sticky lg:top-24">
-            <div className="overflow-hidden rounded-[16px] border border-ink-100 bg-white shadow-[0_2px_6px_rgba(16,25,40,.06),0_16px_40px_rgba(16,25,40,.10)]">
+            <div className="overflow-hidden rounded-[16px] border border-ink-100 bg-white shadow-[0_2px_6px_rgba(16,25,40,.06),0_16px_40px_rgba(16,25,40,.10)] dark:border-ink-100 dark:bg-surface dark:shadow-soft">
               <div className="p-5">
                 <h2 className="font-display text-[17px] font-semibold text-ink-900">
                   Purchase summary
@@ -812,16 +808,16 @@ export function PurchaseEntryModal({
                   </span>
                 </div>
 
-                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-2.5 py-1 text-xs font-semibold text-[#0E9E76]">
+                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-2.5 py-1 text-xs font-semibold text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
                   <Smartphone className="h-3.5 w-3.5" />
                   {unitCount} unit{unitCount === 1 ? "" : "s"}
                 </span>
               </div>
 
-              <div className="flex flex-col gap-2.5 border-t border-ink-100 bg-[#FAFBFC] px-5 py-4">
+              <div className="flex flex-col gap-2.5 border-t border-ink-100 bg-[#FAFBFC] px-5 py-4 dark:border-ink-100 dark:bg-surface-muted">
                 <button
                   type="submit"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink-900 px-4 py-3.5 text-[15px] font-semibold text-white shadow-soft transition hover:-translate-y-px hover:bg-black disabled:opacity-50"
+                  className="btn-primary w-full !rounded-xl !py-3.5 !text-[15px]"
                   disabled={saving}
                 >
                   <Check className="h-[17px] w-[17px]" strokeWidth={2.4} />
@@ -833,7 +829,7 @@ export function PurchaseEntryModal({
                 </button>
                 <button
                   type="button"
-                  className="w-full rounded-xl border border-ink-100 bg-white px-4 py-2.5 text-sm font-semibold text-ink-500 transition hover:bg-[#F4F5F7] hover:text-ink-900"
+                  className="w-full rounded-xl border border-ink-100 bg-white px-4 py-2.5 text-sm font-semibold text-ink-500 transition hover:bg-[#F4F5F7] hover:text-ink-900 dark:border-ink-100 dark:bg-surface-elevated dark:hover:bg-surface-muted dark:hover:text-ink-900"
                   onClick={onClose}
                   disabled={saving}
                 >
@@ -895,14 +891,13 @@ export function PurchaseEntryModal({
             </div>
           ) : (
             <div className="relative z-10 space-y-2">
-              <div className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5">
+              <div className="grid grid-cols-2 gap-0.5 rounded-lg border border-ink-200 bg-ink-50 p-0.5 dark:border-ink-100 dark:bg-surface-muted">
                 <button
                   type="button"
-                  className={
-                    !useNewSupplier
-                      ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                      : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
-                  }
+                  className={clsx(
+                    "rounded-md px-3 py-2 text-sm transition",
+                    !useNewSupplier ? "segment-on" : "segment-off",
+                  )}
                   onClick={() => setUseNewSupplier(false)}
                   disabled={saving}
                 >
@@ -910,11 +905,10 @@ export function PurchaseEntryModal({
                 </button>
                 <button
                   type="button"
-                  className={
-                    useNewSupplier
-                      ? "rounded-md bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                      : "rounded-md px-3 py-2 text-sm font-medium text-ink-600"
-                  }
+                  className={clsx(
+                    "rounded-md px-3 py-2 text-sm transition",
+                    useNewSupplier ? "segment-on" : "segment-off",
+                  )}
                   onClick={() => setUseNewSupplier(true)}
                   disabled={saving}
                 >
@@ -1151,7 +1145,7 @@ function ConditionBadge({ condition }: { condition: "NEW" | "USED" }) {
     <span
       className={clsx(
         "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]",
-        used ? "bg-[#FEF3E2] text-[#B76E00]" : "bg-[#E7F8F1] text-[#0E9E76]",
+        used ? "bg-[#FEF3E2] text-[#B76E00] dark:bg-amber-950/50 dark:text-amber-300" : "bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400",
       )}
     >
       {used ? "Second hand" : "New"}
@@ -1172,7 +1166,7 @@ function QuantityStepper({
 }) {
   const qty = clampQty(value);
   return (
-    <div className="inline-flex h-12 min-h-[48px] w-[7.25rem] shrink-0 items-stretch overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white">
+    <div className="inline-flex h-12 min-h-[48px] w-[7.25rem] shrink-0 items-stretch overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white dark:border-ink-100 dark:bg-surface-elevated">
       <button
         type="button"
         className="grid w-9 shrink-0 place-items-center text-ink-700 transition hover:bg-[#F4F7FA] disabled:cursor-not-allowed disabled:opacity-35"
@@ -1375,16 +1369,14 @@ function DraftFields({
         <div className="grid gap-3 md:grid-cols-[16rem_minmax(0,1fr)]">
           <div>
             <span className="label required">Operating system</span>
-            <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 sm:w-auto">
+            <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 dark:bg-surface-muted sm:w-auto">
               {(["IOS", "ANDROID"] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
                   className={clsx(
-                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-medium transition sm:flex-none",
-                    draft.platform === option
-                      ? "bg-ink-900 font-semibold text-white shadow-soft"
-                      : "text-ink-500 hover:text-ink-700",
+                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] transition sm:flex-none",
+                    draft.platform === option ? "segment-on" : "segment-off",
                   )}
                   onClick={() =>
                     onChange(
@@ -1517,16 +1509,15 @@ function DraftFields({
     <div className="space-y-3">
       <div>
         <span className="label required">Operating system</span>
-        <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5">
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink-100 bg-ink-50/70 p-0.5 dark:border-ink-100 dark:bg-surface-muted">
           {(["IOS", "ANDROID"] as const).map((option) => (
             <button
               key={option}
               type="button"
-              className={
-                draft.platform === option
-                  ? "rounded-lg bg-ink-900 px-3 py-2 text-sm font-semibold text-white"
-                  : "rounded-lg px-3 py-2 text-sm font-semibold text-ink-500"
-              }
+              className={clsx(
+                "rounded-lg px-3 py-2 text-sm transition",
+                draft.platform === option ? "segment-on" : "segment-off",
+              )}
               onClick={() =>
                 onChange(
                   draft.platform === option

@@ -2405,7 +2405,7 @@ export function CreateBillPage() {
 
               <button
                 type="button"
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-200 bg-white/60 px-4 py-3 text-sm font-semibold text-ink-600 transition hover:border-tide-300 hover:bg-tide-50/40 hover:text-tide-700"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-200 bg-white/60 px-4 py-3 text-sm font-semibold text-ink-600 transition hover:border-tide-300 hover:bg-tide-50/40 hover:text-tide-700 dark:border-ink-100 dark:bg-surface-muted/40 dark:text-ink-700 dark:hover:border-tide-400/40 dark:hover:bg-tide-100/25 dark:hover:text-tide-400"
                 onClick={() => {
                   const last = items[items.length - 1];
                   if (last && !isDraftItemReady(last, withGst)) {
@@ -2428,7 +2428,7 @@ export function CreateBillPage() {
             {!withGst ? (
               <section className="overflow-visible rounded-[18px] border border-ink-100/80 bg-white shadow-soft">
                 <div className="flex items-center gap-3.5 px-5 py-[18px] sm:px-[22px]">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E7F8F1] text-[#0E9E76]">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/70 dark:text-tide-400">
                     <RefreshCw className="h-5 w-5" strokeWidth={2} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -2465,7 +2465,7 @@ export function CreateBillPage() {
                       className="overflow-visible"
                     >
                       <div className="space-y-4 px-5 pb-5 sm:px-[22px] sm:pb-[22px]">
-                        <div className="flex items-start gap-2.5 rounded-xl border border-[#CDEFE0] bg-[#E7F8F1] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[#0B7A5B]">
+                        <div className="flex items-start gap-2.5 rounded-xl border border-[#CDEFE0] bg-[#E7F8F1] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[#0B7A5B] dark:border-tide-400/25 dark:bg-tide-100/40 dark:text-tide-400">
                           <Info
                             className="mt-0.5 h-4 w-4 shrink-0"
                             strokeWidth={2}
@@ -2498,7 +2498,7 @@ export function CreateBillPage() {
 
                         <button
                           type="button"
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#BFE9D6] bg-[#E7F8F1]/40 px-4 py-3 text-sm font-semibold text-[#0B7A5B] transition hover:border-[#12B886] hover:bg-[#E7F8F1]"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#BFE9D6] bg-[#E7F8F1]/40 px-4 py-3 text-sm font-semibold text-[#0B7A5B] transition hover:border-[#12B886] hover:bg-[#E7F8F1] dark:border-tide-400/30 dark:bg-tide-100/30 dark:text-tide-400 dark:hover:border-tide-400 dark:hover:bg-tide-100/50"
                           onClick={() =>
                             setExchangeItems((current) => [
                               ...current,
@@ -2620,7 +2620,7 @@ export function CreateBillPage() {
                         </span>
                         <input
                           id="companyDiscount"
-                          className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)]"
+                          className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)] dark:border-tide-400/30 dark:bg-tide-100/35 dark:focus:border-tide-400 dark:focus:bg-surface-elevated dark:focus:shadow-[0_0_0_3px_rgba(45,212,191,0.2)]"
                           type="number"
                           min={0}
                           step="0.01"
@@ -2698,13 +2698,13 @@ export function CreateBillPage() {
                   >
                     <label
                       htmlFor="hasDue"
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-orange-200/80 bg-orange-50/60 px-3 py-2.5"
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-orange-200/80 bg-orange-50/60 px-3 py-2.5 dark:border-amber-500/40 dark:bg-amber-950/50"
                     >
                       <span>
-                        <span className="block text-xs font-semibold text-ink-800">
+                        <span className="block text-xs font-semibold text-ink-800 dark:text-amber-100">
                           This bill has due
                         </span>
-                        <span className="mt-0.5 block text-[11px] text-ink-500">
+                        <span className="mt-0.5 block text-[11px] text-ink-500 dark:text-amber-200/80">
                           Record amount the customer will pay later.
                         </span>
                       </span>
@@ -2999,7 +2999,7 @@ export function CreateBillPage() {
                                 damping: 22,
                                 mass: 0.6,
                               }}
-                              className="mb-3 grid h-14 w-14 place-items-center rounded-full bg-[#E7F8F1] text-[#0E9E76]"
+                              className="mb-3 grid h-14 w-14 place-items-center rounded-full bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/70 dark:text-tide-400"
                             >
                               <Check className="h-7 w-7" strokeWidth={2.5} />
                             </motion.span>
@@ -3184,10 +3184,10 @@ function Switch({
       aria-label={ariaLabel}
       onClick={() => onChange(!checked)}
       className={clsx(
-        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-surface",
         checked
           ? "border-[#0B9B72] bg-[#12B886] shadow-[0_0_0_3px_rgba(18,184,134,0.25)] focus-visible:ring-[#12B886]"
-          : "border-ink-300 bg-ink-100 shadow-sm focus-visible:ring-ink-300",
+          : "border-ink-300 bg-ink-100 shadow-sm focus-visible:ring-ink-300 dark:border-slate-500 dark:bg-slate-600 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]",
       )}
     >
       <span
@@ -3299,7 +3299,7 @@ function PaymentToggle({
   return (
     <div
       className={clsx(
-        "rounded-xl border border-ink-100 bg-white transition",
+        "rounded-xl border border-ink-100 bg-white transition dark:border-ink-100 dark:bg-surface-elevated",
         checked ? "overflow-visible" : "overflow-hidden",
         checked && styles.bg,
         checked && "ring-1",

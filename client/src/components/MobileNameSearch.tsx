@@ -215,7 +215,7 @@ export function MobileNameSearch({
             <ul
               id={listId}
               role="listbox"
-              className="max-h-[min(280px,45dvh)] overflow-auto overscroll-contain rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)]"
+              className="max-h-[min(280px,45dvh)] overflow-auto overscroll-contain rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_10px_24px_rgba(16,25,40,.10),0_30px_70px_-20px_rgba(16,25,40,.28)] dark:border-ink-100 dark:bg-surface-elevated dark:shadow-lift"
             >
               {suggestions.map((model, index) => {
                 const active = index === highlight;
@@ -228,8 +228,8 @@ export function MobileNameSearch({
                       aria-selected={active}
                       className={
                         active
-                          ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-[#E7F8F1]"
-                          : "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left hover:bg-[#F4F7FA]"
+                          ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-[#E7F8F1] dark:bg-tide-100/40"
+                          : "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left hover:bg-[#F4F7FA] dark:hover:bg-surface-muted"
                       }
                       onMouseEnter={() => setHighlight(index)}
                       onMouseDown={(e) => e.preventDefault()}
