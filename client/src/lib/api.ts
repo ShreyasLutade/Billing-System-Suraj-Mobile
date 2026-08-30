@@ -283,6 +283,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateStockItem: (
+    id: string,
+    payload: {
+      mobileName: string;
+      purchasePrice: number;
+      imei?: string;
+      serialNumber?: string;
+      supplierId?: string | null;
+      suppliers?: string[];
+    },
+  ) =>
+    request<{ data: StockItem }>(`/stock/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   deleteStockItem: (id: string) =>
     request<{ data: { id: string } }>(`/stock/${id}`, {
       method: "DELETE",

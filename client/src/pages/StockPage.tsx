@@ -9,10 +9,13 @@ import {
   RefreshCw,
   Search,
   Smartphone,
+  SquarePen,
   Trash2,
 } from "lucide-react";
 import type { AddStockLocationState } from "./AddStockPage";
+import { useAuth } from "../auth/AuthContext";
 import { BackButton, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { EditStockUnitModal } from "../components/EditStockUnitModal";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
@@ -192,6 +195,7 @@ function sortGroups(
 export function StockPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useAuth();
   const locationState = (location.state || null) as {
     condition?: StockTab;
   } | null;
@@ -208,6 +212,7 @@ export function StockPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingUnit, setEditingUnit] = useState<StockItem | null>(null);
   const [selectedKey, setSelectedKeyState] = useState<string | null>(
     () => itemFromUrl,
   );
@@ -376,20 +381,39 @@ export function StockPage() {
     }
   }
 
+  function applyEditedUnit(updated: StockItem) {
+    setItems((current) =>
+      current.map((row) => (row.id === updated.id ? updated : row)),
+    );
+    setSelectedKey(stockGroupKey(updated));
+    setError(null);
+  }
+
   if (selectedKey && loading && !selectedGroup) {
     return <LoadingBlock label="Loading stock…" />;
   }
 
   if (selectedGroup) {
     return (
-      <StockProductDetail
-        group={selectedGroup}
-        condition={tab}
-        deletingId={deletingId}
-        error={error}
-        onBack={() => setSelectedKey(null)}
-        onRemove={(unit) => void removeItem(unit)}
-      />
+      <>
+        <StockProductDetail
+          group={selectedGroup}
+          condition={tab}
+          deletingId={deletingId}
+          error={error}
+          isAdmin={isAdmin}
+          onBack={() => setSelectedKey(null)}
+          onEdit={setEditingUnit}
+          onRemove={(unit) => void removeItem(unit)}
+        />
+        {editingUnit && isAdmin ? (
+          <EditStockUnitModal
+            unit={editingUnit}
+            onClose={() => setEditingUnit(null)}
+            onSaved={applyEditedUnit}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -708,14 +732,18 @@ function StockProductDetail({
   condition,
   deletingId,
   error,
+  isAdmin,
   onBack,
+  onEdit,
   onRemove,
 }: {
   group: StockGroup;
   condition: StockTab;
   deletingId: string | null;
   error: string | null;
+  isAdmin: boolean;
   onBack: () => void;
+  onEdit: (unit: StockItem) => void;
   onRemove: (unit: StockItem) => void;
 }) {
   const location = useLocation();
@@ -781,7 +809,7 @@ function StockProductDetail({
                 <th>Supplier name</th>
                 <th className="text-right">Price</th>
                 <th>IMEI / Serial</th>
-                <th className="text-right">Action</th>
+                <th className="w-[1%] text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -817,16 +845,28 @@ function StockProductDetail({
                   <td className="font-mono text-ink-800">
                     {formatStockUnitId(unit)}
                   </td>
-                  <td className="text-right">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-rose-600 hover:underline disabled:opacity-50"
-                      disabled={deletingId === unit.id}
-                      onClick={() => onRemove(unit)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {deletingId === unit.id ? "…" : "Remove"}
-                    </button>
+                  <td className="w-[1%] whitespace-nowrap text-right">
+                    <div className="inline-flex items-center justify-end gap-1.5">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 disabled:opacity-50 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"
+                          onClick={() => onEdit(unit)}
+                        >
+                          <SquarePen className="h-3 w-3" />
+                          Edit
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
+                        disabled={deletingId === unit.id}
+                        onClick={() => onRemove(unit)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {deletingId === unit.id ? "…" : "Remove"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

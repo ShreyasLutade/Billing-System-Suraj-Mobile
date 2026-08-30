@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
+import { SquarePen } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
+import { EditStockUnitModal } from "../components/EditStockUnitModal";
 import { api, formatINR, formatStockUnitId } from "../lib/api";
-import type { Purchase } from "../types";
+import type { Purchase, PurchaseStockRef, StockItem } from "../types";
 import { fromState, readFromState, readOriginState } from "../lib/navMemory";
 
 function formatDate(value: string) {
@@ -18,8 +20,36 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-const COLS =
-  "grid grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_minmax(9rem,11rem)] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_minmax(10rem,12rem)]";
+const COL_TEMPLATE =
+  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_max-content_max-content]";
+
+const ROW_GRID = "col-span-full grid grid-cols-subgrid items-center";
+
+function toEditUnit(item: PurchaseStockRef, purchase: Purchase): StockItem {
+  return {
+    id: item.id,
+    condition:
+      item.condition === "USED" || item.condition === "NEW"
+        ? item.condition
+        : purchase.condition === "USED"
+          ? "USED"
+          : "NEW",
+    platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
+    mobileName: item.mobileName,
+    storage: item.storage || "",
+    ram: item.ram || "",
+    color: item.color || "",
+    imei: item.imei,
+    serialNumber: item.serialNumber,
+    purchasePrice: item.purchasePrice,
+    suppliers: purchase.supplier?.name ? [purchase.supplier.name] : [],
+    supplierId: purchase.supplierId,
+    supplierName: purchase.supplier?.name || null,
+    status: item.status,
+    createdAt: purchase.createdAt,
+    updatedAt: purchase.createdAt,
+  };
+}
 
 export function PurchaseDetailPage() {
   const { id: supplierId, purchaseId } = useParams<{
@@ -35,6 +65,7 @@ export function PurchaseDetailPage() {
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<PurchaseStockRef | null>(null);
 
   useEffect(() => {
     if (!purchaseId) return;
@@ -120,22 +151,35 @@ export function PurchaseDetailPage() {
       ) : (
         <div className="ledger-card">
           <div className="ledger-scroll">
-            <div className="min-w-[52rem]">
+            <div className={clsx("min-w-[52rem] grid", COL_TEMPLATE)}>
               <div
                 className={clsx(
-                  COLS,
-                  "border-b-2 border-[#DCE2EA] bg-[#F1F4F8] text-[11px] font-bold uppercase tracking-[0.08em] text-ink-500",
+                  ROW_GRID,
+                  "border-b-2 border-[#DCE2EA] bg-[#F1F4F8] text-[11px] font-bold uppercase tracking-[0.08em] text-ink-500 dark:border-[rgb(var(--color-line))] dark:bg-surface-muted",
                 )}
               >
-                <div className="border-r border-[#EEF1F5] px-3 py-2">Product</div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2">Storage</div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2">RAM</div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2">Color</div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2">IMEI / Serial</div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2 text-right">
+                <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
+                  Product
+                </div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
+                  Storage
+                </div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
+                  RAM
+                </div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
+                  Color
+                </div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
+                  IMEI / Serial
+                </div>
+                <div className="border-r border-[#EEF1F5] px-3 py-2 text-right dark:border-[rgb(var(--color-line))]">
                   Purchase price
                 </div>
-                <div className="px-3 py-2">Status</div>
+                <div className="border-r border-[#EEF1F5] px-2 py-2 dark:border-[rgb(var(--color-line))]">
+                  Status
+                </div>
+                <div className="px-2 py-2 text-right">Action</div>
               </div>
 
               {purchase.items.map((row, index) => {
@@ -165,7 +209,7 @@ export function PurchaseDetailPage() {
                       }
                     }}
                     className={clsx(
-                      COLS,
+                      ROW_GRID,
                       "relative isolate overflow-hidden border-b border-[#EEF1F5] text-[13px] dark:border-[rgb(var(--color-line))]",
                       !sold && (index % 2 === 0 ? "bg-white" : "bg-[#FAFBFC]"),
                       sold &&
@@ -182,7 +226,7 @@ export function PurchaseDetailPage() {
                   >
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 font-semibold dark:border-[rgb(var(--color-line))]",
+                        "border-r border-[#EEF1F5] px-3 py-1.5 font-semibold dark:border-[rgb(var(--color-line))]",
                         sold ? "text-ink-500 dark:!text-rose-200/80" : "text-ink-900",
                       )}
                     >
@@ -190,7 +234,7 @@ export function PurchaseDetailPage() {
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums dark:border-[rgb(var(--color-line))]",
+                        "border-r border-[#EEF1F5] px-3 py-1.5 tabular-nums dark:border-[rgb(var(--color-line))]",
                         sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
@@ -198,7 +242,7 @@ export function PurchaseDetailPage() {
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 tabular-nums dark:border-[rgb(var(--color-line))]",
+                        "border-r border-[#EEF1F5] px-3 py-1.5 tabular-nums dark:border-[rgb(var(--color-line))]",
                         sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
@@ -206,7 +250,7 @@ export function PurchaseDetailPage() {
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 dark:border-[rgb(var(--color-line))]",
+                        "border-r border-[#EEF1F5] px-3 py-1.5 dark:border-[rgb(var(--color-line))]",
                         sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
@@ -214,7 +258,7 @@ export function PurchaseDetailPage() {
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 font-mono text-xs sm:text-[13px] dark:border-[rgb(var(--color-line))]",
+                        "border-r border-[#EEF1F5] px-3 py-1.5 font-mono text-xs sm:text-[13px] dark:border-[rgb(var(--color-line))]",
                         sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
@@ -222,13 +266,13 @@ export function PurchaseDetailPage() {
                     </div>
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
+                        "border-r border-[#EEF1F5] px-3 py-1.5 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
                         sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
                       )}
                     >
                       {formatINR(item.purchasePrice)}
                     </div>
-                    <div className="relative z-20 min-w-0 px-3 py-1">
+                    <div className="relative z-20 whitespace-nowrap border-r border-[#EEF1F5] px-2 py-1.5 dark:border-[rgb(var(--color-line))]">
                       {sold ? (
                         <div className="relative z-20 space-y-0.5">
                           {billId ? (
@@ -267,6 +311,24 @@ export function PurchaseDetailPage() {
                       )}
                     </div>
 
+                    <div className="relative z-20 whitespace-nowrap px-2 py-1.5 text-right">
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingItem(item);
+                          }}
+                        >
+                          <SquarePen className="h-3 w-3" />
+                          Edit
+                        </button>
+                      ) : (
+                        <span className="text-ink-300">—</span>
+                      )}
+                    </div>
+
                     {sold ? (
                       <div
                         aria-hidden
@@ -290,6 +352,54 @@ export function PurchaseDetailPage() {
           </p>
         </div>
       )}
+
+      {editingItem && isAdmin ? (
+        <EditStockUnitModal
+          unit={toEditUnit(editingItem, purchase)}
+          allowSupplierEdit={false}
+          onClose={() => setEditingItem(null)}
+          onSaved={async (updated) => {
+            if (!purchaseId) return;
+            try {
+              const { data } = await api.getPurchase(purchaseId);
+              setPurchase(data);
+              setError(null);
+              if (supplierId && data.supplierId !== supplierId) {
+                navigate(
+                  `/suppliers/${data.supplierId}/purchases/${purchaseId}`,
+                  { replace: true, state: location.state },
+                );
+              }
+            } catch (err) {
+              setError(
+                err instanceof Error ? err.message : "Failed to refresh purchase",
+              );
+              setPurchase((current) =>
+                current
+                  ? {
+                      ...current,
+                      totalAmount: updated.purchasePrice,
+                      items: current.items.map((row) =>
+                        row.stockItem.id === updated.id
+                          ? {
+                              ...row,
+                              stockItem: {
+                                ...row.stockItem,
+                                mobileName: updated.mobileName,
+                                purchasePrice: updated.purchasePrice,
+                                imei: updated.imei,
+                                serialNumber: updated.serialNumber,
+                              },
+                            }
+                          : row,
+                      ),
+                    }
+                  : current,
+              );
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
