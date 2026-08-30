@@ -1,10 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import clsx from "clsx";
 import { api, formatStockUnitId } from "../lib/api";
 import type { StockItem, Supplier } from "../types";
+import { formatCapacityLabel } from "../lib/phoneModelSearch";
+import { ImeiScanFieldButton } from "./BarcodeImeiScanner";
 import { FieldPicker } from "./FieldPicker";
 import { MobileNameSearch } from "./MobileNameSearch";
+
+function mobileNameLabel(
+  name: string,
+  color: string,
+  storage: string,
+  ram: string,
+  platform: "IOS" | "ANDROID",
+) {
+  return [
+    name.trim(),
+    color.trim() || null,
+    storage.trim() ? formatCapacityLabel(storage) : "",
+    platform === "ANDROID" && ram.trim()
+      ? formatCapacityLabel(ram)
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 export function EditStockUnitModal({
   unit,
@@ -17,7 +39,13 @@ export function EditStockUnitModal({
   onClose: () => void;
   onSaved: (item: StockItem) => void;
 }) {
+  const [platform, setPlatform] = useState<"IOS" | "ANDROID">(
+    unit.platform === "ANDROID" ? "ANDROID" : "IOS",
+  );
   const [mobileName, setMobileName] = useState(unit.mobileName);
+  const [storage, setStorage] = useState(unit.storage || "");
+  const [ram, setRam] = useState(unit.ram || "");
+  const [color, setColor] = useState(unit.color || "");
   const [purchasePrice, setPurchasePrice] = useState(
     String(unit.purchasePrice ?? ""),
   );
@@ -48,7 +76,8 @@ export function EditStockUnitModal({
     if (!allowSupplierEdit) return;
     if (supplierId || !unit.supplierName) return;
     const match = suppliers.find(
-      (s) => s.name.trim().toLowerCase() === unit.supplierName?.trim().toLowerCase(),
+      (s) =>
+        s.name.trim().toLowerCase() === unit.supplierName?.trim().toLowerCase(),
     );
     if (match) setSupplierId(match.id);
   }, [allowSupplierEdit, suppliers, supplierId, unit.supplierName]);
@@ -63,14 +92,38 @@ export function EditStockUnitModal({
     [suppliers],
   );
 
+  function switchPlatform(next: "IOS" | "ANDROID") {
+    if (next === platform) return;
+    setPlatform(next);
+    setMobileName("");
+    setStorage("");
+    setRam("");
+    setError(null);
+  }
+
   async function save() {
     const name = mobileName.trim();
     const price = Number(purchasePrice);
     const nextImei = imei.replace(/\s+/g, "").trim();
     const nextSerial = serialNumber.replace(/\s+/g, "").trim();
+    const nextStorage = storage.trim();
+    const nextRam = platform === "ANDROID" ? ram.trim() : "";
+    const nextColor = color.trim();
 
     if (name.length < 2) {
       setError("Enter the mobile name");
+      return;
+    }
+    if (!nextStorage) {
+      setError("Select a mobile with storage from the list");
+      return;
+    }
+    if (platform === "ANDROID" && !nextRam) {
+      setError("Select a mobile with RAM from the list");
+      return;
+    }
+    if (!nextColor) {
+      setError("Enter the color");
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
@@ -95,10 +148,20 @@ export function EditStockUnitModal({
     try {
       const { data } = await api.updateStockItem(unit.id, {
         mobileName: name,
+        platform,
+        storage: nextStorage,
+        ram: nextRam,
+        color: nextColor,
         purchasePrice: price,
         imei: nextImei,
         serialNumber: nextSerial,
-        supplierId,
+        supplierId: allowSupplierEdit
+          ? supplierId
+          : unit.supplierId || supplierId,
+        suppliers:
+          !allowSupplierEdit && !unit.supplierId && unit.supplierName
+            ? [unit.supplierName]
+            : undefined,
       });
       onSaved(data);
       onClose();
@@ -108,6 +171,22 @@ export function EditStockUnitModal({
       setSaving(false);
     }
   }
+
+  const unitHeading = mobileNameLabel(
+    mobileName || unit.mobileName,
+    color || unit.color,
+    storage || unit.storage,
+    ram || unit.ram,
+    platform,
+  );
+  const capacityHint = [
+    storage.trim() ? formatCapacityLabel(storage) : "",
+    platform === "ANDROID" && ram.trim()
+      ? formatCapacityLabel(ram)
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <AnimatePresence>
@@ -137,7 +216,7 @@ export function EditStockUnitModal({
                 id="edit-stock-title"
                 className="mt-1 font-display text-xl font-semibold text-ink-900"
               >
-                {unit.mobileName}
+                {unitHeading}
               </h2>
               <p className="mt-1 font-mono text-xs text-ink-500">
                 {formatStockUnitId(unit)}
@@ -156,17 +235,67 @@ export function EditStockUnitModal({
 
           <div className="space-y-3.5">
             <div>
+              <span className="label required">Operating system</span>
+              <div className="inline-flex w-full gap-0.5 rounded-[11px] bg-[#EBEDF1] p-1 dark:bg-surface-muted">
+                {(["IOS", "ANDROID"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={clsx(
+                      "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] transition",
+                      platform === option ? "segment-on" : "segment-off",
+                    )}
+                    onClick={() => switchPlatform(option)}
+                    disabled={saving}
+                  >
+                    {option === "IOS" ? "iOS" : "Android"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
               <label className="label required" htmlFor="edit-stock-name">
                 Mobile name
               </label>
               <MobileNameSearch
                 id="edit-stock-name"
-                platform={unit.platform}
+                platform={platform}
                 value={mobileName}
+                trailingHint={capacityHint || null}
                 disabled={saving}
                 required
-                onChange={setMobileName}
-                onSelectModel={(model) => setMobileName(model.name)}
+                onChange={(next) => {
+                  setMobileName(next);
+                  if (!next.trim()) {
+                    setStorage("");
+                    setRam("");
+                  }
+                }}
+                onSelectModel={(model) => {
+                  setMobileName(model.name);
+                  setStorage(model.storage || "");
+                  if (platform === "ANDROID") {
+                    setRam(model.ram || "");
+                  } else {
+                    setRam("");
+                  }
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="label required" htmlFor="edit-stock-color">
+                Color
+              </label>
+              <input
+                id="edit-stock-color"
+                className="field"
+                value={color}
+                onChange={(event) => setColor(event.target.value)}
+                disabled={saving}
+                placeholder="e.g. Black"
+                required
               />
             </div>
 
@@ -192,14 +321,21 @@ export function EditStockUnitModal({
               <label className="label required" htmlFor="edit-stock-imei">
                 IMEI
               </label>
-              <input
-                id="edit-stock-imei"
-                className="field font-mono"
-                value={imei}
-                onChange={(event) => setImei(event.target.value)}
-                disabled={saving}
-                placeholder="Enter IMEI"
-              />
+              <div className="flex items-stretch gap-2">
+                <input
+                  id="edit-stock-imei"
+                  className="field min-w-0 flex-1 font-mono"
+                  value={imei}
+                  onChange={(event) => setImei(event.target.value)}
+                  disabled={saving}
+                  placeholder="Enter IMEI"
+                  inputMode="numeric"
+                />
+                <ImeiScanFieldButton
+                  disabled={saving}
+                  onScan={setImei}
+                />
+              </div>
             </div>
 
             <div>

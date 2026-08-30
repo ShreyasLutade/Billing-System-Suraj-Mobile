@@ -237,6 +237,8 @@ model StockItem {
   supplierId    String?
   /// AVAILABLE | SOLD
   status        String   @default("AVAILABLE")
+  createdByUserId String?
+  createdByName   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   billItems     BillItem[]
@@ -248,6 +250,7 @@ model StockItem {
   @@index([mobileName])
   @@index([createdAt])
   @@index([supplierId])
+  @@index([createdByUserId])
 }
 
 /// Party master — Tally-style supplier ledger.
@@ -281,6 +284,8 @@ model Purchase {
   condition    String    @default("NEW")
   /// When set, this purchase is fully paid to the supplier
   paidAt       DateTime?
+  createdByUserId String?
+  createdByName   String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   supplier     Supplier  @relation(fields: [supplierId], references: [id])
@@ -289,6 +294,7 @@ model Purchase {
   @@index([supplierId])
   @@index([purchaseDate])
   @@index([paidAt])
+  @@index([createdByUserId])
 }
 
 model PurchaseItem {

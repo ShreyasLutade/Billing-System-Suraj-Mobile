@@ -18,6 +18,8 @@ type StockLinkedItem = {
 const EXCHANGE_NOTE_PREFIX = "EXCHANGE_INVOICE:";
 const RETURN_NOTE_PREFIX = "RETURN_INVOICE:";
 
+export { EXCHANGE_NOTE_PREFIX, RETURN_NOTE_PREFIX };
+
 export function exchangePurchaseNote(invoiceNumber: string) {
   return `${EXCHANGE_NOTE_PREFIX}${invoiceNumber.trim()}`;
 }
@@ -233,6 +235,8 @@ export type ExchangeStockInput = {
   exchangeValue?: number | null;
   exchangeNotes?: string | null;
   purchaseDate?: Date;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
 };
 
 /**
@@ -372,6 +376,8 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
         supplierId: supplier.id,
         status: "AVAILABLE",
         createdAt: purchaseDate,
+        createdByUserId: input.createdByUserId || null,
+        createdByName: input.createdByName || null,
       },
     });
     stockIds.push(stock.id);
@@ -424,6 +430,8 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
         totalAmount,
         condition: "USED",
         paidAt: purchaseDate,
+        createdByUserId: input.createdByUserId || null,
+        createdByName: input.createdByName || null,
       },
     });
 
@@ -460,6 +468,8 @@ export async function returnBillStockToCustomer(
     customerName: string;
     customerPhone: string;
     customerAddress?: string | null;
+    createdByUserId?: string | null;
+    createdByName?: string | null;
     items: Array<{
       stockItemId?: string | null;
       rate?: number | null;
@@ -549,6 +559,8 @@ export async function returnBillStockToCustomer(
       totalAmount: total,
       condition: "USED",
       paidAt: purchaseDate,
+      createdByUserId: bill.createdByUserId || null,
+      createdByName: bill.createdByName || null,
     },
   });
 

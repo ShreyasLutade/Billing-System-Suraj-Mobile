@@ -20,6 +20,11 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function addedByLabel(name?: string | null) {
+  const first = name?.trim().split(/\s+/)[0];
+  return first || null;
+}
+
 export function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -186,6 +191,7 @@ export function SupplierDetailPage() {
                 <tbody>
                   {data.purchases.map((p) => {
                     const paid = Boolean(p.paidAt);
+                    const addedBy = addedByLabel(p.createdByName);
                     return (
                       <tr
                         key={p.id}
@@ -200,7 +206,12 @@ export function SupplierDetailPage() {
                         }
                       >
                         <td className="whitespace-normal text-ink-800">
-                          {formatDate(p.purchaseDate)}
+                          <span className="whitespace-nowrap">
+                            {formatDate(p.purchaseDate)}
+                          </span>
+                          {addedBy ? (
+                            <span className="text-ink-500"> by {addedBy}</span>
+                          ) : null}
                           <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-wide text-ink-300">
                             {p.note?.startsWith("RETURN_INVOICE:")
                               ? "Return"

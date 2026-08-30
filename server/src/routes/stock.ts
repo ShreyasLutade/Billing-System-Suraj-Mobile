@@ -38,6 +38,8 @@ function mapStockItem(item: {
   suppliers: string;
   supplierId?: string | null;
   status: string;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
   createdAt: Date;
   updatedAt: Date;
   supplier?: { id: string; name: string; isExchange?: boolean } | null;
@@ -326,6 +328,8 @@ stockRouter.post("/", async (req, res, next) => {
           condition: data.condition,
           totalAmount: data.purchasePrice,
           purchaseDate: new Date(),
+          createdByUserId: req.user?.id || null,
+          createdByName: req.user?.name || null,
         },
       });
 
@@ -346,6 +350,8 @@ stockRouter.post("/", async (req, res, next) => {
           suppliers: serializeSuppliers([supplier!.name]),
           supplierId: supplier!.id,
           status: "AVAILABLE",
+          createdByUserId: req.user?.id || null,
+          createdByName: req.user?.name || null,
         },
         include: { supplier: { select: { id: true, name: true, isExchange: true } } },
       });
@@ -366,6 +372,10 @@ stockRouter.post("/", async (req, res, next) => {
 const updateStockSchema = z
   .object({
     mobileName: z.string().trim().min(2, "Mobile name is required").max(100),
+    platform: z.enum(["IOS", "ANDROID"]),
+    storage: z.string().trim().min(1, "Storage is required").max(30),
+    ram: z.string().trim().max(30).optional().default(""),
+    color: z.string().trim().min(1, "Color is required").max(40),
     purchasePrice: z.coerce
       .number({ invalid_type_error: "Purchase price is required" })
       .positive("Purchase price must be greater than 0"),
@@ -379,6 +389,13 @@ const updateStockSchema = z
       .default([]),
   })
   .superRefine((data, ctx) => {
+    if (data.platform === "ANDROID" && !data.ram?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "RAM is required for Android",
+        path: ["ram"],
+      });
+    }
     if (!data.supplierId?.trim() && !data.suppliers?.[0]?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -481,12 +498,21 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
 
     const mobileName = data.mobileName.trim();
     const purchasePrice = data.purchasePrice;
+    const platform = data.platform;
+    const storage = normalizeCapacity(data.storage);
+    const ram =
+      platform === "ANDROID" ? normalizeCapacity(data.ram || "") : "";
+    const color = data.color.trim();
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.stockItem.update({
         where: { id: existing.id },
         data: {
           mobileName,
+          platform,
+          storage,
+          ram,
+          color,
           purchasePrice,
           imei,
           serialNumber,
@@ -529,6 +555,10 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
         where: { stockItemId: existing.id },
         data: {
           productName: mobileName,
+          platform,
+          storage,
+          ram,
+          color,
           imei1: imei,
           serialNumber,
         },

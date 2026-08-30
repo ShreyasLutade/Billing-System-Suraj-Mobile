@@ -5,6 +5,7 @@ import { AppShell } from "./components/AppShell";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
+import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
@@ -49,6 +50,10 @@ export default function App() {
                   <Route
                     path="analytics/payments"
                     element={<AnalyticsPaymentsPage />}
+                  />
+                  <Route
+                    path="analytics/exchanges"
+                    element={<AnalyticsExchangesPage />}
                   />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
