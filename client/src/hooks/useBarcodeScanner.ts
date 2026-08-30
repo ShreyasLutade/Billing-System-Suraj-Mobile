@@ -40,11 +40,18 @@ export interface UseBarcodeScannerOptions {
   formats?: string[];
   facingMode?: "environment" | "user";
   roi?: { widthPct: number; heightPct: number };
+  /** Cap for downscaled frame width before detect (higher = denser barcodes). */
+  maxProcessWidth?: number;
   minScanIntervalMs?: number;
   consensusReads?: number;
   duplicateSuppressMs?: number;
   vibrateOnDetect?: boolean;
   beepOnDetect?: boolean;
+  /** Return false to ignore a barcode (e.g. skip product UPC while scanning serial). */
+  acceptResult?: (result: {
+    rawValue: string;
+    format: string;
+  }) => boolean;
 }
 
 export interface UseBarcodeScannerReturn {
@@ -74,11 +81,13 @@ export function useBarcodeScanner(
     formats = DEFAULT_FORMATS,
     facingMode = "environment",
     roi = DEFAULT_ROI,
+    maxProcessWidth = MAX_PROCESS_WIDTH,
     minScanIntervalMs = 80,
     consensusReads = 2,
     duplicateSuppressMs = 2000,
     vibrateOnDetect: doVibrate = true,
     beepOnDetect: doBeep = true,
+    acceptResult,
   } = options;
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -105,6 +114,8 @@ export function useBarcodeScanner(
 
   const onDetectRef = useRef(onDetect);
   onDetectRef.current = onDetect;
+  const acceptResultRef = useRef(acceptResult);
+  acceptResultRef.current = acceptResult;
   const formatsKey = useMemo(() => formats.join(","), [formats]);
 
   const pause = useCallback(() => {
@@ -153,7 +164,7 @@ export function useBarcodeScanner(
       const cropX = (vw - cropW) / 2;
       const cropY = (vh - cropH) / 2;
 
-      const scale = Math.min(1, MAX_PROCESS_WIDTH / cropW);
+      const scale = Math.min(1, maxProcessWidth / cropW);
       const outW = Math.max(1, Math.round(cropW * scale));
       const outH = Math.max(1, Math.round(cropH * scale));
 
@@ -186,7 +197,23 @@ export function useBarcodeScanner(
           return;
         }
 
-        const hit = results[0];
+        const accept = acceptResultRef.current;
+        const ranked = [...results].sort((a, b) => {
+          const score = (raw: string) => {
+            const hasLetter = /[A-Za-z]/.test(raw);
+            const len = raw.replace(/\s+/g, "").length;
+            return (hasLetter ? 1000 : 0) + len;
+          };
+          return score(b.rawValue) - score(a.rawValue);
+        });
+        const hit =
+          ranked.find((row) =>
+            accept
+              ? accept({ rawValue: row.rawValue, format: row.format })
+              : true,
+          ) ?? null;
+        if (!hit) return;
+
         const digits = normalizeImei(hit.rawValue);
         const validImei = isValidImei(hit.rawValue);
 
@@ -230,6 +257,7 @@ export function useBarcodeScanner(
     [
       roi.widthPct,
       roi.heightPct,
+      maxProcessWidth,
       minScanIntervalMs,
       consensusReads,
       duplicateSuppressMs,
@@ -295,8 +323,8 @@ export function useBarcodeScanner(
               ? { deviceId: { exact: deviceId } }
               : {
                   facingMode: { ideal: facingMode },
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 },
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 },
                   frameRate: { ideal: 30 },
                 },
             audio: false,
@@ -308,7 +336,16 @@ export function useBarcodeScanner(
           return;
         }
 
-        detectorRef.current = new ctor({ formats });
+        try {
+          detectorRef.current = new ctor({ formats });
+        } catch {
+          // Some browsers reject unsupported formats — fall back to Code 128.
+          detectorRef.current = new ctor({
+            formats: formats.includes("code_128")
+              ? ["code_128"]
+              : formats.slice(0, 1),
+          });
+        }
         engineRef.current = resolvedEngine;
         setEngine(resolvedEngine);
 

@@ -5,7 +5,12 @@ import clsx from "clsx";
 import { api, formatStockUnitId } from "../lib/api";
 import type { StockItem, Supplier } from "../types";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
-import { ImeiScanFieldButton } from "./BarcodeImeiScanner";
+import {
+  ImeiScanFieldButton,
+  SerialScanFieldButton,
+  ScanFieldShell,
+  scanFieldInputClass,
+} from "./BarcodeImeiScanner";
 import { FieldPicker } from "./FieldPicker";
 import { MobileNameSearch } from "./MobileNameSearch";
 
@@ -325,10 +330,10 @@ export function EditStockUnitModal({
                 <label className="label required" htmlFor="edit-stock-imei">
                   IMEI
                 </label>
-                <div className="flex items-stretch gap-1.5">
+                <ScanFieldShell compact>
                   <input
                     id="edit-stock-imei"
-                    className="field min-w-0 flex-1 font-mono"
+                    className={scanFieldInputClass}
                     value={imei}
                     onChange={(event) => setImei(event.target.value)}
                     disabled={saving}
@@ -338,23 +343,28 @@ export function EditStockUnitModal({
                   <ImeiScanFieldButton
                     disabled={saving}
                     onScan={setImei}
-                    className="min-h-[40px] w-10 rounded-xl"
                   />
-                </div>
+                </ScanFieldShell>
               </div>
 
               <div>
                 <label className="label" htmlFor="edit-stock-serial">
                   Serial number
                 </label>
-                <input
-                  id="edit-stock-serial"
-                  className="field font-mono"
-                  value={serialNumber}
-                  onChange={(event) => setSerialNumber(event.target.value)}
-                  disabled={saving}
-                  placeholder="Optional if IMEI is set"
-                />
+                <ScanFieldShell compact>
+                  <input
+                    id="edit-stock-serial"
+                    className={scanFieldInputClass}
+                    value={serialNumber}
+                    onChange={(event) => setSerialNumber(event.target.value)}
+                    disabled={saving}
+                    placeholder="Optional if IMEI is set"
+                  />
+                  <SerialScanFieldButton
+                    disabled={saving}
+                    onScan={setSerialNumber}
+                  />
+                </ScanFieldShell>
               </div>
             </div>
 
