@@ -156,6 +156,11 @@ function formatPurchaseDate(value: string) {
   }).format(date);
 }
 
+function addedByLabel(name?: string | null) {
+  const first = name?.trim().split(/\s+/)[0];
+  return first || null;
+}
+
 function StockIntakeBadge({
   kind,
   isExchange,
@@ -813,10 +818,17 @@ function StockProductDetail({
               </tr>
             </thead>
             <tbody>
-              {units.map((unit) => (
+              {units.map((unit) => {
+                const addedBy = addedByLabel(unit.createdByName);
+                return (
                 <tr key={unit.id}>
                   <td className="text-ink-800">
-                    {formatPurchaseDate(unit.createdAt)}
+                    <span className="whitespace-nowrap">
+                      {formatPurchaseDate(unit.createdAt)}
+                    </span>
+                    {addedBy ? (
+                      <span className="text-ink-500"> by {addedBy}</span>
+                    ) : null}
                   </td>
                   <td className="whitespace-normal text-ink-800">
                     <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -869,7 +881,8 @@ function StockProductDetail({
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

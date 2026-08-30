@@ -17,6 +17,7 @@ import { upsertCustomerProfile } from "../services/customers";
 import {
   clearExchangeStock,
   deleteStockIds,
+  exchangePurchaseNote,
   returnBillStockToCustomer,
   syncExchangeStock,
   syncStockForBillItems,
@@ -327,6 +328,101 @@ billsRouter.get("/customer-lookup", async (req, res, next) => {
   }
 });
 
+function cleanImei(value: string | null | undefined) {
+  return (value || "").replace(/\s+/g, "").trim();
+}
+
+async function enrichExchangeItemsWithSaleStatus(
+  invoiceNumber: string,
+  items: ReturnType<typeof parseExchangeItemsJson>,
+) {
+  if (!items.length) return items;
+
+  const purchase = await prisma.purchase.findFirst({
+    where: { note: exchangePurchaseNote(invoiceNumber) },
+    select: {
+      items: {
+        select: {
+          stockItem: {
+            select: {
+              id: true,
+              imei: true,
+              status: true,
+              billItems: {
+                orderBy: { bill: { billDate: "desc" } },
+                take: 1,
+                select: {
+                  billId: true,
+                  bill: {
+                    select: {
+                      id: true,
+                      invoiceNumber: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const byImei = new Map(
+    (purchase?.items || [])
+      .map((row) => row.stockItem)
+      .filter((stock): stock is NonNullable<typeof stock> => Boolean(stock))
+      .map((stock) => [cleanImei(stock.imei), stock] as const)
+      .filter(([imei]) => Boolean(imei)),
+  );
+
+  // Fallback for older rows / missing purchase note: resolve by IMEI.
+  const missingImeis = items
+    .map((item) => cleanImei(item.imei1))
+    .filter((imei) => imei && !byImei.has(imei));
+
+  if (missingImeis.length) {
+    const extras = await prisma.stockItem.findMany({
+      where: { imei: { in: missingImeis } },
+      select: {
+        id: true,
+        imei: true,
+        status: true,
+        billItems: {
+          orderBy: { bill: { billDate: "desc" } },
+          take: 1,
+          select: {
+            billId: true,
+            bill: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    for (const stock of extras) {
+      const key = cleanImei(stock.imei);
+      if (key && !byImei.has(key)) byImei.set(key, stock);
+    }
+  }
+
+  return items.map((item) => {
+    const stock = byImei.get(cleanImei(item.imei1));
+    if (!stock) return item;
+    const sale = stock.billItems[0]?.bill;
+    return {
+      ...item,
+      stockItemId: stock.id,
+      stockStatus: stock.status,
+      soldBillId: sale?.id ?? null,
+      soldInvoiceNumber: sale?.invoiceNumber ?? null,
+    };
+  });
+}
+
 billsRouter.get("/:id", async (req, res, next) => {
   try {
     const bill = await prisma.bill.findUnique({
@@ -337,7 +433,14 @@ billsRouter.get("/:id", async (req, res, next) => {
       res.status(404).json({ error: "Bill not found" });
       return;
     }
-    res.json({ data: serializeBill(bill) });
+    const data = serializeBill(bill);
+    if (bill.isExchange && !bill.withGst) {
+      data.exchangeItems = await enrichExchangeItemsWithSaleStatus(
+        bill.invoiceNumber,
+        data.exchangeItems,
+      );
+    }
+    res.json({ data });
   } catch (error) {
     next(error);
   }
@@ -531,6 +634,8 @@ billsRouter.post("/", async (req, res, next) => {
         exchangeValue: exchangePersist.exchangeValue,
         exchangeNotes: exchangePersist.exchangeNotes,
         purchaseDate: billDate,
+        createdByUserId: req.user?.id || null,
+        createdByName: req.user?.name || null,
       });
 
       return bill;
@@ -803,6 +908,8 @@ billsRouter.put("/:id", async (req, res, next) => {
         exchangeValue: exchangePersist.exchangeValue,
         exchangeNotes: exchangePersist.exchangeNotes,
         purchaseDate: billDate,
+        createdByUserId: req.user?.id || null,
+        createdByName: req.user?.name || null,
       });
 
       return bill;
@@ -874,7 +981,11 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
 
     await prisma.$transaction(async (tx) => {
       if (mode === "return") {
-        await returnBillStockToCustomer(tx, existing);
+        await returnBillStockToCustomer(tx, {
+          ...existing,
+          createdByUserId: req.user?.id || null,
+          createdByName: req.user?.name || null,
+        });
         await tx.bill.delete({ where: { id: existing.id } });
         return;
       }

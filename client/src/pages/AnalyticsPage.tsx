@@ -22,7 +22,7 @@ import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
 import { fromState } from "../lib/navMemory";
-import { analyticsPaymentsPath, type PaymentMode } from "../lib/analyticsNav";
+import { analyticsExchangesPath, analyticsPaymentsPath, type PaymentMode } from "../lib/analyticsNav";
 import { MIX, mixSurface } from "../lib/analyticsMix";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -510,6 +510,41 @@ export function AnalyticsPage() {
                 </Link>
               );
             })}
+          </section>
+
+          <section className="mb-6" aria-label="Exchange mobiles">
+            <Link
+              to={analyticsExchangesPath(period, customFrom, customTo)}
+              state={fromState(location)}
+              className="interactive-card group flex items-center justify-between gap-3 rounded-2xl border border-ink-100/80 bg-white/90 px-4 py-3 shadow-soft"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+                  style={mixSurface(MIX.exchange, dark)}
+                >
+                  <ArrowDownUp className="h-4 w-4" strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+                    Exchange mobiles
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                      {formatINR(data.exchangeIntake?.value ?? 0)}
+                    </span>
+                    <span className="text-xs text-ink-500">
+                      · {data.exchangeIntake?.count ?? 0} unit
+                      {(data.exchangeIntake?.count ?? 0) === 1 ? "" : "s"} ·{" "}
+                      {data.periodLabel}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-ink-500 transition group-hover:text-tide-600">
+                View →
+              </span>
+            </Link>
           </section>
 
           <section

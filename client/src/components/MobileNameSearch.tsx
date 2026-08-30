@@ -11,7 +11,7 @@ import clsx from "clsx";
 import { api } from "../lib/api";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
 import {
-  formatCapacityLabel,
+  formatPhoneModelLabel,
   rankPhoneModels,
 } from "../lib/phoneModelSearch";
 import type { PhoneModel } from "../types";
@@ -20,6 +20,8 @@ type Props = {
   id?: string;
   platform: "IOS" | "ANDROID";
   value: string;
+  /** Shown in the same field after the name, e.g. "128 GB · 8 GB". */
+  trailingHint?: string | null;
   disabled?: boolean;
   autoFocus?: boolean;
   required?: boolean;
@@ -65,6 +67,7 @@ export function MobileNameSearch({
   id,
   platform,
   value,
+  trailingHint,
   disabled,
   autoFocus,
   required,
@@ -158,53 +161,82 @@ export function MobileNameSearch({
     >
       <div
         className={clsx(
-          "flex min-h-[48px] items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
+          "flex min-h-[48px] cursor-text items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
           open &&
             "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
           disabled && "cursor-not-allowed opacity-55",
         )}
+        onMouseDown={(event) => {
+          if (disabled) return;
+          // Keep the whole field clickable even when the typed name is short.
+          if (event.target === inputRef.current) return;
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}
       >
         <Search
-          className="h-[18px] w-[18px] shrink-0 text-ink-500"
+          className="pointer-events-none h-[18px] w-[18px] shrink-0 text-ink-500"
           aria-hidden
         />
-        <input
-          ref={inputRef}
-          id={id}
-          className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
-          role="combobox"
-          aria-expanded={showList}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          aria-activedescendant={
-            showList ? `${listId}-opt-${highlight}` : undefined
-          }
-          value={value}
-          onChange={(e) => {
-            onChange(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => {
-            setOpen(true);
-            requestAnimationFrame(() => {
-              inputRef.current?.scrollIntoView({
-                block: "center",
-                behavior: "smooth",
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+          <input
+            ref={inputRef}
+            id={id}
+            className={clsx(
+              "bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]",
+              trailingHint?.trim()
+                ? "min-w-[3ch] max-w-full [field-sizing:content]"
+                : "min-w-0 flex-1",
+            )}
+            style={
+              trailingHint?.trim()
+                ? { width: `${Math.max(value.length, 1) + 1}ch` }
+                : undefined
+            }
+            role="combobox"
+            aria-expanded={showList}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              showList ? `${listId}-opt-${highlight}` : undefined
+            }
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => {
+              setOpen(true);
+              requestAnimationFrame(() => {
+                inputRef.current?.scrollIntoView({
+                  block: "center",
+                  behavior: "smooth",
+                });
               });
-            });
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={
-            platform === "IOS"
-              ? "Search iPhone… e.g. 15 Pro 256"
-              : "Search Android… e.g. Redmi Note 14"
-          }
-          autoComplete="off"
-          spellCheck={false}
-          required={required}
-          autoFocus={autoFocus}
-          disabled={disabled}
-        />
+            }}
+            onKeyDown={onKeyDown}
+            placeholder={
+              platform === "IOS"
+                ? "Search iPhone… e.g. 15 Pro 256"
+                : "Search Android… e.g. Redmi Note 14"
+            }
+            autoComplete="off"
+            spellCheck={false}
+            required={required}
+            autoFocus={autoFocus}
+            disabled={disabled}
+          />
+          {trailingHint?.trim() ? (
+            <span
+              className="pointer-events-none shrink-0 whitespace-nowrap py-3 text-base font-semibold tabular-nums text-ink-600 sm:text-[14.5px]"
+              aria-hidden
+            >
+              · {trailingHint.trim()}
+            </span>
+          ) : null}
+          {/* Absorb leftover width so clicks outside the short input still focus it */}
+          <span className="min-h-[1.5rem] min-w-[0.5rem] flex-1 self-stretch" aria-hidden />
+        </div>
       </div>
       {showList || showEmpty ? (
         <div
@@ -236,17 +268,7 @@ export function MobileNameSearch({
                       onClick={() => pick(model)}
                     >
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
-                        {model.name}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5">
-                        <span className="rounded-md bg-[#EEF0F3] px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-800">
-                          {formatCapacityLabel(model.storage)}
-                        </span>
-                        {model.platform === "ANDROID" && model.ram ? (
-                          <span className="rounded-md bg-[#E8F0FE] px-2 py-0.5 text-xs font-semibold tabular-nums text-[#2563EB]">
-                            {formatCapacityLabel(model.ram)} RAM
-                          </span>
-                        ) : null}
+                        {formatPhoneModelLabel(model)}
                       </span>
                     </button>
                   </li>

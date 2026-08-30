@@ -1,4 +1,5 @@
 import type {
+  AnalyticsExchangesSummary,
   AnalyticsSummary,
   AuthUser,
   Bill,
@@ -214,6 +215,21 @@ export const api = {
       `/analytics/summary?${params.toString()}`,
     );
   },
+  analyticsExchanges: (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    return request<{ data: AnalyticsExchangesSummary }>(
+      `/analytics/exchanges?${params.toString()}`,
+    );
+  },
   listFinanceCompanies: () =>
     request<{ data: FinanceCompany[] }>("/finance-companies"),
   createFinanceCompany: (name: string) =>
@@ -287,6 +303,10 @@ export const api = {
     id: string,
     payload: {
       mobileName: string;
+      platform: "IOS" | "ANDROID";
+      storage: string;
+      ram?: string;
+      color: string;
       purchasePrice: number;
       imei?: string;
       serialNumber?: string;

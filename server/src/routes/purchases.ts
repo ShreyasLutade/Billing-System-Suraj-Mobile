@@ -283,6 +283,8 @@ purchasesRouter.post("/", async (req, res, next) => {
           note: data.note || null,
           condition: data.condition,
           totalAmount,
+          createdByUserId: req.user?.id || null,
+          createdByName: req.user?.name || null,
         },
       });
 
@@ -308,6 +310,8 @@ purchasesRouter.post("/", async (req, res, next) => {
             supplierId: supplier!.id,
             status: "AVAILABLE",
             createdAt: purchaseDate,
+            createdByUserId: req.user?.id || null,
+            createdByName: req.user?.name || null,
           },
         });
         await tx.purchaseItem.create({

@@ -36,6 +36,10 @@ export type BillExchangeItem = {
   imei1: string;
   value: number;
   notes?: string | null;
+  stockItemId?: string | null;
+  stockStatus?: string | null;
+  soldBillId?: string | null;
+  soldInvoiceNumber?: string | null;
 };
 
 export type Bill = {
@@ -139,6 +143,10 @@ export type AnalyticsSummary = {
     count: number;
     value: number;
   };
+  exchangeIntake?: {
+    count: number;
+    value: number;
+  };
   periodBills: Array<{
     id: string;
     invoiceNumber: string;
@@ -165,6 +173,37 @@ export type AnalyticsSummary = {
     dueAmount: number;
     dueDate?: string | null;
   }>;
+};
+
+export type AnalyticsExchangeItem = {
+  id: string;
+  purchaseId: string;
+  purchaseDate: string;
+  invoiceNumber: string;
+  billId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  supplierId: string;
+  mobileName: string;
+  color: string;
+  storage: string;
+  ram: string;
+  platform: string;
+  condition: string;
+  imei: string | null;
+  serialNumber: string | null;
+  value: number;
+  status: string;
+};
+
+export type AnalyticsExchangesSummary = {
+  period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
+  periodLabel: string;
+  from: string | null;
+  to: string | null;
+  count: number;
+  totalValue: number;
+  items: AnalyticsExchangeItem[];
 };
 
 export type FinanceCompany = {
@@ -212,6 +251,8 @@ export type StockItem = {
   /** How this unit entered stock — exchange or customer return. */
   intakeKind?: "exchange" | "return" | null;
   status: "AVAILABLE" | "SOLD" | string;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -275,6 +316,8 @@ export type Purchase = {
   totalAmount: number;
   condition: "NEW" | "USED" | string;
   paidAt?: string | null;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
   createdAt: string;
   supplier?: { id: string; name: string };
   items: Array<{

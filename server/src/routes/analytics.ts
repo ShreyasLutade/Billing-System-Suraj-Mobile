@@ -18,6 +18,7 @@ import {
   type ActivityPeriod,
   type PeriodRange,
 } from "../lib/period";
+import { EXCHANGE_NOTE_PREFIX } from "../services/stockSync";
 
 export const analyticsRouter = Router();
 
@@ -270,6 +271,107 @@ async function analyzePeriod(
   };
 }
 
+async function loadExchangeIntake(
+  purchaseDateFilter: ReturnType<typeof toDateFilter>,
+) {
+  const purchases = await prisma.purchase.findMany({
+    where: {
+      note: { startsWith: EXCHANGE_NOTE_PREFIX },
+      ...(purchaseDateFilter ? { purchaseDate: purchaseDateFilter } : {}),
+    },
+    orderBy: [{ purchaseDate: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      note: true,
+      purchaseDate: true,
+      supplierId: true,
+      supplier: { select: { id: true, name: true, phone: true } },
+      items: {
+        select: {
+          stockItem: {
+            select: {
+              id: true,
+              mobileName: true,
+              color: true,
+              storage: true,
+              ram: true,
+              platform: true,
+              condition: true,
+              imei: true,
+              serialNumber: true,
+              purchasePrice: true,
+              status: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const invoiceNumbers = [
+    ...new Set(
+      purchases
+        .map((purchase) =>
+          (purchase.note || "").startsWith(EXCHANGE_NOTE_PREFIX)
+            ? purchase.note!.slice(EXCHANGE_NOTE_PREFIX.length).trim()
+            : "",
+        )
+        .filter(Boolean),
+    ),
+  ];
+
+  const bills = invoiceNumbers.length
+    ? await prisma.bill.findMany({
+        where: { invoiceNumber: { in: invoiceNumbers } },
+        select: { id: true, invoiceNumber: true },
+      })
+    : [];
+  const billIdByInvoice = new Map(
+    bills.map((bill) => [bill.invoiceNumber, bill.id]),
+  );
+
+  const items = purchases.flatMap((purchase) => {
+    const invoiceNumber = (purchase.note || "")
+      .slice(EXCHANGE_NOTE_PREFIX.length)
+      .trim();
+    return purchase.items
+      .filter((row) => row.stockItem)
+      .map((row) => {
+        const stock = row.stockItem!;
+        return {
+          id: stock.id,
+          purchaseId: purchase.id,
+          purchaseDate: purchase.purchaseDate.toISOString(),
+          invoiceNumber,
+          billId: billIdByInvoice.get(invoiceNumber) || null,
+          customerName: purchase.supplier.name,
+          customerPhone: purchase.supplier.phone || null,
+          supplierId: purchase.supplierId,
+          mobileName: stock.mobileName,
+          color: stock.color,
+          storage: stock.storage,
+          ram: stock.ram,
+          platform: stock.platform,
+          condition: stock.condition,
+          imei: stock.imei,
+          serialNumber: stock.serialNumber,
+          value: round2(stock.purchasePrice || 0),
+          status: stock.status,
+        };
+      });
+  });
+
+  const totalValue = round2(
+    items.reduce((sum, item) => sum + item.value, 0),
+  );
+
+  return {
+    count: items.length,
+    totalValue,
+    items,
+  };
+}
+
 function previousComparableRange(
   period: ActivityPeriod,
   now = new Date(),
@@ -400,6 +502,10 @@ analyticsRouter.get("/summary", async (req, res, next) => {
       _sum: { purchasePrice: true },
     });
 
+    const exchangeIntake = await loadExchangeIntake(
+      period === "all" ? undefined : billDateFilter,
+    );
+
     res.json({
       data: {
         period,
@@ -443,8 +549,52 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           count: stockAgg._count._all,
           value: round2(stockAgg._sum.purchasePrice || 0),
         },
+        exchangeIntake: {
+          count: exchangeIntake.count,
+          value: exchangeIntake.totalValue,
+        },
         periodBills,
         paymentSources,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analyticsRouter.get("/exchanges", async (req, res, next) => {
+  try {
+    const customFrom = parseDayParam(req.query.from, false);
+    const customTo = parseDayParam(req.query.to, true);
+    const hasCustomRange = Boolean(customFrom || customTo);
+
+    const period: ActivityPeriod | "custom" = hasCustomRange
+      ? "custom"
+      : isActivityPeriod(req.query.period)
+        ? req.query.period
+        : "all";
+
+    const range: PeriodRange = hasCustomRange
+      ? { from: customFrom, to: customTo }
+      : getPeriodRange(period === "custom" ? "all" : period);
+
+    const purchaseDateFilter = toDateFilter(range);
+    const exchangeIntake = await loadExchangeIntake(
+      period === "all" ? undefined : purchaseDateFilter,
+    );
+
+    res.json({
+      data: {
+        period,
+        periodLabel:
+          period === "custom"
+            ? customPeriodLabel(customFrom, customTo)
+            : periodLabel(period),
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+        count: exchangeIntake.count,
+        totalValue: exchangeIntake.totalValue,
+        items: exchangeIntake.items,
       },
     });
   } catch (error) {

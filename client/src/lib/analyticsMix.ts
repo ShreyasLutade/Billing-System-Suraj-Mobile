@@ -35,6 +35,13 @@ export const MIX = {
     softDark: "rgba(245,158,11,0.2)",
     inkDark: "#FBBF24",
   },
+  exchange: {
+    color: "#0EA5E9",
+    soft: "#E0F2FE",
+    ink: "#0284C7",
+    softDark: "rgba(14,165,233,0.2)",
+    inkDark: "#7DD3FC",
+  },
 } as const satisfies Record<string, MixTone>;
 
 export function mixSurface(
