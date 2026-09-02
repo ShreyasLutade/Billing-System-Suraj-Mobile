@@ -1637,7 +1637,7 @@ export function CreateBillPage() {
       useFixedReturn &&
       totals.cashReturn <= 0
     ) {
-      setError("Enter the fixed return amount to the client, or turn the toggle off.");
+      setError("Enter the fixed return amount to the customer, or turn the toggle off.");
       document.getElementById("fixedReturnAmount")?.focus();
       return;
     }
@@ -1881,7 +1881,7 @@ export function CreateBillPage() {
               <dl className="mt-3 space-y-2 border-t border-ink-100 pt-3 text-sm">
                 {successPayment.payCustomerAmount > 0 ? (
                   <div className="flex justify-between gap-3">
-                    <dt className="text-ink-500">Pay client</dt>
+                    <dt className="text-ink-500">Pay customer</dt>
                     <dd className="font-medium text-ember-500">
                       {formatINR(successPayment.payCustomerAmount)}
                     </dd>
@@ -2658,7 +2658,7 @@ export function CreateBillPage() {
                           <div className="flex items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-3.5 py-3 dark:border-amber-500/40 dark:bg-amber-950/50">
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-orange-950 dark:text-amber-100">
-                                Fixed return to client
+                                Fixed return to customer
                               </p>
                               <p className="mt-0.5 text-[11px] text-orange-800/70 dark:text-amber-200/80">
                                 Pay cash from the exchange value; remaining
@@ -2668,7 +2668,7 @@ export function CreateBillPage() {
                             <Switch
                               id="useFixedReturn"
                               checked={useFixedReturn}
-                              aria-label="Fixed return to client"
+                              aria-label="Fixed return to customer"
                               onChange={(on) => {
                                 setUseFixedReturn(on);
                                 if (!on) setFixedReturnAmount(0);
@@ -2682,7 +2682,7 @@ export function CreateBillPage() {
                                 className="label required"
                                 htmlFor="fixedReturnAmount"
                               >
-                                Refund to client
+                                Refund to customer
                               </label>
                               <div className="relative">
                                 <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-ember-500">
@@ -2722,7 +2722,7 @@ export function CreateBillPage() {
                                     {formatINR(totals.exchangeDeduction)}
                                   </span>
                                   {" · "}
-                                  Pay client{" "}
+                                  Pay customer{" "}
                                   <span className="font-semibold text-ember-500">
                                     {formatINR(totals.cashReturn)}
                                   </span>
@@ -2787,7 +2787,7 @@ export function CreateBillPage() {
                   ) : null}
                   {!withGst && totals.cashReturn > 0 ? (
                     <SummaryRow
-                      label="Fixed return to client"
+                      label="Fixed return to customer"
                       value={formatINR(totals.cashReturn)}
                       accent
                     />
@@ -2926,7 +2926,7 @@ export function CreateBillPage() {
                   totals.cashReturn > 0 &&
                   totals.payableAmount > 0 ? (
                     <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-xs leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
-                      Pay client{" "}
+                      Pay customer{" "}
                       <span className="font-semibold">
                         {formatINR(totals.cashReturn)}
                       </span>{" "}
