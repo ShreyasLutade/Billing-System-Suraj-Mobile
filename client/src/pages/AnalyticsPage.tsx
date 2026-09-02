@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  CreditCard,
   Headphones,
   MonitorSmartphone,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import { useTheme } from "../theme/ThemeContext";
 const AVATAR_COLORS = [
   MIX.cash.color,
   MIX.online.color,
+  MIX.card.color,
   MIX.finance.color,
   MIX.due.color,
   "#0E1626",
@@ -214,6 +216,7 @@ export function AnalyticsPage() {
     ? [
         { key: "cash", width: shares?.cash ?? 0, color: MIX.cash.color },
         { key: "online", width: shares?.online ?? 0, color: MIX.online.color },
+        { key: "card", width: shares?.card ?? 0, color: MIX.card.color },
         {
           key: "finance",
           width: shares?.finance ?? 0,
@@ -235,11 +238,19 @@ export function AnalyticsPage() {
         },
         {
           key: "online",
-          name: "Online · UPI / card",
+          name: "Online · UPI",
           value: summary.online,
           share: shares?.online ?? 0,
           colors: MIX.online,
           icon: MonitorSmartphone,
+        },
+        {
+          key: "card",
+          name: "Card",
+          value: summary.card,
+          share: shares?.card ?? 0,
+          colors: MIX.card,
+          icon: CreditCard,
         },
         {
           key: "finance",
@@ -265,7 +276,7 @@ export function AnalyticsPage() {
       <PageHeader
         eyebrow="Insights"
         title="Analytics"
-        description="Where your money came from and what's still owed — cash, online, finance, and dues."
+        description="Where your money came from and what's still owed — cash, online, card, finance, and dues."
       />
       <div className="mb-5 sm:mb-6">
         <PeriodFilter
@@ -351,7 +362,7 @@ export function AnalyticsPage() {
                   <div
                     className="flex h-3.5 overflow-hidden rounded-lg bg-white/10"
                     role="img"
-                    aria-label={`Payment mix: cash ${formatShare(shares?.cash ?? 0)}, online ${formatShare(shares?.online ?? 0)}, finance ${formatShare(shares?.finance ?? 0)}, dues ${formatShare(shares?.due ?? 0)}`}
+                    aria-label={`Payment mix: cash ${formatShare(shares?.cash ?? 0)}, online ${formatShare(shares?.online ?? 0)}, card ${formatShare(shares?.card ?? 0)}, finance ${formatShare(shares?.finance ?? 0)}, dues ${formatShare(shares?.due ?? 0)}`}
                   >
                     {mixSegments.map((seg, i) =>
                       seg.width > 0 ? (
@@ -374,6 +385,7 @@ export function AnalyticsPage() {
                       [
                         ["Cash", MIX.cash.color, shares?.cash ?? 0],
                         ["Online", MIX.online.color, shares?.online ?? 0],
+                        ["Card", MIX.card.color, shares?.card ?? 0],
                         ["Finance", MIX.finance.color, shares?.finance ?? 0],
                         ["Dues", MIX.due.color, shares?.due ?? 0],
                       ] as const
@@ -466,7 +478,7 @@ export function AnalyticsPage() {
 
           {/* KPI cards */}
           <section
-            className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
             aria-label="Payment breakdown"
           >
             {kpis.map((kpi) => {

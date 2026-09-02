@@ -21,6 +21,13 @@ export const MIX = {
     softDark: "rgba(59,130,246,0.2)",
     inkDark: "#93C5FD",
   },
+  card: {
+    color: "#6366F1",
+    soft: "#EEF2FF",
+    ink: "#4F46E5",
+    softDark: "rgba(99,102,241,0.2)",
+    inkDark: "#A5B4FC",
+  },
   finance: {
     color: "#8B5CF6",
     soft: "#F0EBFE",

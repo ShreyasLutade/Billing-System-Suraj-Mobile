@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, Check, Smartphone, X } from "lucide-react";
+import { Banknote, Check, CreditCard, Smartphone, X } from "lucide-react";
 import clsx from "clsx";
 import { api, formatINR, round2 } from "../lib/api";
 
-type SettleMethod = "cash" | "online" | "na";
+type SettleMethod = "cash" | "online" | "card" | "na";
 type SettleMode = "full" | "custom";
 
 type SettleTarget = {
@@ -38,7 +38,7 @@ export function SettleDueModal({
 
   async function confirmSettle() {
     if (!settleMethod) {
-      setModalError("Select payment method: Cash, Online, or N/A");
+      setModalError("Select payment method: Cash, Online, Card, or N/A");
       return;
     }
 
@@ -207,6 +207,12 @@ export function SettleDueModal({
               icon={<Smartphone className="h-4 w-4 text-tide-600" />}
               active={settleMethod === "online"}
               onClick={() => setSettleMethod("online")}
+            />
+            <MethodChip
+              label="Card"
+              icon={<CreditCard className="h-4 w-4 text-tide-600" />}
+              active={settleMethod === "card"}
+              onClick={() => setSettleMethod("card")}
             />
             <MethodChip
               label="N/A"

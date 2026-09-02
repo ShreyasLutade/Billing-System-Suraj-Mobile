@@ -60,6 +60,7 @@ model Bill {
   companyDiscount   Float            @default(0)
   cashAmount        Float            @default(0)
   onlineAmount      Float            @default(0)
+  cardAmount        Float            @default(0)
   financeAmount      Float            @default(0)
   financeCompanyId   String?
   financeCompanyName String?
@@ -83,6 +84,9 @@ model Bill {
   exchangeImei2      String?
   exchangeSerial     String?
   exchangeValue      Float?
+  /// Cash paid back to customer from exchange value (fixed return).
+  /// Bill credit = exchangeValue − exchangeCashReturn.
+  exchangeCashReturn Float           @default(0)
   exchangeNotes      String?
   exchangeMobileCatalogId String?
   /// JSON array of extra exchange phones [{ model, platform, color, storage, ram, imei1, value, notes? }]
@@ -114,7 +118,7 @@ model DuePayment {
   id        String   @id @default(cuid())
   billId    String
   amount    Float
-  /// cash | online | na
+  /// cash | online | card | na
   method    String
   /// partial | full
   kind      String   @default("partial")

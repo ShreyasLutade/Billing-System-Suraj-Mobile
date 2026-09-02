@@ -379,7 +379,7 @@ duesRouter.patch(
 const settleSchema = z
   .object({
     mode: z.enum(["full", "custom"]).default("full"),
-    method: z.enum(["cash", "online", "na"]),
+    method: z.enum(["cash", "online", "card", "na"]),
     amount: z.number().positive().optional(),
     nextDueDate: z.string().optional().nullable(),
   })
@@ -471,6 +471,10 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
           method === "online"
             ? Number((bill.onlineAmount + paidAmount).toFixed(2))
             : bill.onlineAmount,
+        cardAmount:
+          method === "card"
+            ? Number((bill.cardAmount + paidAmount).toFixed(2))
+            : bill.cardAmount,
         duePayments: {
           create: {
             amount: paidAmount,

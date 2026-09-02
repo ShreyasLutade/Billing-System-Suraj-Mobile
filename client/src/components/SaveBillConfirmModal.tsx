@@ -10,12 +10,14 @@ export type SaveBillSummary = {
   payCustomerAmount?: number;
   cashAmount: number;
   onlineAmount: number;
+  cardAmount: number;
   financeAmount: number;
   financeCompanyName?: string | null;
   dueAmount: number;
   dueDate?: string | null;
   isExchange: boolean;
   exchangeValue?: number | null;
+  exchangeCashReturn?: number;
   companyDiscount?: number;
 };
 
@@ -36,6 +38,8 @@ export function SaveBillConfirmModal({
   if (summary.cashAmount > 0) payments.push(`Cash ${formatINR(summary.cashAmount)}`);
   if (summary.onlineAmount > 0)
     payments.push(`Online ${formatINR(summary.onlineAmount)}`);
+  if (summary.cardAmount > 0)
+    payments.push(`Card ${formatINR(summary.cardAmount)}`);
   if (summary.financeAmount > 0) {
     payments.push(
       `Finance ${formatINR(summary.financeAmount)}${
@@ -94,32 +98,40 @@ export function SaveBillConfirmModal({
               value={`${summary.itemCount} product${summary.itemCount === 1 ? "" : "s"}`}
             />
             <Row
-              label={
-                summary.payCustomerAmount && summary.payCustomerAmount > 0
-                  ? "Pay customer"
-                  : "Payable"
-              }
-              value={formatINR(
-                summary.payCustomerAmount && summary.payCustomerAmount > 0
-                  ? summary.payCustomerAmount
-                  : summary.payableAmount,
-              )}
+              label="Payable"
+              value={formatINR(summary.payableAmount)}
               strong
-              accent={Boolean(
-                summary.payCustomerAmount && summary.payCustomerAmount > 0,
-              )}
+              accent={!(summary.payCustomerAmount && summary.payCustomerAmount > 0 && summary.payableAmount <= 0)}
             />
             {summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (
-              <Row label="Paid" value="Shop pays customer" />
-            ) : payments.length > 0 ? (
-              <Row label="Paid" value={payments.join(" · ")} />
+              <Row
+                label="Pay client"
+                value={formatINR(summary.payCustomerAmount)}
+                strong
+                accent
+              />
+            ) : null}
+            {summary.payableAmount > 0 ? (
+              payments.length > 0 ? (
+                <Row label="Collected" value={payments.join(" · ")} />
+              ) : (
+                <Row label="Collected" value="Nothing paid yet" />
+              )
+            ) : summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (
+              <Row label="Collected" value="Shop pays customer" />
             ) : (
-              <Row label="Paid" value="Nothing paid yet" />
+              <Row label="Collected" value="Nothing paid yet" />
             )}
             {summary.isExchange && summary.exchangeValue != null ? (
               <Row
-                label="Exchange"
-                value={`− ${formatINR(summary.exchangeValue)}`}
+                label="Exchange value"
+                value={formatINR(summary.exchangeValue)}
+              />
+            ) : null}
+            {summary.exchangeCashReturn && summary.exchangeCashReturn > 0 ? (
+              <Row
+                label="Fixed return"
+                value={formatINR(summary.exchangeCashReturn)}
               />
             ) : null}
             {summary.companyDiscount && summary.companyDiscount > 0 ? (
@@ -128,7 +140,7 @@ export function SaveBillConfirmModal({
                 value={`+ ${formatINR(summary.companyDiscount)}`}
               />
             ) : null}
-            {summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (
+            {summary.payableAmount <= 0 ? (
               <Row label="Due" value="None" />
             ) : summary.dueAmount > 0 ? (
               <Row

@@ -87,9 +87,11 @@ export const createBillSchema = z
     items: z.array(billItemSchema).min(1, "Add at least one product"),
     useCash: z.boolean().default(false),
     useOnline: z.boolean().default(false),
+    useCard: z.boolean().default(false),
     useFinance: z.boolean().default(false),
     cashAmount: z.number().nonnegative().default(0),
     onlineAmount: z.number().nonnegative().default(0),
+    cardAmount: z.number().nonnegative().default(0),
     financeAmount: z.number().nonnegative().default(0),
     financeCompanyId: z.string().trim().optional().nullable(),
     financeCompanyName: z.string().trim().optional().nullable(),
@@ -122,12 +124,14 @@ export const createBillSchema = z
       )
       .optional()
       .default([]),
+    exchangeCashReturn: z.number().nonnegative().default(0),
     dueDate: z.string().optional().nullable(),
     companyDiscount: z.number().nonnegative().default(0),
   })
   .superRefine((data, ctx) => {
     const cash = data.useCash ? money(data.cashAmount) : money(0);
     const online = data.useOnline ? money(data.onlineAmount) : money(0);
+    const card = data.useCard ? money(data.cardAmount) : money(0);
     const finance1 = data.useFinance ? money(data.financeAmount) : money(0);
     const finance2 =
       data.useFinance && money(data.financeAmount2).gt(0)
@@ -224,6 +228,24 @@ export const createBillSchema = z
           path: ["exchangeItems"],
         });
       }
+
+      const gross = items.reduce(
+        (sum, item) => sum.plus(money(item.value || 0)),
+        money(0),
+      );
+      if (money(data.exchangeCashReturn || 0).gt(gross)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Fixed return cannot exceed exchange value",
+          path: ["exchangeCashReturn"],
+        });
+      }
+    } else if (money(data.exchangeCashReturn || 0).gt(0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Fixed return requires an exchange mobile",
+        path: ["exchangeCashReturn"],
+      });
     }
 
     if (data.useCash && cash.lte(0)) {
@@ -238,6 +260,13 @@ export const createBillSchema = z
         code: z.ZodIssueCode.custom,
         message: "Enter online amount",
         path: ["onlineAmount"],
+      });
+    }
+    if (data.useCard && card.lte(0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter card amount",
+        path: ["cardAmount"],
       });
     }
     if (data.useFinance && finance1.lte(0)) {
@@ -295,7 +324,7 @@ export const createBillSchema = z
     const exchangeDeduction = money(exchangeDeductionAmount(data));
 
     const payableAmount = Decimal.max(grandTotal.minus(exchangeDeduction), 0);
-    const paid = cash.plus(online).plus(finance);
+    const paid = cash.plus(online).plus(card).plus(finance);
 
     if (paid.gt(payableAmount)) {
       ctx.addIssue({
@@ -347,13 +376,14 @@ export function computeBillTotals(input: CreateBillInput) {
 
   const cashAmount = input.useCash ? money(input.cashAmount) : money(0);
   const onlineAmount = input.useOnline ? money(input.onlineAmount) : money(0);
+  const cardAmount = input.useCard ? money(input.cardAmount) : money(0);
   const financeAmount1 = input.useFinance ? money(input.financeAmount) : money(0);
   const financeAmount2 =
     input.useFinance && money(input.financeAmount2 || 0).gt(0)
       ? money(input.financeAmount2 || 0)
       : money(0);
   const financeTotal = financeAmount1.plus(financeAmount2);
-  const paid = cashAmount.plus(onlineAmount).plus(financeTotal);
+  const paid = cashAmount.plus(onlineAmount).plus(cardAmount).plus(financeTotal);
   const dueAmount = Decimal.max(payableAmount.minus(paid), 0);
 
   return {
@@ -365,6 +395,7 @@ export function computeBillTotals(input: CreateBillInput) {
     payableAmount: payableAmount.toNumber(),
     cashAmount: cashAmount.toNumber(),
     onlineAmount: onlineAmount.toNumber(),
+    cardAmount: cardAmount.toNumber(),
     /** Total finance (company 1 + company 2) — stored on Bill.financeAmount */
     financeAmount: financeTotal.toNumber(),
     /** Second company amount only — stored on Bill.financeAmount2 */

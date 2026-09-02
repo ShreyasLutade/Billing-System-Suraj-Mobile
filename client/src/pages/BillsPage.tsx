@@ -108,6 +108,7 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
 const PAY = {
   cash: "#12B886",
   online: "#3B82F6",
+  card: "#6366F1",
   finance: "#8B5CF6",
   exchange: "#64748B",
   due: "#B76E00",
@@ -134,6 +135,20 @@ function billFinanceTotal(bill: Bill) {
 
 function isBillPaid(bill: Bill) {
   return !(bill.dueAmount > 0 && !bill.dueSettled);
+}
+
+/** Sold product label for bill list cards (not the exchange phone). */
+function soldProductLabel(bill: Bill): string | null {
+  const names: string[] = [];
+  for (const item of bill.items || []) {
+    const name = item.productName?.trim();
+    if (!name) continue;
+    if (!names.includes(name)) names.push(name);
+  }
+  if (!names.length) return null;
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} · ${names[1]}`;
+  return `${names[0]} +${names.length - 1} more`;
 }
 
 export function BillsPage() {
@@ -649,6 +664,7 @@ export function BillsPage() {
             bill.financeCompanyName,
             bill.financeCompanyName2,
           );
+          const soldLabel = soldProductLabel(bill);
 
           return (
             <article
@@ -658,7 +674,9 @@ export function BillsPage() {
               className={clsx(
                 "interactive-card relative grid items-center gap-x-3 overflow-hidden rounded-[14px] border border-ink-100/80 bg-white/90 py-3 pl-[18px] pr-3.5 shadow-soft sm:gap-x-4 sm:pr-4",
                 "grid-cols-1 max-[420px]:gap-y-2.5 sm:grid-cols-[minmax(160px,1.25fr)_minmax(120px,1.35fr)_148px_74px]",
-                "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2.5 max-sm:[grid-template-areas:'who_money'_'pays_pays'_'actions_actions']",
+                soldLabel
+                  ? "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2 max-sm:[grid-template-areas:'who_money'_'product_product'_'pays_pays'_'actions_actions']"
+                  : "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2.5 max-sm:[grid-template-areas:'who_money'_'pays_pays'_'actions_actions']",
               )}
               style={{ animationDelay: `${0.02 + index * 0.03}s` }}
               onClick={() =>
@@ -692,7 +710,18 @@ export function BillsPage() {
                   <span className="mx-1.5 opacity-50">·</span>
                   {format(new Date(bill.billDate), "dd MMM")}
                 </p>
+                {soldLabel ? (
+                  <p className="mt-1 hidden truncate text-[12.5px] font-semibold leading-snug text-[#2563EB] dark:text-[#93C5FD] sm:block">
+                    {soldLabel}
+                  </p>
+                ) : null}
               </div>
+
+              {soldLabel ? (
+                <p className="min-w-0 truncate text-[12.5px] font-semibold leading-snug text-[#2563EB] dark:text-[#93C5FD] max-sm:[grid-area:product] sm:hidden">
+                  {soldLabel}
+                </p>
+              ) : null}
 
               <div className="flex flex-wrap gap-1.5 max-sm:[grid-area:pays]">
                 {isGstTab ? (
@@ -709,6 +738,13 @@ export function BillsPage() {
                         tone="online"
                         label="Online"
                         amount={bill.onlineAmount}
+                      />
+                    ) : null}
+                    {(bill.cardAmount || 0) > 0 ? (
+                      <PayChip
+                        tone="card"
+                        label="Card"
+                        amount={bill.cardAmount || 0}
                       />
                     ) : null}
                     {finance > 0 ? (
@@ -738,6 +774,7 @@ export function BillsPage() {
                     ) : null}
                     {!bill.cashAmount &&
                     !bill.onlineAmount &&
+                    !(bill.cardAmount || 0) &&
                     finance <= 0 &&
                     !(bill.isExchange && bill.exchangeValue) &&
                     !(bill.dueAmount > 0 && !bill.dueSettled) ? (

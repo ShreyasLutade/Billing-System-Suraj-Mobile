@@ -19,9 +19,11 @@ export type BillSnapshot = {
   withGst: boolean;
   useCash: boolean;
   useOnline: boolean;
+  useCard: boolean;
   useFinance: boolean;
   cashAmount: number;
   onlineAmount: number;
+  cardAmount: number;
   financeAmount: number;
   financeCompanyId: string;
   financeCompanyName: string;
@@ -37,6 +39,7 @@ export type BillSnapshot = {
   exchangeImei1: string;
   exchangeSerial: string;
   exchangeValue: number | null;
+  exchangeCashReturn: number;
   exchangeNotes: string;
   dueDate: string;
   dueAmount: number;
@@ -128,9 +131,11 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     withGst: Boolean(bill.withGst),
     useCash: bill.cashAmount > 0,
     useOnline: bill.onlineAmount > 0,
+    useCard: (bill.cardAmount || 0) > 0,
     useFinance: bill.financeAmount > 0,
     cashAmount: bill.cashAmount,
     onlineAmount: bill.onlineAmount,
+    cardAmount: bill.cardAmount || 0,
     financeAmount: bill.financeAmount,
     financeCompanyId: bill.financeCompanyId || "",
     financeCompanyName: bill.financeCompanyName || "",
@@ -146,6 +151,7 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     exchangeImei1: bill.exchangeImei1 || "",
     exchangeSerial: bill.exchangeSerial || "",
     exchangeValue: bill.exchangeValue ?? null,
+    exchangeCashReturn: bill.exchangeCashReturn || 0,
     exchangeNotes: bill.exchangeNotes || "",
     dueDate,
     dueAmount: bill.dueAmount,
@@ -185,9 +191,11 @@ export function payloadToSnapshot(
     withGst: Boolean(payload.withGst),
     useCash: payload.useCash,
     useOnline: payload.useOnline,
+    useCard: payload.useCard,
     useFinance: payload.useFinance,
     cashAmount: payload.useCash ? payload.cashAmount : 0,
     onlineAmount: payload.useOnline ? payload.onlineAmount : 0,
+    cardAmount: payload.useCard ? payload.cardAmount : 0,
     financeAmount: payload.useFinance
       ? (payload.financeAmount || 0) + (payload.financeAmount2 || 0)
       : 0,
@@ -205,6 +213,7 @@ export function payloadToSnapshot(
     exchangeImei1: payload.exchangeImei1 || "",
     exchangeSerial: payload.exchangeSerial || "",
     exchangeValue: payload.exchangeValue ?? null,
+    exchangeCashReturn: payload.exchangeCashReturn || 0,
     exchangeNotes: payload.exchangeNotes || "",
     dueDate: payload.dueDate || "",
     dueAmount: totals.dueAmount,
@@ -265,6 +274,7 @@ export function diffBillSnapshots(
 
   pushChange(lines, "Cash", money(before.cashAmount), money(after.cashAmount));
   pushChange(lines, "Online", money(before.onlineAmount), money(after.onlineAmount));
+  pushChange(lines, "Card", money(before.cardAmount), money(after.cardAmount));
   pushChange(
     lines,
     "Finance",
@@ -339,6 +349,12 @@ export function diffBillSnapshots(
       "Exchange value",
       money(before.exchangeValue),
       money(after.exchangeValue),
+    );
+    pushChange(
+      lines,
+      "Fixed return to client",
+      money(before.exchangeCashReturn),
+      money(after.exchangeCashReturn),
     );
     pushChange(
       lines,
