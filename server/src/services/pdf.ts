@@ -809,7 +809,7 @@ function drawExchangeBox(
       .font(FONT.regular)
       .fontSize(7)
       .text(
-        `Fixed return to client ${money(cashReturn)} · Bill credit ${money(credit)}`,
+        `Fixed return to customer ${money(cashReturn)} · Bill credit ${money(credit)}`,
         MARGIN + 8,
         noteY,
         { width: CONTENT_WIDTH - 16, lineBreak: false },

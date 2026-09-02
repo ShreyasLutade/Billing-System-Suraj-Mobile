@@ -562,7 +562,7 @@ export function BillDetailPage() {
                 ) : null}
                 {exchangeCashReturn > 0 ? (
                   <SumLine
-                    label="Fixed return to client"
+                    label="Fixed return to customer"
                     value={formatINR(exchangeCashReturn)}
                     exchange
                   />
@@ -587,7 +587,7 @@ export function BillDetailPage() {
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[12.5px] font-semibold text-[#B76E00]">
                     {exchangeCashReturn > 0
-                      ? "Pay client (cash return)"
+                      ? "Pay customer (cash return)"
                       : "Refund due to customer"}
                   </span>
                   <span className="font-display text-lg font-bold tabular-nums text-[#B76E00]">

@@ -352,7 +352,7 @@ export function diffBillSnapshots(
     );
     pushChange(
       lines,
-      "Fixed return to client",
+      "Fixed return to customer",
       money(before.exchangeCashReturn),
       money(after.exchangeCashReturn),
     );

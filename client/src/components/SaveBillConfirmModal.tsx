@@ -105,7 +105,7 @@ export function SaveBillConfirmModal({
             />
             {summary.payCustomerAmount && summary.payCustomerAmount > 0 ? (
               <Row
-                label="Pay client"
+                label="Pay customer"
                 value={formatINR(summary.payCustomerAmount)}
                 strong
                 accent
