@@ -27,6 +27,7 @@ import {
   type BillSearchScope,
 } from "../lib/billSearch";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
+import { formatCapacityLabel } from "../lib/phoneModelSearch";
 import type { Bill } from "../types";
 
 type BillsPeriod = ActivityPeriodValue | "custom";
@@ -138,17 +139,29 @@ function isBillPaid(bill: Bill) {
 }
 
 /** Sold product label for bill list cards (not the exchange phone). */
+function soldItemLabel(item: Bill["items"][number]): string | null {
+  const name = item.productName?.trim();
+  if (!name) return null;
+  const parts = [name];
+  const storage = item.storage?.trim()
+    ? formatCapacityLabel(item.storage)
+    : "";
+  if (storage) parts.push(storage);
+  const ram = item.ram?.trim() ? formatCapacityLabel(item.ram) : "";
+  if (ram) parts.push(ram);
+  return parts.join(" · ");
+}
+
 function soldProductLabel(bill: Bill): string | null {
-  const names: string[] = [];
+  const labels: string[] = [];
   for (const item of bill.items || []) {
-    const name = item.productName?.trim();
-    if (!name) continue;
-    if (!names.includes(name)) names.push(name);
+    const label = soldItemLabel(item);
+    if (!label || labels.includes(label)) continue;
+    labels.push(label);
   }
-  if (!names.length) return null;
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]} · ${names[1]}`;
-  return `${names[0]} +${names.length - 1} more`;
+  if (!labels.length) return null;
+  if (labels.length === 1) return labels[0];
+  return `${labels[0]} +${labels.length - 1} more`;
 }
 
 export function BillsPage() {
