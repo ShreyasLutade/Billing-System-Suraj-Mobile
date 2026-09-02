@@ -68,6 +68,7 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "companyDiscount", key: "companyDiscount", width: 14 },
     { header: "cashAmount", key: "cashAmount", width: 10 },
     { header: "onlineAmount", key: "onlineAmount", width: 10 },
+    { header: "cardAmount", key: "cardAmount", width: 10 },
     { header: "financeAmount", key: "financeAmount", width: 12 },
     { header: "financeCompanyId", key: "financeCompanyId", width: 28 },
     { header: "financeCompanyName", key: "financeCompanyName", width: 18 },
@@ -125,6 +126,7 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
       companyDiscount: money(bill.companyDiscount || 0),
       cashAmount: money(bill.cashAmount),
       onlineAmount: money(bill.onlineAmount),
+      cardAmount: money(bill.cardAmount),
       financeAmount: money(bill.financeAmount),
       financeCompanyId: bill.financeCompanyId || "",
       financeCompanyName: bill.financeCompanyName || "",
@@ -264,6 +266,7 @@ function addSummarySheet(
   );
   const cash = bills.reduce((sum, b) => sum + money(b.cashAmount), 0);
   const online = bills.reduce((sum, b) => sum + money(b.onlineAmount), 0);
+  const card = bills.reduce((sum, b) => sum + money(b.cardAmount), 0);
   const finance = bills.reduce(
     (sum, b) => sum + money(b.financeAmount) + money(b.financeAmount2),
     0,
@@ -287,6 +290,7 @@ function addSummarySheet(
     ["Total payable", payable],
     ["Cash", cash],
     ["Online", online],
+    ["Card", card],
     ["Finance (1+2)", finance],
     ["Outstanding due (in this file)", due],
   ];
@@ -718,6 +722,7 @@ function addTodayBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "Company cashback", key: "companyDiscount", width: 16 },
     { header: "Cash", key: "cashAmount", width: 10 },
     { header: "Online", key: "onlineAmount", width: 10 },
+    { header: "Card", key: "cardAmount", width: 10 },
     { header: "Finance", key: "financeAmount", width: 10 },
     { header: "Finance Co.", key: "financeCompanyName", width: 18 },
     { header: "Due", key: "dueAmount", width: 10 },
@@ -736,6 +741,7 @@ function addTodayBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
       companyDiscount: money(bill.companyDiscount || 0),
       cashAmount: money(bill.cashAmount),
       onlineAmount: money(bill.onlineAmount),
+      cardAmount: money(bill.cardAmount),
       financeAmount: money(bill.financeAmount) + money(bill.financeAmount2),
       financeCompanyName: [bill.financeCompanyName, bill.financeCompanyName2]
         .filter(Boolean)

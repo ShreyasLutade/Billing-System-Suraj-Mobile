@@ -119,6 +119,7 @@ export function exchangeDeductionAmount(input: {
   isExchange?: boolean;
   exchangeItems?: BillExchangeItem[];
   exchangeValue?: number | null;
+  exchangeCashReturn?: number | null;
   exchangeModel?: string | null;
   exchangePlatform?: string | null;
   exchangeColor?: string | null;
@@ -129,6 +130,10 @@ export function exchangeDeductionAmount(input: {
 }) {
   if (!input.isExchange) return 0;
   const items = exchangeItemsFromInput(input);
-  if (items.length) return totalExchangeValue(items);
-  return Number(input.exchangeValue ?? 0) || 0;
+  const gross = items.length
+    ? totalExchangeValue(items)
+    : Number(input.exchangeValue ?? 0) || 0;
+  const cashReturn = Math.max(0, Number(input.exchangeCashReturn ?? 0) || 0);
+  const capped = Math.min(cashReturn, gross);
+  return Math.round((gross - capped) * 100) / 100;
 }

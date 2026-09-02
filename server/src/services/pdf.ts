@@ -86,7 +86,32 @@ function exchangeBoxHeight(bill: BillWithItems, withGst: boolean) {
   if (withGst || !bill.isExchange || !bill.exchangeValue) return 0;
   const items = exchangeItemsForPdf(bill);
   const count = Math.max(items.length, 1);
-  return 18 + count * 14 + 10 + 6;
+  const cashReturn = Number(bill.exchangeCashReturn || 0);
+  // Extra line when fixed return is recorded
+  return 18 + count * 14 + 10 + 6 + (cashReturn > 0 ? 14 : 0);
+}
+
+function exchangeGrossValue(bill: BillWithItems) {
+  return Number(bill.exchangeValue || 0) || 0;
+}
+
+function exchangeCashReturnAmount(bill: BillWithItems) {
+  const gross = exchangeGrossValue(bill);
+  const raw = Math.max(0, Number(bill.exchangeCashReturn || 0) || 0);
+  return Math.min(raw, gross);
+}
+
+/** Amount credited against the new bill after any fixed return. */
+function exchangeCreditAmount(bill: BillWithItems) {
+  return round2(exchangeGrossValue(bill) - exchangeCashReturnAmount(bill));
+}
+
+/** Cash the shop pays the customer (fixed return + excess credit). */
+function computePayCustomerAmount(bill: BillWithItems, withGst: boolean) {
+  if (withGst || !bill.isExchange || !bill.exchangeValue) return 0;
+  const credit = exchangeCreditAmount(bill);
+  const excess = Math.max(credit - Number(bill.grandTotal || 0), 0);
+  return round2(exchangeCashReturnAmount(bill) + excess);
 }
 
 function money(amount: number) {
@@ -537,17 +562,14 @@ function drawItemsTable(
   const footH = 18;
   const exchangeBoxH = exchangeBoxHeight(bill, withGst);
   const upperBoxH = withGst ? 58 : 50;
-  const payCustomerAmount =
-    !withGst && bill.isExchange && bill.exchangeValue
-      ? Math.max(Number(bill.exchangeValue) - Number(bill.grandTotal || 0), 0)
-      : 0;
+  const payCustomerAmountValue = computePayCustomerAmount(bill, withGst);
   const hasDiscount = !withGst && Number(bill.companyDiscount || 0) > 0;
   // Non-GST: payment modes + total payable side-by-side in one band
   const paymentBoxH = withGst
     ? 0
-    : payCustomerAmount > 0 && hasDiscount
+    : payCustomerAmountValue > 0 && hasDiscount
       ? 126
-      : payCustomerAmount > 0 || hasDiscount
+      : payCustomerAmountValue > 0 || hasDiscount
         ? 102
         : 78;
   const totalBarH = withGst ? 26 : 0;
@@ -735,7 +757,9 @@ function drawExchangeBox(
 
   const headerH = 18;
   const rowH = 14;
-  const h = headerH + rows.length * rowH + 10;
+  const cashReturn = exchangeCashReturnAmount(bill);
+  const credit = exchangeCreditAmount(bill);
+  const h = headerH + rows.length * rowH + 10 + (cashReturn > 0 ? 14 : 0);
 
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
   doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.goldSoft);
@@ -752,7 +776,7 @@ function drawExchangeBox(
     );
   doc
     .font(FONT.bold)
-    .text(`− ${money(Number(bill.exchangeValue) || 0)}`, MARGIN + 8, y + 5, {
+    .text(`− ${money(credit)}`, MARGIN + 8, y + 5, {
       width: CONTENT_WIDTH - 16,
       align: "right",
       lineBreak: false,
@@ -778,6 +802,20 @@ function drawExchangeBox(
       });
   });
 
+  if (cashReturn > 0) {
+    const noteY = y + headerH + 6 + rows.length * rowH;
+    doc
+      .fillColor(COLORS.muted)
+      .font(FONT.regular)
+      .fontSize(7)
+      .text(
+        `Fixed return to client ${money(cashReturn)} · Bill credit ${money(credit)}`,
+        MARGIN + 8,
+        noteY,
+        { width: CONTENT_WIDTH - 16, lineBreak: false },
+      );
+  }
+
   return y + h + 6;
 }
 
@@ -788,10 +826,7 @@ function drawPlainTotalsSection(
 ) {
   const payable = bill.payableAmount ?? bill.grandTotal;
   const discountAmount = Number(bill.companyDiscount || 0);
-  const payCustomerAmount =
-    bill.isExchange && bill.exchangeValue
-      ? Math.max(Number(bill.exchangeValue) - Number(bill.grandTotal || 0), 0)
-      : 0;
+  const payCustomerAmount = computePayCustomerAmount(bill, false);
   const wordsH = 50;
   const bandH =
     payCustomerAmount > 0 && discountAmount > 0
@@ -849,6 +884,7 @@ function drawPlainTotalsSection(
   const rows: Array<[string, string]> = [];
   if (bill.cashAmount > 0) rows.push(["Cash", money(bill.cashAmount)]);
   if (bill.onlineAmount > 0) rows.push(["Online", money(bill.onlineAmount)]);
+  if (bill.cardAmount > 0) rows.push(["Card", money(bill.cardAmount)]);
   if (finance1 > 0) {
     rows.push([
       bill.financeCompanyName

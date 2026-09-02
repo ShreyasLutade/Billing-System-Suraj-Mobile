@@ -75,6 +75,7 @@ function totalsForPersist(
     payableAmount: totals.grandTotal,
     cashAmount: 0,
     onlineAmount: 0,
+    cardAmount: 0,
     financeAmount: 0,
     financeAmount2: 0,
     dueAmount: 0,
@@ -551,6 +552,7 @@ billsRouter.post("/", async (req, res, next) => {
           companyDiscount: companyDiscountForPersist(input),
           cashAmount: totals.cashAmount,
           onlineAmount: totals.onlineAmount,
+          cardAmount: totals.cardAmount,
           financeAmount: totals.financeAmount,
           financeAmount2: totals.financeAmount2,
           // Use relation connect — avoids Prisma validation errors when the
@@ -582,6 +584,10 @@ billsRouter.post("/", async (req, res, next) => {
           exchangeValue: persistInput.isExchange
             ? exchangePersist.exchangeValue
             : null,
+          exchangeCashReturn:
+            persistInput.isExchange && !input.withGst
+              ? Math.max(0, Number(input.exchangeCashReturn || 0) || 0)
+              : 0,
           exchangeNotes: persistInput.isExchange
             ? exchangePersist.exchangeNotes
             : null,
@@ -808,6 +814,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           companyDiscount: companyDiscountForPersist(input),
           cashAmount: totals.cashAmount,
           onlineAmount: totals.onlineAmount,
+          cardAmount: totals.cardAmount,
           financeAmount: totals.financeAmount,
           financeAmount2: totals.financeAmount2,
           ...(financeCompanyId
@@ -852,6 +859,10 @@ billsRouter.put("/:id", async (req, res, next) => {
           exchangeValue: persistInput.isExchange
             ? exchangePersist.exchangeValue
             : null,
+          exchangeCashReturn:
+            persistInput.isExchange && !input.withGst
+              ? Math.max(0, Number(input.exchangeCashReturn || 0) || 0)
+              : 0,
           exchangeNotes: persistInput.isExchange
             ? exchangePersist.exchangeNotes
             : null,
@@ -867,7 +878,11 @@ billsRouter.put("/:id", async (req, res, next) => {
           dueSettledAt: totals.dueAmount <= 0 ? existing.dueSettledAt : null,
           isPartialPaid:
             totals.dueAmount > 0 &&
-            totals.cashAmount + totals.onlineAmount + totals.financeAmount > 0,
+            totals.cashAmount +
+              totals.onlineAmount +
+              totals.cardAmount +
+              totals.financeAmount >
+              0,
           items: {
             create: totals.items.map((item) => ({
               productName: item.productName,
@@ -1034,7 +1049,7 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
   try {
     const method =
       typeof req.body?.method === "string" ? req.body.method : "na";
-    if (!["cash", "online", "na"].includes(method)) {
+    if (!["cash", "online", "card", "na"].includes(method)) {
       res.status(400).json({ error: "Invalid settlement method" });
       return;
     }
@@ -1067,6 +1082,10 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
           method === "online"
             ? Number((bill.onlineAmount + due).toFixed(2))
             : bill.onlineAmount,
+        cardAmount:
+          method === "card"
+            ? Number((bill.cardAmount + due).toFixed(2))
+            : bill.cardAmount,
         duePayments: {
           create: {
             amount: due,

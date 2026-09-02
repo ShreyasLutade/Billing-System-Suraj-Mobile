@@ -5,6 +5,7 @@ import {
   Banknote,
   ChartColumn,
   Clock3,
+  CreditCard,
   MonitorSmartphone,
   Search,
   type LucideIcon,
@@ -27,6 +28,7 @@ import { useTheme } from "../theme/ThemeContext";
 const AVATAR_COLORS = [
   MIX.cash.color,
   MIX.online.color,
+  MIX.card.color,
   MIX.finance.color,
   MIX.due.color,
   "#0E1626",
@@ -56,10 +58,17 @@ const MODE_META: Record<
   },
   online: {
     name: "Online",
-    verb: "Received via online (UPI / card)",
+    verb: "Received via online (UPI)",
     countLabel: "Payments",
     colors: MIX.online,
     icon: MonitorSmartphone,
+  },
+  card: {
+    name: "Card",
+    verb: "Received via card",
+    countLabel: "Payments",
+    colors: MIX.card,
+    icon: CreditCard,
   },
   finance: {
     name: "Finance",
@@ -80,6 +89,7 @@ function initials(name: string) {
 function amountFor(row: SourceRow, mode: PaymentMode) {
   if (mode === "cash") return row.cashAmount;
   if (mode === "online") return row.onlineAmount;
+  if (mode === "card") return row.cardAmount;
   return row.financeAmount;
 }
 
@@ -106,7 +116,8 @@ function readPeriod(search: URLSearchParams): {
 
 function readMode(search: URLSearchParams): PaymentMode {
   const raw = search.get("mode");
-  if (raw === "online" || raw === "finance" || raw === "cash") return raw;
+  if (raw === "online" || raw === "card" || raw === "finance" || raw === "cash")
+    return raw;
   return "cash";
 }
 
@@ -203,7 +214,9 @@ export function AnalyticsPaymentsPage() {
       ? summary?.cash ?? 0
       : mode === "online"
         ? summary?.online ?? 0
-        : summary?.finance ?? 0;
+        : mode === "card"
+          ? summary?.card ?? 0
+          : summary?.finance ?? 0;
   const share = mixTotal > 0 ? Math.round((modeTotal / mixTotal) * 100) : 0;
 
   function setMode(next: PaymentMode) {
@@ -230,6 +243,7 @@ export function AnalyticsPaymentsPage() {
           [
             ["cash", MODE_META.cash, summary?.cash ?? 0],
             ["online", MODE_META.online, summary?.online ?? 0],
+            ["card", MODE_META.card, summary?.card ?? 0],
             ["finance", MODE_META.finance, summary?.finance ?? 0],
           ] as const
         ).map(([key, item, value]) => {

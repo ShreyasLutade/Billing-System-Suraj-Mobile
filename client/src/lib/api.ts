@@ -422,7 +422,7 @@ export const api = {
     id: string,
     payload: {
       mode: "full" | "custom";
-      method: "cash" | "online" | "na";
+      method: "cash" | "online" | "card" | "na";
       amount?: number;
       nextDueDate?: string | null;
     },

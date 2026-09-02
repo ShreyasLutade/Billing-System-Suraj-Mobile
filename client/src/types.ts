@@ -58,6 +58,7 @@ export type Bill = {
   companyDiscount?: number;
   cashAmount: number;
   onlineAmount: number;
+  cardAmount?: number;
   financeAmount: number;
   financeCompanyId?: string | null;
   financeCompanyName?: string | null;
@@ -78,6 +79,7 @@ export type Bill = {
   exchangeImei2?: string | null;
   exchangeSerial?: string | null;
   exchangeValue?: number | null;
+  exchangeCashReturn?: number;
   exchangeNotes?: string | null;
   exchangeMobileCatalogId?: string | null;
   exchangeItems?: BillExchangeItem[];
@@ -106,6 +108,7 @@ export type AnalyticsSummary = {
     payable: number;
     cash: number;
     online: number;
+    card: number;
     finance: number;
     due: number;
     bills: number;
@@ -118,6 +121,7 @@ export type AnalyticsSummary = {
     shares: {
       cash: number;
       online: number;
+      card: number;
       finance: number;
       due: number;
     };
@@ -126,6 +130,7 @@ export type AnalyticsSummary = {
     sales: number;
     cash: number;
     online: number;
+    card: number;
     finance: number;
     due: number;
     bills: number;
@@ -168,6 +173,7 @@ export type AnalyticsSummary = {
     billTotal: number;
     cashAmount: number;
     onlineAmount: number;
+    cardAmount: number;
     financeAmount: number;
     financeLabel?: string | null;
     dueAmount: number;
@@ -409,9 +415,11 @@ export type CreateBillPayload = {
   items: BillItem[];
   useCash: boolean;
   useOnline: boolean;
+  useCard: boolean;
   useFinance: boolean;
   cashAmount: number;
   onlineAmount: number;
+  cardAmount: number;
   financeAmount: number;
   financeCompanyId?: string | null;
   financeCompanyName?: string | null;
@@ -430,6 +438,7 @@ export type CreateBillPayload = {
   exchangeValue?: number | null;
   exchangeNotes?: string | null;
   exchangeItems?: BillExchangeItem[];
+  exchangeCashReturn?: number;
   dueDate?: string | null;
   companyDiscount?: number;
 };

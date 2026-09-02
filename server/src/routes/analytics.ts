@@ -50,6 +50,7 @@ type BillRow = {
   companyDiscount?: number;
   cashAmount: number;
   onlineAmount: number;
+  cardAmount: number;
   financeAmount: number;
   financeAmount2: number;
   dueAmount: number;
@@ -106,6 +107,7 @@ function summarizeBills(bills: BillRow[]) {
       acc.payable += payable;
       acc.cash += bill.cashAmount;
       acc.online += bill.onlineAmount;
+      acc.card += bill.cardAmount;
       acc.finance += finance;
       acc.due += bill.dueAmount;
       acc.cost += split.cost;
@@ -122,6 +124,7 @@ function summarizeBills(bills: BillRow[]) {
       payable: 0,
       cash: 0,
       online: 0,
+      card: 0,
       finance: 0,
       due: 0,
       cost: 0,
@@ -132,13 +135,19 @@ function summarizeBills(bills: BillRow[]) {
     },
   );
 
-  const mixTotal = summary.cash + summary.online + summary.finance + summary.due;
+  const mixTotal =
+    summary.cash +
+    summary.online +
+    summary.card +
+    summary.finance +
+    summary.due;
 
   return {
     sales: round2(summary.sales),
     payable: round2(summary.payable),
     cash: round2(summary.cash),
     online: round2(summary.online),
+    card: round2(summary.card),
     finance: round2(summary.finance),
     due: round2(summary.due),
     bills: summary.bills,
@@ -146,11 +155,14 @@ function summarizeBills(bills: BillRow[]) {
     profit: round2(summary.profit),
     accessoriesRevenue: round2(summary.accessoriesRevenue),
     accessoriesSold: summary.accessoriesSold,
-    collected: round2(summary.cash + summary.online + summary.finance),
+    collected: round2(
+      summary.cash + summary.online + summary.card + summary.finance,
+    ),
     mixTotal: round2(mixTotal),
     shares: {
       cash: pct(summary.cash, mixTotal),
       online: pct(summary.online, mixTotal),
+      card: pct(summary.card, mixTotal),
       finance: pct(summary.finance, mixTotal),
       due: pct(summary.due, mixTotal),
     },
@@ -211,6 +223,7 @@ function mapPaymentSources(bills: BillRow[]) {
       billTotal: round2(bill.payableAmount || bill.grandTotal),
       cashAmount: round2(bill.cashAmount || 0),
       onlineAmount: round2(bill.onlineAmount || 0),
+      cardAmount: round2(bill.cardAmount || 0),
       financeAmount: round2(finance),
       financeLabel: financeLabel(bill) || null,
       dueAmount: round2(bill.dueAmount || 0),
@@ -239,6 +252,7 @@ async function loadPeriodBills(
       companyDiscount: true,
       cashAmount: true,
       onlineAmount: true,
+      cardAmount: true,
       financeAmount: true,
       financeAmount2: true,
       financeCompanyName: true,
@@ -520,6 +534,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           payable: summary.payable,
           cash: summary.cash,
           online: summary.online,
+          card: summary.card,
           finance: summary.finance,
           due: summary.due,
           bills: summary.bills,
@@ -535,6 +550,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           sales: summary.sales,
           cash: summary.cash,
           online: summary.online,
+          card: summary.card,
           finance: summary.finance,
           due: summary.due,
           bills: summary.bills,

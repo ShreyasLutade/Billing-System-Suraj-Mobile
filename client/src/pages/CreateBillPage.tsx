@@ -312,10 +312,14 @@ export function CreateBillPage() {
   const [isExchange, setIsExchange] = useState(false);
   const [exchangeItems, setExchangeItems] = useState<ExchangeDraft[]>([]);
   const [exchangePayConfirmed, setExchangePayConfirmed] = useState(false);
+  const [useFixedReturn, setUseFixedReturn] = useState(false);
+  const [fixedReturnAmount, setFixedReturnAmount] = useState(0);
 
   function clearExchangeFields() {
     setExchangeItems([]);
     setExchangePayConfirmed(false);
+    setUseFixedReturn(false);
+    setFixedReturnAmount(0);
   }
 
   function billToExchangeDrafts(bill: Bill): ExchangeDraft[] {
@@ -357,11 +361,13 @@ export function CreateBillPage() {
   }
   const [useCash, setUseCash] = useState(false);
   const [useOnline, setUseOnline] = useState(false);
+  const [useCard, setUseCard] = useState(false);
   const [useFinance, setUseFinance] = useState(false);
   const [hasDue, setHasDue] = useState(false);
   const [dueFollowsRemaining, setDueFollowsRemaining] = useState(true);
   const [cashAmount, setCashAmount] = useState(0);
   const [onlineAmount, setOnlineAmount] = useState(0);
+  const [cardAmount, setCardAmount] = useState(0);
   const [dueEntry, setDueEntry] = useState(0);
   const [financeEntries, setFinanceEntries] = useState<FinanceDraft[]>([
     blankFinanceEntry(),
@@ -394,6 +400,7 @@ export function CreateBillPage() {
     payCustomerAmount: number;
     cashAmount: number;
     onlineAmount: number;
+    cardAmount: number;
     financeAmount: number;
     financeLabel: string;
     dueAmount: number;
@@ -404,8 +411,14 @@ export function CreateBillPage() {
 
   function captureSuccessPayment(bill: Bill) {
     const exchangeVal = bill.isExchange ? Number(bill.exchangeValue || 0) : 0;
+    const cashReturn = bill.isExchange
+      ? Math.min(Math.max(Number(bill.exchangeCashReturn || 0) || 0, 0), exchangeVal)
+      : 0;
+    const credit = Math.max(exchangeVal - cashReturn, 0);
     const grand = Number(bill.grandTotal || 0);
-    const payCustomerAmount = round2(Math.max(exchangeVal - grand, 0));
+    const payCustomerAmount = round2(
+      cashReturn + Math.max(credit - grand, 0),
+    );
     setSuccessPayment({
       withGst: Boolean(bill.withGst),
       payableAmount: bill.withGst
@@ -414,6 +427,7 @@ export function CreateBillPage() {
       payCustomerAmount,
       cashAmount: bill.cashAmount || 0,
       onlineAmount: bill.onlineAmount || 0,
+      cardAmount: bill.cardAmount || 0,
       financeAmount: (bill.financeAmount || 0) + (bill.financeAmount2 || 0),
       financeLabel: formatFinanceCompanies(
         bill.financeCompanyName,
@@ -457,11 +471,13 @@ export function CreateBillPage() {
     clearExchangeFields();
     setUseCash(false);
     setUseOnline(false);
+    setUseCard(false);
     setUseFinance(false);
     setHasDue(false);
     setDueFollowsRemaining(true);
     setCashAmount(0);
     setOnlineAmount(0);
+    setCardAmount(0);
     setDueEntry(0);
     setFinanceEntries([blankFinanceEntry()]);
     setDueDate("");
@@ -523,13 +539,21 @@ export function CreateBillPage() {
     setExchangeItems(
       bill.isExchange ? billToExchangeDrafts(bill) : [],
     );
+    {
+      const cashReturn = round2(Math.max(bill.exchangeCashReturn || 0, 0));
+      setUseFixedReturn(cashReturn > 0);
+      setFixedReturnAmount(cashReturn);
+    }
     setExchangePayConfirmed(
       Boolean(
-        bill.isExchange && (bill.exchangeValue || 0) > (bill.grandTotal || 0),
+        bill.isExchange &&
+          (bill.exchangeValue || 0) - (bill.exchangeCashReturn || 0) >
+            (bill.grandTotal || 0),
       ),
     );
     setUseCash(bill.cashAmount > 0);
     setUseOnline(bill.onlineAmount > 0);
+    setUseCard((bill.cardAmount || 0) > 0);
     setUseFinance(bill.financeAmount > 0);
     setHasDue(bill.dueAmount > 0);
     setDueFollowsRemaining(
@@ -538,6 +562,7 @@ export function CreateBillPage() {
     );
     setCashAmount(bill.cashAmount);
     setOnlineAmount(bill.onlineAmount);
+    setCardAmount(bill.cardAmount || 0);
     setDueEntry(bill.dueAmount > 0 ? bill.dueAmount : 0);
     {
       const secondAmount = bill.financeAmount2 || 0;
@@ -581,15 +606,21 @@ export function CreateBillPage() {
     const subtotal = round2(lines.reduce((sum, line) => sum + line.base, 0));
     const gstAmount = round2(lines.reduce((sum, line) => sum + line.gst, 0));
     const grandTotal = round2(lines.reduce((sum, line) => sum + line.amount, 0));
-    const exchangeDeduction = isExchange
+    const exchangeGross = isExchange
       ? round2(exchangeTotalValue(exchangeItems))
       : 0;
+    const cashReturn = isExchange && useFixedReturn
+      ? round2(Math.min(Math.max(fixedReturnAmount || 0, 0), exchangeGross))
+      : 0;
+    const exchangeDeduction = round2(Math.max(exchangeGross - cashReturn, 0));
     const payableAmount = round2(Math.max(grandTotal - exchangeDeduction, 0));
-    const exchangeRefund = round2(Math.max(exchangeDeduction - grandTotal, 0));
+    const excessRefund = round2(Math.max(exchangeDeduction - grandTotal, 0));
+    const exchangeRefund = round2(cashReturn + excessRefund);
     const cash = useCash ? cashAmount : 0;
     const online = useOnline ? onlineAmount : 0;
+    const card = useCard ? cardAmount : 0;
     const remainingAfterCashOnline = round2(
-      Math.max(payableAmount - cash - online, 0),
+      Math.max(payableAmount - cash - online - card, 0),
     );
     const enteredDue = hasDue
       ? round2(Math.min(Math.max(dueEntry || 0, 0), remainingAfterCashOnline))
@@ -602,7 +633,7 @@ export function CreateBillPage() {
         ? 0
         : round2(Math.max(remainingAfterCashOnline - enteredDue, 0))
       : financeFromEntries;
-    const paid = round2(cash + online + finance);
+    const paid = round2(cash + online + card + finance);
     const dueAmount = hasDue
       ? dueFollowsRemaining || enteredDue <= 0
         ? remainingAfterCashOnline
@@ -618,6 +649,8 @@ export function CreateBillPage() {
       gstAmount,
       grandTotal,
       exchangeDeduction,
+      exchangeGross,
+      cashReturn,
       exchangeRefund,
       payableAmount,
       companyDiscountAmount,
@@ -626,23 +659,28 @@ export function CreateBillPage() {
       dueAmount,
       cash,
       online,
+      card,
       finance,
     };
   }, [
     items,
     isExchange,
     exchangeItems,
+    useFixedReturn,
+    fixedReturnAmount,
     withGst,
     useCompanyCashback,
     companyDiscount,
     useCash,
     useOnline,
+    useCard,
     useFinance,
     hasDue,
     dueFollowsRemaining,
     dueEntry,
     cashAmount,
     onlineAmount,
+    cardAmount,
     financeEntries,
   ]);
 
@@ -737,6 +775,14 @@ export function CreateBillPage() {
   }
 
   useEffect(() => {
+    if (!useFixedReturn) return;
+    const gross = exchangeTotalValue(exchangeItems);
+    if (fixedReturnAmount > gross) {
+      setFixedReturnAmount(round2(gross));
+    }
+  }, [useFixedReturn, exchangeItems, fixedReturnAmount]);
+
+  useEffect(() => {
     if (!hasDue || totals.dueAmount <= 0) setDueDate("");
   }, [hasDue, totals.dueAmount]);
 
@@ -746,7 +792,8 @@ export function CreateBillPage() {
       Math.max(
         totals.payableAmount -
           (useCash ? cashAmount : 0) -
-          (useOnline ? onlineAmount : 0),
+          (useOnline ? onlineAmount : 0) -
+          (useCard ? cardAmount : 0),
         0,
       ),
     );
@@ -764,17 +811,21 @@ export function CreateBillPage() {
     cashAmount,
     useOnline,
     onlineAmount,
+    useCard,
+    cardAmount,
   ]);
 
   useEffect(() => {
-    if (totals.exchangeRefund > 0) {
+    if (totals.payableAmount <= 0 && totals.exchangeRefund > 0) {
       setUseCash(false);
       setUseOnline(false);
+      setUseCard(false);
       setUseFinance(false);
       setHasDue(false);
       setDueFollowsRemaining(true);
       setCashAmount(0);
       setOnlineAmount(0);
+      setCardAmount(0);
       setDueEntry(0);
       setFinanceEntries([blankFinanceEntry()]);
       return;
@@ -783,7 +834,7 @@ export function CreateBillPage() {
     setFieldHint((current) =>
       current?.fieldId === "exchange-pay-confirm-btn" ? null : current,
     );
-  }, [totals.exchangeRefund]);
+  }, [totals.exchangeRefund, totals.payableAmount]);
 
   useEffect(() => {
     if (!fieldHint) return;
@@ -965,7 +1016,8 @@ export function CreateBillPage() {
             Math.max(
               totals.payableAmount -
                 (useCash ? cashAmount : 0) -
-                (useOnline ? onlineAmount : 0),
+                (useOnline ? onlineAmount : 0) -
+                (useCard ? cardAmount : 0),
               0,
             ),
           )
@@ -976,6 +1028,7 @@ export function CreateBillPage() {
         totals.payableAmount -
           (useCash ? cashAmount : 0) -
           (useOnline ? onlineAmount : 0) -
+          (useCard ? cardAmount : 0) -
           dueSlice -
           financeSoFar,
         0,
@@ -1000,9 +1053,10 @@ export function CreateBillPage() {
     });
   }
 
-  function remainingForMode(mode: "cash" | "online" | "finance") {
+  function remainingForMode(mode: "cash" | "online" | "card" | "finance") {
     const cash = mode === "cash" ? 0 : useCash ? cashAmount : 0;
     const online = mode === "online" ? 0 : useOnline ? onlineAmount : 0;
+    const card = mode === "card" ? 0 : useCard ? cardAmount : 0;
     const dueSlice =
       hasDue && !dueFollowsRemaining && dueEntry > 0 ? dueEntry : 0;
     const finance =
@@ -1012,7 +1066,10 @@ export function CreateBillPage() {
           ? financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
           : 0;
     return round2(
-      Math.max(totals.payableAmount - cash - online - dueSlice - finance, 0),
+      Math.max(
+        totals.payableAmount - cash - online - card - dueSlice - finance,
+        0,
+      ),
     );
   }
 
@@ -1024,7 +1081,8 @@ export function CreateBillPage() {
         Math.max(
           totals.payableAmount -
             (useCash ? cashAmount : 0) -
-            (useOnline ? onlineAmount : 0),
+            (useOnline ? onlineAmount : 0) -
+            (useCard ? cardAmount : 0),
           0,
         ),
       );
@@ -1067,7 +1125,7 @@ export function CreateBillPage() {
   }, [hasDue, dueEntry, totals.finance]);
 
   function togglePayment(
-    mode: "cash" | "online" | "finance",
+    mode: "cash" | "online" | "card" | "finance",
     checked: boolean,
   ) {
     if (mode === "cash") {
@@ -1079,6 +1137,11 @@ export function CreateBillPage() {
       setUseOnline(checked);
       if (!checked) setOnlineAmount(0);
       else setOnlineAmount(remainingForMode("online"));
+    }
+    if (mode === "card") {
+      setUseCard(checked);
+      if (!checked) setCardAmount(0);
+      else setCardAmount(remainingForMode("card"));
     }
     if (mode === "finance") {
       setUseFinance(checked);
@@ -1299,9 +1362,11 @@ export function CreateBillPage() {
         withGst: true,
         useCash: false,
         useOnline: false,
+        useCard: false,
         useFinance: false,
         cashAmount: 0,
         onlineAmount: 0,
+        cardAmount: 0,
         financeAmount: 0,
         financeCompanyId: null,
         financeCompanyName: null,
@@ -1318,6 +1383,7 @@ export function CreateBillPage() {
         exchangeImei2: null,
         exchangeSerial: null,
         exchangeValue: null,
+        exchangeCashReturn: 0,
         exchangeNotes: null,
         dueDate: null,
         companyDiscount: 0,
@@ -1415,9 +1481,11 @@ export function CreateBillPage() {
       withGst: false,
       useCash,
       useOnline,
+      useCard,
       useFinance,
       cashAmount: useCash ? cashAmount : 0,
       onlineAmount: useOnline ? onlineAmount : 0,
+      cardAmount: useCard ? cardAmount : 0,
       financeAmount: useFinance ? financeAmount : 0,
       financeCompanyId: useFinance ? resolvedCompanyId : null,
       financeCompanyName: useFinance ? resolvedCompanyName : null,
@@ -1454,6 +1522,8 @@ export function CreateBillPage() {
       exchangeValue: isExchange
         ? round2(exchangeTotalValue(exchangeItems))
         : null,
+      exchangeCashReturn:
+        isExchange && useFixedReturn ? totals.cashReturn : 0,
       exchangeNotes: isExchange
         ? exchangeItems[0]?.notes.trim() || null
         : null,
@@ -1543,7 +1613,12 @@ export function CreateBillPage() {
       }
     }
 
-    if (!withGst && totals.exchangeRefund > 0 && !exchangePayConfirmed) {
+    if (
+      !withGst &&
+      totals.payableAmount <= 0 &&
+      totals.exchangeRefund > 0 &&
+      !exchangePayConfirmed
+    ) {
       setError(null);
       const btn = document.getElementById("exchange-pay-confirm-btn");
       btn?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1554,6 +1629,16 @@ export function CreateBillPage() {
         fieldId: "exchange-pay-confirm-btn",
         message: "Confirm here first — exchange value is more, so you need to pay the customer.",
       });
+      return;
+    }
+
+    if (
+      !withGst &&
+      useFixedReturn &&
+      totals.cashReturn <= 0
+    ) {
+      setError("Enter the fixed return amount to the client, or turn the toggle off.");
+      document.getElementById("fixedReturnAmount")?.focus();
       return;
     }
 
@@ -1623,6 +1708,7 @@ export function CreateBillPage() {
         payCustomerAmount: totals.exchangeRefund,
         cashAmount: payload.useCash ? payload.cashAmount : 0,
         onlineAmount: payload.useOnline ? payload.onlineAmount : 0,
+        cardAmount: payload.useCard ? payload.cardAmount : 0,
         financeAmount: payload.useFinance
           ? round2(
               (payload.financeAmount || 0) + (payload.financeAmount2 || 0),
@@ -1639,6 +1725,7 @@ export function CreateBillPage() {
             : payload.dueDate,
         isExchange: Boolean(payload.isExchange),
         exchangeValue: payload.exchangeValue,
+        exchangeCashReturn: payload.exchangeCashReturn || 0,
         companyDiscount: totals.companyDiscountAmount,
       });
       setShowSaveConfirm(true);
@@ -1762,7 +1849,9 @@ export function CreateBillPage() {
         ) : null}
         {successPayment ? (
           <div className="mx-auto mt-5 w-full max-w-sm rounded-2xl border border-ink-100 bg-ink-50/70 px-4 py-4 text-left">
-            {successPayment.payCustomerAmount > 0 && !successPayment.withGst ? (
+            {successPayment.payCustomerAmount > 0 &&
+            successPayment.payableAmount <= 0 &&
+            !successPayment.withGst ? (
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-ink-500">Pay customer</span>
                 <span className="font-display text-xl font-semibold text-ember-500">
@@ -1783,12 +1872,21 @@ export function CreateBillPage() {
               <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-500">
                 Submission invoice — not recorded in shop sales.
               </p>
-            ) : successPayment.payCustomerAmount > 0 ? (
+            ) : successPayment.payCustomerAmount > 0 &&
+              successPayment.payableAmount <= 0 ? (
               <p className="mt-3 border-t border-ink-100 pt-3 text-xs text-ink-500">
                 Exchange value exceeded the bill. No customer payment due.
               </p>
             ) : (
               <dl className="mt-3 space-y-2 border-t border-ink-100 pt-3 text-sm">
+                {successPayment.payCustomerAmount > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-500">Pay client</dt>
+                    <dd className="font-medium text-ember-500">
+                      {formatINR(successPayment.payCustomerAmount)}
+                    </dd>
+                  </div>
+                ) : null}
                 {successPayment.cashAmount > 0 ? (
                   <div className="flex justify-between gap-3">
                     <dt className="text-ink-500">Cash</dt>
@@ -1802,6 +1900,14 @@ export function CreateBillPage() {
                     <dt className="text-ink-500">Online</dt>
                     <dd className="font-medium text-ink-800">
                       {formatINR(successPayment.onlineAmount)}
+                    </dd>
+                  </div>
+                ) : null}
+                {successPayment.cardAmount > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-500">Card</dt>
+                    <dd className="font-medium text-ink-800">
+                      {formatINR(successPayment.cardAmount)}
                     </dd>
                   </div>
                 ) : null}
@@ -1897,7 +2003,7 @@ export function CreateBillPage() {
         description={
           isEdit
             ? "Update customer, products, or payment details. You’ll review a change summary before saving."
-            : "Enter products manually. Split payment across cash, online, and finance — remaining amount becomes due."
+            : "Enter products manually. Split payment across cash, online, card, and finance — remaining amount becomes due."
         }
         action={
           isEdit && editId ? (
@@ -1930,11 +2036,13 @@ export function CreateBillPage() {
                 setCompanyDiscount("");
                 setUseCash(false);
                 setUseOnline(false);
+                setUseCard(false);
                 setUseFinance(false);
                 setHasDue(false);
                 setDueFollowsRemaining(true);
                 setCashAmount(0);
                 setOnlineAmount(0);
+                setCardAmount(0);
                 setDueEntry(0);
                 resetFinanceEntries();
                 setDueDate("");
@@ -2508,8 +2616,10 @@ export function CreateBillPage() {
                             Added as a second-hand <b className="font-semibold">(Old)</b>{" "}
                             mobile in the catalog so it can be resold later.{" "}
                             <b className="font-semibold">
-                              Payable = bill total − exchange value.
-                            </b>
+                              Payable = bill total − exchange credit.
+                            </b>{" "}
+                            Use fixed return if the customer wants cash back from
+                            the exchange value.
                           </span>
                         </div>
 
@@ -2544,18 +2654,98 @@ export function CreateBillPage() {
                           Add another exchange mobile
                         </button>
 
-                        <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-[#0E1626] to-[#1B2740] px-4 py-3.5 text-white">
-                          <span className="inline-flex items-center gap-2 text-[13px] text-[#B7C3D6]">
-                            <Check
-                              className="h-[15px] w-[15px] text-[#12B886]"
-                              strokeWidth={2.6}
+                        <div className="mt-1 space-y-3">
+                          <div className="flex items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50 px-3.5 py-3 dark:border-amber-500/40 dark:bg-amber-950/50">
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-orange-950 dark:text-amber-100">
+                                Fixed return to client
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-orange-800/70 dark:text-amber-200/80">
+                                Pay cash from the exchange value; remaining
+                                becomes bill credit.
+                              </p>
+                            </div>
+                            <Switch
+                              id="useFixedReturn"
+                              checked={useFixedReturn}
+                              aria-label="Fixed return to client"
+                              onChange={(on) => {
+                                setUseFixedReturn(on);
+                                if (!on) setFixedReturnAmount(0);
+                              }}
                             />
-                            Exchange credit on this bill
-                          </span>
-                          <span className="font-display text-lg font-bold tabular-nums text-[#5CE0AE]">
-                            −
-                            {formatINR(exchangeTotalValue(exchangeItems))}
-                          </span>
+                          </div>
+
+                          {useFixedReturn ? (
+                            <div>
+                              <label
+                                className="label required"
+                                htmlFor="fixedReturnAmount"
+                              >
+                                Refund to client
+                              </label>
+                              <div className="relative">
+                                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-ember-500">
+                                  ₹
+                                </span>
+                                <input
+                                  id="fixedReturnAmount"
+                                  className="w-full rounded-[11px] border border-amber-200 bg-amber-50/70 py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(245,158,11,.18)] dark:border-amber-500/35 dark:bg-amber-950/40 dark:focus:bg-surface-elevated"
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  max={
+                                    exchangeTotalValue(exchangeItems) ||
+                                    undefined
+                                  }
+                                  value={fixedReturnAmount || ""}
+                                  onChange={(e) => {
+                                    const gross = exchangeTotalValue(
+                                      exchangeItems,
+                                    );
+                                    const next = round2(
+                                      Math.min(
+                                        Math.max(Number(e.target.value) || 0, 0),
+                                        gross,
+                                      ),
+                                    );
+                                    setFixedReturnAmount(next);
+                                  }}
+                                  placeholder="e.g. 10000"
+                                  required
+                                />
+                              </div>
+                              {totals.cashReturn > 0 ? (
+                                <p className="mt-2 text-[12px] leading-relaxed text-ink-500">
+                                  Effective exchange credit{" "}
+                                  <span className="font-semibold text-ink-800">
+                                    {formatINR(totals.exchangeDeduction)}
+                                  </span>
+                                  {" · "}
+                                  Pay client{" "}
+                                  <span className="font-semibold text-ember-500">
+                                    {formatINR(totals.cashReturn)}
+                                  </span>
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <div className="flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-[#0E1626] to-[#1B2740] px-4 py-3.5 text-white">
+                            <span className="inline-flex items-center gap-2 text-[13px] text-[#B7C3D6]">
+                              <Check
+                                className="h-[15px] w-[15px] text-[#12B886]"
+                                strokeWidth={2.6}
+                              />
+                              {useFixedReturn && totals.cashReturn > 0
+                                ? "Bill credit after return"
+                                : "Exchange credit on this bill"}
+                            </span>
+                            <span className="font-display text-lg font-bold tabular-nums text-[#5CE0AE]">
+                              −
+                              {formatINR(totals.exchangeDeduction)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -2592,6 +2782,13 @@ export function CreateBillPage() {
                     <SummaryRow
                       label="Exchange credit"
                       value={`- ${formatINR(totals.exchangeDeduction)}`}
+                      accent
+                    />
+                  ) : null}
+                  {!withGst && totals.cashReturn > 0 ? (
+                    <SummaryRow
+                      label="Fixed return to client"
+                      value={formatINR(totals.cashReturn)}
                       accent
                     />
                   ) : null}
@@ -2711,7 +2908,9 @@ export function CreateBillPage() {
                 <div
                   className={clsx(
                     "relative order-1 overflow-visible rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft",
-                    totals.exchangeRefund > 0 && "min-h-[280px]",
+                    totals.payableAmount <= 0 &&
+                      totals.exchangeRefund > 0 &&
+                      "min-h-[280px]",
                   )}
                 >
                   <h2 className="font-display text-base font-semibold text-ink-900">
@@ -2719,14 +2918,28 @@ export function CreateBillPage() {
                   </h2>
                   <p className="mt-1 text-xs text-ink-500">
                     {hasDue
-                      ? "Cash, then online, then due — leftover goes to finance."
+                      ? "Cash, online, card, then due — leftover goes to finance."
                       : "Tick each mode — remaining payable fills in automatically."}
                   </p>
+
+                  {!withGst &&
+                  totals.cashReturn > 0 &&
+                  totals.payableAmount > 0 ? (
+                    <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-xs leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
+                      Pay client{" "}
+                      <span className="font-semibold">
+                        {formatINR(totals.cashReturn)}
+                      </span>{" "}
+                      cash return, then collect remaining payable below
+                      (e.g. finance).
+                    </div>
+                  ) : null}
 
                   <div
                     className={clsx(
                       "mt-4 space-y-2.5 transition",
-                      totals.exchangeRefund > 0 &&
+                      totals.payableAmount <= 0 &&
+                        totals.exchangeRefund > 0 &&
                         "pointer-events-none select-none opacity-25 blur-[1px]",
                     )}
                   >
@@ -2766,6 +2979,14 @@ export function CreateBillPage() {
                       onChecked={(checked) => togglePayment("online", checked)}
                       onAmount={setOnlineAmount}
                     />
+                    <PaymentToggle
+                      label="Card"
+                      tone="card"
+                      checked={useCard}
+                      amount={cardAmount}
+                      onChecked={(checked) => togglePayment("card", checked)}
+                      onAmount={setCardAmount}
+                    />
                     {hasDue ? (
                       <PaymentToggle
                         label="Due"
@@ -2797,7 +3018,8 @@ export function CreateBillPage() {
                                   Math.max(
                                     totals.payableAmount -
                                       (useCash ? cashAmount : 0) -
-                                      (useOnline ? onlineAmount : 0),
+                                      (useOnline ? onlineAmount : 0) -
+                                      (useCard ? cardAmount : 0),
                                     0,
                                   ),
                                 );
@@ -2982,7 +3204,7 @@ export function CreateBillPage() {
                       </div>
                     </PaymentToggle>
 
-                  {(useCash || useOnline || useFinance || hasDue) &&
+                  {(useCash || useOnline || useCard || useFinance || hasDue) &&
                   (totals.dueAmount > 0 || totals.paid > 0) ? (
                     <div
                       className={clsx(
@@ -3009,7 +3231,7 @@ export function CreateBillPage() {
 
                   </div>
 
-                  {totals.exchangeRefund > 0 ? (
+                  {totals.payableAmount <= 0 && totals.exchangeRefund > 0 ? (
                     <div
                       id="exchange-pay-confirm"
                       className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/90 px-6 text-center backdrop-blur-[2px]"
@@ -3303,6 +3525,7 @@ function FieldInfoTip({
 const PAYMENT_TONE_STYLES = {
   cash: { accent: "#12B886", ring: "ring-[#12B886]/20", bg: "bg-[#12B886]/5" },
   online: { accent: "#3B82F6", ring: "ring-[#3B82F6]/20", bg: "bg-[#3B82F6]/5" },
+  card: { accent: "#6366F1", ring: "ring-[#6366F1]/20", bg: "bg-[#6366F1]/5" },
   due: { accent: "#F59E0B", ring: "ring-[#F59E0B]/20", bg: "bg-[#F59E0B]/5" },
   finance: { accent: "#8B5CF6", ring: "ring-[#8B5CF6]/20", bg: "bg-[#8B5CF6]/5" },
 } as const;

@@ -41,6 +41,7 @@ import {
 const PAY = {
   cash: "#12B886",
   online: "#3B82F6",
+  card: "#6366F1",
   finance: "#8B5CF6",
   due: "#F59E0B",
 } as const;
@@ -183,12 +184,18 @@ export function BillDetailPage() {
 
   const hasDue = bill.dueAmount > 0 && !bill.dueSettled;
   const fullyPaid = !bill.withGst && !hasDue;
+  const exchangeGross = Number(bill.exchangeValue || 0) || 0;
+  const exchangeCashReturn = Math.min(
+    Math.max(Number(bill.exchangeCashReturn || 0) || 0, 0),
+    exchangeGross,
+  );
+  const exchangeCredit = Math.max(exchangeGross - exchangeCashReturn, 0);
   const exchangeRefund =
-    !bill.withGst &&
-    bill.isExchange &&
-    bill.exchangeValue != null &&
-    bill.exchangeValue > bill.grandTotal
-      ? Math.max(bill.exchangeValue - bill.grandTotal, 0)
+    !bill.withGst && bill.isExchange && exchangeGross > 0
+      ? Math.max(
+          exchangeCashReturn + Math.max(exchangeCredit - bill.grandTotal, 0),
+          0,
+        )
       : 0;
   const payable = bill.withGst
     ? bill.grandTotal
@@ -544,12 +551,28 @@ export function BillDetailPage() {
             <SumLine label="Subtotal" value={formatINR(bill.subtotal)} muted />
             <SumLine label="GST" value={formatINR(bill.gstAmount)} muted />
             <SumLine label="Gross total" value={formatINR(bill.grandTotal)} />
-            {!bill.withGst && bill.isExchange && bill.exchangeValue ? (
-              <SumLine
-                label="Less: exchange"
-                value={`−${formatINR(bill.exchangeValue)}`}
-                exchange
-              />
+            {!bill.withGst && bill.isExchange && exchangeGross > 0 ? (
+              <>
+                {exchangeCashReturn > 0 ? (
+                  <SumLine
+                    label="Exchange value"
+                    value={formatINR(exchangeGross)}
+                    muted
+                  />
+                ) : null}
+                {exchangeCashReturn > 0 ? (
+                  <SumLine
+                    label="Fixed return to client"
+                    value={formatINR(exchangeCashReturn)}
+                    exchange
+                  />
+                ) : null}
+                <SumLine
+                  label="Less: exchange credit"
+                  value={`−${formatINR(exchangeCredit)}`}
+                  exchange
+                />
+              </>
             ) : null}
             <div className="mt-2 flex items-baseline justify-between gap-3 border-t-2 border-[#0E1626] pt-3">
               <span className="text-sm font-semibold text-[#0E1626]">
@@ -563,15 +586,18 @@ export function BillDetailPage() {
               <div className="mt-3.5 rounded-xl border border-[#F5E0BC] bg-[#FEF3E2] px-3.5 py-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[12.5px] font-semibold text-[#B76E00]">
-                    Refund due to customer
+                    {exchangeCashReturn > 0
+                      ? "Pay client (cash return)"
+                      : "Refund due to customer"}
                   </span>
                   <span className="font-display text-lg font-bold tabular-nums text-[#B76E00]">
                     {formatINR(exchangeRefund)}
                   </span>
                 </div>
                 <p className="mt-1 text-[11.5px] text-[#9A7A3E]">
-                  Exchange value was higher than the bill — this amount is owed
-                  back.
+                  {exchangeCashReturn > 0
+                    ? "Fixed cash return from the exchange mobile."
+                    : "Exchange value was higher than the bill — this amount is owed back."}
                 </p>
               </div>
             ) : null}
@@ -614,6 +640,12 @@ export function BillDetailPage() {
                 label="Online"
                 value={formatINR(bill.onlineAmount)}
                 zero={!(bill.onlineAmount > 0)}
+              />
+              <PayLine
+                color={PAY.card}
+                label="Card"
+                value={formatINR(bill.cardAmount || 0)}
+                zero={!((bill.cardAmount || 0) > 0)}
               />
               {bill.financeAmount2 && bill.financeAmount2 > 0 ? (
                 <>
@@ -1105,7 +1137,13 @@ function DuePaymentHistory({
               <span className="ml-1.5 text-xs font-normal text-[#7A8699]">
                 {payment.kind === "full" ? "Full" : "Partial"}
                 {payment.method && payment.method !== "na"
-                  ? ` · ${payment.method === "cash" ? "Cash" : "Online"}`
+                  ? ` · ${
+                      payment.method === "cash"
+                        ? "Cash"
+                        : payment.method === "card"
+                          ? "Card"
+                          : "Online"
+                    }`
                   : ""}
               </span>
             </p>
