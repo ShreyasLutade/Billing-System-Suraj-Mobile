@@ -241,14 +241,16 @@ export function BillDetailPage() {
 
         <div className="flex w-full flex-col gap-2 sm:w-auto">
           <div className="flex w-full gap-1.5 sm:w-auto sm:flex-wrap sm:gap-2">
-            <Link
-              to={`/bills/${bill.id}/edit`}
-              state={location.state}
-              className="bd-action flex-1 sm:flex-none"
-            >
-              <Pencil className="h-[15px] w-[15px] shrink-0" />
-              Edit
-            </Link>
+            {isAdmin || bill.withGst ? (
+              <Link
+                to={`/bills/${bill.id}/edit`}
+                state={location.state}
+                className="bd-action flex-1 sm:flex-none"
+              >
+                <Pencil className="h-[15px] w-[15px] shrink-0" />
+                Edit
+              </Link>
+            ) : null}
             <button
               type="button"
               className="bd-action flex-1 sm:flex-none"

@@ -15,6 +15,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
 import { AddMobileModal } from "../components/AddMobileModal";
 import {
   ImeiScanFieldButton,
@@ -308,6 +309,7 @@ export function CreateBillPage() {
   const from = readFromState(location.state);
   const { id: editId } = useParams<{ id?: string }>();
   const isEdit = Boolean(editId);
+  const { isAdmin } = useAuth();
 
   const [loadingBill, setLoadingBill] = useState(isEdit);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -984,6 +986,10 @@ export function CreateBillPage() {
       try {
         const { data } = await api.getBill(editId);
         if (!active) return;
+        if (!data.withGst && !isAdmin) {
+          navigate(`/bills/${editId}`, { replace: true, state: location.state });
+          return;
+        }
         applyBillToForm(data);
         const keepIds = data.items
           .map((item) => item.stockItemId)
@@ -1005,7 +1011,7 @@ export function CreateBillPage() {
     return () => {
       active = false;
     };
-  }, [editId]);
+  }, [editId, isAdmin, navigate, location.state]);
 
   function resetFinanceEntries() {
     setFinanceEntries([blankFinanceEntry()]);

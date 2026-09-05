@@ -702,6 +702,12 @@ billsRouter.put("/:id", async (req, res, next) => {
       return;
     }
 
+    // Non-GST bills can only be edited by admins; GST invoices are editable by all staff.
+    if (!existing.withGst && req.user?.role !== "ADMIN") {
+      res.status(403).json({ error: "Only admins can edit non-GST bills" });
+      return;
+    }
+
     const parsed = createBillSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
