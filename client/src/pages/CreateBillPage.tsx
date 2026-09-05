@@ -1257,12 +1257,19 @@ export function CreateBillPage() {
 
   function applyStockMobile(key: string, stock: StockItem) {
     const accessory = isAccessoryStock(stock);
+    const platform: DraftItem["platform"] = accessory
+      ? "ACCESSORY"
+      : stock.platform === "ANDROID"
+        ? "ANDROID"
+        : stock.platform === "IOS"
+          ? "IOS"
+          : null;
     updateItem(key, {
       catalogMode: "mobile",
       stockItemId: stock.id,
       mobileCatalogId: null,
       productName: stock.mobileName,
-      platform: accessory ? "ACCESSORY" : stock.platform,
+      platform,
       color: accessory ? "" : stock.color,
       storage: accessory ? "" : stock.storage,
       ram: !accessory && stock.platform === "ANDROID" ? stock.ram : "",
