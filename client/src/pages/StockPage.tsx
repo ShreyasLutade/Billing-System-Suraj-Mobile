@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import clsx from "clsx";
 import {
   ArrowDownUp,
+  Cable,
   Check,
   ChevronDown,
   Plus,
@@ -14,20 +15,22 @@ import {
 } from "lucide-react";
 import type { AddStockLocationState } from "./AddStockPage";
 import { useAuth } from "../auth/AuthContext";
-import { BackButton, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { BackButton, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
+import { useSessionState } from "../hooks/useSessionState";
 import { fromState } from "../lib/navMemory";
 import { api, formatINR, formatStockUnitId, round2 } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
 import type { StockItem } from "../types";
 
-type StockTab = "NEW" | "USED";
-type SortKey = "model" | "qty" | "avg" | "total";
+type StockTab = "NEW" | "USED" | "ACCESSORY";
+type SortKey = "latest" | "model" | "qty" | "avg" | "total";
 
 const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
+  { key: "latest", label: "Latest" },
   { key: "model", label: "Model" },
   { key: "qty", label: "Qty" },
   { key: "avg", label: "Avg price" },
@@ -35,6 +38,9 @@ const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
 ];
 
 function stockSortLabel(key: SortKey, dir: 1 | -1) {
+  if (key === "latest") {
+    return dir === -1 ? "Newest" : "Oldest";
+  }
   const base =
     key === "model"
       ? "Model"
@@ -62,6 +68,8 @@ type StockGroup = {
   quantity: number;
   avgPrice: number;
   totalValue: number;
+  /** Newest unit createdAt in this group (ms). */
+  latestAt: number;
   units: StockItem[];
 };
 
@@ -122,6 +130,10 @@ function groupStockByProduct(items: StockItem[]): StockGroup[] {
         0,
       );
       const quantity = units.length;
+      const latestAt = units.reduce((max, unit) => {
+        const t = new Date(unit.createdAt).getTime();
+        return Number.isFinite(t) && t > max ? t : max;
+      }, 0);
       return {
         key,
         productName: sample?.mobileName.trim() || "Unknown",
@@ -135,6 +147,7 @@ function groupStockByProduct(items: StockItem[]): StockGroup[] {
         quantity,
         avgPrice: quantity ? round2(totalValue / quantity) : 0,
         totalValue: round2(totalValue),
+        latestAt,
         units: [...units].sort((a, b) =>
           formatStockUnitId(a).localeCompare(formatStockUnitId(b)),
         ),
@@ -184,6 +197,9 @@ function sortGroups(
   sortDir: 1 | -1,
 ) {
   return [...groups].sort((a, b) => {
+    if (sortKey === "latest") {
+      return (a.latestAt - b.latestAt) * sortDir;
+    }
     if (sortKey === "model") {
       const x = a.productName.toLowerCase();
       const y = b.productName.toLowerCase();
@@ -207,7 +223,7 @@ export function StockPage() {
   const [tab, setTab] = usePersistedTab(
     "condition",
     "stock.tab",
-    ["NEW", "USED"] as const,
+    ["NEW", "USED", "ACCESSORY"] as const,
     "NEW",
   );
   const [searchParams, setSearchParams] = useSearchParams();
@@ -215,7 +231,7 @@ export function StockPage() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useSessionState("stock.query", "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingUnit, setEditingUnit] = useState<StockItem | null>(null);
   const [selectedKey, setSelectedKeyState] = useState<string | null>(
@@ -248,31 +264,40 @@ export function StockPage() {
   useEffect(() => {
     if (itemFromUrl) setSelectedKeyState(itemFromUrl);
   }, [itemFromUrl]);
-  const [sortKey, setSortKey] = useState<SortKey>("model");
-  const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const [sortKey, setSortKey] = useSessionState<SortKey>("stock.sortKey", "model");
+  const [sortDir, setSortDir] = useSessionState<1 | -1>("stock.sortDir", 1);
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (
       locationState?.condition === "USED" ||
-      locationState?.condition === "NEW"
+      locationState?.condition === "NEW" ||
+      locationState?.condition === "ACCESSORY"
     ) {
       setTab(locationState.condition);
     }
   }, [locationState?.condition, setTab]);
 
-  function openAddPage() {
+  function openAddMobilePage() {
+    const condition = tab === "USED" ? "USED" : "NEW";
     const state: AddStockLocationState = {
-      condition: tab,
+      condition,
     };
     navigate("/stock/add", { state });
   }
 
-  async function loadStock(condition: StockTab) {
+  function openAddAccessoriesPage() {
+    navigate("/stock/accessories/add");
+  }
+
+  async function loadStock(activeTab: StockTab) {
     setLoading(true);
     try {
-      const response = await api.listStock(condition);
+      const response =
+        activeTab === "ACCESSORY"
+          ? await api.listStock(undefined, undefined, "ACCESSORY")
+          : await api.listStock(activeTab);
       setItems(response.data);
       setError(null);
     } catch (err) {
@@ -411,7 +436,7 @@ export function StockPage() {
           onEdit={setEditingUnit}
           onRemove={(unit) => void removeItem(unit)}
         />
-        {editingUnit && isAdmin ? (
+        {editingUnit && isAdmin && editingUnit.kind !== "ACCESSORY" ? (
           <EditStockUnitModal
             unit={editingUnit}
             onClose={() => setEditingUnit(null)}
@@ -427,21 +452,31 @@ export function StockPage() {
       <PageHeader
         eyebrow="Inventory"
         title="Stock"
-        description="New and second-hand mobiles currently in the shop."
+        description="Mobiles and accessories currently in the shop."
         action={
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => openAddPage()}
-          >
-            <Plus className="h-4 w-4" />
-            Add mobile
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => openAddAccessoriesPage()}
+            >
+              <Cable className="h-4 w-4" />
+              Add accessories
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => openAddMobilePage()}
+            >
+              <Plus className="h-4 w-4" />
+              Add mobile
+            </button>
+          </div>
         }
       />
 
       <div className="tb-toolbar">
-        <div className="tb-tabs" role="tablist" aria-label="Stock type">
+        <div className="tb-tabs tb-tabs-3" role="tablist" aria-label="Stock type">
           <button
             type="button"
             role="tab"
@@ -449,7 +484,7 @@ export function StockPage() {
             className={clsx("tb-tab", tab === "NEW" && "tb-tab-on")}
             onClick={() => setTab("NEW")}
           >
-            <Smartphone className="h-4 w-4 shrink-0" />
+            <Smartphone className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
             New
             {tab === "NEW" ? (
               <span className="tb-cnt">{summaryUnits}</span>
@@ -462,9 +497,24 @@ export function StockPage() {
             className={clsx("tb-tab", tab === "USED" && "tb-tab-on")}
             onClick={() => setTab("USED")}
           >
-            <RefreshCw className="h-4 w-4 shrink-0" />
-            Second hand
+            <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+            <span className="sm:hidden">Used</span>
+            <span className="hidden sm:inline">Second hand</span>
             {tab === "USED" ? (
+              <span className="tb-cnt">{summaryUnits}</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "ACCESSORY"}
+            className={clsx("tb-tab", tab === "ACCESSORY" && "tb-tab-on")}
+            onClick={() => setTab("ACCESSORY")}
+          >
+            <Cable className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+            <span className="sm:hidden">Acc.</span>
+            <span className="hidden sm:inline">Accessories</span>
+            {tab === "ACCESSORY" ? (
               <span className="tb-cnt">{summaryUnits}</span>
             ) : null}
           </button>
@@ -476,8 +526,16 @@ export function StockPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search product, IMEI, supplier…"
+              placeholder={
+                tab === "ACCESSORY"
+                  ? "Search accessory or serial…"
+                  : "Search product, IMEI, supplier…"
+              }
               aria-label="Search stock"
+            />
+            <SearchClearButton
+              visible={Boolean(query)}
+              onClear={() => setQuery("")}
             />
           </div>
         </div>
@@ -502,7 +560,7 @@ export function StockPage() {
         </div>
         <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft dark:border-ink-100 dark:!bg-surface">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
-            Distinct models
+            {tab === "ACCESSORY" ? "Distinct names" : "Distinct models"}
           </p>
           <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-ink-900">
             {loading ? "…" : summaryModels}
@@ -522,15 +580,19 @@ export function StockPage() {
         <EmptyState
           title={
             query.trim()
-              ? "No matching phones"
+              ? "No matching items"
               : tab === "NEW"
                 ? "No new mobiles yet"
-                : "No second-hand mobiles yet"
+                : tab === "USED"
+                  ? "No second-hand mobiles yet"
+                  : "No accessories yet"
           }
           description={
             query.trim()
               ? "Try a different search."
-              : "Tap Add mobile to record a purchase into stock."
+              : tab === "ACCESSORY"
+                ? "Tap Add accessories to record chargers, covers, and more."
+                : "Tap Add mobile to record a purchase into stock."
           }
         />
       ) : (
@@ -595,7 +657,7 @@ export function StockPage() {
                       )}
                       onClick={() => setSortDir(-1)}
                     >
-                      High → Low
+                      {sortKey === "latest" ? "Newest" : "High → Low"}
                     </button>
                     <button
                       type="button"
@@ -607,7 +669,7 @@ export function StockPage() {
                       )}
                       onClick={() => setSortDir(1)}
                     >
-                      Low → High
+                      {sortKey === "latest" ? "Oldest" : "Low → High"}
                     </button>
                   </div>
 
@@ -629,7 +691,10 @@ export function StockPage() {
                               ? "bg-[#F1F5FF] font-semibold text-ink-900"
                               : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
                           )}
-                          onClick={() => setSortKey(option.key)}
+                          onClick={() => {
+                            setSortKey(option.key);
+                            if (option.key === "latest") setSortDir(-1);
+                          }}
                         >
                           {option.label}
                           <Check
@@ -758,6 +823,7 @@ function StockProductDetail({
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const isUsed = condition === "USED";
+  const isAccessory = condition === "ACCESSORY";
 
   return (
     <div>
@@ -767,16 +833,18 @@ function StockProductDetail({
         </BackButton>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="font-display text-xl font-semibold leading-snug text-ink-900 sm:text-2xl">
-            {title}
+            {isAccessory ? group.productName : title}
           </h1>
           <span
             className={
-              isUsed
-                ? "rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ember-500"
-                : "rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-tide-700"
+              isAccessory
+                ? "rounded border border-ink-200 bg-ink-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ink-700"
+                : isUsed
+                  ? "rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-ember-500"
+                  : "rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-tide-700"
             }
           >
-            {isUsed ? "Second hand" : "New"}
+            {isAccessory ? "Accessory" : isUsed ? "Second hand" : "New"}
           </span>
         </div>
         <p className="mt-1 text-sm text-ink-500">
@@ -813,7 +881,7 @@ function StockProductDetail({
                 <th>Purchase date</th>
                 <th>Supplier name</th>
                 <th className="text-right">Price</th>
-                <th>IMEI / Serial</th>
+                <th>{isAccessory ? "Serial" : "IMEI / Serial"}</th>
                 <th className="w-[1%] text-right">Action</th>
               </tr>
             </thead>
@@ -859,7 +927,7 @@ function StockProductDetail({
                   </td>
                   <td className="w-[1%] whitespace-nowrap text-right">
                     <div className="inline-flex items-center justify-end gap-1.5">
-                      {isAdmin ? (
+                      {isAdmin && !isAccessory ? (
                         <button
                           type="button"
                           className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 disabled:opacity-50 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"

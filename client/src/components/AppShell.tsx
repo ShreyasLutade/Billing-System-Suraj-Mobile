@@ -16,6 +16,7 @@ import {
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
+import { clearListUiSession } from "../hooks/useSessionState";
 
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
@@ -46,6 +47,11 @@ export function AppShell() {
       : []),
   ];
 
+  function onMainNavClick() {
+    // Header / bottom nav = fresh list. Detail → back keeps search via session.
+    clearListUiSession();
+  }
+
   function confirmLogout() {
     logout();
     window.location.assign("/login");
@@ -62,6 +68,7 @@ export function AppShell() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 pr-[7.25rem] sm:px-6 sm:pr-36">
           <Link
             to="/"
+            onClick={onMainNavClick}
             className="flex items-center gap-3 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
             aria-label="Suraj Mobile — New Bill"
           >
@@ -87,6 +94,7 @@ export function AppShell() {
                 key={link.to}
                 to={link.to}
                 end={link.to === "/"}
+                onClick={onMainNavClick}
                 className={({ isActive }) =>
                   clsx(
                     "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition",
@@ -179,6 +187,7 @@ export function AppShell() {
               key={link.to}
               to={link.to}
               end={link.to === "/"}
+              onClick={onMainNavClick}
               className={({ isActive }) =>
                 clsx(
                   "flex flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-[11px] font-semibold",

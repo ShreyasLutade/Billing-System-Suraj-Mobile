@@ -20,6 +20,7 @@ import {
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
+import { useSessionState } from "../hooks/useSessionState";
 import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
 import { fromState } from "../lib/navMemory";
@@ -116,11 +117,23 @@ export function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<AnalyticsPeriodValue>("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [sortKey, setSortKey] = useState<BillSortKey>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [period, setPeriod] = useSessionState<AnalyticsPeriodValue>(
+    "analytics.period",
+    "all",
+  );
+  const [customFrom, setCustomFrom] = useSessionState(
+    "analytics.customFrom",
+    "",
+  );
+  const [customTo, setCustomTo] = useSessionState("analytics.customTo", "");
+  const [sortKey, setSortKey] = useSessionState<BillSortKey>(
+    "analytics.sortKey",
+    "date",
+  );
+  const [sortDir, setSortDir] = useSessionState<SortDir>(
+    "analytics.sortDir",
+    "desc",
+  );
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
 

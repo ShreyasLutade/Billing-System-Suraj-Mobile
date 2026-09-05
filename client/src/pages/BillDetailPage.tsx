@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
-import clsx from "clsx";
 import {
   ArrowLeftRight,
   Check,
@@ -34,7 +33,6 @@ import { useAuth } from "../auth/AuthContext";
 import {
   backLabel,
   billsHomePath,
-  fromState,
   readFromState,
 } from "../lib/navMemory";
 
@@ -373,11 +371,11 @@ export function BillDetailPage() {
                       <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-[#0E1626]">
                         <span>{item.productName}</span>
                         {item.condition === "USED" ? (
-                          <span className="rounded-md bg-[#FEF3E2] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#B76E00]">
+                          <span className="rounded-md bg-[#FEF3E2] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#B76E00] dark:bg-amber-950/50 dark:text-amber-300">
                             OLD
                           </span>
                         ) : item.condition === "NEW" ? (
-                          <span className="rounded-md bg-[#E7F8F1] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#0E9E76]">
+                          <span className="rounded-md bg-[#E7F8F1] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
                             NEW
                           </span>
                         ) : null}
@@ -440,47 +438,15 @@ export function BillDetailPage() {
                         },
                       ]
                   : []
-                ).map((item, index) => {
-                  const sold =
-                    item.stockStatus === "SOLD" || Boolean(item.soldBillId);
-                  return (
+                ).map((item, index) => (
                   <div
                     key={`${item.imei1}-${index}`}
-                    className={clsx(
-                      "relative isolate overflow-hidden rounded-xl border p-4",
-                      sold
-                        ? "border-rose-200/80 bg-rose-50/70 dark:border-rose-500/30 dark:!bg-rose-950/45"
-                        : "border-ink-100 bg-ink-50/40",
-                    )}
+                    className="rounded-xl border border-ink-100 bg-ink-50/40 p-4"
                   >
-                    <div className="relative z-20 mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
-                        Exchange {index + 1}
-                      </p>
-                      {sold ? (
-                        item.soldBillId ? (
-                          <Link
-                            to={`/bills/${item.soldBillId}`}
-                            state={fromState(location)}
-                            className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
-                          >
-                            Sold
-                            {item.soldInvoiceNumber
-                              ? ` · ${item.soldInvoiceNumber}`
-                              : ""}
-                          </Link>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400">
-                            Sold
-                          </span>
-                        )
-                      ) : item.stockStatus === "AVAILABLE" ? (
-                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-400">
-                          In stock
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="relative z-20 grid grid-cols-2 gap-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+                      Exchange {index + 1}
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
                       <Kv label="Model" value={item.model || "—"} />
                       <Kv
                         label="Exchange value"
@@ -500,33 +466,12 @@ export function BillDetailPage() {
                           .filter(Boolean)
                           .join(" · ") || "—"}
                       />
-                      {sold && item.soldInvoiceNumber ? (
-                        <Kv
-                          label="Sold on bill"
-                          value={item.soldInvoiceNumber}
-                          full={!item.notes}
-                        />
-                      ) : null}
                       {item.notes ? (
                         <Kv label="Notes" value={item.notes} full />
                       ) : null}
                     </div>
-                    {sold ? (
-                      <div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-                      >
-                        <span
-                          className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm dark:border-rose-400/40 dark:!bg-rose-500/15 dark:!text-rose-300/80 sm:text-xs"
-                          style={{ transform: "rotate(-12deg)" }}
-                        >
-                          Sold
-                        </span>
-                      </div>
-                    ) : null}
                   </div>
-                  );
-                })}
+                ))}
               </div>
             </section>
           ) : null}

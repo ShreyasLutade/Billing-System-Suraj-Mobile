@@ -15,6 +15,7 @@ import {
   rankPhoneModels,
 } from "../lib/phoneModelSearch";
 import type { PhoneModel } from "../types";
+import { SearchClearButton } from "./ui";
 
 type Props = {
   id?: string;
@@ -245,6 +246,15 @@ export function MobileNameSearch({
           {/* Absorb leftover width so clicks outside the short input still focus it */}
           <span className="min-h-[1.5rem] min-w-[0.5rem] flex-1 self-stretch" aria-hidden />
         </div>
+        <SearchClearButton
+          visible={Boolean(value.trim()) && !disabled}
+          label="Clear name"
+          onClear={() => {
+            onChange("");
+            setOpen(true);
+            inputRef.current?.focus();
+          }}
+        />
       </div>
       {showList || showEmpty ? (
         <div

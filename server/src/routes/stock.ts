@@ -26,6 +26,7 @@ function serializeSuppliers(names: string[]): string {
 
 function mapStockItem(item: {
   id: string;
+  kind?: string | null;
   condition: string;
   platform: string;
   mobileName: string;
@@ -51,6 +52,7 @@ function mapStockItem(item: {
   const intakeKind = intakeKindFromNote(note);
   return {
     ...item,
+    kind: item.kind === "ACCESSORY" ? "ACCESSORY" : "MOBILE",
     imei: item.imei || null,
     serialNumber: item.serialNumber || null,
     supplierId: item.supplierId || null,
@@ -135,6 +137,10 @@ stockRouter.get("/", async (req, res, next) => {
       typeof req.query.condition === "string"
         ? req.query.condition.toUpperCase()
         : undefined;
+    const kind =
+      typeof req.query.kind === "string"
+        ? req.query.kind.toUpperCase()
+        : undefined;
     const includeIds =
       typeof req.query.includeIds === "string"
         ? req.query.includeIds
@@ -145,9 +151,17 @@ stockRouter.get("/", async (req, res, next) => {
     const supplierId =
       typeof req.query.supplierId === "string" ? req.query.supplierId : undefined;
 
+    const kindFilter =
+      kind === "ACCESSORY"
+        ? { kind: "ACCESSORY" }
+        : kind === "ALL"
+          ? {}
+          : { NOT: { kind: "ACCESSORY" } };
+
     const items = await prisma.stockItem.findMany({
       where: {
         AND: [
+          kindFilter,
           condition === "NEW" || condition === "USED" ? { condition } : {},
           supplierId ? { supplierId } : {},
           includeIds.length
@@ -164,27 +178,219 @@ stockRouter.get("/", async (req, res, next) => {
       orderBy: [{ createdAt: "desc" }, { mobileName: "asc" }],
     });
 
-    res.json({ data: items.map(mapStockItem) });
+    // Mobiles first, then accessories (create-bill dropdown search order).
+    const sorted =
+      kind === "ALL"
+        ? [...items].sort((a, b) => {
+            const aAcc = a.kind === "ACCESSORY" ? 1 : 0;
+            const bAcc = b.kind === "ACCESSORY" ? 1 : 0;
+            if (aAcc !== bAcc) return aAcc - bAcc;
+            return 0;
+          })
+        : items;
+
+    res.json({ data: sorted.map(mapStockItem) });
   } catch (error) {
     next(error);
   }
 });
 
-/** Look up one AVAILABLE stock unit by IMEI (for create-bill scan autofill). */
+/** Distinct accessory names for typeahead suggestions. */
+stockRouter.get("/accessory-names", async (_req, res, next) => {
+  try {
+    const rows = await prisma.stockItem.findMany({
+      where: { kind: "ACCESSORY" },
+      select: { mobileName: true },
+      distinct: ["mobileName"],
+      orderBy: { mobileName: "asc" },
+      take: 200,
+    });
+    res.json({
+      data: rows
+        .map((row) => row.mobileName.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const createAccessoriesSchema = z
+  .object({
+    name: z.string().trim().min(2, "Accessory name is required").max(100),
+    purchasePrice: z.coerce
+      .number({ invalid_type_error: "Purchase price is required" })
+      .min(0, "Purchase price cannot be negative"),
+    serials: z
+      .array(z.string().trim().min(1, "Serial number is required").max(40))
+      .min(1, "Add at least one serial number")
+      .max(50),
+    supplierId: z.string().trim().optional().nullable(),
+    supplierName: z.string().trim().min(2).max(100).optional().nullable(),
+    supplierPhone: z.string().trim().max(15).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.supplierId?.trim() && !data.supplierName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select or enter a supplier",
+        path: ["supplierId"],
+      });
+    }
+  });
+
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+stockRouter.post("/accessories", async (req, res, next) => {
+  try {
+    const parsed = createAccessoriesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const name = parsed.data.name.trim();
+    const purchasePrice = parsed.data.purchasePrice;
+    const serials = parsed.data.serials.map((s) => cleanId(s));
+
+    if (serials.some((s) => s.length < 3)) {
+      res.status(400).json({ error: "Each serial number must be at least 3 characters" });
+      return;
+    }
+
+    const unique = new Set(serials.map((s) => s.toLowerCase()));
+    if (unique.size !== serials.length) {
+      res.status(400).json({ error: "Duplicate serial numbers in this entry" });
+      return;
+    }
+
+    for (const serial of serials) {
+      const existing = await prisma.stockItem.findUnique({
+        where: { serialNumber: serial },
+        select: { id: true },
+      });
+      if (existing) {
+        res.status(409).json({ error: `Serial ${serial} is already in stock` });
+        return;
+      }
+    }
+
+    let supplier = parsed.data.supplierId
+      ? await prisma.supplier.findUnique({
+          where: { id: parsed.data.supplierId },
+        })
+      : null;
+
+    if (!supplier && parsed.data.supplierName?.trim()) {
+      const phoneDigits =
+        parsed.data.supplierPhone?.replace(/\D/g, "") || null;
+      supplier = await upsertSupplierByName(prisma, parsed.data.supplierName, {
+        phone: phoneDigits,
+      });
+    }
+
+    if (!supplier) {
+      res.status(400).json({ error: "Select or enter a supplier" });
+      return;
+    }
+
+    const purchaseDate = new Date();
+    const totalAmount = round2(purchasePrice * serials.length);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const purchase = await tx.purchase.create({
+        data: {
+          supplierId: supplier!.id,
+          purchaseDate,
+          note: "ACCESSORIES",
+          condition: "NEW",
+          totalAmount,
+          createdByUserId: req.user?.id || null,
+          createdByName: req.user?.name || null,
+        },
+      });
+
+      const items = [];
+      for (const serialNumber of serials) {
+        const item = await tx.stockItem.create({
+          data: {
+            kind: "ACCESSORY",
+            condition: "NEW",
+            platform: "ACCESSORY",
+            mobileName: name,
+            storage: "",
+            ram: "",
+            color: "",
+            imei: null,
+            serialNumber,
+            purchasePrice,
+            suppliers: serializeSuppliers([supplier!.name]),
+            supplierId: supplier!.id,
+            status: "AVAILABLE",
+            createdAt: purchaseDate,
+            createdByUserId: req.user?.id || null,
+            createdByName: req.user?.name || null,
+          },
+          include: {
+            supplier: { select: { id: true, name: true, isExchange: true } },
+            purchaseItem: {
+              select: { purchase: { select: { note: true } } },
+            },
+          },
+        });
+        await tx.purchaseItem.create({
+          data: {
+            purchaseId: purchase.id,
+            stockItemId: item.id,
+          },
+        });
+        items.push(item);
+      }
+      return items;
+    });
+
+    res.status(201).json({ data: created.map(mapStockItem) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Look up one AVAILABLE stock unit by IMEI or serial (create-bill autofill). */
 stockRouter.get("/lookup", async (req, res, next) => {
   try {
-    const raw =
+    const imeiRaw =
       typeof req.query.imei === "string" ? req.query.imei.trim() : "";
-    const imei = raw.replace(/\D/g, "");
-    if (imei.length < 8) {
+    const serialRaw =
+      typeof req.query.serial === "string" ? req.query.serial.trim() : "";
+    const imei = imeiRaw.replace(/\D/g, "");
+    const serial = cleanId(serialRaw);
+
+    if (!imei && !serial) {
+      res.status(400).json({ error: "IMEI or serial number is required" });
+      return;
+    }
+    if (imei && imei.length < 8 && !serial) {
       res.status(400).json({ error: "IMEI is required" });
+      return;
+    }
+    if (serial && serial.length < 3 && !imei) {
+      res.status(400).json({ error: "Serial number is required" });
       return;
     }
 
     const item = await prisma.stockItem.findFirst({
       where: {
         status: "AVAILABLE",
-        imei,
+        OR: [
+          ...(imei.length >= 8 ? [{ imei }] : []),
+          ...(serial.length >= 3 ? [{ serialNumber: serial }] : []),
+        ],
       },
       include: {
         supplier: { select: { id: true, name: true, isExchange: true } },
@@ -193,7 +399,9 @@ stockRouter.get("/lookup", async (req, res, next) => {
     });
 
     if (!item) {
-      res.status(404).json({ error: "No mobile found" });
+      res.status(404).json({
+        error: serial && !imei ? "No accessory found" : "No mobile found",
+      });
       return;
     }
 
@@ -335,6 +543,7 @@ stockRouter.post("/", async (req, res, next) => {
 
       const item = await tx.stockItem.create({
         data: {
+          kind: "MOBILE",
           condition: data.condition,
           platform: data.platform,
           mobileName: data.mobileName.trim(),

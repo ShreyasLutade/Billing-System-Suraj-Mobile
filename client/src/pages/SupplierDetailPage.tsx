@@ -217,9 +217,11 @@ export function SupplierDetailPage() {
                               ? "Return"
                               : p.note?.startsWith("EXCHANGE_INVOICE:")
                                 ? "Exchange"
-                                : p.condition === "USED"
-                                  ? "Second hand"
-                                  : "New"}
+                                : p.note === "ACCESSORIES"
+                                  ? "Accessories"
+                                  : p.condition === "USED"
+                                    ? "Second hand"
+                                    : "New"}
                           </span>
                         </td>
                         <td className="text-right text-base font-semibold tabular-nums text-ink-900">
@@ -281,14 +283,21 @@ export function SupplierDetailPage() {
                   {data.stockItems.map((item) => (
                     <tr key={item.id}>
                       <td className="font-semibold whitespace-normal text-ink-900">
-                        {[
-                          item.mobileName,
-                          item.color,
-                          item.storage,
-                          item.ram || null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          {[
+                            item.mobileName,
+                            item.color,
+                            item.storage,
+                            item.ram || null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                          {item.kind === "ACCESSORY" ? (
+                            <span className="rounded border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600">
+                              Accessory
+                            </span>
+                          ) : null}
+                        </span>
                       </td>
                       <td className="font-mono text-ink-500">
                         {formatStockUnitId(item)}

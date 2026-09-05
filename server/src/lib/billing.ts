@@ -23,7 +23,7 @@ export const billItemSchema = z
     productName: z.string().trim().min(1, "Product name is required"),
     mobileCatalogId: z.string().trim().optional().nullable(),
     stockItemId: z.string().trim().optional().nullable(),
-    platform: z.enum(["IOS", "ANDROID"]).optional().nullable(),
+    platform: z.enum(["IOS", "ANDROID", "ACCESSORY"]).optional().nullable(),
     color: z.string().trim().optional().nullable(),
     storage: z.string().trim().optional().nullable(),
     ram: z.string().trim().optional().nullable(),
@@ -37,7 +37,7 @@ export const billItemSchema = z
     warrantyMonths: z.number().int().positive().optional().nullable(),
   })
   .superRefine((item, ctx) => {
-    if (!item.platform) return;
+    if (!item.platform || item.platform === "ACCESSORY") return;
 
     if (!item.color) {
       ctx.addIssue({

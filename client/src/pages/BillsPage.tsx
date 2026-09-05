@@ -16,10 +16,11 @@ import {
   ACTIVITY_PERIOD_OPTIONS,
   type ActivityPeriodValue,
 } from "../components/PeriodFilter";
-import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
+import { useSessionState } from "../hooks/useSessionState";
 import { fromState } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import {
@@ -176,17 +177,20 @@ export function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [searchScope, setSearchScope] = useState<BillSearchScope>("all");
-  const [period, setPeriod] = useState<BillsPeriod>("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [query, setQuery] = useSessionState("bills.query", "");
+  const [searchScope, setSearchScope] = useSessionState<BillSearchScope>(
+    "bills.searchScope",
+    "all",
+  );
+  const [period, setPeriod] = useSessionState<BillsPeriod>("bills.period", "all");
+  const [customFrom, setCustomFrom] = useSessionState("bills.customFrom", "");
+  const [customTo, setCustomTo] = useSessionState("bills.customTo", "");
   const [filterOpen, setFilterOpen] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const filterWrapRef = useRef<HTMLDivElement>(null);
-  const [sortKey, setSortKey] = useState<BillSortKey>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useSessionState<BillSortKey>("bills.sortKey", "date");
+  const [sortDir, setSortDir] = useSessionState<SortDir>("bills.sortDir", "desc");
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
 
@@ -352,6 +356,10 @@ export function BillsPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder(searchScope)}
               aria-label={searchPlaceholder(searchScope)}
+            />
+            <SearchClearButton
+              visible={Boolean(query)}
+              onClear={() => setQuery("")}
             />
           </div>
 

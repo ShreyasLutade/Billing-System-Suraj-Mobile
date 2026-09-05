@@ -15,9 +15,10 @@ import {
   ACTIVITY_PERIOD_OPTIONS,
   type AnalyticsPeriodValue,
 } from "../components/PeriodFilter";
-import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
+import { useSessionState } from "../hooks/useSessionState";
 import { type PaymentMode } from "../lib/analyticsNav";
 import { fromState } from "../lib/navMemory";
 import { api, formatINR } from "../lib/api";
@@ -133,8 +134,8 @@ export function AnalyticsPaymentsPage() {
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("amount");
+  const [query, setQuery] = useSessionState("analytics.payments.query", "");
+  const [sort, setSort] = useSessionState<SortKey>("analytics.payments.sort", "amount");
 
   const customRangeReady =
     period === "custom" && Boolean(customFrom || customTo);
@@ -361,6 +362,10 @@ export function AnalyticsPaymentsPage() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search customer or invoice…"
                 aria-label="Search customer or invoice"
+              />
+              <SearchClearButton
+                visible={Boolean(query)}
+                onClear={() => setQuery("")}
               />
             </div>
             <div className="inline-flex gap-0.5 rounded-[10px] bg-[#EBEDF1] p-[3px]">

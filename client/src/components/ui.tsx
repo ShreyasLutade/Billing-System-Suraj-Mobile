@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function BackLink({
@@ -20,6 +20,39 @@ export function BackLink({
       <ArrowLeft strokeWidth={2} />
       {children}
     </Link>
+  );
+}
+
+/** Clear (×) control for search fields — show when the query is non-empty. */
+export function SearchClearButton({
+  visible,
+  onClear,
+  className,
+  label = "Clear search",
+}: {
+  visible: boolean;
+  onClear: () => void;
+  className?: string;
+  label?: string;
+}) {
+  if (!visible) return null;
+  return (
+    <button
+      type="button"
+      className={clsx("tb-search-clear", className)}
+      aria-label={label}
+      onMouseDown={(event) => {
+        // Keep the search input focused after clearing.
+        event.preventDefault();
+      }}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClear();
+      }}
+    >
+      <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+    </button>
   );
 }
 
