@@ -3,7 +3,7 @@ export type BillItem = {
   productName: string;
   mobileCatalogId?: string | null;
   stockItemId?: string | null;
-  platform?: "IOS" | "ANDROID" | null;
+  platform?: "IOS" | "ANDROID" | "ACCESSORY" | null;
   color?: string | null;
   storage?: string | null;
   ram?: string | null;
@@ -240,8 +240,9 @@ export type PhoneModel = {
 
 export type StockItem = {
   id: string;
+  kind?: "MOBILE" | "ACCESSORY" | string;
   condition: "NEW" | "USED";
-  platform: "IOS" | "ANDROID";
+  platform: "IOS" | "ANDROID" | "ACCESSORY" | string;
   mobileName: string;
   storage: string;
   ram: string;

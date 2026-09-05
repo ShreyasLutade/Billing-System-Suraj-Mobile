@@ -16,11 +16,12 @@ import {
 } from "../components/PeriodFilter";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
-import { BackLink, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useAuth } from "../auth/AuthContext";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
+import { useSessionState } from "../hooks/useSessionState";
 import { fromState, readFromState, backLabel } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import {
@@ -157,7 +158,7 @@ export function DuesPage() {
     ["customer", "finance"] as const,
     "customer",
   );
-  const [period, setPeriod] = useState<DuePeriodValue>("all");
+  const [period, setPeriod] = useSessionState<DuePeriodValue>("dues.period", "all");
   const [data, setData] = useState<DuesSummary | null>(null);
   const [financeData, setFinanceData] = useState<FinanceDuesSummary | null>(
     null,
@@ -165,15 +166,18 @@ export function DuesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDue, setSelectedDue] = useState<DueItem | null>(null);
-  const [query, setQuery] = useState("");
-  const [searchScope, setSearchScope] = useState<BillSearchScope>("all");
+  const [query, setQuery] = useSessionState("dues.query", "");
+  const [searchScope, setSearchScope] = useSessionState<BillSearchScope>(
+    "dues.searchScope",
+    "all",
+  );
   const [filterOpen, setFilterOpen] = useState(false);
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [selectedFinanceDue, setSelectedFinanceDue] =
     useState<FinanceDueItem | null>(null);
-  const [financeCompanyFilter, setFinanceCompanyFilter] = useState<
+  const [financeCompanyFilter, setFinanceCompanyFilter] = useSessionState<
     string | null
-  >(null);
+  >("dues.financeCompanyFilter", null);
   const filterWrapRef = useRef<HTMLDivElement>(null);
 
   const filtersActive =
@@ -365,6 +369,10 @@ export function DuesPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder(searchScope, tab)}
               aria-label={searchPlaceholder(searchScope, tab)}
+            />
+            <SearchClearButton
+              visible={Boolean(query)}
+              onClear={() => setQuery("")}
             />
           </div>
 

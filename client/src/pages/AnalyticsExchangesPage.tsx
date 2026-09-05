@@ -8,9 +8,10 @@ import {
   PeriodFilter,
   type AnalyticsPeriodValue,
 } from "../components/PeriodFilter";
-import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
+import { useSessionState } from "../hooks/useSessionState";
 import { analyticsExchangesPath } from "../lib/analyticsNav";
 import { fromState } from "../lib/navMemory";
 import { api, formatINR, formatStockUnitId } from "../lib/api";
@@ -68,7 +69,7 @@ export function AnalyticsExchangesPage() {
   const [data, setData] = useState<AnalyticsExchangesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useSessionState("analytics.exchanges.query", "");
 
   const customRangeReady =
     period === "custom" && Boolean(customFrom || customTo);
@@ -257,6 +258,10 @@ export function AnalyticsExchangesPage() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search model, IMEI, customer, invoice…"
                 aria-label="Search exchange mobiles"
+              />
+              <SearchClearButton
+                visible={Boolean(query)}
+                onClear={() => setQuery("")}
               />
             </label>
           </div>

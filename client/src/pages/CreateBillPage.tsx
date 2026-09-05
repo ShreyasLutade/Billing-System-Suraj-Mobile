@@ -93,9 +93,21 @@ const STOCK_AVATAR_COLORS: Record<string, { bg: string; fg: string }> = {
 };
 
 function stockBrandKey(mobileName: string, platform?: string | null) {
+  if (platform === "ACCESSORY") return "Acc";
   if (platform === "IOS" || /^iphone/i.test(mobileName)) return "Apple";
   const first = mobileName.trim().split(/\s+/)[0] || "?";
   return first;
+}
+
+function isAccessoryStock(stock: {
+  kind?: string | null;
+  platform?: string | null;
+}) {
+  return stock.kind === "ACCESSORY" || stock.platform === "ACCESSORY";
+}
+
+function isAccessoryDraft(item: { platform?: string | null }) {
+  return item.platform === "ACCESSORY";
 }
 
 function stockAvatar(mobileName: string, platform?: string | null) {
@@ -119,9 +131,11 @@ function formatStockOption(stock: {
   imei: string | null;
   serialNumber?: string | null;
   platform?: string | null;
+  kind?: string | null;
 }) {
+  const accessory = isAccessoryStock(stock);
   const ramLabel = (() => {
-    if (!stock.ram) return null;
+    if (accessory || !stock.ram) return null;
     const capacity = stock.ram.replace(/\s*gb\s*$/i, "").trim();
     return /^\d+$/.test(capacity)
       ? `${capacity} GB RAM`
@@ -134,9 +148,11 @@ function formatStockOption(stock: {
   ].filter(Boolean);
 
   return {
-    label: [stock.mobileName, stock.color, stock.storage, ramLabel]
-      .filter(Boolean)
-      .join(" · "),
+    label: accessory
+      ? stock.mobileName
+      : [stock.mobileName, stock.color, stock.storage, ramLabel]
+          .filter(Boolean)
+          .join(" · "),
     description: idParts.length ? idParts.join(" · ") : undefined,
     avatar: stockAvatar(stock.mobileName, stock.platform),
   };
@@ -182,6 +198,9 @@ function isDraftItemReady(item: DraftItem, withGst: boolean) {
   }
 
   if (withGst) {
+    if (isAccessoryDraft(item)) {
+      return Boolean(item.productName.trim());
+    }
     return Boolean(
       item.mobileCatalogId ||
         (item.productName.trim() &&
@@ -192,10 +211,16 @@ function isDraftItemReady(item: DraftItem, withGst: boolean) {
     );
   }
 
+  return Boolean(item.stockItemId && stockDetailsComplete(item));
+}
+
+function stockDetailsComplete(item: DraftItem) {
+  if (!item.productName.trim()) return false;
+  if (isAccessoryDraft(item)) {
+    return Boolean(item.serialNumber?.trim() || item.imei1?.trim());
+  }
   return Boolean(
-    item.stockItemId &&
-      item.productName.trim() &&
-      item.platform &&
+    item.platform &&
       item.color?.trim() &&
       item.storage?.trim() &&
       (item.platform !== "ANDROID" || Boolean(item.ram?.trim())),
@@ -381,7 +406,11 @@ export function CreateBillPage() {
     imei: string;
   } | null>(null);
   const stockImeiLookupAbortRef = useRef<AbortController | null>(null);
+  const serialLookupTimerRef = useRef<Record<string, number>>({});
   const [imeiFieldErrors, setImeiFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [serialFieldErrors, setSerialFieldErrors] = useState<
     Record<string, string>
   >({});
   const [savingFinanceKey, setSavingFinanceKey] = useState<string | null>(null);
@@ -685,7 +714,11 @@ export function CreateBillPage() {
   ]);
 
   const stockOptions = useMemo(() => {
-    const fromStock = stockItems.map((stock) => {
+    const mobiles = stockItems.filter((stock) => !isAccessoryStock(stock));
+    const accessories = stockItems.filter((stock) => isAccessoryStock(stock));
+
+    const mapOption = (stock: StockItem) => {
+      const accessory = isAccessoryStock(stock);
       const isUsed = stock.condition === "USED";
       const formatted = formatStockOption(stock);
       return {
@@ -693,11 +726,13 @@ export function CreateBillPage() {
         label: formatted.label,
         description: formatted.description,
         avatar: formatted.avatar,
-        badge: isUsed ? "Old" : "New",
-        badgeTone: (isUsed ? "old" : "new") as "old" | "new",
+        badge: accessory ? "Acc" : isUsed ? "Old" : "New",
+        badgeTone: (isUsed && !accessory ? "old" : "new") as "old" | "new",
         condition: stock.condition as "USED" | "NEW",
       };
-    });
+    };
+
+    const fromStock = [...mobiles.map(mapOption), ...accessories.map(mapOption)];
 
     // Keep currently selected sold/legacy units visible while editing
     for (const item of items) {
@@ -708,6 +743,7 @@ export function CreateBillPage() {
       ) {
         continue;
       }
+      const accessory = isAccessoryDraft(item);
       const isUsed = (item.condition || "NEW") === "USED";
       const formatted = formatStockOption({
         mobileName: item.productName,
@@ -715,15 +751,17 @@ export function CreateBillPage() {
         storage: item.storage || "",
         ram: item.ram || "",
         imei: item.imei1 || "",
+        serialNumber: item.serialNumber || "",
         platform: item.platform,
+        kind: accessory ? "ACCESSORY" : "MOBILE",
       });
       fromStock.push({
         value: item.stockItemId,
         label: formatted.label,
         description: formatted.description,
         avatar: formatted.avatar,
-        badge: isUsed ? "Old" : "New",
-        badgeTone: (isUsed ? "old" : "new") as "old" | "new",
+        badge: accessory ? "Acc" : isUsed ? "Old" : "New",
+        badgeTone: (isUsed && !accessory ? "old" : "new") as "old" | "new",
         condition: (isUsed ? "USED" : "NEW") as "USED" | "NEW",
       });
     }
@@ -906,7 +944,7 @@ export function CreateBillPage() {
     (async () => {
       const [financeResult, stockResult, mobileResult] = await Promise.allSettled([
         api.listFinanceCompanies(),
-        api.listStock(),
+        api.listStock(undefined, undefined, "ALL"),
         api.listMobileCatalog(),
       ]);
       if (!active) return;
@@ -928,6 +966,9 @@ export function CreateBillPage() {
   useEffect(() => {
     return () => {
       stockImeiLookupAbortRef.current?.abort();
+      for (const timer of Object.values(serialLookupTimerRef.current)) {
+        window.clearTimeout(timer);
+      }
     };
   }, []);
 
@@ -948,7 +989,7 @@ export function CreateBillPage() {
           .map((item) => item.stockItemId)
           .filter((id): id is string => Boolean(id));
         if (keepIds.length) {
-          const stockResult = await api.listStock(undefined, keepIds);
+          const stockResult = await api.listStock(undefined, keepIds, "ALL");
           if (active) setStockItems(stockResult.data);
         }
       } catch (err) {
@@ -1215,15 +1256,16 @@ export function CreateBillPage() {
   }
 
   function applyStockMobile(key: string, stock: StockItem) {
+    const accessory = isAccessoryStock(stock);
     updateItem(key, {
       catalogMode: "mobile",
       stockItemId: stock.id,
       mobileCatalogId: null,
       productName: stock.mobileName,
-      platform: stock.platform,
-      color: stock.color,
-      storage: stock.storage,
-      ram: stock.platform === "ANDROID" ? stock.ram : "",
+      platform: accessory ? "ACCESSORY" : stock.platform,
+      color: accessory ? "" : stock.color,
+      storage: accessory ? "" : stock.storage,
+      ram: !accessory && stock.platform === "ANDROID" ? stock.ram : "",
       condition: stock.condition || "NEW",
       imei1: stock.imei || "",
       serialNumber: stock.serialNumber || "",
@@ -1247,6 +1289,8 @@ export function CreateBillPage() {
       return next;
     });
 
+    if (withGst || cleaned.length < 8) return;
+
     stockImeiLookupAbortRef.current?.abort();
     const ac = new AbortController();
     stockImeiLookupAbortRef.current = ac;
@@ -1265,7 +1309,7 @@ export function CreateBillPage() {
       if (usedElsewhere) {
         setImeiFieldErrors((prev) => ({
           ...prev,
-          [itemKey]: "This mobile is already added on another line",
+          [itemKey]: "This unit is already added on another line",
         }));
         return;
       }
@@ -1277,6 +1321,12 @@ export function CreateBillPage() {
       );
       applyStockMobile(itemKey, stock);
       setImeiFieldErrors((prev) => {
+        if (!prev[itemKey]) return prev;
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
+      setSerialFieldErrors((prev) => {
         if (!prev[itemKey]) return prev;
         const next = { ...prev };
         delete next[itemKey];
@@ -1302,6 +1352,106 @@ export function CreateBillPage() {
         setStockImeiLookup(null);
       }
     }
+  }
+
+  async function lookupStockFromSerial(
+    itemKey: string,
+    serial: string,
+    options?: { fromScan?: boolean },
+  ) {
+    const cleaned = serial.replace(/\s+/g, "").trim();
+    updateItem(itemKey, { serialNumber: cleaned });
+    setSerialFieldErrors((prev) => {
+      if (!prev[itemKey]) return prev;
+      const next = { ...prev };
+      delete next[itemKey];
+      return next;
+    });
+
+    if (withGst || cleaned.length < 3) return;
+
+    const current = items.find((row) => row.key === itemKey);
+    if (
+      current?.stockItemId &&
+      current.serialNumber?.replace(/\s+/g, "").trim() === cleaned
+    ) {
+      return;
+    }
+
+    stockImeiLookupAbortRef.current?.abort();
+    const ac = new AbortController();
+    stockImeiLookupAbortRef.current = ac;
+    setStockImeiLookup({ itemKey, imei: cleaned });
+
+    try {
+      const { data: stock } = await api.findAvailableStockBySerial(
+        cleaned,
+        ac.signal,
+      );
+      if (ac.signal.aborted) return;
+
+      const usedElsewhere = items.some(
+        (row) => row.key !== itemKey && row.stockItemId === stock.id,
+      );
+      if (usedElsewhere) {
+        setSerialFieldErrors((prev) => ({
+          ...prev,
+          [itemKey]: "This unit is already added on another line",
+        }));
+        return;
+      }
+
+      setStockItems((prev) =>
+        prev.some((entry) => entry.id === stock.id)
+          ? prev
+          : [stock, ...prev],
+      );
+      applyStockMobile(itemKey, stock);
+      setSerialFieldErrors((prev) => {
+        if (!prev[itemKey]) return prev;
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
+      setImeiFieldErrors((prev) => {
+        if (!prev[itemKey]) return prev;
+        const next = { ...prev };
+        delete next[itemKey];
+        return next;
+      });
+    } catch (err) {
+      if (
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && err.name === "AbortError")
+      ) {
+        return;
+      }
+      if (!options?.fromScan && cleaned.length < 5) {
+        // Wait for a fuller serial before showing "not found" while typing.
+        return;
+      }
+      const message =
+        err instanceof ApiError && err.status === 404
+          ? "No stock found for this serial"
+          : err instanceof Error
+            ? err.message
+            : "No stock found for this serial";
+      setSerialFieldErrors((prev) => ({ ...prev, [itemKey]: message }));
+    } finally {
+      if (stockImeiLookupAbortRef.current === ac) {
+        stockImeiLookupAbortRef.current = null;
+        setStockImeiLookup(null);
+      }
+    }
+  }
+
+  function scheduleSerialLookup(itemKey: string, serial: string) {
+    window.clearTimeout(serialLookupTimerRef.current[itemKey]);
+    const cleaned = serial.replace(/\s+/g, "").trim();
+    if (cleaned.length < 3 || withGst) return;
+    serialLookupTimerRef.current[itemKey] = window.setTimeout(() => {
+      void lookupStockFromSerial(itemKey, cleaned);
+    }, 450);
   }
 
   function selectMobile(key: string, value: string) {
@@ -1575,14 +1725,10 @@ export function CreateBillPage() {
 
     const incompleteMobile = items.find((item) => {
       if (item.catalogMode !== "mobile") return false;
-      const detailsComplete =
-        Boolean(item.productName) &&
-        Boolean(item.platform) &&
-        Boolean(item.color) &&
-        Boolean(item.storage) &&
-        (item.platform !== "ANDROID" || Boolean(item.ram));
+      const detailsComplete = stockDetailsComplete(item);
 
       if (withGst) {
+        if (isAccessoryDraft(item)) return !detailsComplete;
         return !(item.mobileCatalogId || detailsComplete);
       }
 
@@ -1595,7 +1741,7 @@ export function CreateBillPage() {
       setError(
         withGst
           ? "Select a phone from the list or use Add new mobile. Accessories can use Other product."
-          : "Select a phone from stock (add units under Stock first). Accessories can use Other product.",
+          : "Select a phone or accessory from stock (add units under Stock first).",
       );
       return;
     }
@@ -1738,7 +1884,7 @@ export function CreateBillPage() {
 
   async function refreshStock(includeIds: string[] = []) {
     try {
-      const { data } = await api.listStock(undefined, includeIds);
+      const { data } = await api.listStock(undefined, includeIds, "ALL");
       setStockItems(data);
     } catch {
       // Keep existing stock if refresh fails
@@ -2317,7 +2463,7 @@ export function CreateBillPage() {
                   ) : (
                     <>
                       <div className="min-w-0 sm:col-span-2 lg:col-span-5">
-                        <label className="label required">Phone</label>
+                        <label className="label required">Product</label>
                         <div id={`phone-${item.key}`} className="min-w-0">
                         <FieldPicker
                           value={
@@ -2328,11 +2474,11 @@ export function CreateBillPage() {
                           onChange={(value) => selectMobile(item.key, value)}
                           placeholder={
                             stockItems.length
-                              ? "Select from stock"
-                              : "No stock yet — add phones under Stock"
+                              ? "Select phone or accessory"
+                              : "No stock yet — add under Stock"
                           }
                           searchable
-                          searchPlaceholder="Search stock phone / IMEI…"
+                          searchPlaceholder="Search phone, accessory, IMEI, serial…"
                           required
                           conditionFilters
                           options={stockOptionsForItem(item.key)}
@@ -2436,13 +2582,7 @@ export function CreateBillPage() {
                             });
                           }
                         }}
-                        placeholder={
-                          item.imei1?.trim()
-                            ? undefined
-                            : item.serialNumber?.trim()
-                              ? "Optional"
-                              : undefined
-                        }
+                        placeholder="Scan or type"
                         readOnly={
                           Boolean(item.stockItemId) &&
                           !withGst &&
@@ -2472,13 +2612,15 @@ export function CreateBillPage() {
                   <div>
                     <label className="label">Serial</label>
                     <ScanFieldShell
-                      className={
+                      className={clsx(
                         item.stockItemId &&
-                        !withGst &&
-                        item.serialNumber?.trim()
+                          !withGst &&
+                          item.serialNumber?.trim()
                           ? "cursor-default border-ink-200 bg-ink-100/80"
-                          : undefined
-                      }
+                          : null,
+                        serialFieldErrors[item.key] &&
+                          "border-red-400 focus-within:border-red-500 focus-within:ring-red-200",
+                      )}
                     >
                       <input
                         className={clsx(
@@ -2489,21 +2631,33 @@ export function CreateBillPage() {
                             "cursor-default text-ink-600",
                         )}
                         value={item.serialNumber || ""}
-                        onChange={(e) =>
-                          updateItem(item.key, { serialNumber: e.target.value })
-                        }
-                        placeholder={
-                          item.serialNumber?.trim()
-                            ? undefined
-                            : item.imei1?.trim()
-                              ? "Optional"
-                              : undefined
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateItem(item.key, { serialNumber: value });
+                          if (serialFieldErrors[item.key]) {
+                            setSerialFieldErrors((prev) => {
+                              const next = { ...prev };
+                              delete next[item.key];
+                              return next;
+                            });
+                          }
+                          if (
+                            !(
+                              item.stockItemId &&
+                              !withGst &&
+                              item.serialNumber?.trim()
+                            )
+                          ) {
+                            scheduleSerialLookup(item.key, value);
+                          }
+                        }}
+                        placeholder="Scan or type"
                         readOnly={
                           Boolean(item.stockItemId) &&
                           !withGst &&
                           Boolean(item.serialNumber?.trim())
                         }
+                        aria-invalid={Boolean(serialFieldErrors[item.key])}
                       />
                       {!(
                         item.stockItemId &&
@@ -2513,11 +2667,18 @@ export function CreateBillPage() {
                         <SerialScanFieldButton
                           disabled={Boolean(stockImeiLookup)}
                           onScan={(serial) =>
-                            updateItem(item.key, { serialNumber: serial })
+                            void lookupStockFromSerial(item.key, serial, {
+                              fromScan: true,
+                            })
                           }
                         />
                       ) : null}
                     </ScanFieldShell>
+                    {serialFieldErrors[item.key] ? (
+                      <p className="mt-1.5 text-xs font-medium text-red-600">
+                        {serialFieldErrors[item.key]}
+                      </p>
+                    ) : null}
                   </div>
                   <div>
                     <label className="label">Warranty</label>

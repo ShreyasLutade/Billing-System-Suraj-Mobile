@@ -267,17 +267,44 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  listStock: (condition?: "NEW" | "USED", includeIds?: string[]) => {
+  listStock: (
+    condition?: "NEW" | "USED",
+    includeIds?: string[],
+    kind?: "MOBILE" | "ACCESSORY" | "ALL",
+  ) => {
     const params = new URLSearchParams();
     if (condition) params.set("condition", condition);
+    if (kind) params.set("kind", kind);
     if (includeIds?.length) params.set("includeIds", includeIds.join(","));
     const query = params.toString();
     return request<{ data: StockItem[] }>(
       `/stock${query ? `?${query}` : ""}`,
     );
   },
+  listAccessoryNames: () =>
+    request<{ data: string[] }>("/stock/accessory-names"),
+  createAccessories: (payload: {
+    name: string;
+    purchasePrice: number;
+    serials: string[];
+    supplierId?: string | null;
+    supplierName?: string | null;
+    supplierPhone?: string | null;
+  }) =>
+    request<{ data: StockItem[] }>("/stock/accessories", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   findAvailableStockByImei: (imei: string, signal?: AbortSignal) => {
     const params = new URLSearchParams({ imei: imei.replace(/\D/g, "") });
+    return request<{ data: StockItem }>(`/stock/lookup?${params}`, {
+      signal,
+    });
+  },
+  findAvailableStockBySerial: (serial: string, signal?: AbortSignal) => {
+    const params = new URLSearchParams({
+      serial: serial.replace(/\s+/g, "").trim(),
+    });
     return request<{ data: StockItem }>(`/stock/lookup?${params}`, {
       signal,
     });

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import clsx from "clsx";
 import {
   compactSearchText,
@@ -17,6 +17,7 @@ import {
 } from "../lib/elasticSearch";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
 import { useTheme } from "../theme/ThemeContext";
+import { SearchClearButton } from "./ui";
 
 export type FieldPickerAvatar = {
   letter: string;
@@ -374,22 +375,16 @@ export function FieldPicker({
             enterKeyHint="search"
             autoFocus={autoFocus}
           />
-          {showClear ? (
-            <button
-              type="button"
-              className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[7px] bg-[#EEF1F5] text-ink-500"
-              aria-label="Clear"
-              disabled={disabled}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
+          {showClear && !disabled ? (
+            <SearchClearButton
+              visible
+              label="Clear"
+              onClear={() => {
                 setQuery("");
                 if (value) onChange("");
                 close();
               }}
-            >
-              <X className="h-3 w-3" strokeWidth={2.5} />
-            </button>
+            />
           ) : null}
           <ChevronDown
             className={clsx(

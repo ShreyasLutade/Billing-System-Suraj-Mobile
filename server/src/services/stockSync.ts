@@ -364,6 +364,7 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
 
     const stock = await tx.stockItem.create({
       data: {
+        kind: "MOBILE",
         condition: "USED",
         platform,
         mobileName,

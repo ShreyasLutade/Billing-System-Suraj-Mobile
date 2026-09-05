@@ -219,21 +219,23 @@ model ReportSendLog {
   @@index([dateKey])
 }
 
-/// Shop inventory unit (one phone = one IMEI and/or serial).
+/// Shop inventory unit (one phone = one IMEI and/or serial; accessories use serial).
 model StockItem {
   id            String   @id @default(cuid())
-  /// NEW | USED
+  /// MOBILE | ACCESSORY
+  kind          String   @default("MOBILE")
+  /// NEW | USED (ACCESSORY uses NEW)
   condition     String
-  /// IOS | ANDROID
+  /// IOS | ANDROID | ACCESSORY
   platform      String
   mobileName    String
   storage       String
-  /// Required for ANDROID; empty for IOS
+  /// Required for ANDROID; empty for IOS / ACCESSORY
   ram           String   @default("")
   color         String
   /// Optional when serialNumber is set
   imei          String?  @unique
-  /// Optional when imei is set
+  /// Optional when imei is set; required for ACCESSORY
   serialNumber  String?  @unique
   purchasePrice Float
   /// Legacy JSON string array of supplier names (kept for old rows)
@@ -249,6 +251,7 @@ model StockItem {
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   purchaseItem  PurchaseItem?
 
+  @@index([kind])
   @@index([condition])
   @@index([status])
   @@index([mobileName])

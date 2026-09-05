@@ -294,6 +294,7 @@ purchasesRouter.post("/", async (req, res, next) => {
         const ids = units[i];
         const stock = await tx.stockItem.create({
           data: {
+            kind: "MOBILE",
             condition: data.condition,
             platform: item.platform,
             mobileName: item.mobileName.trim(),

@@ -6,6 +6,7 @@ import { ThemeProvider } from "./theme/ThemeContext";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
+import { AddAccessoriesPage } from "./pages/AddAccessoriesPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
@@ -39,6 +40,10 @@ export default function App() {
                 <Route path="dues" element={<DuesPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="stock/add" element={<AddStockPage />} />
+                <Route
+                  path="stock/accessories/add"
+                  element={<AddAccessoriesPage />}
+                />
                 <Route path="suppliers" element={<SuppliersPage />} />
                 <Route
                   path="suppliers/:id/purchases/:purchaseId"
