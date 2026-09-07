@@ -42,6 +42,22 @@ export type BillExchangeItem = {
   soldInvoiceNumber?: string | null;
 };
 
+export type BillPurchaseHistoryItem = {
+  billItemId: string;
+  productName: string;
+  platform?: string | null;
+  imei?: string | null;
+  serialNumber?: string | null;
+  supplier: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    isExchange?: boolean;
+  } | null;
+  purchaseDate: string;
+  costPrice: number;
+};
+
 export type Bill = {
   id: string;
   invoiceNumber: string;
@@ -83,6 +99,8 @@ export type Bill = {
   exchangeNotes?: string | null;
   exchangeMobileCatalogId?: string | null;
   exchangeItems?: BillExchangeItem[];
+  /** Purchase provenance for stock-linked line items (bill detail only). */
+  purchaseHistory?: BillPurchaseHistoryItem[];
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;

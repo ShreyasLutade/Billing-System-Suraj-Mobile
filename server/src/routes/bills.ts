@@ -333,6 +333,169 @@ function cleanImei(value: string | null | undefined) {
   return (value || "").replace(/\s+/g, "").trim();
 }
 
+async function enrichBillPurchaseHistory(
+  items: Array<{
+    id: string;
+    productName: string;
+    stockItemId: string | null;
+    imei1: string | null;
+    serialNumber: string | null;
+    platform: string | null;
+  }>,
+) {
+  if (!items.length) return [];
+
+  const stockSelect = {
+    id: true,
+    purchasePrice: true,
+    createdAt: true,
+    imei: true,
+    serialNumber: true,
+    supplier: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        isExchange: true,
+      },
+    },
+    purchaseItem: {
+      select: {
+        purchase: {
+          select: {
+            purchaseDate: true,
+            supplier: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                isExchange: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  } as const;
+
+  type StockRow = {
+    id: string;
+    purchasePrice: number;
+    createdAt: Date;
+    imei: string | null;
+    serialNumber: string | null;
+    supplier: {
+      id: string;
+      name: string;
+      phone: string | null;
+      isExchange: boolean;
+    } | null;
+    purchaseItem: {
+      purchase: {
+        purchaseDate: Date;
+        supplier: {
+          id: string;
+          name: string;
+          phone: string | null;
+          isExchange: boolean;
+        };
+      };
+    } | null;
+  };
+
+  const byId = new Map<string, StockRow>();
+  const byImei = new Map<string, StockRow>();
+  const bySerial = new Map<string, StockRow>();
+
+  function indexStock(row: StockRow) {
+    byId.set(row.id, row);
+    const imei = cleanImei(row.imei);
+    if (imei) byImei.set(imei, row);
+    const serial = (row.serialNumber || "").replace(/\s+/g, "").trim();
+    if (serial) bySerial.set(serial, row);
+  }
+
+  const stockIds = [
+    ...new Set(
+      items
+        .map((item) => item.stockItemId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  if (stockIds.length) {
+    const stockRows = await prisma.stockItem.findMany({
+      where: { id: { in: stockIds } },
+      select: stockSelect,
+    });
+    for (const row of stockRows) indexStock(row);
+  }
+
+  const missingImeis = [
+    ...new Set(
+      items
+        .filter((item) => !item.stockItemId || !byId.has(item.stockItemId))
+        .map((item) => cleanImei(item.imei1))
+        .filter(Boolean),
+    ),
+  ];
+  const missingSerials = [
+    ...new Set(
+      items
+        .filter((item) => !item.stockItemId || !byId.has(item.stockItemId))
+        .map((item) => (item.serialNumber || "").replace(/\s+/g, "").trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (missingImeis.length || missingSerials.length) {
+    const extras = await prisma.stockItem.findMany({
+      where: {
+        OR: [
+          ...(missingImeis.length ? [{ imei: { in: missingImeis } }] : []),
+          ...(missingSerials.length
+            ? [{ serialNumber: { in: missingSerials } }]
+            : []),
+        ],
+      },
+      select: stockSelect,
+    });
+    for (const row of extras) indexStock(row);
+  }
+
+  return items
+    .map((item) => {
+      const stock =
+        (item.stockItemId ? byId.get(item.stockItemId) : undefined) ||
+        byImei.get(cleanImei(item.imei1)) ||
+        bySerial.get((item.serialNumber || "").replace(/\s+/g, "").trim());
+      if (!stock) return null;
+
+      const purchase = stock.purchaseItem?.purchase || null;
+      const supplier = stock.supplier || purchase?.supplier || null;
+      return {
+        billItemId: item.id,
+        productName: item.productName,
+        platform: item.platform,
+        imei: item.imei1 || stock.imei,
+        serialNumber: item.serialNumber || stock.serialNumber,
+        supplier: supplier
+          ? {
+              id: supplier.id,
+              name: supplier.name,
+              phone: supplier.phone || null,
+              isExchange: Boolean(supplier.isExchange),
+            }
+          : null,
+        purchaseDate: purchase?.purchaseDate
+          ? purchase.purchaseDate.toISOString()
+          : stock.createdAt.toISOString(),
+        costPrice: stock.purchasePrice,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+}
+
 async function enrichExchangeItemsWithSaleStatus(
   invoiceNumber: string,
   items: ReturnType<typeof parseExchangeItemsJson>,
@@ -441,7 +604,11 @@ billsRouter.get("/:id", async (req, res, next) => {
         data.exchangeItems,
       );
     }
-    res.json({ data });
+    const purchaseHistory =
+      req.user?.role === "ADMIN"
+        ? await enrichBillPurchaseHistory(bill.items)
+        : [];
+    res.json({ data: { ...data, purchaseHistory } });
   } catch (error) {
     next(error);
   }

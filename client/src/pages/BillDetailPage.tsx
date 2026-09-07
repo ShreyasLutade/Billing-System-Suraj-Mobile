@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   Check,
   Download,
+  History,
   Pencil,
   Phone,
   RotateCcw,
@@ -15,6 +16,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import clsx from "clsx";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
@@ -28,11 +30,12 @@ import {
   type FinanceSlot,
 } from "../lib/financeSlots";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
-import type { Bill, DuePayment } from "../types";
+import type { Bill, BillPurchaseHistoryItem, DuePayment } from "../types";
 import { useAuth } from "../auth/AuthContext";
 import {
   backLabel,
   billsHomePath,
+  fromState,
   readFromState,
 } from "../lib/navMemory";
 
@@ -478,6 +481,12 @@ export function BillDetailPage() {
             </section>
           ) : null}
 
+          {isAdmin && (bill.purchaseHistory?.length || 0) > 0 ? (
+            <div className="hidden lg:block">
+              <PurchaseHistorySection rows={bill.purchaseHistory!} />
+            </div>
+          ) : null}
+
           {bill.notes ? (
             <section className="bd-card">
               <h2 className="mb-3 font-display text-base font-semibold text-[#0E1626]">
@@ -756,6 +765,12 @@ export function BillDetailPage() {
             </section>
           )}
 
+          {isAdmin && (bill.purchaseHistory?.length || 0) > 0 ? (
+            <div className="lg:hidden">
+              <PurchaseHistorySection rows={bill.purchaseHistory!} />
+            </div>
+          ) : null}
+
           {!bill.withGst && hasDue ? (
             <div className="relative overflow-hidden rounded-2xl border border-[#F5E0BC] bg-gradient-to-br from-[#FEF3E2] to-white p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#B76E00]">
@@ -959,6 +974,127 @@ export function BillDetailPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function PurchaseHistorySection({
+  rows,
+}: {
+  rows: BillPurchaseHistoryItem[];
+}) {
+  return (
+    <section className="bd-card">
+      <div className="mb-4 flex items-center gap-2.5">
+        <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#EEF2FF] text-[#4F46E5]">
+          <History className="h-[15px] w-[15px]" strokeWidth={2} />
+        </span>
+        <h2 className="font-display text-base font-semibold text-[#0E1626]">
+          Purchase history
+          {rows.length > 1 ? ` (${rows.length})` : ""}
+        </h2>
+      </div>
+      <div className="space-y-4">
+        {rows.map((row, index) => (
+          <PurchaseHistoryCard
+            key={row.billItemId}
+            row={row}
+            index={index}
+            multi={rows.length > 1}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PurchaseHistoryCard({
+  row,
+  index,
+  multi,
+}: {
+  row: BillPurchaseHistoryItem;
+  index: number;
+  multi: boolean;
+}) {
+  const location = useLocation();
+  const phoneDigits = (row.supplier?.phone || "").replace(/\D/g, "");
+  const unitId = row.imei
+    ? row.imei
+    : row.serialNumber
+      ? `SN ${row.serialNumber}`
+      : null;
+
+  return (
+    <div className="rounded-xl border border-ink-100 bg-ink-50/40 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+          {multi ? `Purchase ${index + 1}` : "Stock purchase"}
+        </p>
+        {unitId ? (
+          <p className="font-mono text-[11px] tabular-nums text-[#7A8699]">
+            {unitId}
+          </p>
+        ) : null}
+      </div>
+
+      <p className="mb-4 font-display text-[15px] font-semibold leading-snug text-[#0E1626]">
+        {row.productName}
+      </p>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7A8699]">
+            Supplier
+          </p>
+          {row.supplier ? (
+            <Link
+              to={`/suppliers/${row.supplier.id}`}
+              state={fromState(location)}
+              className="text-sm font-semibold text-[#2563EB] underline-offset-2 hover:underline"
+            >
+              {row.supplier.name}
+            </Link>
+          ) : (
+            <p className="text-sm text-[#7A8699]">Unknown</p>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7A8699]">
+            Phone
+          </p>
+          <div className="flex items-center gap-2">
+            <p
+              className={clsx(
+                "text-sm tabular-nums",
+                phoneDigits ? "text-[#0E1626]" : "text-[#7A8699]",
+              )}
+            >
+              {phoneDigits
+                ? formatPhoneDisplay(phoneDigits)
+                : row.supplier
+                  ? "No phone"
+                  : "—"}
+            </p>
+            {phoneDigits ? (
+              <a
+                href={`tel:${phoneDigits}`}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#E8F8EF] text-[#15803D] transition hover:bg-[#DCF5E7]"
+                aria-label={`Call ${row.supplier?.name || "supplier"}`}
+              >
+                <Phone className="h-3.5 w-3.5" strokeWidth={2.25} />
+              </a>
+            ) : null}
+          </div>
+        </div>
+
+        <Kv
+          label="Purchase date"
+          value={format(new Date(row.purchaseDate), "dd MMM yyyy")}
+        />
+        <Kv label="Cost price" value={formatINR(row.costPrice)} highlight />
+      </div>
     </div>
   );
 }

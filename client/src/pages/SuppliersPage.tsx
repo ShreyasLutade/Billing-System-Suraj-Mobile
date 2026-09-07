@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowDownUp, ChevronDown, Search } from "lucide-react";
+import { ArrowDownUp, ChevronDown, Phone, Search, Smartphone } from "lucide-react";
 import clsx from "clsx";
 import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
 import {
@@ -255,14 +255,16 @@ export function SuppliersPage() {
       ) : null}
 
       {imeiMode ? (
-        <div className="mb-4">
-          {imeiLoading ? (
-            <LoadingBlock label="Looking up IMEI…" />
-          ) : imeiError ? (
-            <EmptyState title={imeiError} description="Try another IMEI." />
-          ) : imeiTrace ? (
-            <ImeiTraceCard trace={imeiTrace} />
-          ) : null}
+        <div className="mb-4 flex justify-center md:justify-start">
+          <div className="w-full max-w-[420px] md:max-w-xl lg:max-w-2xl">
+            {imeiLoading ? (
+              <LoadingBlock label="Looking up IMEI…" />
+            ) : imeiError ? (
+              <EmptyState title={imeiError} description="Try another IMEI." />
+            ) : imeiTrace ? (
+              <ImeiTraceCard trace={imeiTrace} />
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -492,131 +494,171 @@ export function SuppliersPage() {
   );
 }
 
+function formatImeiGroups(imei: string) {
+  const digits = digitsOnly(imei);
+  if (!digits) return "—";
+  return digits.replace(/(\d{6})(?=\d)/g, "$1 ").trim();
+}
+
+function formatPhoneGroups(phone: string) {
+  const digits = digitsOnly(phone);
+  if (!digits) return "No phone";
+  if (digits.length === 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+  return phone;
+}
+
 function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
   const location = useLocation();
   const { stock, supplier, purchaseDate, costPrice, sale } = trace;
   const sold = stock.status === "SOLD" || Boolean(sale);
+  const isUsed = stock.condition === "USED";
+  const supplierInitial = (supplier?.name?.trim()?.[0] || "?").toUpperCase();
+  const supplierPhoneDigits = supplier?.phone ? digitsOnly(supplier.phone) : "";
+  const hasSalePrice = Boolean(sale && sale.sellingPrice > 0);
 
   return (
-    <div className="overflow-hidden rounded-[16px] border border-ink-100/80 bg-white shadow-soft dark:border-ink-100 dark:bg-surface-elevated">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 px-4 py-3.5 sm:px-5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-            IMEI trace
-          </p>
-          <p className="mt-1 font-display text-lg font-semibold leading-snug text-ink-900">
-            {stockSpecLabel(stock)}
-          </p>
-          <p className="mt-1 font-mono text-xs tabular-nums text-ink-500">
-            {stock.imei || "—"}
-            {stock.condition === "USED" ? (
-              <span className="ml-2 rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
-                Old
+    <article className="relative overflow-hidden rounded-[22px] border border-[#E8ECF2] bg-white shadow-[0_10px_28px_rgba(16,25,40,0.08)] dark:border-ink-100 dark:bg-surface-elevated dark:shadow-soft">
+      <div
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[5px] bg-[#22C55E]"
+      />
+
+      <div className="pl-[5px]">
+        <div className="flex gap-3.5 px-4 pb-4 pt-4 sm:gap-4 sm:px-5 sm:pt-5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#EEF1F6] text-ink-500 dark:bg-surface-muted sm:h-14 sm:w-14 sm:rounded-2xl">
+            <Smartphone className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+              Imei trace
+            </p>
+            <h2 className="mt-1 font-display text-[1.15rem] font-semibold leading-snug text-ink-900 sm:text-xl">
+              {stockSpecLabel(stock)}
+            </h2>
+            <p className="mt-1.5 font-mono text-[13px] tabular-nums tracking-wide text-ink-400 sm:text-sm">
+              {formatImeiGroups(stock.imei || "")}
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <span
+                className={clsx(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                  isUsed
+                    ? "bg-orange-50 text-ember-500"
+                    : "bg-[#E8F8EF] text-[#15803D]",
+                )}
+              >
+                <span
+                  className={clsx(
+                    "h-1.5 w-1.5 rounded-full",
+                    isUsed ? "bg-ember-500" : "bg-[#22C55E]",
+                  )}
+                />
+                {isUsed ? "Old" : "New"}
               </span>
-            ) : (
-              <span className="ml-2 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                New
+              <span
+                className={clsx(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                  sold
+                    ? "bg-rose-50 text-rose-600"
+                    : "bg-[#E8F1FE] text-[#2563EB]",
+                )}
+              >
+                <span
+                  className={clsx(
+                    "h-1.5 w-1.5 rounded-full",
+                    sold ? "bg-rose-500" : "bg-[#3B82F6]",
+                  )}
+                />
+                {sold ? "Sold" : "In stock"}
               </span>
-            )}
-            <span
-              className={
-                sold
-                  ? "ml-2 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600"
-                  : "ml-2 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
-              }
-            >
-              {sold ? "Sold" : "In stock"}
-            </span>
-          </p>
+            </div>
+          </div>
         </div>
+
         {supplier ? (
-          <Link
-            to={`/suppliers/${supplier.id}`}
-            state={fromState(location)}
-            className="shrink-0 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2 text-right transition hover:border-ink-300 hover:bg-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-              Supplier
-            </p>
-            <p className="mt-0.5 text-sm font-semibold text-ink-900">
-              {supplier.name}
-            </p>
-            <p className="mt-0.5 text-xs tabular-nums text-ink-500">
-              {supplier.phone || "No phone"}
-            </p>
-          </Link>
-        ) : null}
-      </div>
-
-      <div className="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-4">
-        <TraceStat
-          label="Purchase date"
-          value={format(new Date(purchaseDate), "dd MMM yyyy")}
-        />
-        <TraceStat label="Cost price" value={formatINR(costPrice)} />
-        <TraceStat
-          label="Selling price"
-          value={
-            sale && sale.sellingPrice > 0
-              ? formatINR(sale.sellingPrice)
-              : sold
-                ? "—"
-                : "Not sold"
-          }
-          accent={Boolean(sale && sale.sellingPrice > 0)}
-        />
-        <div className="rounded-xl border border-ink-100 bg-[#F7F8FA] px-3.5 py-3 dark:bg-surface-muted">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-            Bill
-          </p>
-          {sale ? (
+          <div className="mx-4 flex items-center gap-3 border-t border-[#EEF1F5] py-3.5 sm:mx-5">
             <Link
-              to={`/bills/${sale.billId}`}
+              to={`/suppliers/${supplier.id}`}
               state={fromState(location)}
-              className="mt-1 inline-flex flex-col"
-              onClick={(e) => e.stopPropagation()}
+              className="flex min-w-0 flex-1 items-center gap-3"
             >
-              <span className="text-sm font-semibold text-[#2563EB] underline-offset-2 hover:underline">
-                {sale.invoiceNumber}
-              </span>
-              <span className="mt-0.5 text-xs text-ink-500">
-                {sale.customerName} ·{" "}
-                {format(new Date(sale.billDate), "dd MMM yyyy")}
-              </span>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#EEF1F6] font-display text-base font-semibold text-ink-900 dark:bg-surface-muted">
+                {supplierInitial}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+                  Supplier
+                </p>
+                <p className="truncate text-[15px] font-semibold text-ink-900">
+                  {supplier.name}
+                </p>
+                <p className="text-[13px] tabular-nums text-ink-400">
+                  {formatPhoneGroups(supplier.phone || "")}
+                </p>
+              </div>
             </Link>
-          ) : (
-            <p className="mt-1 text-sm font-medium text-ink-500">—</p>
-          )}
+            {supplierPhoneDigits ? (
+              <a
+                href={`tel:${supplierPhoneDigits}`}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-[#E8F8EF] text-[#15803D] transition hover:bg-[#DCF5E7]"
+                aria-label={`Call ${supplier.name}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Phone className="h-[18px] w-[18px]" strokeWidth={2.25} />
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
+          <div className="flex items-center justify-between gap-3 rounded-[16px] bg-[#F3F5F8] px-4 py-3.5 dark:bg-surface-muted">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+              Cost price
+            </p>
+            <p className="font-display text-xl font-semibold tabular-nums tracking-tight text-ink-900 sm:text-2xl">
+              {formatINR(costPrice)}
+            </p>
+          </div>
+
+          <div className="rounded-[16px] border border-[#EEF1F5] px-4 dark:border-ink-100">
+            <div className="flex items-center justify-between gap-3 border-b border-[#EEF1F5] py-3.5 dark:border-ink-100">
+              <span className="text-[13px] text-ink-400">Purchase date</span>
+              <span className="text-[13px] font-semibold tabular-nums text-ink-900 sm:text-sm">
+                {format(new Date(purchaseDate), "dd MMM yyyy")}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-[#EEF1F5] py-3.5 dark:border-ink-100">
+              <span className="text-[13px] text-ink-400">Selling price</span>
+              {hasSalePrice ? (
+                <span className="text-[13px] font-semibold tabular-nums text-ink-900 sm:text-sm">
+                  {formatINR(sale!.sellingPrice)}
+                </span>
+              ) : sold ? (
+                <span className="text-[13px] text-ink-400">—</span>
+              ) : (
+                <span className="rounded-full bg-[#FFF1E8] px-2.5 py-1 text-[12px] font-semibold text-[#C2410C]">
+                  Not sold yet
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 py-3.5">
+              <span className="text-[13px] text-ink-400">Linked bill</span>
+              {sale ? (
+                <Link
+                  to={`/bills/${sale.billId}`}
+                  state={fromState(location)}
+                  className="max-w-[60%] truncate text-right text-[13px] font-semibold text-[#2563EB] underline-offset-2 hover:underline sm:text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {sale.invoiceNumber}
+                </Link>
+              ) : (
+                <span className="text-[13px] text-ink-400">—</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function TraceStat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-ink-100 bg-[#F7F8FA] px-3.5 py-3 dark:bg-surface-muted">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-        {label}
-      </p>
-      <p
-        className={
-          accent
-            ? "mt-1 font-display text-base font-semibold tabular-nums text-[#0E9E76]"
-            : "mt-1 font-display text-base font-semibold tabular-nums text-ink-900"
-        }
-      >
-        {value}
-      </p>
-    </div>
+    </article>
   );
 }
