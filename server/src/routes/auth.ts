@@ -64,6 +64,10 @@ authRouter.post("/login", async (req, res, next) => {
     }
 
     if (!matched) {
+      if (phone === "7038006342" && candidates.length > 0) {
+        res.status(401).json({ error: "This user is not active" });
+        return;
+      }
       res.status(401).json({ error: "Invalid phone number or password" });
       return;
     }
@@ -267,7 +271,7 @@ const SEED_USERS: Array<{
   },
   {
     phone: "7038006342",
-    password: "Shreyas@123",
+    password: "Shreyas@026",
     name: "Shreyas Admin",
     role: "ADMIN",
   },
@@ -287,6 +291,12 @@ const SEED_USERS: Array<{
     phone: "8962948807",
     password: "Shop@123",
     name: "Mayank",
+    role: "STAFF",
+  },
+  {
+    phone: "9893179033",
+    password: "Shop@123",
+    name: "Anish",
     role: "STAFF",
   },
 ];

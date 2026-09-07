@@ -11,6 +11,7 @@ import type {
   PhoneModel,
   Purchase,
   StockHistory,
+  StockImeiTrace,
   StockItem,
   Supplier,
   SupplierDetail,
@@ -306,6 +307,12 @@ export const api = {
       serial: serial.replace(/\s+/g, "").trim(),
     });
     return request<{ data: StockItem }>(`/stock/lookup?${params}`, {
+      signal,
+    });
+  },
+  traceStockByImei: (imei: string, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ imei: imei.replace(/\D/g, "") });
+    return request<{ data: StockImeiTrace }>(`/stock/trace?${params}`, {
       signal,
     });
   },

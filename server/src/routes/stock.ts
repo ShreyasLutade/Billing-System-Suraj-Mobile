@@ -411,6 +411,110 @@ stockRouter.get("/lookup", async (req, res, next) => {
   }
 });
 
+/**
+ * Trace any stock unit by IMEI (available or sold) — specs, supplier,
+ * purchase date/cost, and sale price + bill link when sold.
+ */
+stockRouter.get("/trace", async (req, res, next) => {
+  try {
+    const raw =
+      typeof req.query.imei === "string" ? req.query.imei.trim() : "";
+    const imei = raw.replace(/\D/g, "");
+    if (imei.length < 8) {
+      res.status(400).json({ error: "IMEI is required" });
+      return;
+    }
+
+    const item = await prisma.stockItem.findFirst({
+      where: { imei },
+      include: {
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            isExchange: true,
+          },
+        },
+        purchaseItem: {
+          include: {
+            purchase: {
+              include: {
+                supplier: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    isExchange: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        billItems: {
+          include: {
+            bill: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+                billDate: true,
+                customerName: true,
+                customerPhone: true,
+              },
+            },
+          },
+          orderBy: { bill: { billDate: "desc" } },
+          take: 1,
+        },
+      },
+    });
+
+    if (!item) {
+      res.status(404).json({ error: "No mobile found for this IMEI" });
+      return;
+    }
+
+    const purchase = item.purchaseItem?.purchase || null;
+    const supplier =
+      item.supplier ||
+      purchase?.supplier ||
+      null;
+    const billItem = item.billItems[0] || null;
+    const sale = billItem?.bill || null;
+
+    res.json({
+      data: {
+        stock: mapStockItem(item),
+        supplier: supplier
+          ? {
+              id: supplier.id,
+              name: supplier.name,
+              phone: supplier.phone || null,
+              isExchange: Boolean(supplier.isExchange),
+            }
+          : null,
+        purchaseDate: purchase?.purchaseDate
+          ? purchase.purchaseDate.toISOString()
+          : item.createdAt.toISOString(),
+        costPrice: item.purchasePrice,
+        sale: sale
+          ? {
+              billId: sale.id,
+              invoiceNumber: sale.invoiceNumber,
+              billDate: sale.billDate.toISOString(),
+              customerName: sale.customerName,
+              customerPhone: sale.customerPhone,
+              sellingPrice: Number(billItem?.rate ?? billItem?.amount ?? 0),
+            }
+          : null,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 stockRouter.get("/:id/history", async (req, res, next) => {
   try {
     const item = await prisma.stockItem.findUnique({

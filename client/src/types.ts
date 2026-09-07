@@ -358,6 +358,27 @@ export type StockHistory = {
   } | null;
 };
 
+/** IMEI trace for supplier search — any stock status. */
+export type StockImeiTrace = {
+  stock: StockItem;
+  supplier: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    isExchange?: boolean;
+  } | null;
+  purchaseDate: string;
+  costPrice: number;
+  sale: {
+    billId: string;
+    invoiceNumber: string;
+    billDate: string;
+    customerName: string;
+    customerPhone: string;
+    sellingPrice: number;
+  } | null;
+};
+
 export type DueItem = {
   id: string;
   invoiceNumber: string;

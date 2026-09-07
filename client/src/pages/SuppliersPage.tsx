@@ -1,15 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import { ArrowDownUp, ChevronDown, Search } from "lucide-react";
 import clsx from "clsx";
-import { EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
+import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
+import {
+  EmptyState,
+  LoadingBlock,
+  PageHeader,
+  SearchClearButton,
+} from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
-import { fromState } from "../lib/navMemory";
-import { api, formatINR } from "../lib/api";
+import { ApiError, api, formatINR } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
-import type { Supplier } from "../types";
+import { fromState } from "../lib/navMemory";
+import { formatCapacityLabel } from "../lib/phoneModelSearch";
+import type { StockImeiTrace, Supplier } from "../types";
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function looksLikeImei(value: string) {
+  return digitsOnly(value).length >= 8;
+}
+
+function stockSpecLabel(stock: StockImeiTrace["stock"]) {
+  const parts = [
+    stock.mobileName,
+    stock.color,
+    stock.storage ? formatCapacityLabel(stock.storage) : "",
+    stock.platform === "ANDROID" && stock.ram
+      ? formatCapacityLabel(stock.ram)
+      : "",
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
 
 type SortKey = "latest" | "name" | "outstanding" | "purchased" | "stock";
 type SortDir = 1 | -1;
@@ -64,6 +92,10 @@ export function SuppliersPage() {
   const [sortDir, setSortDir] = useSessionState<SortDir>("suppliers.sortDir", -1);
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
+  const [imeiTrace, setImeiTrace] = useState<StockImeiTrace | null>(null);
+  const [imeiLoading, setImeiLoading] = useState(false);
+  const [imeiError, setImeiError] = useState<string | null>(null);
+  const imeiAbortRef = useRef<AbortController | null>(null);
 
   async function load() {
     setLoading(true);
@@ -103,7 +135,56 @@ export function SuppliersPage() {
     };
   }, [sortOpen]);
 
+  useEffect(() => {
+    imeiAbortRef.current?.abort();
+    imeiAbortRef.current = null;
+
+    if (!looksLikeImei(query)) {
+      setImeiTrace(null);
+      setImeiError(null);
+      setImeiLoading(false);
+      return;
+    }
+
+    const imei = digitsOnly(query);
+    const controller = new AbortController();
+    imeiAbortRef.current = controller;
+    setImeiLoading(true);
+    setImeiError(null);
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const { data } = await api.traceStockByImei(imei, controller.signal);
+          if (controller.signal.aborted) return;
+          setImeiTrace(data);
+          setImeiError(null);
+        } catch (err) {
+          if (controller.signal.aborted) return;
+          setImeiTrace(null);
+          if (err instanceof ApiError && err.status === 404) {
+            setImeiError("No mobile found for this IMEI");
+          } else {
+            setImeiError(
+              err instanceof Error ? err.message : "Could not look up IMEI",
+            );
+          }
+        } finally {
+          if (!controller.signal.aborted) setImeiLoading(false);
+        }
+      })();
+    }, 280);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  const imeiMode = looksLikeImei(query);
+
   const filtered = useMemo(() => {
+    if (imeiMode) return [];
     const matched = !query.trim()
       ? suppliers
       : suppliers.filter((s) =>
@@ -112,7 +193,7 @@ export function SuppliersPage() {
     return [...matched].sort((a, b) =>
       compareSuppliers(a, b, sortKey, sortDir),
     );
-  }, [suppliers, query, sortKey, sortDir]);
+  }, [suppliers, query, sortKey, sortDir, imeiMode]);
 
   const suppliersReveal = useInfiniteReveal(
     filtered,
@@ -132,6 +213,12 @@ export function SuppliersPage() {
     );
   }, [filtered]);
 
+  function applyImei(imei: string) {
+    const cleaned = digitsOnly(imei);
+    if (!cleaned) return;
+    setQuery(cleaned);
+  }
+
   return (
     <div>
       <PageHeader
@@ -141,18 +228,22 @@ export function SuppliersPage() {
 
       <div className="tb-toolbar">
         <div className="tb-searchrow">
-          <div className="tb-search">
+          <div className="tb-search !pr-1.5">
             <Search className="h-[17px] w-[17px] shrink-0 text-[#7A8699]" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search supplier…"
-              aria-label="Search supplier"
+              placeholder="Search supplier or scan / type IMEI…"
+              aria-label="Search supplier or IMEI"
+              className="font-mono tracking-wide"
+              inputMode="search"
+              autoComplete="off"
             />
             <SearchClearButton
               visible={Boolean(query)}
               onClear={() => setQuery("")}
             />
+            <ImeiScanFieldButton onScan={applyImei} />
           </div>
         </div>
       </div>
@@ -163,12 +254,24 @@ export function SuppliersPage() {
         </div>
       ) : null}
 
+      {imeiMode ? (
+        <div className="mb-4">
+          {imeiLoading ? (
+            <LoadingBlock label="Looking up IMEI…" />
+          ) : imeiError ? (
+            <EmptyState title={imeiError} description="Try another IMEI." />
+          ) : imeiTrace ? (
+            <ImeiTraceCard trace={imeiTrace} />
+          ) : null}
+        </div>
+      ) : null}
+
       {loading ? (
         <LoadingBlock label="Loading suppliers…" />
-      ) : filtered.length === 0 ? (
+      ) : imeiMode ? null : filtered.length === 0 ? (
         <EmptyState
           title={query.trim() ? "No matching suppliers" : "No suppliers yet"}
-          description="Suppliers appear here after you add stock from the Stock page."
+          description="Suppliers appear here after you add stock from the Stock page. You can also scan an IMEI to trace a unit."
         />
       ) : (
         <>
@@ -385,6 +488,135 @@ export function SuppliersPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
+  const location = useLocation();
+  const { stock, supplier, purchaseDate, costPrice, sale } = trace;
+  const sold = stock.status === "SOLD" || Boolean(sale);
+
+  return (
+    <div className="overflow-hidden rounded-[16px] border border-ink-100/80 bg-white shadow-soft dark:border-ink-100 dark:bg-surface-elevated">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 px-4 py-3.5 sm:px-5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+            IMEI trace
+          </p>
+          <p className="mt-1 font-display text-lg font-semibold leading-snug text-ink-900">
+            {stockSpecLabel(stock)}
+          </p>
+          <p className="mt-1 font-mono text-xs tabular-nums text-ink-500">
+            {stock.imei || "—"}
+            {stock.condition === "USED" ? (
+              <span className="ml-2 rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                Old
+              </span>
+            ) : (
+              <span className="ml-2 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                New
+              </span>
+            )}
+            <span
+              className={
+                sold
+                  ? "ml-2 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600"
+                  : "ml-2 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+              }
+            >
+              {sold ? "Sold" : "In stock"}
+            </span>
+          </p>
+        </div>
+        {supplier ? (
+          <Link
+            to={`/suppliers/${supplier.id}`}
+            state={fromState(location)}
+            className="shrink-0 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2 text-right transition hover:border-ink-300 hover:bg-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+              Supplier
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-ink-900">
+              {supplier.name}
+            </p>
+            <p className="mt-0.5 text-xs tabular-nums text-ink-500">
+              {supplier.phone || "No phone"}
+            </p>
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-4">
+        <TraceStat
+          label="Purchase date"
+          value={format(new Date(purchaseDate), "dd MMM yyyy")}
+        />
+        <TraceStat label="Cost price" value={formatINR(costPrice)} />
+        <TraceStat
+          label="Selling price"
+          value={
+            sale && sale.sellingPrice > 0
+              ? formatINR(sale.sellingPrice)
+              : sold
+                ? "—"
+                : "Not sold"
+          }
+          accent={Boolean(sale && sale.sellingPrice > 0)}
+        />
+        <div className="rounded-xl border border-ink-100 bg-[#F7F8FA] px-3.5 py-3 dark:bg-surface-muted">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+            Bill
+          </p>
+          {sale ? (
+            <Link
+              to={`/bills/${sale.billId}`}
+              state={fromState(location)}
+              className="mt-1 inline-flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="text-sm font-semibold text-[#2563EB] underline-offset-2 hover:underline">
+                {sale.invoiceNumber}
+              </span>
+              <span className="mt-0.5 text-xs text-ink-500">
+                {sale.customerName} ·{" "}
+                {format(new Date(sale.billDate), "dd MMM yyyy")}
+              </span>
+            </Link>
+          ) : (
+            <p className="mt-1 text-sm font-medium text-ink-500">—</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TraceStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-ink-100 bg-[#F7F8FA] px-3.5 py-3 dark:bg-surface-muted">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+        {label}
+      </p>
+      <p
+        className={
+          accent
+            ? "mt-1 font-display text-base font-semibold tabular-nums text-[#0E9E76]"
+            : "mt-1 font-display text-base font-semibold tabular-nums text-ink-900"
+        }
+      >
+        {value}
+      </p>
     </div>
   );
 }
