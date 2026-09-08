@@ -221,6 +221,12 @@ export function AnalyticsPage() {
   const summary = data?.summary;
   const shares = summary?.shares;
   const change = formatChange(data?.vsPrevious.mixTotalChangePct ?? null);
+  const profitAmount = summary?.profit ?? 0;
+  const revenueAmount = summary?.sales ?? 0;
+  const profitMarginPct =
+    revenueAmount > 0
+      ? Math.round((profitAmount / revenueAmount) * 1000) / 10
+      : null;
   const showSoldDate = data != null && data.period !== "today";
   const billsRowGrid = showSoldDate
     ? "sm:grid-cols-[minmax(0,1.5fr)_1fr_0.9fr_0.9fr_0.9fr]"
@@ -328,19 +334,42 @@ export function AnalyticsPage() {
                 <p className="mt-2.5 font-display text-[clamp(2.125rem,6vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
                   {formatINR(summary.collected)}
                 </p>
-                <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
+                <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
                       Profit earned
                     </p>
-                    <p
-                      className={`mt-1 font-display text-xl font-bold leading-none tabular-nums sm:text-2xl ${
-                        (summary.profit ?? 0) >= 0
-                          ? "text-[#5CE0AE]"
-                          : "text-orange-300"
-                      }`}
-                    >
-                      {formatINR(summary.profit ?? 0)}
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                      <p
+                        className={`font-display text-xl font-bold leading-none tabular-nums sm:text-2xl ${
+                          profitAmount >= 0
+                            ? "text-[#5CE0AE]"
+                            : "text-orange-300"
+                        }`}
+                      >
+                        {formatINR(profitAmount)}
+                      </p>
+                      {profitMarginPct != null ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                            profitMarginPct >= 0
+                              ? "bg-[#5CE0AE]/15 text-[#5CE0AE]"
+                              : "bg-orange-300/15 text-orange-300"
+                          }`}
+                          title="Profit as a share of mobile revenue"
+                        >
+                          {profitMarginPct >= 0 ? "+" : ""}
+                          {profitMarginPct.toFixed(1)}% margin
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
+                      Revenue
+                    </p>
+                    <p className="mt-1 font-display text-xl font-bold leading-none tabular-nums text-white sm:text-2xl">
+                      {formatINR(revenueAmount)}
                     </p>
                   </div>
                 </div>

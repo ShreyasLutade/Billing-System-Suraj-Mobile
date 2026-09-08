@@ -26,6 +26,21 @@ function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+/** Period-over-period % change. Returns null when the baseline is too weak to compare. */
+function percentChange(current: number, previous: number): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  if (previous <= 0) return null;
+
+  const raw = ((current - previous) / previous) * 100;
+  if (!Number.isFinite(raw)) return null;
+
+  // Near-zero prior periods produce absurd values (e.g. 184832%).
+  // Hide those instead of claiming a meaningful trend.
+  if (Math.abs(raw) > 1000) return null;
+
+  return round2(raw);
+}
+
 function pct(part: number, total: number) {
   if (total <= 0) return 0;
   return round2((part / total) * 100);
@@ -408,12 +423,6 @@ function previousComparableRange(
   if (period === "month") {
     return getPeriodRange("month", subMonths(now, 1));
   }
-  if (period === "all") {
-    return {
-      from: startOfDay(subDays(now, 60)),
-      to: endOfDay(subDays(now, 31)),
-    };
-  }
   return null;
 }
 
@@ -444,46 +453,29 @@ analyticsRouter.get("/summary", async (req, res, next) => {
       label: string | null;
     } = { mixTotalChangePct: null, label: null };
 
-    if (period !== "custom") {
+    // "All time" totals are not period-matched. Comparing rolling 30-day windows
+    // next to all-time collected/profit produced misleading swings like 184832%.
+    if (period !== "custom" && period !== "all") {
       const prevRange = previousComparableRange(period);
       if (prevRange) {
-        const currentForTrend =
-          period === "all"
-            ? (
-                await analyzePeriod(
-                  toDateFilter({
-                    from: startOfDay(subDays(new Date(), 30)),
-                    to: endOfDay(new Date()),
-                  }),
-                )
-              ).summary
-            : summary;
         const previous = (
           await analyzePeriod(toDateFilter(prevRange))
         ).summary;
         const label =
-          period === "all"
-            ? "vs prior 30 days"
-            : period === "month"
-              ? "vs last month"
-              : period === "week"
-                ? "vs last week"
-                : "vs prior day";
+          period === "month"
+            ? "vs last month"
+            : period === "week"
+              ? "vs last week"
+              : "vs prior day";
 
-        if (previous.mixTotal > 0) {
-          vsPrevious = {
-            mixTotalChangePct: round2(
-              ((currentForTrend.mixTotal - previous.mixTotal) /
-                previous.mixTotal) *
-                100,
-            ),
-            label,
-          };
-        } else if (currentForTrend.mixTotal > 0) {
-          vsPrevious = { mixTotalChangePct: 100, label };
-        } else {
-          vsPrevious = { mixTotalChangePct: 0, label };
-        }
+        const mixTotalChangePct = percentChange(
+          summary.mixTotal,
+          previous.mixTotal,
+        );
+        vsPrevious = {
+          mixTotalChangePct,
+          label: mixTotalChangePct == null ? null : label,
+        };
       }
     }
 
