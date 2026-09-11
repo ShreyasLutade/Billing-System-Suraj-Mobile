@@ -154,25 +154,21 @@ export function SupplierDetailPage() {
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                className="btn-secondary min-w-0 flex-1 !px-2.5 !py-2.5 text-xs sm:!px-4 sm:text-sm"
+                className="btn-secondary flex-1 !gap-1.5 !px-2 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
                 disabled={exporting !== null}
                 onClick={() => void exportMobilesExcel("NEW")}
               >
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-                <span className="truncate">
-                  {exporting === "NEW" ? "Exporting…" : "Export new"}
-                </span>
+                {exporting === "NEW" ? "Exporting…" : "Export new"}
               </button>
               <button
                 type="button"
-                className="btn-secondary min-w-0 flex-1 !px-2.5 !py-2.5 text-xs sm:!px-4 sm:text-sm"
+                className="btn-secondary flex-1 !gap-1.5 !px-2 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
                 disabled={exporting !== null}
                 onClick={() => void exportMobilesExcel("USED")}
               >
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-                <span className="truncate">
-                  {exporting === "USED" ? "Exporting…" : "Export old"}
-                </span>
+                {exporting === "USED" ? "Exporting…" : "Export old"}
               </button>
             </div>
           ) : null}
