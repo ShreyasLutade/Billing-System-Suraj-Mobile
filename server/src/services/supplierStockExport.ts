@@ -206,8 +206,16 @@ export async function buildSupplierMobilesWorkbook(
   sheet.views = [{ state: "frozen", ySplit: 1 }];
 
   // Dropdown lookups on each data row (and spare empty rows for notes).
+  // ExcelJS exposes worksheet.dataValidations at runtime; typings only put it on Cell.
   const validationEnd = Math.max(lastDataRow, 500);
-  sheet.dataValidations.add(`D2:D${validationEnd}`, {
+  const dataValidations = (
+    sheet as ExcelJS.Worksheet & {
+      dataValidations: {
+        add: (range: string, validation: ExcelJS.DataValidation) => void;
+      };
+    }
+  ).dataValidations;
+  dataValidations.add(`D2:D${validationEnd}`, {
     type: "list",
     allowBlank: true,
     formulae: ['"IOS,ANDROID"'],
@@ -219,7 +227,7 @@ export async function buildSupplierMobilesWorkbook(
     prompt: "IOS or ANDROID",
     showInputMessage: true,
   });
-  sheet.dataValidations.add(`C2:C${validationEnd}`, {
+  dataValidations.add(`C2:C${validationEnd}`, {
     type: "list",
     allowBlank: true,
     formulae: ['"NEW,USED"'],
@@ -228,7 +236,7 @@ export async function buildSupplierMobilesWorkbook(
     errorTitle: "Condition",
     error: "Choose NEW or USED",
   });
-  sheet.dataValidations.add(`L2:L${validationEnd}`, {
+  dataValidations.add(`L2:L${validationEnd}`, {
     type: "list",
     allowBlank: true,
     formulae: ['"AVAILABLE,SOLD"'],
@@ -237,7 +245,7 @@ export async function buildSupplierMobilesWorkbook(
     errorTitle: "Status",
     error: "Choose AVAILABLE or SOLD",
   });
-  sheet.dataValidations.add(`U2:U${validationEnd}`, {
+  dataValidations.add(`U2:U${validationEnd}`, {
     type: "list",
     allowBlank: true,
     formulae: ['"Yes,No"'],
