@@ -35,7 +35,7 @@ export function SupplierDetailPage() {
   const [data, setData] = useState<SupplierDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"NEW" | "USED" | null>(null);
   const [tab, setTab] = usePersistedTab(
     "tab",
     "supplier.tab",
@@ -78,18 +78,18 @@ export function SupplierDetailPage() {
     }
   }
 
-  async function exportMobilesExcel() {
+  async function exportMobilesExcel(condition: "NEW" | "USED") {
     if (!id) return;
-    setExporting(true);
+    setExporting(condition);
     setError(null);
     try {
-      await api.downloadSupplierMobilesExport(id);
+      await api.downloadSupplierMobilesExport(id, condition);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to export mobiles Excel",
       );
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -151,15 +151,26 @@ export function SupplierDetailPage() {
             </span>
           </p>
           {isAdmin ? (
-            <button
-              type="button"
-              className="btn-secondary mt-3"
-              disabled={exporting}
-              onClick={() => void exportMobilesExcel()}
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? "Exporting…" : "Export mobiles Excel"}
-            </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={exporting !== null}
+                onClick={() => void exportMobilesExcel("NEW")}
+              >
+                <Download className="h-4 w-4" />
+                {exporting === "NEW" ? "Exporting…" : "Export new mobiles"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={exporting !== null}
+                onClick={() => void exportMobilesExcel("USED")}
+              >
+                <Download className="h-4 w-4" />
+                {exporting === "USED" ? "Exporting…" : "Export old mobiles"}
+              </button>
+            </div>
           ) : null}
         </div>
       </div>

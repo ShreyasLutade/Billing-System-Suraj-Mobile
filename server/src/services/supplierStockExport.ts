@@ -42,14 +42,18 @@ export type SupplierMobileExport = {
   unitCount: number;
   soldCount: number;
   supplierName: string;
+  condition: "NEW" | "USED";
 };
 
+export type SupplierMobileExportCondition = "NEW" | "USED";
+
 /**
- * Excel of all MOBILE stock units for a supplier, with cost + sale details.
+ * Excel of MOBILE stock units for a supplier (new or second-hand), with cost + sale details.
  */
 export async function buildSupplierMobilesWorkbook(
   prisma: PrismaClient,
   supplierId: string,
+  condition: SupplierMobileExportCondition,
 ): Promise<SupplierMobileExport> {
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
@@ -61,6 +65,7 @@ export async function buildSupplierMobilesWorkbook(
 
   const items = await prisma.stockItem.findMany({
     where: {
+      condition,
       NOT: { kind: "ACCESSORY" },
       OR: [
         { supplierId: supplier.id },
@@ -108,7 +113,8 @@ export async function buildSupplierMobilesWorkbook(
   wb.creator = "Suraj Mobile Billing";
   wb.created = new Date();
 
-  const sheet = wb.addWorksheet("Mobiles");
+  const sheetLabel = condition === "USED" ? "Old mobiles" : "New mobiles";
+  const sheet = wb.addWorksheet(sheetLabel);
   sheet.columns = [
     { header: "Purchase date", key: "purchaseDate", width: 14 },
     { header: "Supplier", key: "supplier", width: 16 },
@@ -196,6 +202,10 @@ export async function buildSupplierMobilesWorkbook(
   ];
   summary.getRow(1).font = { bold: true };
   summary.addRow({ metric: "Supplier", value: supplier.name });
+  summary.addRow({
+    metric: "Condition",
+    value: condition === "USED" ? "Second hand / Old" : "New",
+  });
   summary.addRow({ metric: "Total mobiles", value: items.length });
   summary.addRow({ metric: "Sold", value: soldCount });
   summary.addRow({ metric: "In stock", value: items.length - soldCount });
@@ -207,7 +217,8 @@ export async function buildSupplierMobilesWorkbook(
   summary.getColumn("value").numFmt = "#,##0.00";
 
   const stamp = new Date().toISOString().slice(0, 10);
-  const filename = `${safeFilePart(supplier.name)}-mobiles-${stamp}.xlsx`;
+  const conditionPart = condition === "USED" ? "old" : "new";
+  const filename = `${safeFilePart(supplier.name)}-${conditionPart}-mobiles-${stamp}.xlsx`;
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
 
   return {
@@ -216,5 +227,6 @@ export async function buildSupplierMobilesWorkbook(
     unitCount: items.length,
     soldCount,
     supplierName: supplier.name,
+    condition,
   };
 }

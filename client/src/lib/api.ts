@@ -361,10 +361,14 @@ export const api = {
   listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
   getSupplier: (id: string) =>
     request<{ data: SupplierDetail }>(`/suppliers/${id}`),
-  downloadSupplierMobilesExport: async (supplierId: string) => {
+  downloadSupplierMobilesExport: async (
+    supplierId: string,
+    condition: "NEW" | "USED",
+  ) => {
     const token = getAuthToken();
+    const params = new URLSearchParams({ condition });
     const response = await fetch(
-      `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/mobiles-export`,
+      `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/mobiles-export?${params}`,
       {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
@@ -397,9 +401,12 @@ export const api = {
       soldCount: Number(response.headers.get("X-Sold-Count") || 0),
     };
   },
-  downloadSupplierMobilesExportByName: async (name: string) => {
+  downloadSupplierMobilesExportByName: async (
+    name: string,
+    condition: "NEW" | "USED",
+  ) => {
     const token = getAuthToken();
-    const params = new URLSearchParams({ name });
+    const params = new URLSearchParams({ name, condition });
     const response = await fetch(
       `${API_BASE}/suppliers/export-mobiles?${params}`,
       {

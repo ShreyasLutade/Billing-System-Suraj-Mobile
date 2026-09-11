@@ -4,9 +4,17 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
+import type { SupplierMobileExportCondition } from "../services/supplierStockExport";
 import { intakeKindFromNote } from "../services/stockSync";
 
 export const suppliersRouter = Router();
+
+function parseExportCondition(raw: unknown): SupplierMobileExportCondition | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim().toUpperCase();
+  if (value === "NEW" || value === "USED") return value;
+  return null;
+}
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -97,7 +105,7 @@ suppliersRouter.get("/", async (_req, res, next) => {
 
 /**
  * Admin Excel export of mobiles for a supplier (by name contains).
- * Example: GET /api/suppliers/export-mobiles?name=Tally
+ * Example: GET /api/suppliers/export-mobiles?name=Tally&condition=NEW
  */
 suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
   try {
@@ -105,6 +113,11 @@ suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
       typeof req.query.name === "string" ? req.query.name.trim() : "";
     if (name.length < 1) {
       res.status(400).json({ error: "Pass ?name=SupplierName" });
+      return;
+    }
+    const condition = parseExportCondition(req.query.condition);
+    if (!condition) {
+      res.status(400).json({ error: "Pass ?condition=NEW or ?condition=USED" });
       return;
     }
 
@@ -129,7 +142,11 @@ suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
       (s) => s.name.trim().toLowerCase() === needle,
     );
     const target = exact || matched[0];
-    const exportFile = await buildSupplierMobilesWorkbook(prisma, target.id);
+    const exportFile = await buildSupplierMobilesWorkbook(
+      prisma,
+      target.id,
+      condition,
+    );
 
     res.setHeader(
       "Content-Type",
@@ -153,9 +170,17 @@ suppliersRouter.get(
   requireAdmin,
   async (req, res, next) => {
     try {
+      const condition = parseExportCondition(req.query.condition);
+      if (!condition) {
+        res
+          .status(400)
+          .json({ error: "Pass ?condition=NEW or ?condition=USED" });
+        return;
+      }
       const exportFile = await buildSupplierMobilesWorkbook(
         prisma,
         req.params.id,
+        condition,
       );
       res.setHeader(
         "Content-Type",
