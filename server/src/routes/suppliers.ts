@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
+import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
 import { intakeKindFromNote } from "../services/stockSync";
 
 export const suppliersRouter = Router();
@@ -92,6 +94,89 @@ suppliersRouter.get("/", async (_req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Admin Excel export of mobiles for a supplier (by name contains).
+ * Example: GET /api/suppliers/export-mobiles?name=Tally
+ */
+suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
+  try {
+    const name =
+      typeof req.query.name === "string" ? req.query.name.trim() : "";
+    if (name.length < 1) {
+      res.status(400).json({ error: "Pass ?name=SupplierName" });
+      return;
+    }
+
+    const suppliers = await prisma.supplier.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    const needle = name.toLowerCase();
+    const matched = suppliers.filter((s) =>
+      s.name.trim().toLowerCase().includes(needle),
+    );
+    if (!matched.length) {
+      res.status(404).json({
+        error: `No supplier matching '${name}'`,
+        suppliers: suppliers.map((s) => s.name),
+      });
+      return;
+    }
+
+    // Prefer exact match, otherwise first contains match.
+    const exact = matched.find(
+      (s) => s.name.trim().toLowerCase() === needle,
+    );
+    const target = exact || matched[0];
+    const exportFile = await buildSupplierMobilesWorkbook(prisma, target.id);
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${exportFile.filename}"`,
+    );
+    res.setHeader("X-Unit-Count", String(exportFile.unitCount));
+    res.setHeader("X-Sold-Count", String(exportFile.soldCount));
+    res.send(exportFile.buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin Excel export of mobiles for one supplier id. */
+suppliersRouter.get(
+  "/:id/mobiles-export",
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const exportFile = await buildSupplierMobilesWorkbook(
+        prisma,
+        req.params.id,
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${exportFile.filename}"`,
+      );
+      res.setHeader("X-Unit-Count", String(exportFile.unitCount));
+      res.setHeader("X-Sold-Count", String(exportFile.soldCount));
+      res.send(exportFile.buffer);
+    } catch (error) {
+      if (error instanceof Error && error.message === "SUPPLIER_NOT_FOUND") {
+        res.status(404).json({ error: "Supplier not found" });
+        return;
+      }
+      next(error);
+    }
+  },
+);
 
 suppliersRouter.post("/", async (req, res, next) => {
   try {

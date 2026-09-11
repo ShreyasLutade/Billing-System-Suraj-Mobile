@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, X } from "lucide-react";
+import { Check, Download, X } from "lucide-react";
 import clsx from "clsx";
+import { useAuth } from "../auth/AuthContext";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, formatStockUnitId } from "../lib/api";
 import type { Purchase, SupplierDetail } from "../types";
@@ -30,9 +31,11 @@ export function SupplierDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = readFromState(location.state);
+  const { isAdmin } = useAuth();
   const [data, setData] = useState<SupplierDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [tab, setTab] = usePersistedTab(
     "tab",
     "supplier.tab",
@@ -72,6 +75,21 @@ export function SupplierDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to mark as paid");
     } finally {
       setMarkingPaid(false);
+    }
+  }
+
+  async function exportMobilesExcel() {
+    if (!id) return;
+    setExporting(true);
+    setError(null);
+    try {
+      await api.downloadSupplierMobilesExport(id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to export mobiles Excel",
+      );
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -132,6 +150,17 @@ export function SupplierDetailPage() {
               Outstanding {formatINR(data.outstanding)}
             </span>
           </p>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="btn-secondary mt-3"
+              disabled={exporting}
+              onClick={() => void exportMobilesExcel()}
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Exporting…" : "Export mobiles Excel"}
+            </button>
+          ) : null}
         </div>
       </div>
 
