@@ -195,6 +195,58 @@ export async function buildSupplierMobilesWorkbook(
     sheet.getColumn(col).numFmt = "#,##0.00";
   }
 
+  const lastDataRow = Math.max(items.length + 1, 2);
+  const lastCol = sheet.columnCount;
+
+  // Header filter so rows can be filtered by Platform (IOS/ANDROID), Status, etc.
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: lastDataRow, column: lastCol },
+  };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+  // Dropdown lookups on each data row (and spare empty rows for notes).
+  const validationEnd = Math.max(lastDataRow, 500);
+  sheet.dataValidations.add(`D2:D${validationEnd}`, {
+    type: "list",
+    allowBlank: true,
+    formulae: ['"IOS,ANDROID"'],
+    showErrorMessage: true,
+    errorStyle: "warning",
+    errorTitle: "Platform",
+    error: "Choose IOS or ANDROID",
+    promptTitle: "Platform",
+    prompt: "IOS or ANDROID",
+    showInputMessage: true,
+  });
+  sheet.dataValidations.add(`C2:C${validationEnd}`, {
+    type: "list",
+    allowBlank: true,
+    formulae: ['"NEW,USED"'],
+    showErrorMessage: true,
+    errorStyle: "warning",
+    errorTitle: "Condition",
+    error: "Choose NEW or USED",
+  });
+  sheet.dataValidations.add(`L2:L${validationEnd}`, {
+    type: "list",
+    allowBlank: true,
+    formulae: ['"AVAILABLE,SOLD"'],
+    showErrorMessage: true,
+    errorStyle: "warning",
+    errorTitle: "Status",
+    error: "Choose AVAILABLE or SOLD",
+  });
+  sheet.dataValidations.add(`U2:U${validationEnd}`, {
+    type: "list",
+    allowBlank: true,
+    formulae: ['"Yes,No"'],
+    showErrorMessage: true,
+    errorStyle: "warning",
+    errorTitle: "GST bill",
+    error: "Choose Yes or No",
+  });
+
   const summary = wb.addWorksheet("Summary");
   summary.columns = [
     { header: "Metric", key: "metric", width: 28 },
