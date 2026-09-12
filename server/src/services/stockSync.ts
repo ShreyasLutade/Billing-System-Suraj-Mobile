@@ -36,11 +36,9 @@ export function intakeKindFromNote(note?: string | null) {
 }
 
 /**
- * True when a stock unit should stay SOLD (linked to a sale that was not
- * returned / taken back later).
- *
- * Re-saving an exchange bill must not reopen phones sold after that intake.
- * Phones sold earlier and later taken back (return or re-exchange) stay available.
+ * True when a stock unit should be SOLD (linked to a sale that was not
+ * returned / taken back later). Used by data repair; bill edits must not
+ * rewrite status for phones that already stay on the bill / exchange.
  */
 export function shouldStockRemainSold(stock: {
   status?: string;
@@ -75,8 +73,10 @@ export function shouldStockRemainSold(stock: {
 }
 
 /**
- * Marks stock units as SOLD for the given bill lines.
- * Previously linked units that are no longer on the bill become AVAILABLE again.
+ * Marks stock units as SOLD for newly linked bill lines.
+ * Units removed from the bill become AVAILABLE again.
+ * Units that stay on the bill keep their existing status untouched
+ * (re-saving a bill must not flip In stock / Sold as a side effect).
  */
 export async function syncStockForBillItems(
   tx: Tx,
@@ -115,7 +115,10 @@ export async function syncStockForBillItems(
     }
   }
 
-  const releaseIds = previousStockIds.filter((id) => !nextIds.includes(id));
+  const previousSet = new Set(previousStockIds);
+  const nextSet = new Set(nextIds);
+
+  const releaseIds = previousStockIds.filter((id) => !nextSet.has(id));
   if (releaseIds.length) {
     await tx.stockItem.updateMany({
       where: { id: { in: releaseIds } },
@@ -123,9 +126,10 @@ export async function syncStockForBillItems(
     });
   }
 
-  if (nextIds.length) {
+  const newlyLinkedIds = nextIds.filter((id) => !previousSet.has(id));
+  if (newlyLinkedIds.length) {
     await tx.stockItem.updateMany({
-      where: { id: { in: nextIds } },
+      where: { id: { in: newlyLinkedIds } },
       data: { status: "SOLD" },
     });
   }
@@ -373,33 +377,11 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     });
 
     if (existing) {
-      const current = await tx.stockItem.findUnique({
-        where: { id: existing.stockItemId },
-        include: {
-          billItems: {
-            select: {
-              id: true,
-              bill: { select: { billDate: true } },
-            },
-            orderBy: { bill: { billDate: "desc" } },
-            take: 1,
-          },
-          purchaseItem: {
-            include: {
-              purchase: { select: { note: true, purchaseDate: true } },
-            },
-          },
-        },
-      });
-      const status = shouldStockRemainSold(current || {})
-        ? "SOLD"
-        : "AVAILABLE";
-
+      // Update exchange metadata only — never touch In stock / Sold on edit.
       await tx.stockItem.update({
         where: { id: existing.stockItemId },
         data: {
           condition: "USED",
-          status,
           platform,
           mobileName,
           storage,

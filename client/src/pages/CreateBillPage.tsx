@@ -2141,13 +2141,13 @@ export function CreateBillPage() {
             View all bills
           </button>
           {!isEdit ? (
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => resetBlankForm()}
-            >
-              Create another
-            </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => resetBlankForm()}
+          >
+            Create another
+          </button>
           ) : null}
         </div>
       </motion.div>
@@ -2248,8 +2248,8 @@ export function CreateBillPage() {
                   </span>
                   <div>
                     <h2 className="font-display text-base font-semibold text-ink-900">
-                      Customer
-                    </h2>
+            Customer
+          </h2>
                     <p className="mt-0.5 text-xs text-ink-500">
                       Phone lookup fills name and address automatically.
                     </p>
@@ -2278,56 +2278,56 @@ export function CreateBillPage() {
 
               <div className="space-y-4">
                 {useCustomBillDate ? (
-                  <div>
+            <div>
                     <label className="label required" htmlFor="customBillDate">
                       Bill date
-                    </label>
-                    <input
+              </label>
+              <input
                       id="customBillDate"
-                      className="field"
+                className="field"
                       type="date"
                       value={customBillDate}
                       max={todayDateInput()}
                       onChange={(event) => setCustomBillDate(event.target.value)}
-                      required
-                    />
-                  </div>
+                required
+              />
+            </div>
                 ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="label required" htmlFor="customerPhone">
-                      Phone
-                    </label>
-                    <input
-                      id="customerPhone"
-                      className={`field ${phoneError ? "border-ember-400 focus:border-ember-500 focus:ring-ember-200" : ""}`}
-                      inputMode="numeric"
-                      maxLength={10}
-                      value={customerPhone}
-                      onChange={(e) => {
-                        const next = e.target.value.replace(/\D/g, "").slice(0, 10);
-                        setCustomerPhone(next);
-                        if (phoneError && next.length === 10) setPhoneError(null);
-                      }}
-                      onBlur={() => setPhoneError(validatePhone(customerPhone))}
-                      placeholder="10-digit mobile"
-                      aria-invalid={Boolean(phoneError)}
+            <div>
+              <label className="label required" htmlFor="customerPhone">
+                Phone
+              </label>
+              <input
+                id="customerPhone"
+                className={`field ${phoneError ? "border-ember-400 focus:border-ember-500 focus:ring-ember-200" : ""}`}
+                inputMode="numeric"
+                maxLength={10}
+                value={customerPhone}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setCustomerPhone(next);
+                  if (phoneError && next.length === 10) setPhoneError(null);
+                }}
+                onBlur={() => setPhoneError(validatePhone(customerPhone))}
+                placeholder="10-digit mobile"
+                aria-invalid={Boolean(phoneError)}
                       aria-describedby={
                         phoneError ? "customerPhone-error" : undefined
                       }
-                      required
+                required
                       autoComplete="tel"
-                    />
-                    {phoneError ? (
-                      <p
-                        id="customerPhone-error"
-                        className="mt-1.5 text-xs font-medium text-ember-500"
-                        role="alert"
-                      >
-                        {phoneError}
-                      </p>
-                    ) : null}
+              />
+              {phoneError ? (
+                <p
+                  id="customerPhone-error"
+                  className="mt-1.5 text-xs font-medium text-ember-500"
+                  role="alert"
+                >
+                  {phoneError}
+                </p>
+              ) : null}
                     {fetchingCustomer ? (
                       <p
                         className="mt-1.5 text-xs font-medium text-tide-600"
@@ -2350,22 +2350,22 @@ export function CreateBillPage() {
                       required
                       autoComplete="name"
                     />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="customerAddress">
+                Address (optional)
+              </label>
+              <input
+                id="customerAddress"
+                className="field"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                placeholder="Village / city"
+              />
                   </div>
-                  <div className="sm:col-span-2">
-                    <label className="label" htmlFor="customerAddress">
-                      Address (optional)
-                    </label>
-                    <input
-                      id="customerAddress"
-                      className="field"
-                      value={customerAddress}
-                      onChange={(e) => setCustomerAddress(e.target.value)}
-                      placeholder="Village / city"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
+            </div>
+          </div>
+        </section>
 
             <section className="rounded-[16px] border border-ink-100/80 bg-white/90 p-5 shadow-soft">
               <div className="mb-4 flex items-center gap-2.5">
@@ -2374,8 +2374,8 @@ export function CreateBillPage() {
                 </span>
                 <div>
                   <h2 className="font-display text-base font-semibold text-ink-900">
-                    Products
-                  </h2>
+              Products
+            </h2>
                   {withGst ? (
                     <p className="mt-0.5 text-xs text-ink-500">
                       Pick a saved phone or add a new one. GST lines are not taken from
@@ -2383,22 +2383,22 @@ export function CreateBillPage() {
                     </p>
                   ) : null}
                 </div>
-              </div>
+          </div>
 
               <div className="space-y-3">
-                <AnimatePresence initial={false}>
-                  {items.map((item, index) => (
-                    <motion.div
+          <AnimatePresence initial={false}>
+            {items.map((item, index) => (
+              <motion.div
                       id={`item-${item.key}`}
-                      key={item.key}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, height: 0 }}
+                key={item.key}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0 }}
                       className="min-w-0 overflow-visible rounded-xl border border-ink-100 bg-ink-50/30 p-4"
-                    >
+              >
                       <div className="mb-4 flex items-center justify-between gap-2">
                         <span className="inline-flex rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 ring-1 ring-ink-100">
-                          Item {index + 1}
+                    Item {index + 1}
                         </span>
                   {items.length > 1 ? (
                     <button
@@ -2458,19 +2458,19 @@ export function CreateBillPage() {
                       {item.catalogMode === "other" ? (
                         <div className="sm:col-span-2 lg:col-span-5">
                           <label className="label required" htmlFor={`productName-${item.key}`}>Product name</label>
-                          <input
+                    <input
                             id={`productName-${item.key}`}
-                            className="field"
-                            value={item.productName}
+                      className="field"
+                      value={item.productName}
                             onChange={(event) =>
                               updateItem(item.key, {
                                 productName: event.target.value,
                               })
                             }
                             placeholder="e.g. Charger / Earphones"
-                            required
-                          />
-                        </div>
+                      required
+                    />
+                  </div>
                       ) : null}
                     </>
                   ) : (
@@ -2506,19 +2506,19 @@ export function CreateBillPage() {
                       {item.catalogMode === "other" ? (
                         <div className="sm:col-span-2 lg:col-span-5">
                           <label className="label required" htmlFor={`productName-${item.key}`}>Product name</label>
-                          <input
+                    <input
                             id={`productName-${item.key}`}
-                            className="field"
+                      className="field"
                             value={item.productName}
                             onChange={(event) =>
-                              updateItem(item.key, {
+                        updateItem(item.key, {
                                 productName: event.target.value,
-                              })
-                            }
+                        })
+                      }
                             placeholder="e.g. Charger / Earphones"
-                            required
-                          />
-                        </div>
+                      required
+                    />
+                  </div>
                       ) : null}
                     </>
                   )}
@@ -2575,7 +2575,7 @@ export function CreateBillPage() {
                           "border-red-400 focus-within:border-red-500 focus-within:ring-red-200",
                       )}
                     >
-                      <input
+                    <input
                         className={clsx(
                           scanFieldInputClass,
                           "text-sm tracking-wide",
@@ -2584,7 +2584,7 @@ export function CreateBillPage() {
                             item.imei1?.trim() &&
                             "cursor-default text-ink-600",
                         )}
-                        value={item.imei1 || ""}
+                      value={item.imei1 || ""}
                         onChange={(e) => {
                           updateItem(item.key, { imei1: e.target.value });
                           if (imeiFieldErrors[item.key]) {
@@ -2635,7 +2635,7 @@ export function CreateBillPage() {
                           "border-red-400 focus-within:border-red-500 focus-within:ring-red-200",
                       )}
                     >
-                      <input
+                    <input
                         className={clsx(
                           scanFieldInputClass,
                           item.stockItemId &&
@@ -2643,7 +2643,7 @@ export function CreateBillPage() {
                             item.serialNumber?.trim() &&
                             "cursor-default text-ink-600",
                         )}
-                        value={item.serialNumber || ""}
+                      value={item.serialNumber || ""}
                         onChange={(e) => {
                           const value = e.target.value;
                           updateItem(item.key, { serialNumber: value });
@@ -2714,9 +2714,9 @@ export function CreateBillPage() {
                 <p className="mt-4 border-t border-ink-100/80 pt-3 text-right text-sm font-semibold text-ink-800">
                   Line total · {formatINR(lineAmount(item))}
                 </p>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+              </motion.div>
+            ))}
+          </AnimatePresence>
               </div>
 
               <button
@@ -2754,10 +2754,10 @@ export function CreateBillPage() {
                     <p className="mt-0.5 text-[12.5px] text-ink-300">
                       Old phone enters second-hand stock; its value is deducted
                       from payable.
-                    </p>
-                  </div>
+                </p>
+              </div>
                   <Switch
-                    checked={isExchange}
+                checked={isExchange}
                     aria-label="Mobile exchange"
                     onChange={(checked) => {
                       setIsExchange(checked);
@@ -2772,12 +2772,12 @@ export function CreateBillPage() {
                   />
                 </div>
 
-                <AnimatePresence>
-                  {isExchange ? (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
+            <AnimatePresence>
+              {isExchange ? (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
                       className="overflow-visible"
                     >
                       <div className="space-y-4 px-5 pb-5 sm:px-[22px] sm:pb-[22px]">
@@ -2795,7 +2795,7 @@ export function CreateBillPage() {
                             Use fixed return if the customer wants cash back from
                             the exchange value.
                           </span>
-                        </div>
+                    </div>
 
                         {exchangeItems.map((item, index) => (
                           <ExchangeMobileFields
@@ -2838,7 +2838,7 @@ export function CreateBillPage() {
                                 Pay cash from the exchange value; remaining
                                 becomes bill credit.
                               </p>
-                            </div>
+                    </div>
                             <Switch
                               id="useFixedReturn"
                               checked={useFixedReturn}
@@ -2851,18 +2851,18 @@ export function CreateBillPage() {
                           </div>
 
                           {useFixedReturn ? (
-                            <div>
+                    <div>
                               <label
                                 className="label required"
                                 htmlFor="fixedReturnAmount"
                               >
                                 Refund to customer
-                              </label>
+                      </label>
                               <div className="relative">
                                 <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-ember-500">
                                   ₹
                                 </span>
-                                <input
+                      <input
                                   id="fixedReturnAmount"
                                   className="w-full rounded-[11px] border border-amber-200 bg-amber-50/70 py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-amber-400 focus:bg-white focus:shadow-[0_0_0_3px_rgba(245,158,11,.18)] dark:border-amber-500/35 dark:bg-amber-950/40 dark:focus:bg-surface-elevated"
                                   type="number"
@@ -2887,8 +2887,8 @@ export function CreateBillPage() {
                                   }}
                                   placeholder="e.g. 10000"
                                   required
-                                />
-                              </div>
+                      />
+                    </div>
                               {totals.cashReturn > 0 ? (
                                 <p className="mt-2 text-[12px] leading-relaxed text-ink-500">
                                   Effective exchange credit{" "}
@@ -3023,24 +3023,24 @@ export function CreateBillPage() {
                         <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
                           ₹
                         </span>
-                        <input
+                      <input
                           id="companyDiscount"
                           className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)] dark:border-tide-400/30 dark:bg-tide-100/35 dark:focus:border-tide-400 dark:focus:bg-surface-elevated dark:focus:shadow-[0_0_0_3px_rgba(45,212,191,0.2)]"
-                          type="number"
-                          min={0}
-                          step="0.01"
+                        type="number"
+                        min={0}
+                        step="0.01"
                           value={companyDiscount}
-                          onChange={(e) =>
+                        onChange={(e) =>
                             setCompanyDiscount(
-                              e.target.value === ""
-                                ? ""
-                                : Number(e.target.value) || 0,
-                            )
-                          }
+                            e.target.value === ""
+                              ? ""
+                              : Number(e.target.value) || 0,
+                          )
+                        }
                           placeholder="0"
                           inputMode="decimal"
-                        />
-                      </div>
+                      />
+                    </div>
                     ) : null}
                   </div>
                 ) : null}
@@ -3048,21 +3048,21 @@ export function CreateBillPage() {
                 <div className="mt-4 border-t border-ink-100 pt-4">
                   <label className="label" htmlFor="notes">
                     Note (optional)
-                  </label>
-                  <textarea
+                      </label>
+                      <textarea
                     id="notes"
                     className="field min-h-[64px] resize-y"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Optional note for this bill"
-                  />
-                </div>
+                      />
+                    </div>
 
                 {error ? (
                   <p className="mt-3 rounded-xl bg-orange-50 px-4 py-3 text-sm text-ember-500">
                     {error}
                   </p>
-                ) : null}
+              ) : null}
 
                 <button
                   type="submit"
@@ -3076,7 +3076,7 @@ export function CreateBillPage() {
                       ? "Review & update"
                       : "Save bill"}
                 </button>
-              </div>
+          </div>
 
               {!withGst ? (
                 <div
@@ -3089,7 +3089,7 @@ export function CreateBillPage() {
                 >
                   <h2 className="font-display text-base font-semibold text-ink-900">
                     Payment
-                  </h2>
+              </h2>
                   <p className="mt-1 text-xs text-ink-500">
                     {hasDue
                       ? "Cash, online, card, then due — leftover goes to finance."
@@ -3137,22 +3137,22 @@ export function CreateBillPage() {
                       />
                     </label>
 
-                    <PaymentToggle
-                      label="Cash"
+              <PaymentToggle
+                label="Cash"
                       tone="cash"
-                      checked={useCash}
-                      amount={cashAmount}
-                      onChecked={(checked) => togglePayment("cash", checked)}
-                      onAmount={setCashAmount}
-                    />
-                    <PaymentToggle
-                      label="Online"
+                checked={useCash}
+                amount={cashAmount}
+                onChecked={(checked) => togglePayment("cash", checked)}
+                onAmount={setCashAmount}
+              />
+              <PaymentToggle
+                label="Online"
                       tone="online"
-                      checked={useOnline}
-                      amount={onlineAmount}
-                      onChecked={(checked) => togglePayment("online", checked)}
-                      onAmount={setOnlineAmount}
-                    />
+                checked={useOnline}
+                amount={onlineAmount}
+                onChecked={(checked) => togglePayment("online", checked)}
+                onAmount={setOnlineAmount}
+              />
                     <PaymentToggle
                       label="Card"
                       tone="card"
@@ -3227,10 +3227,10 @@ export function CreateBillPage() {
                         </div>
                       </PaymentToggle>
                     ) : null}
-                    <PaymentToggle
-                      label="Finance"
+              <PaymentToggle
+                label="Finance"
                       tone="finance"
-                      checked={useFinance}
+                checked={useFinance}
                       amount={totals.finance}
                       onChecked={(checked) => {
                         if (hasDue && totals.finance > 0 && !checked) return;
@@ -3270,7 +3270,7 @@ export function CreateBillPage() {
                                   {financeEntries.length > 1
                                     ? `Finance company ${index + 1}`
                                     : "Finance company"}
-                                </label>
+                    </label>
                                 {index > 0 ? (
                                   <button
                                     type="button"
@@ -3281,12 +3281,12 @@ export function CreateBillPage() {
                                   </button>
                                 ) : null}
                               </div>
-                              <FinanceCompanyPicker
-                                companies={financeCompanies}
+                    <FinanceCompanyPicker
+                      companies={financeCompanies}
                                 value={entry.select}
-                                required={useFinance}
+                      required={useFinance}
                                 excludeIds={excludeIds}
-                                onChange={(value) => {
+                      onChange={(value) => {
                                   updateFinanceEntry(entry.key, {
                                     select: value,
                                     companyId: value === ADD_NEW_FINANCE ? "" : value,
@@ -3296,37 +3296,37 @@ export function CreateBillPage() {
                                 }}
                               />
                               {entry.select === ADD_NEW_FINANCE ? (
-                                <div>
+                    <div>
                                   <label
                                     className="label required"
                                     htmlFor={`newFinanceName-${entry.key}`}
                                   >
-                                    New finance company
-                                  </label>
-                                  <div className="flex flex-col gap-2 sm:flex-row">
-                                    <input
+                        New finance company
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
                                       id={`newFinanceName-${entry.key}`}
-                                      className="field"
+                          className="field"
                                       value={entry.newName}
                                       onChange={(e) =>
                                         updateFinanceEntry(entry.key, {
                                           newName: e.target.value,
                                         })
                                       }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
                                           void saveNewFinanceCompany(entry.key);
-                                        }
-                                      }}
-                                      placeholder="e.g. HDFC Finance"
-                                      required={
+                            }
+                          }}
+                          placeholder="e.g. HDFC Finance"
+                          required={
                                         useFinance && entry.select === ADD_NEW_FINANCE
-                                      }
-                                    />
-                                    <button
-                                      type="button"
-                                      className="btn-secondary shrink-0"
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary shrink-0"
                                       disabled={
                                         savingFinanceKey === entry.key ||
                                         !entry.newName.trim()
@@ -3338,13 +3338,13 @@ export function CreateBillPage() {
                                       {savingFinanceKey === entry.key
                                         ? "Saving…"
                                         : "Save for later"}
-                                    </button>
-                                  </div>
-                                  <p className="mt-2 text-xs text-ink-500">
-                                    Saved names stay in the list for all future bills.
-                                  </p>
-                                </div>
-                              ) : null}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-ink-500">
+                        Saved names stay in the list for all future bills.
+                      </p>
+                    </div>
+                  ) : null}
                               <div>
                                 <label className="label required">Amount</label>
                                 <input
@@ -3375,8 +3375,8 @@ export function CreateBillPage() {
                             </div>
                           );
                         })}
-                      </div>
-                    </PaymentToggle>
+                </div>
+              </PaymentToggle>
 
                   {(useCash || useOnline || useCard || useFinance || hasDue) &&
                   (totals.dueAmount > 0 || totals.paid > 0) ? (
@@ -3400,7 +3400,7 @@ export function CreateBillPage() {
                           ? formatINR(totals.dueAmount)
                           : formatINR(totals.paid)}
                       </span>
-                    </div>
+            </div>
                   ) : null}
 
                   </div>
@@ -3412,7 +3412,7 @@ export function CreateBillPage() {
                     >
                       <AnimatePresence mode="wait" initial={false}>
                         {exchangePayConfirmed ? (
-                          <motion.div
+                <motion.div
                             key="exchange-confirmed"
                             initial={{ opacity: 0, scale: 0.96 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -3446,7 +3446,7 @@ export function CreateBillPage() {
                             <p className="mt-3 max-w-[16rem] text-xs leading-relaxed text-ink-300">
                               Edit price to change
                             </p>
-                          </motion.div>
+                </motion.div>
                         ) : (
                           <motion.div
                             key="exchange-confirm-prompt"
@@ -3483,8 +3483,8 @@ export function CreateBillPage() {
                             </motion.button>
                           </motion.div>
                         )}
-                      </AnimatePresence>
-                    </div>
+            </AnimatePresence>
+          </div>
                   ) : null}
                 </div>
               ) : null}
@@ -3498,8 +3498,8 @@ export function CreateBillPage() {
           fieldId={fieldHint.fieldId}
           message={fieldHint.message}
           onDismiss={() => setFieldHint(null)}
-        />
-      ) : null}
+                />
+              ) : null}
 
       <AnimatePresence>
         {addMobileForItem ? (
@@ -3517,7 +3517,7 @@ export function CreateBillPage() {
               setAddMobileForItem(null);
             }}
           />
-        ) : null}
+            ) : null}
       </AnimatePresence>
 
       {showSaveConfirm && saveSummary ? (
@@ -3804,9 +3804,9 @@ function SummaryRow({
           strong && accent
             ? "font-display text-lg font-semibold text-ember-500"
             : strong
-              ? "font-display text-lg font-semibold text-ink-900"
-              : accent
-                ? "font-semibold text-ember-500"
+            ? "font-display text-lg font-semibold text-ink-900"
+            : accent
+              ? "font-semibold text-ember-500"
                 : "font-medium tabular-nums text-ink-800",
         )}
       >
