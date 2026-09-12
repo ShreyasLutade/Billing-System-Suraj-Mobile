@@ -536,7 +536,11 @@ async function enrichExchangeItemsWithSaleStatus(
     (purchase?.items || [])
       .map((row) => row.stockItem)
       .filter((stock): stock is NonNullable<typeof stock> => Boolean(stock))
-      .map((stock) => [cleanImei(stock.imei), stock] as const)
+      .map((stock) => {
+        const raw = cleanImei(stock.imei);
+        const key = raw.includes("~") ? raw.slice(0, raw.indexOf("~")) : raw;
+        return [key, stock] as const;
+      })
       .filter(([imei]) => Boolean(imei)),
   );
 
