@@ -71,7 +71,7 @@ export async function syncStockForBillItems(
     }
 
     const imei = item.imei1?.replace(/\s+/g, "") || "";
-    if (imei && stock.imei !== imei) {
+    if (imei && !stockImeiMatches(stock.imei, imei)) {
       throw new Error("STOCK_IMEI_MISMATCH");
     }
   }
@@ -122,6 +122,25 @@ function resolveExchangeImei(invoiceNumber: string, rawImei?: string | null) {
   if (cleaned) return cleaned;
   const safeInvoice = invoiceNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-10);
   return `EXC${safeInvoice}${Date.now().toString(36).toUpperCase()}`;
+}
+
+/** Free a unique IMEI slot while keeping the sold/historical stock row readable. */
+export function retireStockImei(imei: string, stockId: string) {
+  const cleaned = imei.replace(/\s+/g, "").trim();
+  return `${cleaned}~${stockId}`;
+}
+
+/** True when stored IMEI is the live value or a retired copy of it (`IMEI~stockId`). */
+export function stockImeiMatches(
+  stored: string | null | undefined,
+  raw: string | null | undefined,
+) {
+  const imei = (raw || "").replace(/\s+/g, "").trim();
+  if (!imei) return true;
+  const storedClean = (stored || "").replace(/\s+/g, "").trim();
+  if (!storedClean) return false;
+  if (storedClean === imei) return true;
+  return storedClean.startsWith(`${imei}~`);
 }
 
 async function upsertIntakeSupplier(
@@ -302,7 +321,7 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     const ownedByThisExchange = existing?.stockItemId === imeiOwner?.id;
 
     // Only block IMEIs that are still AVAILABLE in shop stock.
-    // Sold units may come back as exchange (same IMEI) — reuse that row.
+    // Sold units may come back as exchange (same IMEI) — keep history, add a new row.
     if (imeiOwner && !ownedByThisExchange && imeiOwner.status === "AVAILABLE") {
       throw new Error("EXCHANGE_IMEI_TAKEN");
     }
@@ -336,17 +355,19 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     }
 
     if (imeiOwner && !ownedByThisExchange) {
-      const oldLink = await tx.purchaseItem.findUnique({
-        where: { stockItemId: imeiOwner.id },
-      });
-      if (oldLink) {
-        await tx.purchaseItem.delete({ where: { id: oldLink.id } });
-      }
+      // Same IMEI already exists as a sold (or otherwise historical) unit —
+      // e.g. customer A exchanged it, shop sold it to B, B now exchanges it.
+      // Keep A's stock + purchase history intact; free the unique IMEI and
+      // create a new USED stock row under B.
       await tx.stockItem.update({
         where: { id: imeiOwner.id },
+        data: { imei: retireStockImei(imei, imeiOwner.id) },
+      });
+
+      const stock = await tx.stockItem.create({
         data: {
+          kind: "MOBILE",
           condition: "USED",
-          status: "AVAILABLE",
           platform,
           mobileName,
           storage,
@@ -356,9 +377,13 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
           purchasePrice,
           suppliers: serializeSuppliers([supplier.name]),
           supplierId: supplier.id,
+          status: "AVAILABLE",
+          createdAt: purchaseDate,
+          createdByUserId: input.createdByUserId || null,
+          createdByName: input.createdByName || null,
         },
       });
-      stockIds.push(imeiOwner.id);
+      stockIds.push(stock.id);
       continue;
     }
 
