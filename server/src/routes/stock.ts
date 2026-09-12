@@ -890,14 +890,58 @@ stockRouter.delete("/:id", async (req, res, next) => {
   try {
     const existing = await prisma.stockItem.findUnique({
       where: { id: req.params.id },
+      include: {
+        purchaseItem: { select: { purchaseId: true } },
+        billItems: { select: { id: true }, take: 1 },
+      },
     });
     if (!existing) {
       res.status(404).json({ error: "Stock item not found" });
       return;
     }
+    if (existing.status === "SOLD" || existing.billItems.length > 0) {
+      res.status(400).json({
+        error: "This phone is sold. Remove it from the bill first.",
+      });
+      return;
+    }
 
-    await prisma.stockItem.delete({ where: { id: existing.id } });
-    res.json({ data: { id: existing.id } });
+    const purchaseId = existing.purchaseItem?.purchaseId || null;
+    let purchaseDeleted = false;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.stockItem.delete({ where: { id: existing.id } });
+
+      if (!purchaseId) return;
+
+      const siblings = await tx.purchaseItem.findMany({
+        where: { purchaseId },
+        include: { stockItem: { select: { purchasePrice: true } } },
+      });
+
+      if (!siblings.length) {
+        await tx.purchase.delete({ where: { id: purchaseId } });
+        purchaseDeleted = true;
+        return;
+      }
+
+      const totalAmount = siblings.reduce(
+        (sum, row) => sum + row.stockItem.purchasePrice,
+        0,
+      );
+      await tx.purchase.update({
+        where: { id: purchaseId },
+        data: { totalAmount },
+      });
+    });
+
+    res.json({
+      data: {
+        id: existing.id,
+        purchaseId,
+        purchaseDeleted,
+      },
+    });
   } catch (error) {
     next(error);
   }

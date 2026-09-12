@@ -353,7 +353,9 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   deleteStockItem: (id: string) =>
-    request<{ data: { id: string } }>(`/stock/${id}`, {
+    request<{
+      data: { id: string; purchaseId?: string | null; purchaseDeleted?: boolean };
+    }>(`/stock/${id}`, {
       method: "DELETE",
     }),
   stockHistory: (id: string) =>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { SquarePen } from "lucide-react";
+import { SquarePen, Trash2 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
@@ -66,6 +66,7 @@ export function PurchaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<PurchaseStockRef | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!purchaseId) return;
@@ -94,6 +95,34 @@ export function PurchaseDetailPage() {
       active = false;
     };
   }, [purchaseId, supplierId]);
+
+  async function removeItem(item: PurchaseStockRef) {
+    if (
+      !window.confirm(
+        `Delete ${item.mobileName} (${formatStockUnitId(item)}) from this purchase?`,
+      )
+    ) {
+      return;
+    }
+    setDeletingId(item.id);
+    setError(null);
+    try {
+      const { data } = await api.deleteStockItem(item.id);
+      if (data.purchaseDeleted || !purchaseId) {
+        navigate(from ?? `/suppliers/${supplierId || purchase?.supplierId}`, {
+          state: supplierState,
+          replace: true,
+        });
+        return;
+      }
+      const refreshed = await api.getPurchase(purchaseId);
+      setPurchase(refreshed.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete phone");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   if (loading) return <LoadingBlock label="Loading purchase…" />;
 
@@ -313,17 +342,33 @@ export function PurchaseDetailPage() {
 
                     <div className="relative z-20 whitespace-nowrap px-2 py-1.5 text-right">
                       {isAdmin ? (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setEditingItem(item);
-                          }}
-                        >
-                          <SquarePen className="h-3 w-3" />
-                          Edit
-                        </button>
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingItem(item);
+                            }}
+                          >
+                            <SquarePen className="h-3 w-3" />
+                            Edit
+                          </button>
+                          {!sold ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
+                              disabled={deletingId === item.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void removeItem(item);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              {deletingId === item.id ? "…" : "Delete"}
+                            </button>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-ink-300">—</span>
                       )}
@@ -356,7 +401,7 @@ export function PurchaseDetailPage() {
       {editingItem && isAdmin ? (
         <EditStockUnitModal
           unit={toEditUnit(editingItem, purchase)}
-          allowSupplierEdit={false}
+          allowSupplierEdit
           onClose={() => setEditingItem(null)}
           onSaved={async (updated) => {
             if (!purchaseId) return;
