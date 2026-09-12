@@ -36,6 +36,45 @@ export function intakeKindFromNote(note?: string | null) {
 }
 
 /**
+ * True when a stock unit should stay SOLD (linked to a sale that was not
+ * returned / taken back later).
+ *
+ * Re-saving an exchange bill must not reopen phones sold after that intake.
+ * Phones sold earlier and later taken back (return or re-exchange) stay available.
+ */
+export function shouldStockRemainSold(stock: {
+  status?: string;
+  billItems?: Array<{
+    id: string;
+    bill?: { billDate?: Date | string | null } | null;
+  }> | null;
+  purchaseItem?: {
+    purchase?: {
+      note?: string | null;
+      purchaseDate?: Date | string | null;
+    } | null;
+  } | null;
+}): boolean {
+  const note = stock.purchaseItem?.purchase?.note || "";
+  if (note.startsWith(RETURN_NOTE_PREFIX)) return false;
+
+  const saleBill = stock.billItems?.[0]?.bill;
+  if (!saleBill?.billDate) {
+    return stock.status === "SOLD";
+  }
+
+  const purchaseDate = stock.purchaseItem?.purchase?.purchaseDate;
+  if (purchaseDate) {
+    const saleTime = new Date(saleBill.billDate).getTime();
+    const intakeTime = new Date(purchaseDate).getTime();
+    // Sale before current intake → phone came back into stock after that sale.
+    if (saleTime < intakeTime) return false;
+  }
+
+  return true;
+}
+
+/**
  * Marks stock units as SOLD for the given bill lines.
  * Previously linked units that are no longer on the bill become AVAILABLE again.
  */
@@ -334,11 +373,33 @@ export async function syncExchangeStock(tx: Tx, input: ExchangeStockInput) {
     });
 
     if (existing) {
+      const current = await tx.stockItem.findUnique({
+        where: { id: existing.stockItemId },
+        include: {
+          billItems: {
+            select: {
+              id: true,
+              bill: { select: { billDate: true } },
+            },
+            orderBy: { bill: { billDate: "desc" } },
+            take: 1,
+          },
+          purchaseItem: {
+            include: {
+              purchase: { select: { note: true, purchaseDate: true } },
+            },
+          },
+        },
+      });
+      const status = shouldStockRemainSold(current || {})
+        ? "SOLD"
+        : "AVAILABLE";
+
       await tx.stockItem.update({
         where: { id: existing.stockItemId },
         data: {
           condition: "USED",
-          status: "AVAILABLE",
+          status,
           platform,
           mobileName,
           storage,

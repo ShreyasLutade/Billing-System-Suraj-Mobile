@@ -26,6 +26,7 @@ import { ensurePasswordResetOtpTable } from "./services/passwordResetOtp";
 import { backfillFinanceReceived2 } from "./services/backfillFinanceReceived2";
 import { fixGurunanakSep10PurchaseToUsed } from "./services/fixPurchaseCondition";
 import { repairOverwrittenReexchangeHistory } from "./services/repairOverwrittenReexchange";
+import { repairSoldStockMarkedAvailable } from "./services/repairSoldStockMarkedAvailable";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -194,6 +195,21 @@ async function start() {
     }
   } catch (error) {
     console.warn("[stock] Re-exchange history repair skipped:", error);
+  }
+  try {
+    const repair = await repairSoldStockMarkedAvailable(prisma);
+    if (repair.repaired > 0) {
+      console.log(
+        `[stock] Marked ${repair.repaired} sold unit(s) back to SOLD (were wrongly AVAILABLE)`,
+      );
+      for (const row of repair.details) {
+        console.log(
+          `[stock]   ${row.imei || row.stockId}: ${row.mobileName} → ${row.invoiceNumber} (${row.customerName})`,
+        );
+      }
+    }
+  } catch (error) {
+    console.warn("[stock] Sold-as-available repair skipped:", error);
   }
   startDailyReportScheduler();
   const server = app.listen(port, "0.0.0.0", () => {
