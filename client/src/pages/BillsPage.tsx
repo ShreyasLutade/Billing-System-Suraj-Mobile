@@ -841,7 +841,7 @@ export function BillsPage() {
                     {shopDuePaid > 0 ? (
                       <PayChip
                         tone="due"
-                        label="Shop due"
+                        label="Due"
                         amount={shopDuePaid}
                       />
                     ) : null}
