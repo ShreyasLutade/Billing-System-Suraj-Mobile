@@ -264,7 +264,10 @@ billsRouter.get("/", async (req, res, next) => {
 
     const bills = await prisma.bill.findMany({
       where,
-      include: { items: true },
+      include: {
+        items: true,
+        duePayments: { orderBy: { paidAt: "asc" } },
+      },
       orderBy: { billDate: "desc" },
     });
     res.json({

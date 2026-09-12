@@ -139,6 +139,33 @@ function isBillPaid(bill: Bill) {
   return !(bill.dueAmount > 0 && !bill.dueSettled);
 }
 
+/** Amount collected later against shop due (settled dues). */
+function billShopDuePaid(bill: Bill) {
+  const payments = bill.duePayments || [];
+  if (payments.length) {
+    return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  }
+  // Legacy settled dues with no payment rows (often method "na"): treat payable as shop due.
+  if (
+    bill.dueSettled &&
+    Number(bill.cashAmount || 0) <= 0 &&
+    Number(bill.onlineAmount || 0) <= 0 &&
+    Number(bill.cardAmount || 0) <= 0 &&
+    billFinanceTotal(bill) <= 0 &&
+    !(bill.isExchange && Number(bill.exchangeValue || 0) > 0) &&
+    Number(bill.payableAmount || 0) > 0
+  ) {
+    return Number(bill.payableAmount);
+  }
+  return 0;
+}
+
+function billDuePaidByMethod(bill: Bill, method: string) {
+  return (bill.duePayments || [])
+    .filter((payment) => payment.method === method)
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+}
+
 /** Sold product label for bill list cards (not the exchange phone). */
 function soldItemLabel(item: Bill["items"][number]): string | null {
   const name = item.productName?.trim();
@@ -686,6 +713,28 @@ export function BillsPage() {
             bill.financeCompanyName2,
           );
           const soldLabel = soldProductLabel(bill);
+          const shopDuePaid = billShopDuePaid(bill);
+          const cashShown = Math.max(
+            0,
+            Number(bill.cashAmount || 0) - billDuePaidByMethod(bill, "cash"),
+          );
+          const onlineShown = Math.max(
+            0,
+            Number(bill.onlineAmount || 0) - billDuePaidByMethod(bill, "online"),
+          );
+          const cardShown = Math.max(
+            0,
+            Number(bill.cardAmount || 0) - billDuePaidByMethod(bill, "card"),
+          );
+          const hasPendingDue = bill.dueAmount > 0 && !bill.dueSettled;
+          const hasPaymentRecord =
+            cashShown > 0 ||
+            onlineShown > 0 ||
+            cardShown > 0 ||
+            finance > 0 ||
+            Boolean(bill.isExchange && bill.exchangeValue) ||
+            hasPendingDue ||
+            shopDuePaid > 0;
 
           return (
             <article
@@ -751,22 +800,18 @@ export function BillsPage() {
                   </span>
                 ) : (
                   <>
-                    {bill.cashAmount > 0 ? (
-                      <PayChip tone="cash" label="Cash" amount={bill.cashAmount} />
+                    {cashShown > 0 ? (
+                      <PayChip tone="cash" label="Cash" amount={cashShown} />
                     ) : null}
-                    {bill.onlineAmount > 0 ? (
+                    {onlineShown > 0 ? (
                       <PayChip
                         tone="online"
                         label="Online"
-                        amount={bill.onlineAmount}
+                        amount={onlineShown}
                       />
                     ) : null}
-                    {(bill.cardAmount || 0) > 0 ? (
-                      <PayChip
-                        tone="card"
-                        label="Card"
-                        amount={bill.cardAmount || 0}
-                      />
+                    {cardShown > 0 ? (
+                      <PayChip tone="card" label="Card" amount={cardShown} />
                     ) : null}
                     {finance > 0 ? (
                       <PayChip
@@ -786,19 +831,21 @@ export function BillsPage() {
                         amount={bill.exchangeValue}
                       />
                     ) : null}
-                    {bill.dueAmount > 0 && !bill.dueSettled ? (
+                    {hasPendingDue ? (
                       <PayChip
                         tone="due"
                         label={bill.isPartialPaid ? "Remaining" : "Due"}
                         amount={bill.dueAmount}
                       />
                     ) : null}
-                    {!bill.cashAmount &&
-                    !bill.onlineAmount &&
-                    !(bill.cardAmount || 0) &&
-                    finance <= 0 &&
-                    !(bill.isExchange && bill.exchangeValue) &&
-                    !(bill.dueAmount > 0 && !bill.dueSettled) ? (
+                    {shopDuePaid > 0 ? (
+                      <PayChip
+                        tone="due"
+                        label="Shop due"
+                        amount={shopDuePaid}
+                      />
+                    ) : null}
+                    {!hasPaymentRecord ? (
                       <span className="inline-flex items-center rounded-lg border border-ink-100 bg-[#F7F8FA] px-2.5 py-1 text-xs text-ink-500">
                         No payment recorded
                       </span>
