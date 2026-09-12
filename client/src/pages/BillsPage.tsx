@@ -843,6 +843,7 @@ export function BillsPage() {
                         tone="due"
                         label="Due"
                         amount={shopDuePaid}
+                        suffix=" - paid"
                       />
                     ) : null}
                     {!hasPaymentRecord ? (
@@ -946,10 +947,12 @@ function PayChip({
   tone,
   label,
   amount,
+  suffix,
 }: {
   tone: keyof typeof PAY;
   label: string;
   amount: number;
+  suffix?: string;
 }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-ink-100 bg-[#F7F8FA] px-2.5 py-1 text-xs font-medium tabular-nums text-ink-500">
@@ -959,6 +962,7 @@ function PayChip({
       />
       {label}{" "}
       <b className="font-semibold text-ink-900">{formatINR(amount)}</b>
+      {suffix ? <span className="text-ink-500">{suffix}</span> : null}
     </span>
   );
 }
