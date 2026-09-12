@@ -24,6 +24,7 @@ import { backfillSuppliersFromStock } from "./services/suppliers";
 import { ensurePhoneModelsSeeded } from "./services/phoneModels";
 import { ensurePasswordResetOtpTable } from "./services/passwordResetOtp";
 import { backfillFinanceReceived2 } from "./services/backfillFinanceReceived2";
+import { fixGurunanakSep10PurchaseToUsed } from "./services/fixPurchaseCondition";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -167,6 +168,16 @@ async function start() {
     }
   } catch (error) {
     console.warn("[finance] Received2 backfill skipped:", error);
+  }
+  try {
+    const fix = await fixGurunanakSep10PurchaseToUsed(prisma);
+    if (!fix.skipped) {
+      console.log(
+        `[stock] Moved Gurunanak 10 Sep purchase ${fix.purchaseId} ${fix.from}→${fix.to} (${fix.stockCount} phones)`,
+      );
+    }
+  } catch (error) {
+    console.warn("[stock] Gurunanak condition fix skipped:", error);
   }
   startDailyReportScheduler();
   const server = app.listen(port, "0.0.0.0", () => {

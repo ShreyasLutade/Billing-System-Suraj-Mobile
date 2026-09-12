@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma";
 import { normalizeCapacity } from "../lib/capacity";
 import { upsertSupplierByName } from "../services/suppliers";
 import { upsertPhoneModel } from "../services/phoneModels";
+import { requireAdmin } from "../middleware/auth";
+import { setPurchaseCondition } from "../services/fixPurchaseCondition";
 
 export const purchasesRouter = Router();
 
@@ -348,6 +350,50 @@ purchasesRouter.post("/", async (req, res, next) => {
     }
 
     res.status(201).json({ data: purchase });
+  } catch (error) {
+    next(error);
+  }
+});
+
+purchasesRouter.patch("/:id/condition", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({ condition: z.enum(["NEW", "USED"]) })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Pass condition NEW or USED",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const result = await setPurchaseCondition(
+      prisma,
+      req.params.id,
+      parsed.data.condition,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: result.purchaseId },
+      include: {
+        supplier: true,
+        items: { include: { stockItem: true } },
+      },
+    });
+
+    res.json({
+      data: purchase,
+      meta: {
+        previousCondition: result.previousCondition,
+        condition: result.condition,
+        stockCount: result.stockCount,
+      },
+    });
   } catch (error) {
     next(error);
   }
