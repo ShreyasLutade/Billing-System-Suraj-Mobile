@@ -105,6 +105,18 @@ body,
   min-height: 100%;
 }
 
+/*
+ * iOS Safari zooms the page when focusing inputs with font-size < 16px.
+ * Keep form controls at least 16px on phones so the viewport stays put.
+ */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 body {
   margin: 0;
   font-family: "Manrope", system-ui, -apple-system, sans-serif;
@@ -359,7 +371,7 @@ body {
   }
 
   .tb-search input {
-    @apply w-full min-w-0 border-0 bg-transparent py-0 text-sm leading-none text-[#0E1626] outline-none placeholder:text-[#9AA6B6] dark:text-ink-900 dark:placeholder:text-ink-400;
+    @apply w-full min-w-0 border-0 bg-transparent py-0 text-base leading-normal text-[#0E1626] outline-none placeholder:text-[#9AA6B6] dark:text-ink-900 dark:placeholder:text-ink-400 sm:text-sm sm:leading-none;
   }
 
   .tb-search-clear {
