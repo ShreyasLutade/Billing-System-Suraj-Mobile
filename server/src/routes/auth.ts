@@ -319,21 +319,12 @@ export async function seedUsers() {
       continue;
     }
 
-    const updates: { name?: string; passwordHash?: string } = {};
+    // Never overwrite passwords for existing users — forgot-password / admin
+    // resets must survive Railway redeploys and restarts.
     if (existing.name !== seed.name) {
-      updates.name = seed.name;
-    }
-    const passwordMatches = await bcrypt.compare(
-      seed.password,
-      existing.passwordHash,
-    );
-    if (!passwordMatches) {
-      updates.passwordHash = await bcrypt.hash(seed.password, 10);
-    }
-    if (Object.keys(updates).length) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: updates,
+        data: { name: seed.name },
       });
     }
   }
