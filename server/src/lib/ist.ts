@@ -64,15 +64,23 @@ export function isSundayIST(date = new Date()) {
   return weekday === "Sun";
 }
 
-export function isWednesdayIST(date = new Date()) {
+export function isTuesdayIST(date = new Date()) {
   const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone: IST_TIMEZONE,
     weekday: "short",
   }).format(date);
-  return weekday === "Wed";
+  return weekday === "Tue";
 }
 
-/** Full Excel dump days: Wednesday and Sunday (IST). */
+export function isFridayIST(date = new Date()) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIMEZONE,
+    weekday: "short",
+  }).format(date);
+  return weekday === "Fri";
+}
+
+/** Full Excel dump days: Tuesday, Friday, and Sunday (IST). */
 export function isReportDayIST(date = new Date()) {
-  return isWednesdayIST(date) || isSundayIST(date);
+  return isTuesdayIST(date) || isFridayIST(date) || isSundayIST(date);
 }

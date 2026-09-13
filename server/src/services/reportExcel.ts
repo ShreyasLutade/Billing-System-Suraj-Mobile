@@ -89,12 +89,14 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "exchangeImei2", key: "exchangeImei2", width: 18 },
     { header: "exchangeSerial", key: "exchangeSerial", width: 16 },
     { header: "exchangeValue", key: "exchangeValue", width: 12 },
+    { header: "exchangeCashReturn", key: "exchangeCashReturn", width: 16 },
     { header: "exchangeNotes", key: "exchangeNotes", width: 24 },
     {
       header: "exchangeMobileCatalogId",
       key: "exchangeMobileCatalogId",
       width: 28,
     },
+    { header: "exchangeItemsJson", key: "exchangeItemsJson", width: 40 },
     { header: "dueAmount", key: "dueAmount", width: 10 },
     { header: "dueDate", key: "dueDate", width: 24 },
     { header: "dueSettled", key: "dueSettled", width: 12 },
@@ -147,8 +149,10 @@ function addBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
       exchangeImei2: bill.exchangeImei2 || "",
       exchangeSerial: bill.exchangeSerial || "",
       exchangeValue: bill.exchangeValue ?? "",
+      exchangeCashReturn: money(bill.exchangeCashReturn || 0),
       exchangeNotes: bill.exchangeNotes || "",
       exchangeMobileCatalogId: bill.exchangeMobileCatalogId || "",
+      exchangeItemsJson: bill.exchangeItemsJson || "",
       dueAmount: money(bill.dueAmount),
       dueDate: iso(bill.dueDate),
       dueSettled: yesNo(bill.dueSettled),
@@ -305,7 +309,11 @@ function addSummarySheet(
       ["—", "—"],
       [
         "Restore note",
-        "Dates are ISO-8601 UTC. Yes/No map to boolean. Re-import sheets to rebuild SQLite.",
+        "Import every data sheet below to rebuild SQLite. Keep row ids. Dates are ISO-8601 UTC. Yes/No → boolean. Restore order: Users → FinanceCompanies → Customers → Suppliers → MobileCatalog → PhoneModels → StockItems → Purchases → PurchaseItems → SupplierPayments → Bills → BillItems → DuePayments → InvoiceSequence → ReportSendLog. Outstanding/Finance Dues sheets are views only (not tables).",
+      ],
+      [
+        "Not included",
+        "PasswordResetOtp (temporary OTPs only — not needed to restore shop data).",
       ],
     );
   }
@@ -438,6 +446,7 @@ async function addStockItemsSheet(wb: ExcelJS.Workbook) {
   const sheet = wb.addWorksheet("StockItems");
   sheet.columns = [
     { header: "id", key: "id", width: 28 },
+    { header: "kind", key: "kind", width: 12 },
     { header: "condition", key: "condition", width: 10 },
     { header: "platform", key: "platform", width: 10 },
     { header: "mobileName", key: "mobileName", width: 24 },
@@ -450,6 +459,8 @@ async function addStockItemsSheet(wb: ExcelJS.Workbook) {
     { header: "suppliers", key: "suppliers", width: 28 },
     { header: "supplierId", key: "supplierId", width: 28 },
     { header: "status", key: "status", width: 12 },
+    { header: "createdByUserId", key: "createdByUserId", width: 28 },
+    { header: "createdByName", key: "createdByName", width: 16 },
     { header: "createdAt", key: "createdAt", width: 24 },
     { header: "updatedAt", key: "updatedAt", width: 24 },
   ];
@@ -457,6 +468,7 @@ async function addStockItemsSheet(wb: ExcelJS.Workbook) {
   for (const row of rows) {
     sheet.addRow({
       id: row.id,
+      kind: row.kind,
       condition: row.condition,
       platform: row.platform,
       mobileName: row.mobileName,
@@ -469,6 +481,8 @@ async function addStockItemsSheet(wb: ExcelJS.Workbook) {
       suppliers: row.suppliers,
       supplierId: row.supplierId || "",
       status: row.status,
+      createdByUserId: row.createdByUserId || "",
+      createdByName: row.createdByName || "",
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),
     });
@@ -519,6 +533,8 @@ async function addPurchasesSheet(wb: ExcelJS.Workbook) {
     { header: "totalAmount", key: "totalAmount", width: 12 },
     { header: "condition", key: "condition", width: 10 },
     { header: "paidAt", key: "paidAt", width: 24 },
+    { header: "createdByUserId", key: "createdByUserId", width: 28 },
+    { header: "createdByName", key: "createdByName", width: 16 },
     { header: "createdAt", key: "createdAt", width: 24 },
     { header: "updatedAt", key: "updatedAt", width: 24 },
   ];
@@ -542,6 +558,8 @@ async function addPurchasesSheet(wb: ExcelJS.Workbook) {
       totalAmount: money(row.totalAmount),
       condition: row.condition,
       paidAt: iso(row.paidAt),
+      createdByUserId: row.createdByUserId || "",
+      createdByName: row.createdByName || "",
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),
     });
@@ -710,6 +728,33 @@ async function addInvoiceSequenceSheet(wb: ExcelJS.Workbook) {
   return rows.length;
 }
 
+async function addReportSendLogSheet(wb: ExcelJS.Workbook) {
+  const rows = await prisma.reportSendLog.findMany({
+    orderBy: { sentAt: "asc" },
+  });
+  const sheet = wb.addWorksheet("ReportSendLog");
+  sheet.columns = [
+    { header: "id", key: "id", width: 28 },
+    { header: "scope", key: "scope", width: 10 },
+    { header: "dateKey", key: "dateKey", width: 12 },
+    { header: "sentAt", key: "sentAt", width: 24 },
+    { header: "messageId", key: "messageId", width: 28 },
+    { header: "toEmail", key: "toEmail", width: 28 },
+  ];
+  styleHeader(sheet);
+  for (const row of rows) {
+    sheet.addRow({
+      id: row.id,
+      scope: row.scope,
+      dateKey: row.dateKey,
+      sentAt: iso(row.sentAt),
+      messageId: row.messageId || "",
+      toEmail: row.toEmail || "",
+    });
+  }
+  return rows.length;
+}
+
 function addTodayBillsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
   const sheet = wb.addWorksheet("Bills");
   sheet.columns = [
@@ -814,6 +859,7 @@ export async function buildReportWorkbook(scope: ReportScope, now = new Date()) 
     counts.PhoneModels = await addPhoneModelsSheet(wb);
     counts.Users = await addUsersSheet(wb);
     counts.InvoiceSequence = await addInvoiceSequenceSheet(wb);
+    counts.ReportSendLog = await addReportSendLogSheet(wb);
     counts["Outstanding Dues (view)"] = await addOutstandingDuesSheet(wb);
     counts["Finance Dues (view)"] = await addFinanceDuesSheet(wb);
 
