@@ -1,0 +1,61 @@
+name: Deploy GCP free stack
+
+# Auto-deploy when this branch is updated. Railway `main` is not touched.
+on:
+  push:
+    branches:
+      - deploy/gcp-cloudflare-free
+    paths:
+      - "client/**"
+      - "server/**"
+      - "deploy/gcp/**"
+      - "package.json"
+      - ".github/workflows/deploy-gcp.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gcp-free-stack
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy to e2-micro
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.1
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USER }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          port: 22
+          command_timeout: 45m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "$HOME/Billing-System-Suraj-Mobile"
+            echo "==> Fetching deploy/gcp-cloudflare-free"
+            git fetch origin deploy/gcp-cloudflare-free
+            git checkout deploy/gcp-cloudflare-free
+            git pull --ff-only origin deploy/gcp-cloudflare-free
+            test -f deploy/gcp/.env || {
+              echo "Missing deploy/gcp/.env on the VM — copy from .env.example and fill secrets first."
+              exit 1
+            }
+            echo "==> Building and restarting containers (can take several minutes on e2-micro)"
+            docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env up -d --build
+            echo "==> Health check"
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -fsS http://127.0.0.1/api/health | grep -q '"ok":true'; then
+                curl -fsS http://127.0.0.1/api/health
+                echo
+                echo "==> Deploy OK"
+                exit 0
+              fi
+              sleep 6
+            done
+            echo "Health check failed"
+            docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env ps
+            docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env logs api --tail=80
+            exit 1

@@ -17,6 +17,14 @@ Always Free terms for your account.
 
 ---
 
+## Auto-deploy (GitHub Actions)
+
+Pushes to this branch can update the VM automatically.
+
+See [`deploy/gcp/AUTO_DEPLOY.md`](../deploy/gcp/AUTO_DEPLOY.md) for SSH key + GitHub secrets setup.
+
+---
+
 ## What you need to create / provide
 
 ### 1) Accounts
