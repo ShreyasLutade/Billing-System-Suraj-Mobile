@@ -26,6 +26,7 @@ import {
 } from "./MobileNameSearch";
 import { BackButton } from "./ui";
 import { api, formatINR } from "../lib/api";
+import { newClientId } from "../lib/id";
 import type { PhoneModel, Purchase, Supplier } from "../types";
 import clsx from "clsx";
 export type PurchasePrefill = Partial<
@@ -93,7 +94,7 @@ function expandDrafts(drafts: DraftMobile[]) {
 
 function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
   return {
-    id: crypto.randomUUID(),
+    id: newClientId(),
     platform: prefill?.platform || "IOS",
     mobileName: prefill?.mobileName || "",
     storage: prefill?.storage || "",

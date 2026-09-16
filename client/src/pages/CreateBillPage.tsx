@@ -36,6 +36,7 @@ import {
 } from "../components/ExchangeMobileFields";
 import { BackLink, PageHeader, LoadingBlock } from "../components/ui";
 import { FieldPicker } from "../components/FieldPicker";
+import { newClientId } from "../lib/id";
 import {
   ADD_NEW_FINANCE,
   FinanceCompanyPicker,
@@ -64,7 +65,7 @@ type DraftItem = BillItem & {
 };
 
 const blankItem = (): DraftItem => ({
-  key: crypto.randomUUID(),
+  key: newClientId(),
   catalogMode: "mobile",
   productName: "",
   mobileCatalogId: null,
@@ -168,7 +169,7 @@ type FinanceDraft = {
 };
 
 const blankFinanceEntry = (amount = 0): FinanceDraft => ({
-  key: crypto.randomUUID(),
+  key: newClientId(),
   select: "",
   companyId: "",
   newName: "",
@@ -352,7 +353,7 @@ export function CreateBillPage() {
   function billToExchangeDrafts(bill: Bill): ExchangeDraft[] {
     if (bill.exchangeItems?.length) {
       return bill.exchangeItems.map((item) => ({
-        key: crypto.randomUUID(),
+        key: newClientId(),
         platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
         model: item.model,
         color: item.color,
@@ -366,7 +367,7 @@ export function CreateBillPage() {
     if (bill.isExchange && bill.exchangeModel) {
       return [
         {
-          key: crypto.randomUUID(),
+          key: newClientId(),
           platform: bill.exchangePlatform === "ANDROID" ? "ANDROID" : "IOS",
           model: bill.exchangeModel,
           color: bill.exchangeColor || "",
@@ -544,7 +545,7 @@ export function CreateBillPage() {
     setItems(
       bill.items.length
         ? bill.items.map((item) => ({
-            key: crypto.randomUUID(),
+            key: newClientId(),
             catalogMode:
               item.stockItemId || item.mobileCatalogId || item.platform
                 ? "mobile"
@@ -600,7 +601,7 @@ export function CreateBillPage() {
       const firstAmount = round2(Math.max(bill.financeAmount - secondAmount, 0));
       const entries: FinanceDraft[] = [
         {
-          key: crypto.randomUUID(),
+          key: newClientId(),
           select: bill.financeCompanyId || "",
           companyId: bill.financeCompanyId || "",
           newName: "",
@@ -609,7 +610,7 @@ export function CreateBillPage() {
       ];
       if (secondAmount > 0 || bill.financeCompanyId2 || bill.financeCompanyName2) {
         entries.push({
-          key: crypto.randomUUID(),
+          key: newClientId(),
           select: bill.financeCompanyId2 || "",
           companyId: bill.financeCompanyId2 || "",
           newName: "",
