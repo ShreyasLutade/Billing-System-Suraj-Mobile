@@ -161,10 +161,11 @@ async function configureSqlite() {
   const url = process.env.DATABASE_URL || "";
   if (!url.startsWith("file:")) return;
   try {
-    await prisma.$executeRawUnsafe(`PRAGMA journal_mode=WAL;`);
-    await prisma.$executeRawUnsafe(`PRAGMA synchronous=NORMAL;`);
-    await prisma.$executeRawUnsafe(`PRAGMA busy_timeout=5000;`);
-    await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=ON;`);
+    // SQLite PRAGMAs return rows — must use queryRaw, not executeRaw.
+    await prisma.$queryRawUnsafe(`PRAGMA journal_mode=WAL`);
+    await prisma.$queryRawUnsafe(`PRAGMA synchronous=NORMAL`);
+    await prisma.$queryRawUnsafe(`PRAGMA busy_timeout=5000`);
+    await prisma.$queryRawUnsafe(`PRAGMA foreign_keys=ON`);
     console.log("[db] SQLite WAL mode enabled");
   } catch (error) {
     console.warn("[db] SQLite pragma setup skipped:", error);
