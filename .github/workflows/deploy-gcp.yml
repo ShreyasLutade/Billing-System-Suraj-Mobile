@@ -1,6 +1,6 @@
 name: Deploy GCP free stack
 
-# Auto-deploy when this branch is updated. Railway `main` is not touched.
+# Restored for Actions UI. Auto-deploy on this branch only — Railway `main` is not touched.
 on:
   push:
     branches:
