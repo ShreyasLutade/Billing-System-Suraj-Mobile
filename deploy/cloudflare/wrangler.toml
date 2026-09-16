@@ -1,0 +1,16 @@
+# Cloudflare Pages — Suraj Mobile UI
+#
+# Dashboard setup (recommended):
+#   Framework preset: Vite
+#   Root directory:   client
+#   Build command:    npm ci && npm run build
+#   Build output:     dist
+#   Env vars:
+#     VITE_API_URL = https://api.YOUR_DOMAIN/api
+#
+# Custom domain: billing.YOUR_DOMAIN → this Pages project
+# API domain:    api.YOUR_DOMAIN     → Google Cloud VM (proxied)
+
+name = "suraj-mobile-billing"
+compatibility_date = "2026-09-01"
+pages_build_output_dir = "dist"

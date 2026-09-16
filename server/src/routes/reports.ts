@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { runBillingReport, runScheduledReports } from "../services/dailyReports";
 import { getReportMailConfig } from "../services/reportEmail";
+import { emailSqliteBackup } from "../services/sqliteBackup";
 import {
   PURGE_CONFIRM,
   purgeOperationalData,
@@ -58,6 +59,25 @@ reportsRouter.post("/send", async (req, res, next) => {
         subject: mail.subject,
         messageId: mail.messageId,
         dateKey,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin: email a fresh SQLite .db snapshot (GCP free-stack backups). */
+reportsRouter.post("/backup-db", async (req, res, next) => {
+  try {
+    const force = Boolean(req.body?.force);
+    const result = await emailSqliteBackup({ force });
+    res.json({
+      data: {
+        filename: result.snapshot.filename,
+        bytes: result.snapshot.bytes,
+        dateKey: result.snapshot.dateKey,
+        emailedTo: result.mail.to,
+        messageId: result.mail.messageId,
       },
     });
   } catch (error) {

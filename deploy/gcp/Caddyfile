@@ -1,0 +1,15 @@
+# Default: HTTP on :80. Put Cloudflare in front (orange cloud).
+# SSL/TLS mode options:
+#   - Flexible  → works with this file immediately (Cloudflare↔visitor HTTPS, CF↔origin HTTP)
+#   - Full (strict) → switch compose to Caddyfile.full + Origin CA certs (recommended)
+
+:80 {
+	encode gzip
+	reverse_proxy api:4000
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

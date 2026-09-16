@@ -1,0 +1,77 @@
+# Suraj Mobile — Google Cloud Always Free (e2-micro) stack
+#
+# Usage on the VM (from repo root after clone):
+#   cp deploy/gcp/.env.example deploy/gcp/.env   # edit secrets
+#   docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env up -d --build
+#
+# Data lives in the named volume `suraj-data` mounted at /data inside the API
+# container (suraj.db + local file backups).
+
+name: suraj-billing
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/gcp/Dockerfile
+      args:
+        # Set SERVE_CLIENT=1 only for temporary same-origin testing before Pages goes live.
+        SERVE_CLIENT: ${SERVE_CLIENT:-0}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: file:/data/suraj.db
+      TRUST_PROXY: "1"
+      NODE_OPTIONS: --max-old-space-size=384
+    volumes:
+      - suraj-data:/data
+    expose:
+      - "4000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:4000/api/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Must match the hostname Cloudflare proxies to this VM, e.g. api.yourdomain.com
+      API_HOSTNAME: ${API_HOSTNAME:-api.localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  suraj-data:
+  caddy-data:
+  caddy-config:
