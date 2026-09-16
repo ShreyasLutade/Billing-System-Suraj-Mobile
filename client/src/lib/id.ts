@@ -8,7 +8,7 @@ export function ensureRandomUUID() {
   if (!cryptoObj) return;
   if (typeof cryptoObj.randomUUID === "function") return;
 
-  const randomUUID = function randomUUID() {
+  const randomUUID = (() => {
     if (typeof cryptoObj.getRandomValues === "function") {
       const bytes = new Uint8Array(16);
       cryptoObj.getRandomValues(bytes);
@@ -20,7 +20,7 @@ export function ensureRandomUUID() {
       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     }
     return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
-  };
+  }) as Crypto["randomUUID"];
 
   try {
     Object.defineProperty(cryptoObj, "randomUUID", {
@@ -28,7 +28,8 @@ export function ensureRandomUUID() {
       configurable: true,
     });
   } catch {
-    (cryptoObj as Crypto & { randomUUID: () => string }).randomUUID =
+    // Some browsers expose a non-writable crypto.randomUUID slot.
+    (cryptoObj as unknown as { randomUUID: Crypto["randomUUID"] }).randomUUID =
       randomUUID;
   }
 }
