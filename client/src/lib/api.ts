@@ -578,6 +578,56 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ scope, force }),
     }),
+  downloadBackupZip: async () => {
+    const token = getAuthToken();
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/reports/download-backup-zip`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      throw new ApiError(
+        "Cannot reach the server. Make sure the API is running on port 4000.",
+        0,
+      );
+    }
+
+    if (response.status === 401) {
+      clearAuthToken();
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.assign("/login");
+      }
+    }
+
+    if (!response.ok) {
+      let message = "Could not download backup zip";
+      try {
+        const body = await response.json();
+        message = body.error || message;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || `SurajMobile-Backup.zip`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return {
+      filename,
+      excelFilename: response.headers.get("X-Excel-Filename") || null,
+      dbFilename: response.headers.get("X-Db-Filename") || null,
+    };
+  },
   restoreDatabase: async (file: File, confirm: string) => {
     const token = getAuthToken();
     const form = new FormData();

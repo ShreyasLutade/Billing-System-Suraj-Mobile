@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DatabaseBackup, Mail, Upload } from "lucide-react";
+import { DatabaseBackup, Download, Mail, Upload } from "lucide-react";
 import { BackLink, PageHeader } from "../components/ui";
 import { ApiError, api } from "../lib/api";
 
@@ -19,6 +19,7 @@ export function BackupPage() {
   const [file, setFile] = useState<File | null>(null);
   const [confirm, setConfirm] = useState("");
   const [sending, setSending] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +72,31 @@ export function BackupPage() {
     }
   }
 
+  async function downloadLocalBackup() {
+    setDownloading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await api.downloadBackupZip();
+      setMessage(
+        `Downloaded ${result.filename}${
+          result.dbFilename
+            ? ` (Excel + ${result.dbFilename})`
+            : " (Excel only — SQLite .db not available)"
+        }. Save it somewhere safe.`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to download backup zip",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   async function restore() {
     if (!file) {
-      setError("Choose a .db backup file first");
+      setError("Choose a .db or backup .zip file first");
       return;
     }
     if (confirm.trim() !== confirmPhrase) {
@@ -107,7 +130,7 @@ export function BackupPage() {
       <PageHeader
         eyebrow="Admin"
         title="Backup & restore"
-        description="Report emails include Excel and a SQLite .db file. Upload a .db here to restore the full shop database."
+        description="Download a zip (Excel + .db) to keep locally, email the same files, or upload a .db / backup zip to restore."
       />
 
       {loading ? (
@@ -123,13 +146,12 @@ export function BackupPage() {
               </span>
               <div>
                 <h2 className="font-display text-xl font-semibold text-ink-900">
-                  Email backup
+                  Save a backup
                 </h2>
                 <p className="mt-1 text-sm text-ink-500">
-                  Sends the Excel report and the live{" "}
-                  <span className="font-medium text-ink-700">.db</span> file to
-                  the configured report email. Scheduled Tue + Fri + Sun still do
-                  the same.
+                  Download a zip with the full Excel report and the live{" "}
+                  <span className="font-medium text-ink-700">.db</span> file, or
+                  email the same to the configured report address.
                 </p>
               </div>
             </div>
@@ -153,19 +175,30 @@ export function BackupPage() {
               </div>
             </dl>
 
-            <button
-              type="button"
-              className="btn-primary mt-5"
-              disabled={sending || !sqlite}
-              onClick={() => void sendEmailBackup()}
-            >
-              <DatabaseBackup className="h-4 w-4" />
-              {sending ? "Sending…" : "Email Excel + .db now"}
-            </button>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={downloading}
+                onClick={() => void downloadLocalBackup()}
+              >
+                <Download className="h-4 w-4" />
+                {downloading ? "Preparing zip…" : "Download Excel + .db zip"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={sending || !sqlite}
+                onClick={() => void sendEmailBackup()}
+              >
+                <DatabaseBackup className="h-4 w-4" />
+                {sending ? "Sending…" : "Email Excel + .db"}
+              </button>
+            </div>
             {!sqlite ? (
               <p className="mt-3 text-xs text-ink-500">
-                .db email/restore only works with SQLite. Postgres deployments
-                keep Excel reports only.
+                Zip still includes Excel. .db email/restore only works with
+                SQLite. Postgres deployments keep Excel reports only.
               </p>
             ) : null}
           </section>
@@ -177,20 +210,23 @@ export function BackupPage() {
               </span>
               <div>
                 <h2 className="font-display text-xl font-semibold text-ink-900">
-                  Restore from .db
+                  Restore from backup
                 </h2>
                 <p className="mt-1 text-sm text-ink-500">
-                  Replaces the live database with an emailed backup. This
-                  overwrites current data. The server restarts after restore.
+                  Upload a raw{" "}
+                  <span className="font-medium text-ink-700">.db</span> or the
+                  backup <span className="font-medium text-ink-700">.zip</span>{" "}
+                  you downloaded. This overwrites current data. The server
+                  restarts after restore.
                 </p>
               </div>
             </div>
 
             <label className="mt-5 block text-sm font-medium text-ink-700">
-              Backup file (.db)
+              Backup file (.db or .zip)
               <input
                 type="file"
-                accept=".db,application/x-sqlite3,application/octet-stream"
+                accept=".db,.zip,application/zip,application/x-sqlite3,application/octet-stream"
                 className="mt-2 block w-full text-sm text-ink-600 file:mr-3 file:rounded-xl file:border-0 file:bg-ink-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:file:bg-tide-400 dark:file:text-ink-50"
                 disabled={!canRestore || restoring}
                 onChange={(event) => {

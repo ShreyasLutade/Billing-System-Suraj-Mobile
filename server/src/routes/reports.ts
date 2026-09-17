@@ -18,6 +18,10 @@ import {
   isSqliteDatabaseUrl,
   restoreSqliteFromBuffer,
 } from "../services/sqliteBackup";
+import {
+  buildBackupZipBuffer,
+  extractSqliteBackupBuffer,
+} from "../services/backupBundle";
 import fs from "fs";
 
 export const reportsRouter = Router();
@@ -104,7 +108,29 @@ reportsRouter.get("/backup-status", async (_req, res, next) => {
 });
 
 /**
- * Admin-only: upload a Suraj Mobile .db backup and replace the live SQLite file.
+ * Admin-only: download a zip with full Excel report + live SQLite .db snapshot.
+ */
+reportsRouter.get("/download-backup-zip", async (_req, res, next) => {
+  try {
+    const bundle = await buildBackupZipBuffer();
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${bundle.filename}"`,
+    );
+    res.setHeader("Content-Length", String(bundle.bytes));
+    if (bundle.dbFilename) {
+      res.setHeader("X-Db-Filename", bundle.dbFilename);
+    }
+    res.setHeader("X-Excel-Filename", bundle.excelFilename);
+    res.send(bundle.buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Admin-only: upload a Suraj Mobile .db (or backup .zip) and replace the live SQLite file.
  * Server restarts shortly after so Prisma opens the restored database.
  */
 reportsRouter.post(
@@ -123,12 +149,16 @@ reportsRouter.post(
 
       if (!req.file?.buffer?.length) {
         res.status(400).json({
-          error: "Choose a .db backup file to upload",
+          error: "Choose a .db or backup .zip file to upload",
         });
         return;
       }
 
-      const result = await restoreSqliteFromBuffer(req.file.buffer);
+      const dbBuffer = await extractSqliteBackupBuffer(
+        req.file.buffer,
+        req.file.originalname || "",
+      );
+      const result = await restoreSqliteFromBuffer(dbBuffer);
       res.json({
         data: {
           ok: true,
