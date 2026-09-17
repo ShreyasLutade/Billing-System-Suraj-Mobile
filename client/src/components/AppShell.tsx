@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
+  DatabaseBackup,
   FilePlus2,
   LogOut,
   Moon,
@@ -43,7 +44,10 @@ export function AppShell() {
     { to: "/stock", label: "Stock", icon: Package },
     { to: "/suppliers", label: "Suppliers", icon: Truck },
     ...(isAdmin
-      ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }]
+      ? [
+          { to: "/analytics", label: "Analytics", icon: BarChart3 },
+          { to: "/backup", label: "Backup", icon: DatabaseBackup },
+        ]
       : []),
   ];
 

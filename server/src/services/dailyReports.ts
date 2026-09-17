@@ -11,6 +11,10 @@ import {
   sendReportEmail,
   verifyReportSmtp,
 } from "./reportEmail";
+import {
+  createSqliteBackupBuffer,
+  isSqliteDatabaseUrl,
+} from "./sqliteBackup";
 
 let started = false;
 
@@ -92,18 +96,56 @@ export async function runBillingReport(
     return {
       report: null as Awaited<ReturnType<typeof buildReportWorkbook>> | null,
       mail: null as Awaited<ReturnType<typeof sendReportEmail>> | null,
+      dbFilename: null as string | null,
+      dbBytes: null as number | null,
       skipped: true as const,
       dateKey,
     };
   }
 
   const report = await buildReportWorkbook(scope);
-  const mail = await sendReportEmail(report);
+
+  let dbAttachment:
+    | Awaited<ReturnType<typeof createSqliteBackupBuffer>>
+    | null = null;
+  if (isSqliteDatabaseUrl()) {
+    try {
+      dbAttachment = await createSqliteBackupBuffer();
+      console.log(
+        `[reports] SQLite snapshot ready — ${dbAttachment.filename} (${dbAttachment.bytes} bytes)`,
+      );
+    } catch (error) {
+      console.error("[reports] SQLite .db snapshot failed:", error);
+      // Still send Excel; restore file is best-effort alongside reports.
+    }
+  }
+
+  const mail = await sendReportEmail(
+    report,
+    dbAttachment
+      ? [
+          {
+            filename: dbAttachment.filename,
+            buffer: dbAttachment.buffer,
+            contentType: "application/x-sqlite3",
+          },
+        ]
+      : [],
+  );
   await markSent(scope, dateKey, mail.messageId, mail.to);
   console.log(
-    `[reports] Sent ${scope} Excel (${report.billCount} bills) to ${mail.to} — ${report.filename}`,
+    `[reports] Sent ${scope} Excel (${report.billCount} bills)${
+      dbAttachment ? ` + ${dbAttachment.filename}` : ""
+    } to ${mail.to} — ${report.filename}`,
   );
-  return { report, mail, skipped: false as const, dateKey };
+  return {
+    report,
+    mail,
+    dbFilename: dbAttachment?.filename ?? null,
+    dbBytes: dbAttachment?.bytes ?? null,
+    skipped: false as const,
+    dateKey,
+  };
 }
 
 /**

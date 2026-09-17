@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import cron from "node-cron";
 import { prisma } from "../lib/prisma";
@@ -11,18 +12,50 @@ import {
 let started = false;
 
 const DEFAULT_BACKUP_CRON = "30 23 * * *";
+const SQLITE_HEADER = Buffer.from("SQLite format 3\0");
+
+/** Confirm phrase required for destructive DB restore. */
+export const RESTORE_DB_CONFIRM = "RESTORE DATABASE";
 
 function cleanEnv(value: string | undefined) {
   return (value || "").trim();
 }
 
-function databaseFilePath() {
-  const url = cleanEnv(process.env.DATABASE_URL) || "file:./dev.db";
-  if (!url.startsWith("file:")) return null;
-  const raw = url.slice("file:".length);
-  return path.isAbsolute(raw)
-    ? raw
-    : path.resolve(process.cwd(), raw);
+export function isSqliteDatabaseUrl(url = process.env.DATABASE_URL || "") {
+  return url.trim().toLowerCase().startsWith("file:");
+}
+
+/**
+ * Resolve the on-disk SQLite path from DATABASE_URL.
+ * Absolute paths (GCP `file:/data/suraj.db`) win; relative paths try `prisma/` then cwd.
+ */
+export function getSqliteFilePath(url = process.env.DATABASE_URL || ""): string {
+  const raw = cleanEnv(url) || "file:./dev.db";
+  if (!raw.toLowerCase().startsWith("file:")) {
+    throw new Error(
+      "SQLite backup/restore requires DATABASE_URL starting with file:",
+    );
+  }
+
+  let filePart = raw.slice("file:".length);
+  if (filePart.startsWith("///")) {
+    filePart = filePart.slice(2);
+    if (/^\/[A-Za-z]:/.test(filePart)) {
+      filePart = filePart.slice(1);
+    }
+  } else if (filePart.startsWith("//localhost/")) {
+    filePart = filePart.slice("//localhost".length);
+  }
+
+  if (path.isAbsolute(filePart)) {
+    return path.normalize(filePart);
+  }
+
+  const prismaPath = path.resolve(process.cwd(), "prisma", filePart);
+  const cwdPath = path.resolve(process.cwd(), filePart);
+  if (fs.existsSync(prismaPath)) return prismaPath;
+  if (fs.existsSync(cwdPath)) return cwdPath;
+  return prismaPath;
 }
 
 function backupDirFor(dbFile: string) {
@@ -31,11 +64,36 @@ function backupDirFor(dbFile: string) {
   return path.join(path.dirname(dbFile), "backups");
 }
 
+export function assertSqliteFile(buffer: Buffer) {
+  if (buffer.length < 100) {
+    throw new Error("Uploaded file is too small to be a SQLite database");
+  }
+  if (!buffer.subarray(0, 16).equals(SQLITE_HEADER)) {
+    throw new Error(
+      "Uploaded file is not a SQLite database (.db). Use a Suraj Mobile backup .db file.",
+    );
+  }
+}
+
+function escapeSqliteLiteral(value: string) {
+  return value.replace(/'/g, "''");
+}
+
+function sidecarPaths(dbPath: string) {
+  return [`${dbPath}-wal`, `${dbPath}-shm`];
+}
+
+async function removeSidecars(dbPath: string) {
+  for (const side of sidecarPaths(dbPath)) {
+    await fs.promises.unlink(side).catch(() => undefined);
+  }
+}
+
 /** Checkpoint WAL then snapshot the SQLite file for email / disk retention. */
 export async function createSqliteBackupSnapshot() {
-  const dbFile = databaseFilePath();
-  if (!dbFile || !fs.existsSync(dbFile)) {
-    throw new Error(`SQLite database not found (${dbFile || "unset"})`);
+  const dbFile = getSqliteFilePath();
+  if (!fs.existsSync(dbFile)) {
+    throw new Error(`SQLite database not found (${dbFile})`);
   }
 
   try {
@@ -91,6 +149,63 @@ export async function createSqliteBackupSnapshot() {
   };
 }
 
+/**
+ * Consistent snapshot via SQLite VACUUM INTO (preferred for report email attach).
+ * Falls back to file copy if VACUUM INTO is unavailable.
+ */
+export async function createSqliteBackupBuffer(): Promise<{
+  buffer: Buffer;
+  filename: string;
+  bytes: number;
+  sourcePath: string;
+}> {
+  if (!isSqliteDatabaseUrl()) {
+    throw new Error(
+      "Database backup (.db) is only available when using SQLite (DATABASE_URL=file:...)",
+    );
+  }
+
+  const sourcePath = getSqliteFilePath();
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(`SQLite database file not found at ${sourcePath}`);
+  }
+
+  const dateKey = istDateString();
+  const filename = `suraj-mobile-backup-${dateKey}.db`;
+  const tempPath = path.join(
+    os.tmpdir(),
+    `suraj-vacuum-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+  );
+
+  try {
+    await prisma.$executeRawUnsafe(
+      `VACUUM INTO '${escapeSqliteLiteral(tempPath)}'`,
+    );
+    const buffer = await fs.promises.readFile(tempPath);
+    assertSqliteFile(buffer);
+    return {
+      buffer,
+      filename,
+      bytes: buffer.length,
+      sourcePath,
+    };
+  } catch (error) {
+    console.warn(
+      "[backup] VACUUM INTO failed, falling back to file snapshot:",
+      error,
+    );
+    const snapshot = await createSqliteBackupSnapshot();
+    return {
+      buffer: snapshot.buffer,
+      filename,
+      bytes: snapshot.bytes,
+      sourcePath,
+    };
+  } finally {
+    await fs.promises.unlink(tempPath).catch(() => undefined);
+  }
+}
+
 export async function emailSqliteBackup(options: { force?: boolean } = {}) {
   const { configured, to } = getReportMailConfig();
   if (!configured || !to) {
@@ -106,7 +221,8 @@ export async function emailSqliteBackup(options: { force?: boolean } = {}) {
     `File: ${snapshot.filename}`,
     `Size: ${(snapshot.bytes / (1024 * 1024)).toFixed(2)} MB`,
     "",
-    "Keep this email. To restore: stop the API, replace /data/suraj.db with this file, start again.",
+    "Keep this email. To restore: open Backup on the website, upload this .db, and confirm RESTORE DATABASE.",
+    "Or stop the API, replace /data/suraj.db with this file, and start again.",
   ].join("\n");
 
   const mail = await sendRawEmailWithAttachments({
@@ -165,4 +281,61 @@ export function startSqliteBackupScheduler() {
   console.log(
     `[backup] SQLite email backup scheduled (${expression} ${IST_TIMEZONE})`,
   );
+}
+
+/**
+ * Replace the live SQLite file with an uploaded backup.
+ * Caller should restart the process after a successful response so Prisma reconnects cleanly.
+ */
+export async function restoreSqliteFromBuffer(buffer: Buffer): Promise<{
+  restoredPath: string;
+  previousBackupPath: string;
+  bytes: number;
+}> {
+  assertSqliteFile(buffer);
+
+  if (!isSqliteDatabaseUrl()) {
+    throw new Error(
+      "Database restore is only available when using SQLite (DATABASE_URL=file:...)",
+    );
+  }
+
+  const livePath = getSqliteFilePath();
+  const dir = path.dirname(livePath);
+  await fs.promises.mkdir(dir, { recursive: true });
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const previousBackupPath = path.join(dir, `suraj.pre-restore-${stamp}.db`);
+  const incomingPath = path.join(dir, `suraj.incoming-${stamp}.db`);
+
+  await fs.promises.writeFile(incomingPath, buffer);
+
+  try {
+    try {
+      await prisma.$executeRawUnsafe(`PRAGMA wal_checkpoint(TRUNCATE)`);
+    } catch {
+      // Ignore if DB is not in WAL mode or checkpoint fails.
+    }
+
+    await prisma.$disconnect();
+
+    if (fs.existsSync(livePath)) {
+      await fs.promises.copyFile(livePath, previousBackupPath);
+    }
+
+    await removeSidecars(livePath);
+    await fs.promises.rename(incomingPath, livePath);
+    await removeSidecars(livePath);
+
+    return {
+      restoredPath: livePath,
+      previousBackupPath: fs.existsSync(previousBackupPath)
+        ? previousBackupPath
+        : "",
+      bytes: buffer.length,
+    };
+  } catch (error) {
+    await fs.promises.unlink(incomingPath).catch(() => undefined);
+    throw error;
+  }
 }
