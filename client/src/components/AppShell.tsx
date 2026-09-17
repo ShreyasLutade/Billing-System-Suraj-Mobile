@@ -3,7 +3,6 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
-  DatabaseBackup,
   FilePlus2,
   LogOut,
   Moon,
@@ -43,12 +42,7 @@ export function AppShell() {
     { to: "/dues", label: "Dues", icon: Wallet },
     { to: "/stock", label: "Stock", icon: Package },
     { to: "/suppliers", label: "Suppliers", icon: Truck },
-    ...(isAdmin
-      ? [
-          { to: "/analytics", label: "Analytics", icon: BarChart3 },
-          { to: "/backup", label: "Backup", icon: DatabaseBackup },
-        ]
-      : []),
+    ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
   ];
 
   function onMainNavClick() {
@@ -69,7 +63,12 @@ export function AppShell() {
       </div>
 
       <header className="fixed inset-x-0 top-0 z-40 border-b border-white/50 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 pr-[7.25rem] sm:px-6 sm:pr-36">
+        <div
+          className={clsx(
+            "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",
+            isAdmin ? "pr-[10.5rem] sm:pr-48" : "pr-[7.25rem] sm:pr-36",
+          )}
+        >
           <Link
             to="/"
             onClick={onMainNavClick}
@@ -131,6 +130,21 @@ export function AppShell() {
               <Moon className="h-4 w-4" />
             )}
           </button>
+          {isAdmin ? (
+            <Link
+              to="/backup"
+              onClick={onMainNavClick}
+              title="Restore data"
+              aria-label="Restore data"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-100/90 bg-white/80 text-center text-[9px] font-semibold leading-[1.05] text-ink-700 shadow-soft transition hover:border-tide-300 hover:bg-tide-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:border-white/10 dark:bg-surface-muted/80 dark:text-ink-100 dark:hover:bg-tide-400/15"
+            >
+              <span className="px-0.5">
+                Restore
+                <br />
+                Data
+              </span>
+            </Link>
+          ) : null}
           <button
             type="button"
             className="btn-secondary px-3 py-2"

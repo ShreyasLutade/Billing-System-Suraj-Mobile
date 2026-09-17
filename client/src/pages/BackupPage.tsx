@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DatabaseBackup, Mail, Upload } from "lucide-react";
-import { PageHeader } from "../components/ui";
+import { BackLink, PageHeader } from "../components/ui";
 import { ApiError, api } from "../lib/api";
 
 function formatBytes(bytes: number | null | undefined) {
@@ -101,6 +101,9 @@ export function BackupPage() {
 
   return (
     <div>
+      <BackLink to="/" className="mb-4">
+        Back
+      </BackLink>
       <PageHeader
         eyebrow="Admin"
         title="Backup & restore"
