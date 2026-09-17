@@ -110,7 +110,7 @@ app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 if (!serveClient) {
   app.get("/", (_req, res) => {
     res.json({
-      service: "Suraj Billing API",
+      service: "Smart Billing API",
       message:
         "Open the website at http://localhost:5173 — this port is the API only.",
       health: "/api/health",
@@ -249,7 +249,7 @@ async function start() {
   startDailyReportScheduler();
   startSqliteBackupScheduler();
   const server = app.listen(port, "0.0.0.0", () => {
-    console.log(`Suraj Billing API running on http://localhost:${port}`);
+    console.log(`Smart Billing API running on http://localhost:${port}`);
     if (serveClient) {
       console.log("Serving web app from /public");
     }

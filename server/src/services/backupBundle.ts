@@ -36,7 +36,7 @@ export async function buildBackupZipBuffer(): Promise<{
     }),
   );
 
-  const filename = `SurajMobile-Backup-${istDateString()}.zip`;
+  const filename = `SmartBilling-Backup-${istDateString()}.zip`;
   return {
     buffer,
     filename,
@@ -67,18 +67,22 @@ export async function extractSqliteBackupBuffer(
   );
   if (!entries.length) {
     throw new Error(
-      "Zip has no .db file. Use a Suraj Mobile backup zip or a raw .db file.",
+      "Zip has no .db file. Use a Smart Billing backup zip or a raw .db file.",
     );
   }
 
-  // Prefer root-level / Suraj-named db if several exist.
+  // Prefer root-level / brand-named db if several exist.
   entries.sort((a, b) => {
     const aScore =
-      (a.name.toLowerCase().includes("suraj") ? 0 : 1) +
-      (a.name.includes("/") || a.name.includes("\\") ? 1 : 0);
+      (a.name.toLowerCase().includes("smart") ||
+      a.name.toLowerCase().includes("suraj")
+        ? 0
+        : 1) + (a.name.includes("/") || a.name.includes("\\") ? 1 : 0);
     const bScore =
-      (b.name.toLowerCase().includes("suraj") ? 0 : 1) +
-      (b.name.includes("/") || b.name.includes("\\") ? 1 : 0);
+      (b.name.toLowerCase().includes("smart") ||
+      b.name.toLowerCase().includes("suraj")
+        ? 0
+        : 1) + (b.name.includes("/") || b.name.includes("\\") ? 1 : 0);
     return aScore - bScore || a.name.localeCompare(b.name);
   });
 

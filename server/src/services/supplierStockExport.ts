@@ -110,7 +110,7 @@ export async function buildSupplierMobilesWorkbook(
   });
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Suraj Mobile Billing";
+  wb.creator = "Smart Billing";
   wb.created = new Date();
 
   const sheetLabel = condition === "USED" ? "Old mobiles" : "New mobiles";

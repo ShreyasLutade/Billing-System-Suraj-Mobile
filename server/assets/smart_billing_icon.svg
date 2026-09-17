@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Smart Billing">
+  <title>Smart Billing</title>
+  <defs>
+    <linearGradient id="sbBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B7CF6"/>
+      <stop offset="100%" stop-color="#6D5EF0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sbBg)"/>
+  <!-- Receipt -->
+  <path fill="#FFFFFF" d="M168 96h176c14 0 26 12 26 26v236l-22-14-22 14-22-14-22 14-22-14-22 14-22-14-22 14-22-14-22 14V122c0-14 12-26 26-26z"/>
+  <!-- Lines -->
+  <rect x="208" y="148" width="96" height="22" rx="11" fill="#5B6FD6"/>
+  <rect x="208" y="192" width="128" height="22" rx="11" fill="#B8C0F5"/>
+  <rect x="208" y="236" width="88" height="22" rx="11" fill="#B8C0F5"/>
+  <rect x="208" y="288" width="52" height="22" rx="11" fill="#B8C0F5"/>
+  <rect x="276" y="288" width="52" height="22" rx="11" fill="#5B6FD6"/>
+  <!-- Sparkle -->
+  <path fill="#FFC145" d="M372 118l10.5 24.5L407 153l-24.5 10.5L372 188l-10.5-24.5L337 153l24.5-10.5L372 118z"/>
+  <circle cx="404" cy="178" r="9" fill="#FFC145"/>
+</svg>

@@ -132,7 +132,7 @@ authRouter.post("/forgot-password", async (req, res, next) => {
     const otp = String(randomInt(100000, 1000000));
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
     const names = users.map((user) => user.name).join(", ");
-    const shop = process.env.SHOP_NAME || "Suraj Mobile";
+    const shop = process.env.SHOP_NAME || "Smart Billing";
     const mail = await sendPlainEmail({
       subject: `${shop} password reset OTP (${phone})`,
       text: [

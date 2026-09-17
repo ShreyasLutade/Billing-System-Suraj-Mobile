@@ -613,7 +613,7 @@ export const api = {
     const blob = await response.blob();
     const disposition = response.headers.get("Content-Disposition") || "";
     const match = /filename="?([^"]+)"?/i.exec(disposition);
-    const filename = match?.[1] || `SurajMobile-Backup.zip`;
+    const filename = match?.[1] || `SmartBilling-Backup.zip`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

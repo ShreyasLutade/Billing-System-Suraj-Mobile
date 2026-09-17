@@ -12,33 +12,33 @@ import {
 
 type BillWithItems = Bill & { items: BillItem[] };
 
-/** Logo palette: charcoal + gold (exact Suraj Mobile wordmark colors) */
+/** Logo palette: Smart Billing purple + gold accent */
 const COLORS = {
-  charcoal: "#494D53",
-  gold: "#C49333",
-  goldSoft: "#F5EDD8",
+  charcoal: "#1A1F36",
+  gold: "#6D5EF0",
+  goldSoft: "#EDE9FE",
   ink: "#1A1A1A",
   muted: "#555555",
   white: "#FFFFFF",
 };
 
 const shop = {
-  name: process.env.SHOP_NAME || "Suraj Mobile",
+  name: process.env.SHOP_NAME || "Smart Billing",
   tagline:
-    process.env.SHOP_TAGLINE || "Deals In - All New & Second Hand Phones",
+    process.env.SHOP_TAGLINE || "Mobile shop billing · Stock · Dues · GST",
   address:
     process.env.SHOP_ADDRESS ||
-    "Near Jain Mandir, Beside Arihant Institute Main Road Balaghat (M.P) 481001",
-  phone: process.env.SHOP_PHONE || "9516533556",
-  instagram: process.env.SHOP_INSTAGRAM || "@surajmobileofficial",
-  gstin: process.env.SHOP_GSTIN || "23FAAPB2709A1ZP",
+    "Demo storefront — replace with your shop address",
+  phone: process.env.SHOP_PHONE || "0000000000",
+  instagram: process.env.SHOP_INSTAGRAM || "@smartbilling",
+  gstin: process.env.SHOP_GSTIN || "DEMOGSTIN0000",
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 28;
 const CONTENT_WIDTH = PAGE.width - MARGIN * 2;
-const LOGO_PATH = path.join(__dirname, "../../assets/suraj_mobile_logo.png");
-const ICON_PATH = path.join(__dirname, "../../assets/suraj_mobile_icon.png");
+const LOGO_PATH = path.join(__dirname, "../../assets/smart_billing_logo.png");
+const ICON_PATH = path.join(__dirname, "../../assets/smart_billing_icon.png");
 const FONTS_DIR = path.join(__dirname, "../../assets/fonts");
 const FONT = {
   regular: "Manrope",

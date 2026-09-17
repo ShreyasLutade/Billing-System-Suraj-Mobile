@@ -17,6 +17,7 @@ import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
+import { BRAND_NAME, BrandIcon } from "./Brand";
 
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
@@ -73,20 +74,16 @@ export function AppShell() {
             to="/"
             onClick={onMainNavClick}
             className="flex items-center gap-3 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
-            aria-label="Suraj Mobile — New Bill"
+            aria-label={`${BRAND_NAME} — New Bill`}
           >
-            <img
-              src="/suraj_mobile_icon.png"
-              alt=""
-              className="h-11 w-11 shrink-0 object-contain"
-            />
+            <BrandIcon className="h-11 w-11 shrink-0" alt="" />
             <div>
               <p className="font-display text-lg font-semibold tracking-tight text-ink-900">
-                Suraj Mobile
+                {BRAND_NAME}
               </p>
               <p className="text-xs text-ink-500">
                 {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·
-                Balaghat
+                Demo
               </p>
             </div>
           </Link>

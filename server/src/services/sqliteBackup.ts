@@ -70,7 +70,7 @@ export function assertSqliteFile(buffer: Buffer) {
   }
   if (!buffer.subarray(0, 16).equals(SQLITE_HEADER)) {
     throw new Error(
-      "Uploaded file is not a SQLite database (.db). Use a Suraj Mobile backup .db file.",
+      "Uploaded file is not a SQLite database (.db). Use a Smart Billing backup .db file.",
     );
   }
 }
@@ -117,7 +117,7 @@ export async function createSqliteBackupSnapshot() {
     .replace(", ", "_")
     .replace(/:/g, "");
 
-  const dest = path.join(dir, `suraj-${stamp}.db`);
+  const dest = path.join(dir, `smart-billing-${stamp}.db`);
   fs.copyFileSync(dbFile, dest);
   for (const extra of [`${dbFile}-wal`, `${dbFile}-shm`]) {
     if (fs.existsSync(extra)) {
@@ -129,7 +129,7 @@ export async function createSqliteBackupSnapshot() {
   if (Number.isFinite(keepDays) && keepDays > 0) {
     const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000;
     for (const name of fs.readdirSync(dir)) {
-      if (!name.startsWith("suraj-")) continue;
+      if (!name.startsWith("smart-billing-") && !name.startsWith("suraj-")) continue;
       const full = path.join(dir, name);
       try {
         if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full);
@@ -171,7 +171,7 @@ export async function createSqliteBackupBuffer(): Promise<{
   }
 
   const dateKey = istDateString();
-  const filename = `suraj-mobile-backup-${dateKey}.db`;
+  const filename = `smart-billing-backup-${dateKey}.db`;
   const tempPath = path.join(
     os.tmpdir(),
     `suraj-vacuum-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
@@ -213,7 +213,7 @@ export async function emailSqliteBackup(options: { force?: boolean } = {}) {
   }
 
   const snapshot = await createSqliteBackupSnapshot();
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   const subject = `${shop} — SQLite backup (${snapshot.dateKey})`;
   const text = [
     `${shop} database backup`,

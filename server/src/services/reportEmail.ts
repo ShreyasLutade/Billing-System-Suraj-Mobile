@@ -50,7 +50,7 @@ function isRailway() {
 }
 
 function resendFromAddress() {
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   return (
     cleanEnv(process.env.RESEND_FROM) ||
     `${shop} <onboarding@resend.dev>`
@@ -73,7 +73,7 @@ export function getReportMailConfig() {
   const pass = cleanEnv(process.env.SMTP_PASS).replace(/\s+/g, "");
   const to = cleanEnv(process.env.REPORT_EMAIL_TO);
   const provider = emailProvider();
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   const from =
     cleanEnv(process.env.RESEND_FROM) ||
     (provider === "resend"
@@ -399,7 +399,7 @@ export async function sendReportEmail(
     );
   }
 
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   const isToday = report.scope === "today";
   const hasDb = extraAttachments.some((file) =>
     file.filename.toLowerCase().endsWith(".db"),

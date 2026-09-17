@@ -150,7 +150,7 @@ reportsRouter.get("/download-backup-zip", async (_req, res, next) => {
 });
 
 /**
- * Admin-only: upload a Suraj Mobile .db (or backup .zip) and replace the live SQLite file.
+ * Admin-only: upload a Smart Billing .db (or backup .zip) and replace the live SQLite file.
  * Server restarts shortly after so Prisma opens the restored database.
  */
 reportsRouter.post(
