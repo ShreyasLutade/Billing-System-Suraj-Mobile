@@ -201,6 +201,12 @@ async function sendWithSmtp(
   throw new Error(`${base.message}.${hint}`);
 }
 
+export type MailFileAttachment = {
+  filename: string;
+  buffer: Buffer;
+  contentType?: string;
+};
+
 async function sendWithResend(input: {
   from: string;
   to: string;
@@ -208,11 +214,27 @@ async function sendWithResend(input: {
   text: string;
   filename?: string;
   buffer?: Buffer;
+  attachments?: MailFileAttachment[];
 }) {
   const apiKey = resendApiKey();
   if (!apiKey) {
     throw new Error("RESEND_API_KEY is not set");
   }
+
+  const attachments =
+    input.attachments && input.attachments.length > 0
+      ? input.attachments.map((file) => ({
+          filename: file.filename,
+          content: file.buffer.toString("base64"),
+        }))
+      : input.filename && input.buffer
+        ? [
+            {
+              filename: input.filename,
+              content: input.buffer.toString("base64"),
+            },
+          ]
+        : undefined;
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -225,16 +247,7 @@ async function sendWithResend(input: {
       to: [input.to],
       subject: input.subject,
       text: input.text,
-      ...(input.filename && input.buffer
-        ? {
-            attachments: [
-              {
-                filename: input.filename,
-                content: input.buffer.toString("base64"),
-              },
-            ],
-          }
-        : {}),
+      ...(attachments ? { attachments } : {}),
     }),
   });
 
@@ -375,7 +388,10 @@ export async function sendPlainEmail(input: {
   }
 }
 
-export async function sendReportEmail(report: ReportMailAttachment) {
+export async function sendReportEmail(
+  report: ReportMailAttachment,
+  extraAttachments: MailFileAttachment[] = [],
+) {
   const { to, from, configured, provider } = getReportMailConfig();
   if (!configured || !provider) {
     throw new Error(
@@ -385,6 +401,9 @@ export async function sendReportEmail(report: ReportMailAttachment) {
 
   const shop = process.env.SHOP_NAME || "Suraj Mobile";
   const isToday = report.scope === "today";
+  const hasDb = extraAttachments.some((file) =>
+    file.filename.toLowerCase().endsWith(".db"),
+  );
   const subject = isToday
     ? `${shop} — today's bills (${report.dateLabel})`
     : `${shop} — full backup (${report.dateLabel})`;
@@ -395,6 +414,13 @@ export async function sendReportEmail(report: ReportMailAttachment) {
     isToday
       ? `Attached is today's billing Excel for ${shop}.`
       : `Attached is the FULL DATABASE BACKUP Excel for ${shop}.`,
+    ...(hasDb
+      ? [
+          ``,
+          `Also attached: SQLite database file (.db).`,
+          `Upload that .db in the website Backup page to restore all data.`,
+        ]
+      : []),
     ``,
     `Date: ${report.dateLabel} (IST)`,
     `Bills in file: ${report.billCount}`,
@@ -402,7 +428,7 @@ export async function sendReportEmail(report: ReportMailAttachment) {
       ? []
       : [
           ``,
-          `This file includes restore-ready sheets for:`,
+          `Excel includes restore-ready sheets for:`,
           `Bills, BillItems, DuePayments, Customers, StockItems,`,
           `Suppliers, Purchases, PurchaseItems, SupplierPayments,`,
           `FinanceCompanies, MobileCatalog, PhoneModels, Users,`,
@@ -415,36 +441,83 @@ export async function sendReportEmail(report: ReportMailAttachment) {
     `— ${shop} Billing System`,
   ].join("\n");
 
-  if (provider === "resend") {
-    const info = await sendWithResend({
-      from: resendFromAddress(),
-      to,
-      subject,
-      text: body,
+  const attachments: MailFileAttachment[] = [
+    {
       filename: report.filename,
       buffer: report.buffer,
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    ...extraAttachments,
+  ];
+
+  const totalBytes = attachments.reduce((sum, file) => sum + file.buffer.length, 0);
+  // Gmail ~25MB; leave headroom for MIME encoding.
+  const MAX_COMBINED_BYTES = 20 * 1024 * 1024;
+
+  async function sendBundle(files: MailFileAttachment[], mailSubject: string, mailBody: string) {
+    if (provider === "resend") {
+      const info = await sendWithResend({
+        from: resendFromAddress(),
+        to,
+        subject: mailSubject,
+        text: mailBody,
+        attachments: files,
+      });
+      return { messageId: info.messageId, to, subject: mailSubject };
+    }
+
+    const info = await sendWithSmtp({
+      from,
+      to,
+      subject: mailSubject,
+      text: mailBody,
+      attachments: files.map((file) => ({
+        filename: file.filename,
+        content: file.buffer,
+        contentType:
+          file.contentType ||
+          (file.filename.toLowerCase().endsWith(".db")
+            ? "application/x-sqlite3"
+            : "application/octet-stream"),
+      })),
     });
-    return { messageId: info.messageId, to, subject };
+    return { messageId: info.messageId, to, subject: mailSubject };
   }
 
-  const info = await sendWithSmtp({
-    from,
-    to,
-    subject,
-    text: body,
-    attachments: [
-      {
-        filename: report.filename,
-        content: report.buffer,
-        contentType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      },
-    ],
-  });
+  if (extraAttachments.length === 0 || totalBytes <= MAX_COMBINED_BYTES) {
+    return sendBundle(attachments, subject, body);
+  }
 
-  return {
-    messageId: info.messageId,
-    to,
+  // Too large for one email — send Excel first, then .db separately.
+  const excelResult = await sendBundle(
+    [attachments[0]],
     subject,
-  };
+    body.replace(
+      /Also attached: SQLite database file \(\.db\)\.\nUpload that \.db in the website Backup page to restore all data\.\n\n/,
+      "SQLite .db is sent in a follow-up email (attachment size limit).\n\n",
+    ),
+  );
+
+  const dbFiles = extraAttachments.filter((file) =>
+    file.filename.toLowerCase().endsWith(".db"),
+  );
+  if (dbFiles.length > 0) {
+    await sendBundle(
+      dbFiles,
+      `${shop} — SQLite DB backup (${report.dateLabel})`,
+      [
+        `Namaste,`,
+        ``,
+        `Attached is the SQLite database backup (.db) for ${shop}.`,
+        `Upload this file on the website Backup page to restore everything.`,
+        ``,
+        `Date: ${report.dateLabel} (IST)`,
+        ``,
+        `— ${shop} Billing System`,
+      ].join("\n"),
+    );
+  }
+
+  return excelResult;
 }

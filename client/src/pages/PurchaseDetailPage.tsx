@@ -531,6 +531,27 @@ export function PurchaseDetailPage() {
               );
             }
           }}
+          onDeleted={async () => {
+            setEditingItem(null);
+            if (!purchaseId) return;
+            try {
+              const { data } = await api.getPurchase(purchaseId);
+              setPurchase(data);
+              setError(null);
+              if (supplierId && data.supplierId !== supplierId) {
+                navigate(
+                  `/suppliers/${data.supplierId}/purchases/${purchaseId}`,
+                  { replace: true, state: location.state },
+                );
+              }
+            } catch {
+              // Purchase may have been deleted when this was the last unit.
+              navigate(`/suppliers/${supplierId}`, {
+                replace: true,
+                state: supplierState,
+              });
+            }
+          }}
         />
       ) : null}
     </div>

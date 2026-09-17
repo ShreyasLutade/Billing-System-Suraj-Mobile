@@ -84,9 +84,12 @@ Edit in `server/.env`:
 - `SHOP_PHONE`
 - `SHOP_GSTIN`
 
-## Automatic Excel email
+## Automatic Excel + database email
 
-Nightly Excel reports are emailed as a **full dump 3×/week** at **11:00 PM IST** on **Tuesday, Friday, and Sunday** (`REPORT_CRON`).
+Nightly Excel reports are emailed as a **full dump 3×/week** at **11:00 PM IST** on **Tuesday, Friday, and Sunday** (`REPORT_CRON`).  
+Each send also attaches a **SQLite `.db` snapshot** (when `DATABASE_URL` is `file:...`) so you can restore the shop from email.
+
+Admin UI: **/backup** — email Excel + `.db` now, or upload a `.db` to restore (overwrites live data; server restarts).
 
 ### Railway (recommended): Resend HTTPS
 

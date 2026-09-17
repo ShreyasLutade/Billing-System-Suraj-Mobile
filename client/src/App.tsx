@@ -6,6 +6,7 @@ import { ThemeProvider } from "./theme/ThemeContext";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
+import { BackupPage } from "./pages/BackupPage";
 import { AddAccessoriesPage } from "./pages/AddAccessoriesPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
@@ -60,6 +61,7 @@ export default function App() {
                     path="analytics/exchanges"
                     element={<AnalyticsExchangesPage />}
                   />
+                  <Route path="backup" element={<BackupPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

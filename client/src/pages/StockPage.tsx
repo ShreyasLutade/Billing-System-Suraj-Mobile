@@ -441,6 +441,20 @@ export function StockPage() {
             unit={editingUnit}
             onClose={() => setEditingUnit(null)}
             onSaved={applyEditedUnit}
+            onDeleted={(id) => {
+              setItems((current) => {
+                const next = current.filter((row) => row.id !== id);
+                const removed = current.find((row) => row.id === id);
+                if (
+                  removed &&
+                  !next.some((row) => stockGroupKey(row) === stockGroupKey(removed))
+                ) {
+                  setSelectedKey(null);
+                }
+                return next;
+              });
+              setEditingUnit(null);
+            }}
           />
         ) : null}
       </>

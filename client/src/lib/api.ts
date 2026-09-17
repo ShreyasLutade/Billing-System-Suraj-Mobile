@@ -552,6 +552,85 @@ export const api = {
     const base = `${API_BASE}/bills/${id}/pdf`;
     return token ? `${base}?token=${encodeURIComponent(token)}` : base;
   },
+  backupStatus: () =>
+    request<{
+      data: {
+        sqlite: boolean;
+        canRestore: boolean;
+        approxDbBytes: number | null;
+        confirmPhrase: string;
+      };
+    }>("/reports/backup-status"),
+  sendBackupEmail: (scope: "today" | "all" = "all", force = true) =>
+    request<{
+      data: {
+        skipped: boolean;
+        scope?: string;
+        filename?: string;
+        dbFilename?: string | null;
+        dbBytes?: number | null;
+        billCount?: number;
+        emailedTo?: string;
+        message?: string;
+        dateKey?: string;
+      };
+    }>("/reports/send", {
+      method: "POST",
+      body: JSON.stringify({ scope, force }),
+    }),
+  restoreDatabase: async (file: File, confirm: string) => {
+    const token = getAuthToken();
+    const form = new FormData();
+    form.append("database", file);
+    form.append("confirm", confirm);
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/reports/restore-db`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: form,
+      });
+    } catch {
+      throw new ApiError(
+        "Cannot reach the server. Make sure the API is running on port 4000.",
+        0,
+      );
+    }
+
+    if (response.status === 401) {
+      clearAuthToken();
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.assign("/login");
+      }
+    }
+
+    if (!response.ok) {
+      let message = "Restore failed";
+      try {
+        const body = await response.json();
+        message = body.error || message;
+        if (body.detail && typeof body.detail === "string") {
+          message = `${message}: ${body.detail}`;
+        }
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    return response.json() as Promise<{
+      data: {
+        ok: boolean;
+        bytes: number;
+        restarting: boolean;
+        message: string;
+        previousBackupPath: string | null;
+      };
+    }>;
+  },
 };
 
 export function formatINR(amount: number) {

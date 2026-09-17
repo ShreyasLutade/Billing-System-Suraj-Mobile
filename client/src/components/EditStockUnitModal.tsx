@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import { api, formatStockUnitId } from "../lib/api";
 import type { StockItem, Supplier } from "../types";
@@ -36,13 +36,17 @@ function mobileNameLabel(
 export function EditStockUnitModal({
   unit,
   allowSupplierEdit = true,
+  allowRemove = true,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   unit: StockItem;
   allowSupplierEdit?: boolean;
+  allowRemove?: boolean;
   onClose: () => void;
   onSaved: (item: StockItem) => void;
+  onDeleted?: (id: string) => void;
 }) {
   const [platform, setPlatform] = useState<"IOS" | "ANDROID">(
     unit.platform === "ANDROID" ? "ANDROID" : "IOS",
@@ -59,7 +63,10 @@ export function EditStockUnitModal({
   const [supplierId, setSupplierId] = useState(unit.supplierId || "");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canRemove = allowRemove && unit.status !== "SOLD";
 
   useEffect(() => {
     if (!allowSupplierEdit) return;
@@ -177,6 +184,21 @@ export function EditStockUnitModal({
     }
   }
 
+  async function removeUnit() {
+    setRemoving(true);
+    setError(null);
+    try {
+      await api.deleteStockItem(unit.id);
+      onDeleted?.(unit.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove unit");
+      setConfirmRemove(false);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   const unitHeading = mobileNameLabel(
     mobileName || unit.mobileName,
     color || unit.color,
@@ -192,6 +214,7 @@ export function EditStockUnitModal({
   ]
     .filter(Boolean)
     .join(" · ");
+  const busy = saving || removing;
 
   return (
     <AnimatePresence>
@@ -200,7 +223,7 @@ export function EditStockUnitModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={() => !saving && onClose()}
+        onClick={() => !busy && onClose()}
       >
         <motion.div
           role="dialog"
@@ -231,7 +254,7 @@ export function EditStockUnitModal({
               type="button"
               className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-50 dark:hover:bg-surface-muted"
               onClick={onClose}
-              disabled={saving}
+              disabled={busy}
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -251,7 +274,7 @@ export function EditStockUnitModal({
                       platform === option ? "segment-on" : "segment-off",
                     )}
                     onClick={() => switchPlatform(option)}
-                    disabled={saving}
+                    disabled={busy}
                   >
                     {option === "IOS" ? "iOS" : "Android"}
                   </button>
@@ -269,7 +292,7 @@ export function EditStockUnitModal({
                 value={mobileName}
                 trailingHint={capacityHint || null}
                 compact
-                disabled={saving}
+                disabled={busy}
                 required
                 onChange={(next) => {
                   setMobileName(next);
@@ -300,7 +323,7 @@ export function EditStockUnitModal({
                   className="field"
                   value={color}
                   onChange={(event) => setColor(event.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                   placeholder="e.g. Black"
                   required
                 />
@@ -319,7 +342,7 @@ export function EditStockUnitModal({
                   step="0.01"
                   value={purchasePrice}
                   onChange={(event) => setPurchasePrice(event.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                   required
                 />
               </div>
@@ -336,14 +359,11 @@ export function EditStockUnitModal({
                     className={scanFieldInputClass}
                     value={imei}
                     onChange={(event) => setImei(event.target.value)}
-                    disabled={saving}
+                    disabled={busy}
                     placeholder="Enter IMEI"
                     inputMode="numeric"
                   />
-                  <ImeiScanFieldButton
-                    disabled={saving}
-                    onScan={setImei}
-                  />
+                  <ImeiScanFieldButton disabled={busy} onScan={setImei} />
                 </ScanFieldShell>
               </div>
 
@@ -357,11 +377,11 @@ export function EditStockUnitModal({
                     className={scanFieldInputClass}
                     value={serialNumber}
                     onChange={(event) => setSerialNumber(event.target.value)}
-                    disabled={saving}
+                    disabled={busy}
                     placeholder="Optional if IMEI is set"
                   />
                   <SerialScanFieldButton
-                    disabled={saving}
+                    disabled={busy}
                     onScan={setSerialNumber}
                   />
                 </ScanFieldShell>
@@ -382,7 +402,7 @@ export function EditStockUnitModal({
                   searchable
                   searchPlaceholder="Search supplier name…"
                   required
-                  disabled={saving}
+                  disabled={busy}
                   options={supplierOptions}
                 />
               </div>
@@ -395,26 +415,110 @@ export function EditStockUnitModal({
             </p>
           ) : null}
 
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              className="btn-secondary flex-1 !py-2.5"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn-primary flex-1 !py-2.5"
-              onClick={() => void save()}
-              disabled={saving}
-            >
-              {saving ? "Saving…" : "Save changes"}
-            </button>
+          <div className="mt-3 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary flex-1 !py-2.5"
+                onClick={onClose}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1 !py-2.5"
+                onClick={() => void save()}
+                disabled={busy}
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+            {canRemove ? (
+              <button
+                type="button"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/40 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:bg-rose-950/50"
+                onClick={() => {
+                  setError(null);
+                  setConfirmRemove(true);
+                }}
+                disabled={busy}
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove unit
+              </button>
+            ) : null}
           </div>
         </motion.div>
       </motion.div>
+
+      {confirmRemove ? (
+        <motion.div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-ink-950/50 p-4 sm:items-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => !removing && setConfirmRemove(false)}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-stock-title"
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
+              <div className="min-w-0">
+                <h2
+                  id="remove-stock-title"
+                  className="font-display text-xl font-semibold text-ink-900"
+                >
+                  Remove this unit?
+                </h2>
+                <p className="mt-1 text-sm text-ink-500">
+                  {unit.mobileName} · {formatStockUnitId(unit)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
+                onClick={() => !removing && setConfirmRemove(false)}
+                aria-label="Close"
+                disabled={removing}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
+              <p>
+                This permanently deletes the unit from stock and this purchase.
+                This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 border-t border-ink-100 px-5 py-4">
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                onClick={() => setConfirmRemove(false)}
+                disabled={removing}
+              >
+                Keep unit
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                onClick={() => void removeUnit()}
+                disabled={removing}
+              >
+                {removing ? "Removing…" : "Yes, remove"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
     </AnimatePresence>
   );
 }
