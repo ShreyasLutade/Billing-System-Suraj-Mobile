@@ -43,12 +43,20 @@ export function AppShell() {
     const node = mainRef.current;
     if (!node) return;
 
+    let ticking = false;
+
     const handleScroll = () => {
-      setShowScrollToTop(node.scrollTop > 180);
+      if (ticking) return;
+
+      ticking = true;
+      requestAnimationFrame(() => {
+        setShowScrollToTop(node.scrollTop > 160);
+        ticking = false;
+      });
     };
 
     handleScroll();
-    node.addEventListener("scroll", handleScroll);
+    node.addEventListener("scroll", handleScroll, { passive: true });
     return () => node.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -248,12 +256,12 @@ export function AppShell() {
         {showScrollToTop ? (
           <motion.button
             type="button"
-            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            initial={{ opacity: 0, scale: 0.72, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.72, y: 16 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6"
+            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6"
             aria-label="Scroll to top"
             title="Scroll to top"
           >
