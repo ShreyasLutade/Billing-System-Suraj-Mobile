@@ -56,7 +56,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
+    <div className="relative flex h-screen flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-tide-400/20 blur-3xl animate-float" />
         <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-ink-900/10 blur-3xl dark:bg-tide-400/10" />
@@ -170,7 +170,7 @@ export function AppShell() {
 
       <main
         className={clsx(
-          "relative mx-auto max-w-6xl px-4 pb-6 sm:px-6 sm:pb-8",
+          "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto px-4 pb-28 sm:px-6 sm:pb-8",
           isOnline
             ? "pt-[5.5rem] sm:pt-[5.75rem]"
             : "pt-[7.5rem] sm:pt-[7.75rem]",
