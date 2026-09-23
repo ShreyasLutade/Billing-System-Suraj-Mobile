@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowUp,
   BarChart3,
   FilePlus2,
   LogOut,
@@ -21,8 +22,10 @@ import { clearListUiSession } from "../hooks/useSessionState";
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const mainRef = useRef<HTMLElement | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);
@@ -35,6 +38,23 @@ export function AppShell() {
       window.removeEventListener("offline", markOffline);
     };
   }, []);
+
+  useEffect(() => {
+    const node = mainRef.current;
+    if (!node) return;
+
+    const handleScroll = () => {
+      setShowScrollToTop(node.scrollTop > 180);
+    };
+
+    handleScroll();
+    node.addEventListener("scroll", handleScroll);
+    return () => node.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  function scrollToTop() {
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   const links = [
     { to: "/", label: "New Bill", icon: FilePlus2 },
@@ -169,6 +189,7 @@ export function AppShell() {
       </header>
 
       <main
+        ref={mainRef}
         className={clsx(
           "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto px-4 pb-28 sm:px-6 sm:pb-8",
           isOnline
@@ -222,6 +243,24 @@ export function AppShell() {
         </div>
       </nav>
       <div className="h-20 md:hidden" />
+
+      <AnimatePresence>
+        {showScrollToTop ? (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            transition={{ duration: 0.2 }}
+            onClick={scrollToTop}
+            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6"
+            aria-label="Scroll to top"
+            title="Scroll to top"
+          >
+            <ArrowUp className="h-5 w-5" />
+          </motion.button>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showLogoutConfirm ? (
