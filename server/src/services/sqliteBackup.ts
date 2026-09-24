@@ -10,7 +10,6 @@ import {
 } from "./reportEmail";
 
 let started = false;
-
 const DEFAULT_BACKUP_CRON = "30 23 * * *";
 const SQLITE_HEADER = Buffer.from("SQLite format 3\0");
 
@@ -70,7 +69,7 @@ export function assertSqliteFile(buffer: Buffer) {
   }
   if (!buffer.subarray(0, 16).equals(SQLITE_HEADER)) {
     throw new Error(
-      "Uploaded file is not a SQLite database (.db). Use a Smart Billing backup .db file.",
+      "Uploaded file is not a SQLite database (.db). Use a Suraj Mobile backup .db file.",
     );
   }
 }
@@ -117,7 +116,7 @@ export async function createSqliteBackupSnapshot() {
     .replace(", ", "_")
     .replace(/:/g, "");
 
-  const dest = path.join(dir, `smart-billing-${stamp}.db`);
+  const dest = path.join(dir, `suraj-${stamp}.db`);
   fs.copyFileSync(dbFile, dest);
   for (const extra of [`${dbFile}-wal`, `${dbFile}-shm`]) {
     if (fs.existsSync(extra)) {
@@ -129,7 +128,7 @@ export async function createSqliteBackupSnapshot() {
   if (Number.isFinite(keepDays) && keepDays > 0) {
     const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000;
     for (const name of fs.readdirSync(dir)) {
-      if (!name.startsWith("smart-billing-") && !name.startsWith("suraj-")) continue;
+      if (!name.startsWith("suraj-") && !name.startsWith("smart-billing-")) continue;
       const full = path.join(dir, name);
       try {
         if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full);
@@ -150,8 +149,7 @@ export async function createSqliteBackupSnapshot() {
 }
 
 /**
- * Consistent snapshot via SQLite VACUUM INTO (preferred for report email attach).
- * Falls back to file copy if VACUUM INTO is unavailable.
+ * Consistent on-disk snapshot via SQLite VACUUM INTO (safe while the app runs).
  */
 export async function createSqliteBackupBuffer(): Promise<{
   buffer: Buffer;
@@ -171,7 +169,7 @@ export async function createSqliteBackupBuffer(): Promise<{
   }
 
   const dateKey = istDateString();
-  const filename = `smart-billing-backup-${dateKey}.db`;
+  const filename = `suraj-mobile-backup-${dateKey}.db`;
   const tempPath = path.join(
     os.tmpdir(),
     `suraj-vacuum-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
@@ -213,7 +211,7 @@ export async function emailSqliteBackup(options: { force?: boolean } = {}) {
   }
 
   const snapshot = await createSqliteBackupSnapshot();
-  const shop = process.env.SHOP_NAME || "Smart Billing";
+  const shop = process.env.SHOP_NAME || "Suraj Mobile";
   const subject = `${shop} — SQLite backup (${snapshot.dateKey})`;
   const text = [
     `${shop} database backup`,
@@ -222,7 +220,7 @@ export async function emailSqliteBackup(options: { force?: boolean } = {}) {
     `Size: ${(snapshot.bytes / (1024 * 1024)).toFixed(2)} MB`,
     "",
     "Keep this email. To restore: open Backup on the website, upload this .db, and confirm RESTORE DATABASE.",
-    "Or stop the API, replace /data/suraj.db with this file, and start again.",
+    "Or stop the API, replace the SQLite file with this database and restart the service.",
   ].join("\n");
 
   const mail = await sendRawEmailWithAttachments({
@@ -311,6 +309,7 @@ export async function restoreSqliteFromBuffer(buffer: Buffer): Promise<{
   await fs.promises.writeFile(incomingPath, buffer);
 
   try {
+    // Flush WAL so the main file is complete before we move it aside.
     try {
       await prisma.$executeRawUnsafe(`PRAGMA wal_checkpoint(TRUNCATE)`);
     } catch {
