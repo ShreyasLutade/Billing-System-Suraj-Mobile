@@ -48,7 +48,6 @@ jobs:
           port: ${{ secrets.GCP_SSH_PORT || 22 }}
           command_timeout: 45m
           envs: GITHUB_TOKEN
-          envs_format: "export %s='%s'"
           script: |
             set -euo pipefail
             cd "$HOME/Billing-System-Suraj-Mobile"
