@@ -196,10 +196,10 @@ export function AppShell() {
       <main
         ref={mainRef}
         className={clsx(
-          "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto px-4 pb-28 sm:px-6 sm:pb-8",
+          "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto scroll-pt-28 px-4 pb-28 sm:px-6 sm:scroll-pt-32 sm:pb-8",
           isOnline
-            ? "pt-[5.5rem] sm:pt-[5.75rem]"
-            : "pt-[7.5rem] sm:pt-[7.75rem]",
+            ? "pt-[6.5rem] sm:pt-[6.75rem]"
+            : "pt-[8.5rem] sm:pt-[8.75rem]",
         )}
       >
         <motion.div
