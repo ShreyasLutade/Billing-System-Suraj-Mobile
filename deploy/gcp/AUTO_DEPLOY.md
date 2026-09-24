@@ -55,6 +55,20 @@ Optional: `GCP_SSH_PORT` if not `22`.
 2. Or push any small change to `deploy/gcp-cloudflare-free`
 3. Watch the job logs; when green, open `http://YOUR_IP` and hard-refresh
 
+### Troubleshooting SSH authentication
+
+The message `unable to authenticate, attempted methods [none publickey]` means the VM was reached, but it rejected the key or username. In the Google Cloud browser SSH session, run:
+
+```bash
+whoami
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+echo 'PASTE_THE_CONTENTS_OF_suraj-billing-gcp-deploy.pub_HERE' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Set `GCP_USER` to the exact output of `whoami`. Set `GCP_SSH_KEY` to the matching private key file, including its `BEGIN ... PRIVATE KEY` and `END ... PRIVATE KEY` lines. Do not put the `.pub` file in `GCP_SSH_KEY`, and do not add quotes around the key. If the VM SSH port is not `22`, set `GCP_SSH_PORT` as well.
+
 ## Notes
 
 - First auto-deploy build on e2-micro can take **10–20 minutes**
