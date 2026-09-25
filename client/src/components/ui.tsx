@@ -92,18 +92,18 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+    <div className="babu-page-header mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
       <div>
         {eyebrow ? (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
+          <p className="babu-eyebrow mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
+        <h1 className="babu-page-title font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-500 sm:text-base">
+          <p className="babu-page-description mt-2 max-w-2xl text-sm leading-relaxed text-ink-500 sm:text-base">
             {description}
           </p>
         ) : null}
@@ -131,8 +131,8 @@ export function StatCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.35 }}
-      className={clsx(
-        "glass-panel relative overflow-hidden p-5",
+        className={clsx(
+          "babu-stat-card glass-panel relative overflow-hidden p-5",
         tone === "tide" && "bg-gradient-to-br from-tide-100/80 to-white/80",
         tone === "ember" && "bg-gradient-to-br from-orange-50/90 to-white/80",
         tone === "ink" && "bg-gradient-to-br from-ink-900 to-ink-800 text-white",
@@ -176,7 +176,7 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <div className="glass-panel px-6 py-16 text-center">
+    <div className="babu-empty-state glass-panel px-6 py-16 text-center">
       <p className="font-display text-xl font-semibold text-ink-900">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">{description}</p>
     </div>
@@ -185,7 +185,7 @@ export function EmptyState({
 
 export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="glass-panel flex items-center justify-center gap-3 px-6 py-16 text-sm text-ink-500">
+    <div className="babu-loading-block glass-panel flex items-center justify-center gap-3 px-6 py-16 text-sm text-ink-500">
       <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-tide-500" />
       {label}
     </div>

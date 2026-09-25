@@ -85,7 +85,7 @@ const blankItem = (): DraftItem => ({
 const STOCK_AVATAR_COLORS: Record<string, { bg: string; fg: string }> = {
   Apple: { bg: "#EEF0F4", fg: "#1B2740" },
   Oppo: { bg: "#E7F8F1", fg: "#0E9E76" },
-  Samsung: { bg: "#E8F0FE", fg: "#2563EB" },
+  Samsung: { bg: "#e3f3ff", fg: "#4a62a8" },
   Redmi: { bg: "#FEECEC", fg: "#D64545" },
   Xiaomi: { bg: "#FEECEC", fg: "#D64545" },
   Vivo: { bg: "#EEF0FE", fg: "#4338CA" },
@@ -2744,7 +2744,7 @@ export function CreateBillPage() {
             {!withGst ? (
               <section className="overflow-visible rounded-[18px] border border-ink-100/80 bg-white shadow-soft">
                 <div className="flex items-center gap-3.5 px-5 py-[18px] sm:px-[22px]">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/70 dark:text-tide-400">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-tide-100 text-tide-600 dark:bg-tide-100/70 dark:text-tide-400">
                     <RefreshCw className="h-5 w-5" strokeWidth={2} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -2781,7 +2781,7 @@ export function CreateBillPage() {
                       className="overflow-visible"
                     >
                       <div className="space-y-4 px-5 pb-5 sm:px-[22px] sm:pb-[22px]">
-                        <div className="flex items-start gap-2.5 rounded-xl border border-[#CDEFE0] bg-[#E7F8F1] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[#0B7A5B] dark:border-tide-400/25 dark:bg-tide-100/40 dark:text-tide-400">
+                        <div className="flex items-start gap-2.5 rounded-xl border border-tide-500/25 bg-tide-100 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-tide-600 dark:border-tide-400/25 dark:bg-tide-100/40 dark:text-tide-400">
                           <Info
                             className="mt-0.5 h-4 w-4 shrink-0"
                             strokeWidth={2}
@@ -2816,7 +2816,7 @@ export function CreateBillPage() {
 
                         <button
                           type="button"
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#BFE9D6] bg-[#E7F8F1]/40 px-4 py-3 text-sm font-semibold text-[#0B7A5B] transition hover:border-[#12B886] hover:bg-[#E7F8F1] dark:border-tide-400/30 dark:bg-tide-100/30 dark:text-tide-400 dark:hover:border-tide-400 dark:hover:bg-tide-100/50"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-tide-500/40 bg-tide-100/40 px-4 py-3 text-sm font-semibold text-tide-600 transition hover:border-tide-500 hover:bg-tide-100 dark:border-tide-400/30 dark:bg-tide-100/30 dark:text-tide-400 dark:hover:border-tide-400 dark:hover:bg-tide-100/50"
                           onClick={() =>
                             setExchangeItems((current) => [
                               ...current,
@@ -3020,12 +3020,12 @@ export function CreateBillPage() {
                     </div>
                     {useCompanyCashback ? (
                       <div className="relative mt-3">
-                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
+                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-tide-600">
                           ₹
                         </span>
                         <input
                           id="companyDiscount"
-                          className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)] dark:border-tide-400/30 dark:bg-tide-100/35 dark:focus:border-tide-400 dark:focus:bg-surface-elevated dark:focus:shadow-[0_0_0_3px_rgba(45,212,191,0.2)]"
+                          className="w-full rounded-[11px] border border-tide-500/40 bg-tide-100 py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-tide-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(var(--accent-rgb),.18)] dark:border-tide-400/30 dark:bg-tide-100/35 dark:focus:border-tide-400 dark:focus:bg-surface-elevated dark:focus:shadow-[0_0_0_3px_rgba(127,207,255,0.2)]"
                           type="number"
                           min={0}
                           step="0.01"
@@ -3616,7 +3616,7 @@ function Switch({
       className={clsx(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-surface",
         checked
-          ? "border-[#0B9B72] bg-[#12B886] shadow-[0_0_0_3px_rgba(18,184,134,0.25)] focus-visible:ring-[#12B886]"
+          ? "border-transparent [background:var(--grad)_border-box] shadow-[0_0_0_3px_rgba(var(--accent-rgb),0.22)] focus-visible:ring-[var(--accent)]"
           : "border-ink-300 bg-ink-100 shadow-sm focus-visible:ring-ink-300 dark:border-slate-500 dark:bg-slate-600 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]",
       )}
     >
@@ -3675,12 +3675,12 @@ function FieldInfoTip({
       className="pointer-events-auto fixed z-[80] max-w-[240px] -translate-y-full"
       style={{ top: pos.top, left: pos.left }}
     >
-      <div className="flex items-start gap-2 rounded-xl border border-[#93C5FD] bg-[#E8F0FE] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
+      <div className="flex items-start gap-2 rounded-xl border border-[#a9dcff] bg-[#e3f3ff] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
         <span className="min-w-0">{message}</span>
         <button
           type="button"
-          className="ml-1 shrink-0 rounded-md px-1 text-[#2563EB]/80 hover:bg-white/60 hover:text-[#1D4ED8]"
+          className="ml-1 shrink-0 rounded-md px-1 text-[#4a62a8]/80 hover:bg-white/60 hover:text-[#1D4ED8]"
           aria-label="Dismiss"
           onClick={onDismiss}
         >
@@ -3689,7 +3689,7 @@ function FieldInfoTip({
       </div>
       <span
         aria-hidden
-        className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
+        className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#a9dcff] bg-[#e3f3ff]"
       />
     </div>,
     document.body,
@@ -3698,7 +3698,7 @@ function FieldInfoTip({
 
 const PAYMENT_TONE_STYLES = {
   cash: { accent: "#12B886", ring: "ring-[#12B886]/20", bg: "bg-[#12B886]/5" },
-  online: { accent: "#3B82F6", ring: "ring-[#3B82F6]/20", bg: "bg-[#3B82F6]/5" },
+  online: { accent: "#5d73b6", ring: "ring-[#5d73b6]/20", bg: "bg-[#5d73b6]/5" },
   card: { accent: "#6366F1", ring: "ring-[#6366F1]/20", bg: "bg-[#6366F1]/5" },
   due: { accent: "#F59E0B", ring: "ring-[#F59E0B]/20", bg: "bg-[#F59E0B]/5" },
   finance: { accent: "#8B5CF6", ring: "ring-[#8B5CF6]/20", bg: "bg-[#8B5CF6]/5" },

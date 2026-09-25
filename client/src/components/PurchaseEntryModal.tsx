@@ -751,7 +751,7 @@ export function PurchaseEntryModal({
 
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-[#0E9E76] hover:bg-[#E7F8F1] hover:text-[#0E9E76] dark:border-ink-300 dark:hover:border-tide-400 dark:hover:bg-tide-100/40 dark:hover:text-tide-400"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-tide-500 hover:bg-tide-100 hover:text-tide-600 dark:border-ink-300 dark:hover:border-tide-400 dark:hover:bg-tide-100/40 dark:hover:text-tide-400"
               onClick={addAnother}
               disabled={saving}
             >
@@ -813,7 +813,7 @@ export function PurchaseEntryModal({
                   </span>
                 </div>
 
-                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-2.5 py-1 text-xs font-semibold text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
+                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-2.5 py-1 text-xs font-semibold text-tide-600 dark:bg-tide-100/50 dark:text-tide-400">
                   <Smartphone className="h-3.5 w-3.5" />
                   {unitCount} unit{unitCount === 1 ? "" : "s"}
                 </span>
@@ -1270,13 +1270,13 @@ function QuantityAndImeiFields({
                     : "-translate-y-0.5 opacity-0 group-hover/ids:translate-y-0 group-hover/ids:opacity-100 group-focus-within/ids:translate-y-0 group-focus-within/ids:opacity-100",
                 )}
               >
-                <div className="flex items-start gap-2 rounded-xl border border-[#93C5FD] bg-[#E8F0FE] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
+                <div className="flex items-start gap-2 rounded-xl border border-[#a9dcff] bg-[#e3f3ff] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
                   <span>Enter IMEI or serial number</span>
                 </div>
                 <span
                   aria-hidden
-                  className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
+                  className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#a9dcff] bg-[#e3f3ff]"
                 />
               </div>
                 <div>
@@ -1288,7 +1288,7 @@ function QuantityAndImeiFields({
                   </label>
                   <ScanFieldShell
                     className={clsx(
-                      showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                      showIdHint && "border-[#a9dcff] ring-4 ring-[#a9dcff]/25",
                     )}
                   >
                     <input
@@ -1326,7 +1326,7 @@ function QuantityAndImeiFields({
                   </label>
                   <ScanFieldShell
                     className={clsx(
-                      showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                      showIdHint && "border-[#a9dcff] ring-4 ring-[#a9dcff]/25",
                     )}
                   >
                     <input

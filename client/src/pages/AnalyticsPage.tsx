@@ -729,7 +729,7 @@ export function AnalyticsPage() {
                             className={clsx(
                               "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
                               on
-                                ? "bg-[#F1F5FF] font-semibold text-ink-900"
+                                ? "bg-[#eaf5ff] font-semibold text-ink-900"
                                 : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
                             )}
                             onClick={() => setSortKey(option.key)}
@@ -737,7 +737,7 @@ export function AnalyticsPage() {
                             {option.label}
                             <Check
                               className={clsx(
-                                "h-[15px] w-[15px] text-[#2563EB]",
+                                "h-[15px] w-[15px] text-[#4a62a8]",
                                 on ? "opacity-100" : "opacity-0",
                               )}
                               strokeWidth={2.6}

@@ -4,8 +4,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
   FilePlus2,
   LogOut,
+  Menu,
   Moon,
   Package,
   ReceiptText,
@@ -18,6 +21,7 @@ import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
+import { api } from "../lib/api";
 
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
@@ -26,6 +30,34 @@ export function AppShell() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [openDueCount, setOpenDueCount] = useState<number | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void api
+      .listDues("all")
+      .then(({ data }) => {
+        if (active) setOpenDueCount(data.count);
+      })
+      .catch(() => {
+        if (active) setOpenDueCount(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);
@@ -84,127 +116,162 @@ export function AppShell() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-tide-400/20 blur-3xl animate-float" />
-        <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-ink-900/10 blur-3xl dark:bg-tide-400/10" />
-      </div>
-
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/50 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
-        <div
-          className={clsx(
-            "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",
-            isAdmin ? "pr-[10.5rem] sm:pr-48" : "pr-[7.25rem] sm:pr-36",
-          )}
+    <div className={clsx("babu-shell", sidebarCollapsed && "is-sidebar-collapsed")}>
+      <aside className="babu-sidebar">
+        <button
+          type="button"
+          className="babu-sidebar-toggle"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <Link
-            to="/"
-            onClick={onMainNavClick}
-            className="flex items-center gap-3 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
-            aria-label="Babu Mobile — New Bill"
-          >
-            <img
-              src="/suraj_mobile_icon.png"
-              alt=""
-              className="h-11 w-11 shrink-0 object-contain"
-            />
+          {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
+        </button>
+        <Link to="/" onClick={onMainNavClick} className="babu-brand" aria-label="Babu Mobile — New Bill">
+          <img src="/babu_mobile_icon.svg" alt="" />
+          <span>
+            <strong>Babu Mobile</strong>
+            <small>Balaghat</small>
+          </span>
+        </Link>
+
+        <nav className="babu-sidebar-nav" aria-label="Main navigation">
+          {links.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === "/"}
+              onClick={onMainNavClick}
+              className={({ isActive }) => clsx("babu-nav-link", isActive && "is-active")}
+            >
+              <link.icon />
+              <span>{link.label}</span>
+              {link.to === "/dues" && openDueCount ? (
+                <b className="babu-nav-count">{openDueCount}</b>
+              ) : null}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="babu-sidebar-foot">
+          <div className="babu-user-card">
+            <span>{(user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")).slice(0, 1).toUpperCase()}</span>
             <div>
-              <p className="font-display text-lg font-semibold tracking-tight text-ink-900">
-                Babu Mobile
-              </p>
-              <p className="text-xs text-ink-500">
-                {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·
-                Balaghat
-              </p>
+              <strong>{user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")}</strong>
+              <small>{user?.phone || "9516533556"}</small>
             </div>
-          </Link>
-
-          <nav className="hidden items-center gap-1 rounded-2xl border border-ink-100/80 bg-white/70 p-1 dark:border-ink-100 dark:bg-surface-muted/80 md:flex">
-            {links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.to === "/"}
-                onClick={onMainNavClick}
-                className={({ isActive }) =>
-                  clsx(
-                    "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition",
-                    isActive
-                      ? "bg-ink-900 text-white shadow-soft dark:bg-tide-400 dark:text-ink-50"
-                      : "text-ink-500 hover:bg-ink-50 hover:text-ink-900",
-                  )
-                }
-              >
-                <link.icon className="h-4 w-4" />
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-
-        <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 sm:right-6 sm:gap-2">
-          <button
-            type="button"
-            className="btn-secondary px-2.5 py-2 sm:px-3"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            aria-label={
-              theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
-            }
-          >
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
+          </div>
+          <button type="button" className="babu-utility-button" onClick={toggleTheme}>
+            {theme === "dark" ? <Sun /> : <Moon />}
+            {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
           {isAdmin ? (
-            <Link
-              to="/backup"
-              onClick={onMainNavClick}
-              title="Restore data"
-              aria-label="Restore data"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-100/90 bg-white/80 text-center text-[9px] font-semibold leading-[1.05] text-ink-700 shadow-soft transition hover:border-tide-300 hover:bg-tide-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:border-white/10 dark:bg-surface-muted/80 dark:text-ink-100 dark:hover:bg-tide-400/15"
-            >
-              <span className="px-0.5">
-                Restore
-                <br />
-                Data
-              </span>
+            <Link to="/backup" onClick={onMainNavClick} className="babu-utility-button">
+              <Package /> Restore data
             </Link>
           ) : null}
-          <button
-            type="button"
-            className="btn-secondary px-3 py-2"
-            onClick={() => setShowLogoutConfirm(true)}
-            title="Log out"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Logout</span>
+          <button type="button" className="babu-utility-button" onClick={() => setShowLogoutConfirm(true)}>
+            <LogOut /> Logout
           </button>
         </div>
+      </aside>
 
-        {!isOnline ? (
-          <div
-            role="status"
-            aria-label="No internet connection"
-            className="absolute inset-x-0 top-full flex h-8 items-center justify-center bg-rose-600 px-4 text-center text-sm font-semibold text-white shadow-sm"
-            title="No internet connection"
-          >
-            Offline
-          </div>
-        ) : null}
+      <header className="babu-mobile-header">
+        <Link to="/" onClick={onMainNavClick} className="babu-mobile-brand" aria-label="Babu Mobile — New Bill">
+          <img src="/babu_mobile_icon.svg" alt="" />
+          <strong>Babu Mobile</strong>
+        </Link>
+        <button
+          type="button"
+          className="babu-mobile-menu-btn babu-mobile-menu-open"
+          onClick={() => setMobileMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={mobileMenuOpen}
+        >
+          <Menu />
+        </button>
       </header>
 
-      <main
-        ref={mainRef}
-        className={clsx(
-          "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto scroll-pt-28 px-4 pb-28 sm:px-6 sm:scroll-pt-32 sm:pb-8",
-          isOnline
-            ? "pt-[6.5rem] sm:pt-[6.75rem]"
-            : "pt-[8.5rem] sm:pt-[8.75rem]",
-        )}
-      >
+      <AnimatePresence>
+        {mobileMenuOpen ? (
+          <motion.div
+            className="babu-drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <motion.aside
+              className="babu-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="babu-drawer-head">
+                <div className="babu-brand">
+                  <img src="/babu_mobile_icon.svg" alt="" />
+                  <span>
+                    <strong>Babu Mobile</strong>
+                    <small>Balaghat</small>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="babu-mobile-menu-btn"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close menu"
+                >
+                  <X />
+                </button>
+              </div>
+
+              <div className="babu-sidebar-foot">
+                <div className="babu-user-card">
+                  <span>{(user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")).slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")}</strong>
+                    <small>{user?.phone || "9516533556"}</small>
+                  </div>
+                </div>
+                <button type="button" className="babu-utility-button" onClick={toggleTheme}>
+                  {theme === "dark" ? <Sun /> : <Moon />}
+                  {theme === "dark" ? "Light mode" : "Dark mode"}
+                </button>
+                {isAdmin ? (
+                  <Link
+                    to="/backup"
+                    onClick={() => {
+                      onMainNavClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="babu-utility-button"
+                  >
+                    <Package /> Restore data
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  className="babu-utility-button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setShowLogoutConfirm(true);
+                  }}
+                >
+                  <LogOut /> Logout
+                </button>
+              </div>
+            </motion.aside>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <main ref={mainRef} className="babu-main">
+        {!isOnline ? <div className="babu-offline-banner">Offline</div> : null}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -214,43 +281,23 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
-        <div
-          className={clsx(
-            "mx-auto grid max-w-lg gap-1",
-            links.length >= 6
-              ? "grid-cols-6"
-              : links.length >= 5
-                ? "grid-cols-5"
-                : links.length >= 4
-                  ? "grid-cols-4"
-                  : links.length === 3
-                    ? "grid-cols-3"
-                    : "grid-cols-2",
-          )}
-        >
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === "/"}
-              onClick={onMainNavClick}
-              className={({ isActive }) =>
-                clsx(
-                  "flex flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-[11px] font-semibold",
-                  isActive
-                    ? "bg-ink-900 text-white dark:bg-tide-400 dark:text-ink-50"
-                    : "text-ink-500",
-                )
-              }
-            >
-              <link.icon className="h-4 w-4" />
-              {link.label}
-            </NavLink>
-          ))}
-        </div>
+      <nav className="babu-mobile-nav" aria-label="Mobile navigation">
+        {links.map((link) => (
+          <NavLink
+            key={link.to}
+            to={link.to}
+            end={link.to === "/"}
+            onClick={onMainNavClick}
+            className={({ isActive }) => clsx("babu-mobile-link", isActive && "is-active")}
+          >
+            <span className="babu-mobile-icon-wrap">
+              <link.icon />
+              {link.to === "/dues" && openDueCount ? <b>{openDueCount}</b> : null}
+            </span>
+            {link.label}
+          </NavLink>
+        ))}
       </nav>
-      <div className="h-20 md:hidden" />
 
       <AnimatePresence>
         {showScrollToTop ? (

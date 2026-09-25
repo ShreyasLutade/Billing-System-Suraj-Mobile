@@ -6,6 +6,7 @@ import {
   BarChart3,
   Check,
   Filter,
+  Phone,
   Search,
   UserRound,
 } from "lucide-react";
@@ -582,6 +583,18 @@ export function DuesPage() {
                           {dueWhen?.label || "No due date"}
                         </p>
                       </div>
+                      {due.customerPhone ? (
+                        <a
+                          href={`tel:${due.customerPhone.replace(/[^\d+]/g, "")}`}
+                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 transition hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300"
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          aria-label={`Call ${due.customerName}`}
+                          title={`Call ${due.customerPhone}`}
+                        >
+                          <Phone className="h-4 w-4" />
+                        </a>
+                      ) : null}
                       {isAdmin ? (
                         <button
                           type="button"

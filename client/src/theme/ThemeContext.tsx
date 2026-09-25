@@ -18,7 +18,7 @@ type ThemeContextValue = {
   toggleTheme: () => void;
 };
 
-const STORAGE_KEY = "suraj_theme";
+const STORAGE_KEY = "babu_theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function getSystemTheme(): ResolvedTheme {

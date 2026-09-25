@@ -702,7 +702,7 @@ export function StockPage() {
                           className={clsx(
                             "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
                             on
-                              ? "bg-[#F1F5FF] font-semibold text-ink-900"
+                              ? "bg-[#eaf5ff] font-semibold text-ink-900"
                               : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
                           )}
                           onClick={() => {
@@ -713,7 +713,7 @@ export function StockPage() {
                           {option.label}
                           <Check
                             className={clsx(
-                              "h-[15px] w-[15px] text-[#2563EB]",
+                              "h-[15px] w-[15px] text-[#4a62a8]",
                               on ? "opacity-100" : "opacity-0",
                             )}
                             strokeWidth={2.6}
@@ -757,7 +757,7 @@ export function StockPage() {
                             className={clsx(
                               "tabular-nums font-semibold",
                               group.quantity > 1
-                                ? "text-[#2563EB]"
+                                ? "text-[#4a62a8]"
                                 : "text-ink-500",
                             )}
                           >
@@ -798,7 +798,7 @@ export function StockPage() {
               Manage suppliers under{" "}
               <Link
                 to="/suppliers"
-                className="font-medium text-[#2563EB] hover:underline"
+                className="font-medium text-[#4a62a8] hover:underline"
               >
                 Suppliers
               </Link>
@@ -926,7 +926,7 @@ function StockProductDetail({
                         <Link
                           to={`/suppliers/${unit.supplierId}`}
                           state={fromState(location)}
-                          className="text-xs text-[#2563EB] hover:underline"
+                          className="text-xs text-[#4a62a8] hover:underline"
                         >
                           ledger
                         </Link>

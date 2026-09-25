@@ -88,8 +88,8 @@ export function PeriodFilter(props: PeriodFilterProps) {
               className={clsx(
                 "min-w-0 flex-1 rounded-lg px-1.5 py-2 text-center text-[11px] font-semibold transition sm:rounded-xl sm:px-2 sm:text-xs",
                 props.value === "custom"
-                  ? "bg-[#3B82F6] text-white shadow-[0_0_0_3px_#E8F0FE] dark:shadow-[0_0_0_3px_rgba(59,130,246,0.28)]"
-                  : "bg-[#E8F0FE] text-[#2563EB] hover:bg-[#DBEAFE] dark:bg-[#3B82F6]/20 dark:text-[#93C5FD] dark:hover:bg-[#3B82F6]/30",
+                  ? "bg-[#5d73b6] text-white shadow-[0_0_0_3px_#e3f3ff] dark:shadow-[0_0_0_3px_rgba(59,130,246,0.28)]"
+                  : "bg-[#e3f3ff] text-[#4a62a8] hover:bg-[#d3ecff] dark:bg-[#5d73b6]/20 dark:text-[#a9dcff] dark:hover:bg-[#5d73b6]/30",
               )}
               onClick={() => {
                 props.onChange("custom");
@@ -105,18 +105,18 @@ export function PeriodFilter(props: PeriodFilterProps) {
           }
         />
         {props.value === "custom" ? (
-          <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-[#BFDBFE] bg-[#F0F7FF] p-3 dark:border-[#3B82F6]/35 dark:bg-[#3B82F6]/10">
+          <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-[#BFDBFE] bg-[#F0F7FF] p-3 dark:border-[#5d73b6]/35 dark:bg-[#5d73b6]/10">
             <div>
               <label
                 htmlFor="analytics-custom-from"
-                className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2563EB] dark:text-[#93C5FD]"
+                className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4a62a8] dark:text-[#a9dcff]"
               >
                 From
               </label>
               <input
                 id="analytics-custom-from"
                 type="date"
-                className="w-full rounded-lg border border-[#BFDBFE] bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-[#3B82F6] focus:shadow-[0_0_0_3px_#E8F0FE] dark:border-[#3B82F6]/35 dark:bg-surface-elevated dark:text-ink-900 dark:[color-scheme:dark] dark:focus:border-[#60A5FA] dark:focus:shadow-[0_0_0_3px_rgba(59,130,246,0.25)]"
+                className="w-full rounded-lg border border-[#BFDBFE] bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-[#5d73b6] focus:shadow-[0_0_0_3px_#e3f3ff] dark:border-[#5d73b6]/35 dark:bg-surface-elevated dark:text-ink-900 dark:[color-scheme:dark] dark:focus:border-[#60A5FA] dark:focus:shadow-[0_0_0_3px_rgba(59,130,246,0.25)]"
                 value={props.customFrom}
                 max={props.customTo || undefined}
                 onChange={(e) => props.onCustomFromChange(e.target.value)}
@@ -125,14 +125,14 @@ export function PeriodFilter(props: PeriodFilterProps) {
             <div>
               <label
                 htmlFor="analytics-custom-to"
-                className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2563EB] dark:text-[#93C5FD]"
+                className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4a62a8] dark:text-[#a9dcff]"
               >
                 To
               </label>
               <input
                 id="analytics-custom-to"
                 type="date"
-                className="w-full rounded-lg border border-[#BFDBFE] bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-[#3B82F6] focus:shadow-[0_0_0_3px_#E8F0FE] dark:border-[#3B82F6]/35 dark:bg-surface-elevated dark:text-ink-900 dark:[color-scheme:dark] dark:focus:border-[#60A5FA] dark:focus:shadow-[0_0_0_3px_rgba(59,130,246,0.25)]"
+                className="w-full rounded-lg border border-[#BFDBFE] bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-[#5d73b6] focus:shadow-[0_0_0_3px_#e3f3ff] dark:border-[#5d73b6]/35 dark:bg-surface-elevated dark:text-ink-900 dark:[color-scheme:dark] dark:focus:border-[#60A5FA] dark:focus:shadow-[0_0_0_3px_rgba(59,130,246,0.25)]"
                 value={props.customTo}
                 min={props.customFrom || undefined}
                 onChange={(e) => props.onCustomToChange(e.target.value)}

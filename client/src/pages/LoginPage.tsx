@@ -6,50 +6,39 @@ import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { useTheme } from "../theme/ThemeContext";
 
-/** Phone + sunrise mark — transparent, stroke via currentColor */
-function SurajMark({ className }: { className?: string }) {
+/** Babu Mobile mark — a phone-shaped B with camera and signal details. */
+function BabuMark({ className }: { className?: string }) {
   return (
     <svg
       className={className}
-      viewBox="0 0 48 48"
+      viewBox="0 0 64 64"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <rect
-        x="12"
-        y="4"
-        width="24"
-        height="40"
-        rx="6"
-        stroke="currentColor"
-        strokeWidth="2.6"
-      />
-      <line
-        x1="20"
-        y1="8.5"
-        x2="28"
-        y2="8.5"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <path d="M17 31a7 7 0 0 1 14 0Z" fill="#F79A2B" />
-      <circle cx="24" cy="30.5" r="4.3" fill="#FFD24A" />
-      <g stroke="#FFD24A" strokeWidth="1.85" strokeLinecap="round">
-        <line x1="24" y1="18.5" x2="24" y2="14.5" />
-        <line x1="17.2" y1="21.2" x2="14.6" y2="18.6" />
-        <line x1="30.8" y1="21.2" x2="33.4" y2="18.6" />
-        <line x1="15.2" y1="28.5" x2="12.4" y2="28.5" />
-        <line x1="32.8" y1="28.5" x2="35.6" y2="28.5" />
-        <line x1="18.2" y1="24.2" x2="15.8" y2="21.8" />
-        <line x1="29.8" y1="24.2" x2="32.2" y2="21.8" />
-      </g>
+      <defs>
+        <linearGradient id="babu-mark-gradient" x1="8" y1="4" x2="58" y2="60">
+          <stop stopColor="#5B2DF0" />
+          <stop offset="0.62" stopColor="#E23DBB" />
+          <stop offset="1" stopColor="#FF8A3D" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="20" fill="url(#babu-mark-gradient)" />
       <path
-        d="M15.5 34.2c2.6-1.4 5.4-2.1 8.5-2.1s5.9.7 8.5 2.1"
-        stroke="#F79A2B"
-        strokeWidth="2"
+        d="M22 15V49M22 15H33a8.5 8.5 0 0 1 0 17H22M22 32H35a8.5 8.5 0 0 1 0 17H22"
+        stroke="white"
+        strokeWidth="6.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="33" cy="23.5" r="2.3" fill="#E23DBB" />
+      <rect x="29" y="39.5" width="9" height="3" rx="1.5" fill="#FF8A3D" />
+      <path
+        d="M46 13a10 10 0 0 1 6 6M46 8a15 15 0 0 1 10 10"
+        stroke="white"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        opacity="0.9"
       />
     </svg>
   );
@@ -69,6 +58,7 @@ export function LoginPage() {
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -185,7 +175,7 @@ export function LoginPage() {
         : "Reset password";
   const subtitle =
     view === "login"
-      ? "Sign in to continue to billing."
+      ? "Sign in to start billing, track stock and collect dues."
       : view === "forgot-phone"
         ? "Enter the account mobile. OTP goes to the shop Gmail."
         : `OTP sent to ${otpEmail || "the shop Gmail"}.`;
@@ -214,11 +204,7 @@ export function LoginPage() {
           </div>
         </header>
         <div className="login-mobile-badge" aria-hidden>
-          <img
-            src="/suraj_mobile_icon.png"
-            alt=""
-            className="login-mobile-badge-img"
-          />
+          <BabuMark className="login-mobile-badge-mark" />
         </div>
       </div>
 
@@ -227,7 +213,7 @@ export function LoginPage() {
           <div className="login-bloom" aria-hidden />
 
           <div className="login-bp-top">
-            <SurajMark className="login-logo" />
+                    <BabuMark className="login-logo" />
             <div className="login-bp-name">
               Babu Mobile
               <small>9516533556 · Balaghat</small>
@@ -236,14 +222,10 @@ export function LoginPage() {
 
           <div className="login-bp-head">
             <h1>
-              The whole shop,
+              Sell more.
               <br />
-              billed in one place.
+              <em>Miss nothing.</em>
             </h1>
-            <p>
-              Bills, stock, dues and suppliers — with cash, online and finance
-              splits, and GST invoices in a tap.
-            </p>
           </div>
 
           <div className="login-stage-phone">
@@ -251,154 +233,65 @@ export function LoginPage() {
               <div className="login-phone">
                 <div className="login-notch" />
                 <div className="login-screen">
-                  <div className="login-rc-head">
-                    <SurajMark className="login-rc-sun" />
-                    <div className="login-rc-shop">
-                      Babu Mobile
-                      <small>TAX INVOICE</small>
-                    </div>
+                  <div className="login-dashboard-title">Today&apos;s sales</div>
+                  <div className="login-dashboard-amount">₹1,24,580</div>
+                  <div className="login-dashboard-bars" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                    <i />
+                    <i />
                   </div>
-                  <div className="login-rc-line">
-                    <span>iPhone 16 · 128 GB</span>
-                    <b>₹71,833</b>
+                  <div className="login-dashboard-line">
+                    iPhone 16 <span>₹71,833</span>
                   </div>
-                  <div className="login-rc-line">
-                    <span>Tempered glass ×2</span>
-                    <b>₹400</b>
+                  <div className="login-dashboard-line">
+                    Back cover ×3 <span>₹900</span>
                   </div>
-                  <div className="login-rc-total">
-                    <span>PAYABLE</span>
-                    <b>₹72,233</b>
-                  </div>
-                  <div className="login-rc-bar">
-                    <i
-                      style={{ width: "52%", background: "var(--login-cash)" }}
-                    />
-                    <i
-                      style={{
-                        width: "22%",
-                        background: "var(--login-online)",
-                      }}
-                    />
-                    <i
-                      style={{
-                        width: "14%",
-                        background: "var(--login-finance)",
-                      }}
-                    />
-                    <i
-                      style={{ width: "12%", background: "var(--login-due)" }}
-                    />
-                  </div>
-                  <div className="login-rc-tags">
-                    <span
-                      className="login-rc-tag"
-                      style={{ background: "#E7F8F1", color: "#0E9E76" }}
-                    >
-                      <span
-                        className="login-rc-dot"
-                        style={{ background: "var(--login-cash)" }}
-                      />
-                      Cash
-                    </span>
-                    <span
-                      className="login-rc-tag"
-                      style={{ background: "#E8F0FE", color: "#2563EB" }}
-                    >
-                      <span
-                        className="login-rc-dot"
-                        style={{ background: "var(--login-online)" }}
-                      />
-                      UPI
-                    </span>
-                    <span
-                      className="login-rc-tag"
-                      style={{ background: "#F0EBFE", color: "#7C3AED" }}
-                    >
-                      <span
-                        className="login-rc-dot"
-                        style={{ background: "var(--login-finance)" }}
-                      />
-                      EMI
-                    </span>
+                  <div className="login-dashboard-line">
+                    Tempered glass <span>₹400</span>
                   </div>
                 </div>
-                <div className="login-paid">PAID</div>
               </div>
 
-              <div className="login-chip">
-                <span className="login-chip-ic">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path
-                      d="M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <div>
-                  <div className="login-chip-k">Today&apos;s sales</div>
-                  <div className="login-chip-v">₹1.2L</div>
+              <div className="login-art-card login-art-dues">
+                <small>Pending dues</small>
+                <strong>₹18,250</strong>
+                <div className="login-art-chips">
+                  <span>Cash</span>
+                  <span>UPI</span>
+                  <span>EMI</span>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="login-feat">
-            <div>
-              <span className="login-fi">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M5 13l4 4L19 7"
-                    stroke="currentColor"
-                    strokeWidth="2.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              Split any payment — cash, online &amp; finance
-            </div>
-            <div>
-              <span className="login-fi">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M5 13l4 4L19 7"
-                    stroke="currentColor"
-                    strokeWidth="2.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              Track stock, exchanges &amp; dues live
-            </div>
-            <div>
-              <span className="login-fi">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M5 13l4 4L19 7"
-                    stroke="currentColor"
-                    strokeWidth="2.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              GST-ready invoices, shared as PDF
+              <div className="login-art-card login-art-stock">
+                <small>Low stock alert</small>
+                <strong>6 items</strong>
+              </div>
+              <div className="login-art-pill">
+                <span>✓</span>
+                Invoice shared on WhatsApp
+              </div>
             </div>
           </div>
         </section>
 
         <section className="login-form-pane">
-          <img
-            src="/suraj_mobile_icon.png"
-            alt="Babu Mobile"
-            className="login-fp-logo"
-          />
-          <h2>{heading}</h2>
+          <div className="login-fp-brand">
+            <BabuMark className="login-fp-mark" />
+            <div>
+              <strong>Babu Mobile</strong>
+              <span>Balaghat · 9516533556</span>
+            </div>
+          </div>
+          {view === "login" ? (
+            <h2 className="login-welcome-heading">
+              <span>Open the shop,</span>
+              <strong>one tap away.</strong>
+            </h2>
+          ) : (
+            <h2>{heading}</h2>
+          )}
           <p className="login-sub">{subtitle}</p>
 
           {view === "login" ? (
@@ -406,7 +299,6 @@ export function LoginPage() {
             <div className="login-field">
               <label htmlFor="login-phone">
                 Phone number
-                <span className="login-req">*</span>
               </label>
               <div className="login-inp">
                 <svg
@@ -428,7 +320,7 @@ export function LoginPage() {
                   inputMode="numeric"
                   autoComplete="username"
                   maxLength={10}
-                  placeholder="10-digit mobile"
+                  placeholder="10-digit mobile number"
                   value={phone}
                   onChange={(e) => {
                     const next = e.target.value.replace(/\D/g, "").slice(0, 10);
@@ -466,7 +358,6 @@ export function LoginPage() {
             >
               <label htmlFor="login-password">
                 Password
-                <span className="login-req">*</span>
               </label>
               <div className="login-inp">
                 <svg
@@ -494,7 +385,7 @@ export function LoginPage() {
                   id="login-password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
-                  placeholder="Your password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -537,7 +428,15 @@ export function LoginPage() {
               </div>
             </div>
 
-            <div className="login-forgot-row">
+            <div className="login-login-row">
+              <label className="login-remember">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                />
+                <span>Keep me signed in</span>
+              </label>
               <button
                 type="button"
                 className="login-text-btn"
@@ -797,6 +696,13 @@ export function LoginPage() {
                 </button>
               </div>
             </form>
+          ) : null}
+
+          {view === "login" ? (
+            <div className="login-security-foot">
+              <span aria-hidden />
+              Secure · GST-ready invoices · Works on phone &amp; desktop
+            </div>
           ) : null}
         </section>
       </main>

@@ -109,7 +109,7 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
 
 const PAY = {
   cash: "#12B886",
-  online: "#3B82F6",
+  online: "#5d73b6",
   card: "#6366F1",
   finance: "#8B5CF6",
   exchange: "#64748B",
@@ -480,8 +480,8 @@ export function BillsPage() {
                       className={clsx(
                         "rounded-full border px-1 py-1.5 text-center text-[11px] font-semibold transition sm:text-[12px]",
                         period === "custom"
-                          ? "border-[#2563EB] bg-[#3B82F6] text-white shadow-[0_0_0_3px_#E8F0FE]"
-                          : "border-[#93C5FD] bg-[#E8F0FE] text-[#2563EB] hover:border-[#3B82F6] hover:bg-[#DBEAFE]",
+                          ? "border-[#4a62a8] bg-[#5d73b6] text-white shadow-[0_0_0_3px_#e3f3ff]"
+                          : "border-[#a9dcff] bg-[#e3f3ff] text-[#4a62a8] hover:border-[#5d73b6] hover:bg-[#d3ecff]",
                       )}
                       onClick={() => {
                         setPeriod("custom");
@@ -507,7 +507,7 @@ export function BillsPage() {
                         <input
                           id="bills-custom-from"
                           type="date"
-                          className="w-full rounded-lg border border-ink-100 bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-blue-400"
+                          className="w-full rounded-lg border border-ink-100 bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-tide-500"
                           value={customFrom}
                           max={customTo || undefined}
                           onChange={(e) => setCustomFrom(e.target.value)}
@@ -523,7 +523,7 @@ export function BillsPage() {
                         <input
                           id="bills-custom-to"
                           type="date"
-                          className="w-full rounded-lg border border-ink-100 bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-blue-400"
+                          className="w-full rounded-lg border border-ink-100 bg-white px-2 py-2 text-[13px] text-ink-900 outline-none focus:border-tide-500"
                           value={customTo}
                           min={customFrom || undefined}
                           onChange={(e) => setCustomTo(e.target.value)}
@@ -646,7 +646,7 @@ export function BillsPage() {
                         className={clsx(
                           "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
                           on
-                            ? "bg-[#F1F5FF] font-semibold text-ink-900"
+                            ? "bg-[#eaf5ff] font-semibold text-ink-900"
                             : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
                         )}
                         onClick={() => {
@@ -658,7 +658,7 @@ export function BillsPage() {
                         {option.label}
                         <Check
                           className={clsx(
-                            "h-[15px] w-[15px] text-[#2563EB]",
+                            "h-[15px] w-[15px] text-[#4a62a8]",
                             on ? "opacity-100" : "opacity-0",
                           )}
                           strokeWidth={2.6}
@@ -781,14 +781,14 @@ export function BillsPage() {
                   {format(new Date(bill.billDate), "dd MMM")}
                 </p>
                 {soldLabel ? (
-                  <p className="mt-1 hidden truncate text-[12.5px] font-semibold leading-snug text-[#2563EB] dark:text-[#93C5FD] sm:block">
+                  <p className="mt-1 hidden truncate text-[12.5px] font-semibold leading-snug text-[#4a62a8] dark:text-[#a9dcff] sm:block">
                     {soldLabel}
                   </p>
                 ) : null}
               </div>
 
               {soldLabel ? (
-                <p className="min-w-0 truncate text-[12.5px] font-semibold leading-snug text-[#2563EB] dark:text-[#93C5FD] max-sm:[grid-area:product] sm:hidden">
+                <p className="min-w-0 truncate text-[12.5px] font-semibold leading-snug text-[#4a62a8] dark:text-[#a9dcff] max-sm:[grid-area:product] sm:hidden">
                   {soldLabel}
                 </p>
               ) : null}
