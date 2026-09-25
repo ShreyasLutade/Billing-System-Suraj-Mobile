@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigationType,
+} from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -91,6 +97,15 @@ export function AppShell() {
     node.addEventListener("scroll", handleScroll, { passive: true });
     return () => node.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // .babu-main is the scroll container, so the browser won't reset it between
+  // routes. Start new pages at the top; keep the position on Back (POP).
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  useEffect(() => {
+    if (navigationType === "POP") return;
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname, navigationType]);
 
   function scrollToTop() {
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -272,13 +287,11 @@ export function AppShell() {
 
       <main ref={mainRef} className="babu-main">
         {!isOnline ? <div className="babu-offline-banner">Offline</div> : null}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-        >
+        {/* CSS animation (not a transform left in place) so popups inside pages
+            aren't trapped below the header and bottom nav. */}
+        <div className="babu-page-enter">
           <Outlet />
-        </motion.div>
+        </div>
       </main>
 
       <nav className="babu-mobile-nav" aria-label="Mobile navigation">

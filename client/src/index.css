@@ -405,6 +405,23 @@ body,
   display: none;
 }
 
+.babu-page-enter {
+  animation: babuPageEnter 0.35s ease-out;
+}
+
+@keyframes babuPageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .babu-page-enter {
+    animation: none;
+  }
+}
+
 .babu-mobile-menu-btn {
   display: grid;
   width: 40px;
@@ -607,7 +624,6 @@ body,
     height: 100%;
     min-height: 0;
     overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
     padding: calc(58px + env(safe-area-inset-top, 0px) + 20px) 18px 104px;
   }
 

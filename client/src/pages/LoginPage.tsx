@@ -18,9 +18,9 @@ function BabuMark({ className }: { className?: string }) {
     >
       <defs>
         <linearGradient id="babu-mark-gradient" x1="8" y1="4" x2="58" y2="60">
-          <stop stopColor="#5B2DF0" />
-          <stop offset="0.62" stopColor="#E23DBB" />
-          <stop offset="1" stopColor="#FF8A3D" />
+          <stop stopColor="#1ABAFF" />
+          <stop offset="0.62" stopColor="#3F95E0" />
+          <stop offset="1" stopColor="#5D73B6" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="20" fill="url(#babu-mark-gradient)" />
@@ -31,8 +31,8 @@ function BabuMark({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="33" cy="23.5" r="2.3" fill="#E23DBB" />
-      <rect x="29" y="39.5" width="9" height="3" rx="1.5" fill="#FF8A3D" />
+      <circle cx="33" cy="23.5" r="2.3" fill="#1ABAFF" />
+      <rect x="29" y="39.5" width="9" height="3" rx="1.5" fill="#1ABAFF" />
       <path
         d="M46 13a10 10 0 0 1 6 6M46 8a15 15 0 0 1 10 10"
         stroke="white"
