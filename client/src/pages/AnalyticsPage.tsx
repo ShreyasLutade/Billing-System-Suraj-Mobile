@@ -324,7 +324,7 @@ export function AnalyticsPage() {
                 className="pointer-events-none absolute inset-0 opacity-50"
                 style={{
                   background:
-                    "radial-gradient(60% 90% at 92% 8%, rgba(18,184,134,.16), transparent 60%)",
+                    "radial-gradient(60% 90% at 92% 8%, rgba(26,186,255,.14), transparent 60%)",
                 }}
               />
               <div className="relative">
@@ -838,7 +838,7 @@ export function AnalyticsPage() {
                         </p>
                       ) : null}
                       {(bill.companyDiscount || 0) > 0 ? (
-                        <p className="text-[11px] font-medium text-[#0E9E76]">
+                        <p className="text-[11px] font-medium text-bright">
                           incl. {formatINR(bill.companyDiscount || 0)} cashback
                         </p>
                       ) : null}
@@ -850,7 +850,7 @@ export function AnalyticsPage() {
                       <p
                         className={`font-display text-[14px] font-bold tabular-nums sm:text-[15px] ${
                           bill.profit >= 0
-                            ? "text-[#0E9E76]"
+                            ? "text-bright"
                             : "text-[#E5484D]"
                         }`}
                       >
@@ -888,7 +888,7 @@ export function AnalyticsPage() {
                 <p className="hidden text-right text-[13.5px] font-bold tabular-nums text-ink-900 sm:block">
                   {formatINR(billTotals.sell)}
                 </p>
-                <p className="hidden text-right font-display text-[15px] font-bold tabular-nums text-[#0E9E76] sm:block">
+                <p className="hidden text-right font-display text-[15px] font-bold tabular-nums text-bright sm:block">
                   {formatINR(billTotals.profit)}
                 </p>
                 <div className="col-span-full grid grid-cols-3 gap-2 sm:hidden">
@@ -912,7 +912,7 @@ export function AnalyticsPage() {
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-300">
                       Profit
                     </p>
-                    <p className="font-display text-sm font-bold tabular-nums text-[#0E9E76]">
+                    <p className="font-display text-sm font-bold tabular-nums text-bright">
                       {formatINR(billTotals.profit)}
                     </p>
                   </div>

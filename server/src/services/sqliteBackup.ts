@@ -79,10 +79,10 @@ export async function createSqliteBackupBuffer(): Promise<{
   }
 
   const dateKey = istDateString();
-  const filename = `suraj-mobile-backup-${dateKey}.db`;
+  const filename = `babu-mobile-backup-${dateKey}.db`;
   const tempPath = path.join(
     os.tmpdir(),
-    `suraj-vacuum-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+    `babu-vacuum-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
   );
 
   try {
@@ -136,9 +136,9 @@ export async function restoreSqliteFromBuffer(buffer: Buffer): Promise<{
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const previousBackupPath = path.join(
     dir,
-    `suraj.pre-restore-${stamp}.db`,
+    `babu.pre-restore-${stamp}.db`,
   );
-  const incomingPath = path.join(dir, `suraj.incoming-${stamp}.db`);
+  const incomingPath = path.join(dir, `babu.incoming-${stamp}.db`);
 
   await fs.promises.writeFile(incomingPath, buffer);
 

@@ -586,7 +586,7 @@ export function DuesPage() {
                       {due.customerPhone ? (
                         <a
                           href={`tel:${due.customerPhone.replace(/[^\d+]/g, "")}`}
-                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 transition hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300"
+                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-tide-500/30 bg-tide-100 text-bright transition hover:border-tide-500 hover:bg-[#d3ecff] dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400"
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
                           aria-label={`Call ${due.customerName}`}

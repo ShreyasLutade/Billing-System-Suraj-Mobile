@@ -29,8 +29,8 @@ const shop = {
   address:
     process.env.SHOP_ADDRESS ||
     "Near Jain Mandir, Beside Arihant Institute Main Road Balaghat (M.P) 481001",
-  phone: process.env.SHOP_PHONE || "9516533556",
-  instagram: process.env.SHOP_INSTAGRAM || "",
+  phone: process.env.SHOP_PHONE || "7581817575",
+  instagram: process.env.SHOP_INSTAGRAM || "@babumobile_nx_balaghat",
   gstin: process.env.SHOP_GSTIN || "23FAAPB2709A1ZP",
 };
 

@@ -869,7 +869,7 @@ export function BillsPage() {
                     Tax invoice
                   </p>
                 ) : paid ? (
-                  <p className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-[11.5px] font-semibold text-[#0E9E76]">
+                  <p className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-[11.5px] font-semibold text-bright">
                     <Check className="h-3 w-3 shrink-0" strokeWidth={2.6} />
                     Fully paid
                   </p>

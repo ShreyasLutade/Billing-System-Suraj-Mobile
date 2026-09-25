@@ -34,6 +34,7 @@
   --color-tide-500: 93 115 182;
   --color-tide-400: 26 186 255;
   --color-tide-100: 227 243 255;
+  --color-bright: 10 159 224;
   --color-sand-50: 247 244 239;
   --color-sand-100: 239 232 222;
   --color-ember-500: 194 65 12;
@@ -83,6 +84,7 @@ html.dark {
   --color-tide-500: 26 186 255;
   --color-tide-400: 127 207 255;
   --color-tide-100: 20 44 72;
+  --color-bright: 127 207 255;
   --color-sand-50: 22 28 38;
   --color-sand-100: 30 38 52;
   --color-ember-500: 251 146 60;
@@ -1029,11 +1031,11 @@ body {
   }
 
   .tb-tab-on {
-    @apply bg-[#12B886] font-semibold text-white shadow-[0_4px_12px_rgba(18,184,134,.35)] sm:min-w-0 sm:flex-[1.7] sm:px-3 sm:text-[13px];
+    @apply bg-tide-500 font-semibold text-white shadow-[0_4px_12px_rgba(93,115,182,.35)] sm:min-w-0 sm:flex-[1.7] sm:px-3 sm:text-[13px];
   }
 
   .segment-on {
-    @apply bg-[#12B886] font-semibold text-white shadow-[0_4px_12px_rgba(18,184,134,.35)];
+    @apply bg-tide-500 font-semibold text-white shadow-[0_4px_12px_rgba(93,115,182,.35)];
   }
 
   .segment-off {
@@ -1549,7 +1551,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
     ),
     radial-gradient(
       90% 70% at 82% 8%,
-      rgba(18, 184, 134, 0.3) 0%,
+      rgba(26, 186, 255, 0.3) 0%,
       transparent 55%
     ),
     linear-gradient(160deg, #0f2438 0%, #0c1a2b 55%, #0a1522 100%);
@@ -1814,7 +1816,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
   letter-spacing: 0.1em;
   padding: 6px 10px;
   border-radius: 7px;
-  box-shadow: 0 8px 18px rgba(18, 184, 134, 0.5);
+  box-shadow: 0 8px 18px rgba(26, 186, 255, 0.5);
 }
 
 .login-chip {
@@ -1837,8 +1839,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: rgba(18, 184, 134, 0.2);
-  color: #5ce0ae;
+  background: rgba(26, 186, 255, 0.2);
+  color: #7fcfff;
   display: grid;
   place-items: center;
 }
@@ -1890,7 +1892,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
   border: 1px solid rgba(255, 255, 255, 0.06);
   display: grid;
   place-items: center;
-  color: #5ce0ae;
+  color: #7fcfff;
   flex: none;
 }
 
@@ -2129,8 +2131,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-alert-ok {
-  background: #e7f8f1;
-  color: #0e9e76;
+  background: #e3f3ff;
+  color: #4a62a8;
   border: 1px solid #bfe9d6;
 }
 
@@ -2251,7 +2253,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
       ),
       radial-gradient(
         90% 70% at 85% 0%,
-        rgba(18, 184, 134, 0.28) 0%,
+        rgba(26, 186, 255, 0.28) 0%,
         transparent 55%
       ),
       linear-gradient(165deg, #123049 0%, #0c1b2c 60%, #0a1522 100%);
@@ -3174,7 +3176,7 @@ html.dark .login-brand {
   height: 22px;
   place-items: center;
   border-radius: 50%;
-  background: #22c55e;
+  background: #5d73b6;
   color: #ffffff;
   font-size: 12px;
 }
@@ -3292,8 +3294,8 @@ html.dark .login-brand {
   height: 8px;
   flex: none;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+  background: #1abaff;
+  box-shadow: 0 0 0 4px rgba(26, 186, 255, 0.2);
 }
 
 @media (max-width: 900px) {

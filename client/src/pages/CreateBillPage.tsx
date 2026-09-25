@@ -2908,7 +2908,7 @@ export function CreateBillPage() {
                           <div className="flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-[#0E1626] to-[#1B2740] px-4 py-3.5 text-white">
                             <span className="inline-flex items-center gap-2 text-[13px] text-[#B7C3D6]">
                               <Check
-                                className="h-[15px] w-[15px] text-[#12B886]"
+                                className="h-[15px] w-[15px] text-tide-400"
                                 strokeWidth={2.6}
                               />
                               {useFixedReturn && totals.cashReturn > 0
@@ -3385,7 +3385,7 @@ export function CreateBillPage() {
                         "mt-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold",
                         totals.dueAmount > 0
                           ? "border border-amber-200 bg-amber-50 text-amber-800"
-                          : "border border-emerald-200 bg-emerald-50 text-emerald-800",
+                          : "border border-tide-500/30 bg-tide-100 text-bright",
                       )}
                     >
                       <span>
@@ -3429,7 +3429,7 @@ export function CreateBillPage() {
                                 damping: 22,
                                 mass: 0.6,
                               }}
-                              className="mb-3 grid h-14 w-14 place-items-center rounded-full bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/70 dark:text-tide-400"
+                              className="mb-3 grid h-14 w-14 place-items-center rounded-full bg-tide-100 text-bright dark:bg-tide-100/70 dark:text-tide-400"
                             >
                               <Check className="h-7 w-7" strokeWidth={2.5} />
                             </motion.span>

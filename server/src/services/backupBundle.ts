@@ -71,13 +71,14 @@ export async function extractSqliteBackupBuffer(
     );
   }
 
-  // Prefer root-level / Suraj-named db if several exist.
+  // Prefer root-level / shop-named db if several exist (older backups used "suraj").
+  const shopNamed = (name: string) => /babu|suraj/i.test(name);
   entries.sort((a, b) => {
     const aScore =
-      (a.name.toLowerCase().includes("suraj") ? 0 : 1) +
+      (shopNamed(a.name) ? 0 : 1) +
       (a.name.includes("/") || a.name.includes("\\") ? 1 : 0);
     const bScore =
-      (b.name.toLowerCase().includes("suraj") ? 0 : 1) +
+      (shopNamed(b.name) ? 0 : 1) +
       (b.name.includes("/") || b.name.includes("\\") ? 1 : 0);
     return aScore - bScore || a.name.localeCompare(b.name);
   });

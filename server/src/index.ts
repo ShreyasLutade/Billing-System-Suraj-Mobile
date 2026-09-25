@@ -68,7 +68,7 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
-    service: "suraj-billing-api",
+    service: "babu-billing-api",
     time: new Date().toISOString(),
   });
 });
@@ -91,7 +91,7 @@ app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 if (!serveClient) {
   app.get("/", (_req, res) => {
     res.json({
-      service: "Suraj Billing API",
+      service: "Babu Billing API",
       message:
         "Open the website at http://localhost:5173 — this port is the API only.",
       health: "/api/health",
@@ -213,7 +213,7 @@ async function start() {
   }
   startDailyReportScheduler();
   const server = app.listen(port, "0.0.0.0", () => {
-    console.log(`Suraj Billing API running on http://localhost:${port}`);
+    console.log(`Babu Billing API running on http://localhost:${port}`);
     if (serveClient) {
       console.log("Serving web app from /public");
     }

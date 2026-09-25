@@ -229,7 +229,7 @@ export function BillDetailPage() {
                 GST invoice
               </span>
             ) : fullyPaid ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-[11px] py-1 text-xs font-semibold text-[#0E9E76]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-[11px] py-1 text-xs font-semibold text-bright">
                 <Check className="h-[13px] w-[13px]" strokeWidth={2.6} />
                 Fully paid
               </span>
@@ -380,13 +380,13 @@ export function BillDetailPage() {
                             OLD
                           </span>
                         ) : item.condition === "NEW" ? (
-                          <span className="rounded-md bg-[#E7F8F1] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
+                          <span className="rounded-md bg-tide-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-bright dark:bg-tide-100/50 dark:text-tide-400">
                             NEW
                           </span>
                         ) : null}
                       </div>
                       {specs ? (
-                        <p className="mt-1 text-[13px] font-medium text-tide-600">
+                        <p className="mt-1 text-[13px] font-medium text-bright">
                           {specs}
                         </p>
                       ) : null}
@@ -413,7 +413,7 @@ export function BillDetailPage() {
           {!bill.withGst && bill.isExchange ? (
             <section className="bd-card">
               <div className="mb-4 flex items-center gap-2.5">
-                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-tide-100 text-tide-600">
+                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-tide-100 text-bright">
                   <ArrowLeftRight className="h-[15px] w-[15px]" strokeWidth={2} />
                 </span>
                 <h2 className="font-display text-base font-semibold text-[#0E1626]">
@@ -558,16 +558,16 @@ export function BillDetailPage() {
               </div>
             ) : null}
             {!bill.withGst && (bill.companyDiscount || 0) > 0 ? (
-              <div className="mt-3.5 rounded-xl border border-[#D8EEE4] bg-[#E7F8F1] px-3.5 py-3">
+              <div className="mt-3.5 rounded-xl border border-tide-500/25 bg-tide-100 px-3.5 py-3">
                 <SumLine
                   label="Company cashback"
                   value={`+ ${formatINR(bill.companyDiscount || 0)}`}
                 />
                 <div className="mt-2 flex items-baseline justify-between gap-3">
-                  <span className="text-[12.5px] font-semibold text-[#0E9E76]">
+                  <span className="text-[12.5px] font-semibold text-bright">
                     Effective selling
                   </span>
-                  <span className="font-display text-lg font-bold tabular-nums text-[#0E9E76]">
+                  <span className="font-display text-lg font-bold tabular-nums text-bright">
                     {formatINR(
                       round2(payable + Number(bill.companyDiscount || 0)),
                     )}
@@ -692,7 +692,7 @@ export function BillDetailPage() {
                       >
                         <p
                           className={`text-xs font-semibold ${
-                            row.received ? "text-[#0E9E76]" : "text-[#B76E00]"
+                            row.received ? "text-bright" : "text-[#B76E00]"
                           }`}
                         >
                           {row.label} ·{" "}
@@ -807,21 +807,21 @@ export function BillDetailPage() {
           ) : null}
 
           {!bill.withGst && fullyPaid ? (
-            <div className="relative overflow-hidden rounded-2xl border border-[#CDEFE0] bg-gradient-to-br from-[#E7F8F1] to-[#EAF6FF] p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
+            <div className="relative overflow-hidden rounded-2xl border border-tide-500/25 bg-gradient-to-br from-tide-100 to-[#EAF6FF] p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
               <div
                 aria-hidden
-                className="pointer-events-none absolute -right-[30px] -top-[30px] h-[120px] w-[120px] rounded-full bg-[radial-gradient(circle,rgba(18,184,134,.18),transparent_70%)]"
+                className="pointer-events-none absolute -right-[30px] -top-[30px] h-[120px] w-[120px] rounded-full bg-[radial-gradient(circle,rgba(26,186,255,.18),transparent_70%)]"
               />
-              <p className="relative text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0E9E76]">
+              <p className="relative text-[11px] font-semibold uppercase tracking-[0.12em] text-bright">
                 Status
               </p>
               <p className="relative mt-2 flex items-center gap-2.5 font-display text-[22px] font-bold text-[#0E1626]">
-                <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[#12B886] text-white">
+                <span className="grid h-[26px] w-[26px] place-items-center rounded-full text-white [background:var(--grad)]">
                   <Check className="h-[15px] w-[15px]" strokeWidth={2.6} />
                 </span>
                 Fully paid
               </p>
-              <p className="relative mt-1 text-[13px] text-[#0E9E76]/85">
+              <p className="relative mt-1 text-[13px] text-bright/85">
                 {bill.dueSettledAt
                   ? `Settled on ${format(new Date(bill.dueSettledAt), "dd MMM yyyy")}`
                   : "No pending amount on this invoice."}
@@ -829,7 +829,7 @@ export function BillDetailPage() {
               {(bill.duePayments?.length ?? 0) > 0 ? (
                 <DuePaymentHistory
                   payments={bill.duePayments!}
-                  borderClass="border-[#CDEFE0]"
+                  borderClass="border-tide-500/25"
                 />
               ) : null}
             </div>
@@ -1080,7 +1080,7 @@ function PurchaseHistoryCard({
             {phoneDigits ? (
               <a
                 href={`tel:${phoneDigits}`}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#E8F8EF] text-[#15803D] transition hover:bg-[#DCF5E7]"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-tide-100 text-bright transition hover:bg-[#d3ecff]"
                 aria-label={`Call ${row.supplier?.name || "supplier"}`}
               >
                 <Phone className="h-3.5 w-3.5" strokeWidth={2.25} />
@@ -1120,7 +1120,7 @@ function Kv({
       <p
         className={
           highlight
-            ? "font-display text-[15px] font-bold tabular-nums text-[#0E9E76]"
+            ? "font-display text-[15px] font-bold tabular-nums text-bright"
             : muted
               ? "text-sm tabular-nums text-[#7A8699]"
               : "text-sm tabular-nums text-[#0E1626]"
@@ -1149,7 +1149,7 @@ function SumLine({
       <span
         className={
           exchange
-            ? "font-semibold tabular-nums text-[#0E9E76]"
+            ? "font-semibold tabular-nums text-bright"
             : muted
               ? "font-medium tabular-nums text-[#7A8699]"
               : "font-medium tabular-nums text-[#0E1626]"

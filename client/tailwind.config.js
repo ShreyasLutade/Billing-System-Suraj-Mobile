@@ -24,6 +24,8 @@ export default {
           400: "rgb(var(--color-tide-400) / <alpha-value>)",
           100: "rgb(var(--color-tide-100) / <alpha-value>)",
         },
+        /* Bright sky accent for highlighted values (cost price, paid, profit). */
+        bright: "rgb(var(--color-bright) / <alpha-value>)",
         sand: {
           50: "rgb(var(--color-sand-50) / <alpha-value>)",
           100: "rgb(var(--color-sand-100) / <alpha-value>)",

@@ -98,7 +98,7 @@ export function SavePurchaseConfirmModal({
                     "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]",
                     used
                       ? "bg-[#FEF3E2] text-[#B76E00]"
-                      : "bg-[#E7F8F1] text-[#0E9E76]",
+                      : "bg-tide-100 text-bright",
                   )}
                 >
                   {used ? "Old" : "New"}

@@ -158,7 +158,7 @@ export function AppShell() {
             <span>{(user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")).slice(0, 1).toUpperCase()}</span>
             <div>
               <strong>{user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")}</strong>
-              <small>{user?.phone || "9516533556"}</small>
+              <small>{user?.phone || "7581817575"}</small>
             </div>
           </div>
           <button type="button" className="babu-utility-button" onClick={toggleTheme}>
@@ -235,7 +235,7 @@ export function AppShell() {
                   <span>{(user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")).slice(0, 1).toUpperCase()}</span>
                   <div>
                     <strong>{user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")}</strong>
-                    <small>{user?.phone || "9516533556"}</small>
+                    <small>{user?.phone || "7581817575"}</small>
                   </div>
                 </div>
                 <button type="button" className="babu-utility-button" onClick={toggleTheme}>

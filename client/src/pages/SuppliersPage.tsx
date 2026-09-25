@@ -520,7 +520,7 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
     <article className="relative overflow-hidden rounded-[22px] border border-[#E8ECF2] bg-white shadow-[0_10px_28px_rgba(16,25,40,0.08)] dark:border-ink-100 dark:bg-surface-elevated dark:shadow-soft">
       <div
         aria-hidden
-        className="absolute inset-y-0 left-0 w-[5px] bg-[#22C55E]"
+        className="absolute inset-y-0 left-0 w-[5px] bg-tide-500"
       />
 
       <div className="pl-[5px]">
@@ -544,13 +544,13 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
                   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold",
                   isUsed
                     ? "bg-orange-50 text-ember-500"
-                    : "bg-[#E8F8EF] text-[#15803D]",
+                    : "bg-tide-100 text-bright",
                 )}
               >
                 <span
                   className={clsx(
                     "h-1.5 w-1.5 rounded-full",
-                    isUsed ? "bg-ember-500" : "bg-[#22C55E]",
+                    isUsed ? "bg-ember-500" : "bg-tide-500",
                   )}
                 />
                 {isUsed ? "Old" : "New"}
@@ -600,7 +600,7 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
             {supplierPhoneDigits ? (
               <a
                 href={`tel:${supplierPhoneDigits}`}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-[#E8F8EF] text-[#15803D] transition hover:bg-[#DCF5E7]"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-tide-100 text-bright transition hover:bg-[#d3ecff]"
                 aria-label={`Call ${supplier.name}`}
                 onClick={(e) => e.stopPropagation()}
               >

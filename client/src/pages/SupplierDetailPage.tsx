@@ -272,7 +272,7 @@ export function SupplierDetailPage() {
                         </td>
                         <td className="text-right">
                           {paid ? (
-                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-400">
+                            <span className="inline-flex items-center gap-1 rounded border border-tide-500/30 bg-tide-100/80 px-2 py-1 text-xs font-semibold text-bright dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400">
                               <Check className="h-3.5 w-3.5" />
                               Paid
                             </span>

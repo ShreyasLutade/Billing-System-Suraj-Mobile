@@ -337,7 +337,7 @@ export function PurchaseDetailPage() {
                           ) : null}
                         </div>
                       ) : (
-                        <span className="inline-flex whitespace-nowrap rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-400">
+                        <span className="inline-flex whitespace-nowrap rounded border border-tide-500/30 bg-tide-100 px-2 py-0.5 text-xs font-semibold text-bright dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400">
                           In stock
                         </span>
                       )}

@@ -200,7 +200,7 @@ export function LoginPage() {
           <div className="login-mobile-glow" aria-hidden />
           <div className="login-mobile-hero-txt">
             <p className="login-mobile-name">Babu Mobile</p>
-            <p className="login-mobile-meta">9516533556 · Balaghat</p>
+            <p className="login-mobile-meta">7581817575 · Balaghat</p>
           </div>
         </header>
         <div className="login-mobile-badge" aria-hidden>
@@ -216,7 +216,7 @@ export function LoginPage() {
                     <BabuMark className="login-logo" />
             <div className="login-bp-name">
               Babu Mobile
-              <small>9516533556 · Balaghat</small>
+              <small>7581817575 · Balaghat</small>
             </div>
           </div>
 
@@ -281,7 +281,7 @@ export function LoginPage() {
             <BabuMark className="login-fp-mark" />
             <div>
               <strong>Babu Mobile</strong>
-              <span>Balaghat · 9516533556</span>
+              <span>Balaghat · 7581817575</span>
             </div>
           </div>
           {view === "login" ? (

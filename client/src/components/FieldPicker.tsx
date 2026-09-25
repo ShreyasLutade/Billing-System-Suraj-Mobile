@@ -582,7 +582,7 @@ function PickerOption({
                 "rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide",
                 badgeTone === "old"
                   ? "bg-[#FEF3E2] text-[#B76E00] dark:bg-amber-500/20 dark:text-amber-400"
-                  : "bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-400/20 dark:text-tide-400",
+                  : "bg-tide-100 text-bright dark:bg-tide-400/20 dark:text-tide-400",
               )}
             >
               {badge}

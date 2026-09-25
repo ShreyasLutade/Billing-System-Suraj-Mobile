@@ -311,7 +311,7 @@ export function AnalyticsExchangesPage() {
                           className={clsx(
                             "rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide",
                             inStock
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              ? "bg-tide-500/10 text-bright dark:text-tide-400"
                               : "bg-rose-500/10 text-rose-600 dark:text-rose-400",
                           )}
                         >

@@ -521,7 +521,7 @@ export function PurchaseEntryModal({
             <span
               className={clsx(
                 "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-white",
-                condition === "USED" ? "bg-[#B76E00]" : "bg-[#0E9E76]",
+                condition === "USED" ? "bg-[#B76E00]" : "bg-tide-500",
               )}
             >
               {condition === "USED" ? "Second hand" : "New"}
@@ -813,7 +813,7 @@ export function PurchaseEntryModal({
                   </span>
                 </div>
 
-                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-2.5 py-1 text-xs font-semibold text-tide-600 dark:bg-tide-100/50 dark:text-tide-400">
+                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-2.5 py-1 text-xs font-semibold text-bright dark:bg-tide-100/50 dark:text-tide-400">
                   <Smartphone className="h-3.5 w-3.5" />
                   {unitCount} unit{unitCount === 1 ? "" : "s"}
                 </span>
@@ -1150,7 +1150,7 @@ function ConditionBadge({ condition }: { condition: "NEW" | "USED" }) {
     <span
       className={clsx(
         "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]",
-        used ? "bg-[#FEF3E2] text-[#B76E00] dark:bg-amber-950/50 dark:text-amber-300" : "bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400",
+        used ? "bg-[#FEF3E2] text-[#B76E00] dark:bg-amber-950/50 dark:text-amber-300" : "bg-tide-100 text-bright dark:bg-tide-100/50 dark:text-tide-400",
       )}
     >
       {used ? "Second hand" : "New"}
