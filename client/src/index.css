@@ -542,10 +542,15 @@ body,
 }
 
 @media (max-width: 900px) {
+  /* Pin the app to the visible viewport so only .babu-main scrolls; otherwise iOS
+     scrolls the whole document, hiding the top under the header and leaving a gap
+     above the bottom nav. */
   .babu-shell {
+    position: fixed;
+    inset: 0;
     display: block;
-    height: 100dvh;
-    min-height: 100dvh;
+    height: auto;
+    min-height: 0;
   }
 
   .babu-sidebar {
@@ -599,8 +604,10 @@ body,
   }
 
   .babu-main {
-    height: 100dvh;
-    min-height: 100dvh;
+    height: 100%;
+    min-height: 0;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
     padding: calc(58px + env(safe-area-inset-top, 0px) + 20px) 18px 104px;
   }
 
@@ -806,6 +813,8 @@ html.dark .babu-main .bd-card {
 body {
   margin: 0;
   height: 100vh;
+  /* iOS: 100vh is the toolbar-hidden height, which lets the page shift under the header. */
+  height: 100dvh;
   overflow: hidden;
   font-family: "DM Sans", system-ui, -apple-system, sans-serif;
   background-image: var(--bg-mesh);
