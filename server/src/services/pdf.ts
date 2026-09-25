@@ -1,4 +1,3 @@
-import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
@@ -12,14 +11,16 @@ import {
 
 type BillWithItems = Bill & { items: BillItem[] };
 
-/** Logo palette: charcoal + gold */
+/** App theme palette: slate blue + bright sky (matches the web UI). */
 const COLORS = {
-  charcoal: "#494D53",
-  gold: "#C49333",
-  goldSoft: "#F5EDD8",
-  ink: "#1A1A1A",
-  muted: "#555555",
+  slate: "#3E4F8A",
+  accent: "#0A9FE0",
+  accentSoft: "#E3F3FF",
+  ink: "#15203A",
+  muted: "#5B6780",
   white: "#FFFFFF",
+  gradStart: "#1ABAFF",
+  gradEnd: "#5D73B6",
 };
 
 const shop = {
@@ -37,8 +38,6 @@ const shop = {
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 28;
 const CONTENT_WIDTH = PAGE.width - MARGIN * 2;
-const LOGO_PATH = path.join(__dirname, "../../assets/suraj_mobile_logo.png");
-const ICON_PATH = path.join(__dirname, "../../assets/suraj_mobile_icon.png");
 const FONTS_DIR = path.join(__dirname, "../../assets/fonts");
 const FONT = {
   regular: "Manrope",
@@ -209,7 +208,7 @@ function strokeBox(
   w: number,
   h: number,
 ) {
-  doc.rect(x, y, w, h).strokeColor(COLORS.charcoal).lineWidth(0.9).stroke();
+  doc.rect(x, y, w, h).strokeColor(COLORS.slate).lineWidth(0.9).stroke();
 }
 
 function drawInstagramIcon(
@@ -236,28 +235,51 @@ function drawInstagramIcon(
     .fill();
 }
 
-function drawHeader(doc: PDFKit.PDFDocument) {
-  const logoFile = fs.existsSync(LOGO_PATH)
-    ? LOGO_PATH
-    : fs.existsSync(ICON_PATH)
-      ? ICON_PATH
-      : null;
+/** Babu Mobile "B" mark (client/public/babu_mobile_icon.svg) drawn as vectors in theme colours. */
+function drawBabuLogo(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  size: number,
+) {
+  doc.save();
+  doc.translate(x, y).scale(size / 64);
 
+  const grad = doc.linearGradient(8, 4, 58, 60);
+  grad.stop(0, COLORS.gradStart).stop(1, COLORS.gradEnd);
+  doc.roundedRect(0, 0, 64, 64, 20).fill(grad);
+
+  doc
+    .path(
+      "M22 15V49M22 15H33a8.5 8.5 0 0 1 0 17H22M22 32H35a8.5 8.5 0 0 1 0 17H22",
+    )
+    .lineWidth(6.5)
+    .lineCap("round")
+    .lineJoin("round")
+    .stroke(COLORS.white);
+  doc.circle(33, 23.5, 2.3).fill(COLORS.gradStart);
+  doc.roundedRect(29, 39.5, 9, 3, 1.5).fill(COLORS.gradStart);
+
+  doc
+    .path("M46 13a10 10 0 0 1 6 6M46 8a15 15 0 0 1 10 10")
+    .lineWidth(2.6)
+    .lineCap("round")
+    .strokeOpacity(0.9)
+    .stroke(COLORS.white);
+
+  doc.restore();
+}
+
+function drawHeader(doc: PDFKit.PDFDocument) {
   const logoW = 58;
   const logoH = 72;
   const logoY = 10;
-  if (logoFile) {
-    doc.image(logoFile, MARGIN, logoY, {
-      fit: [logoW, logoH],
-      align: "center",
-      valign: "center",
-    });
-  }
+  drawBabuLogo(doc, MARGIN, logoY + (logoH - logoW) / 2, logoW);
 
   const textX = MARGIN + logoW + 14;
   const textW = CONTENT_WIDTH - logoW - 14;
 
-  // Distinct display font — match logo: SURAJ charcoal, MOBILE gold
+  // Distinct display font — first word slate, rest in the bright accent
   const title = shop.name.toUpperCase();
   const parts = title.split(/\s+/);
   const first = parts[0] || title;
@@ -265,13 +287,13 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   doc.font(FONT.bold).fontSize(24);
   const firstW = doc.widthOfString(first + (rest ? " " : ""));
   doc
-    .fillColor(COLORS.charcoal)
+    .fillColor(COLORS.slate)
     .text(first + (rest ? " " : ""), textX, 16, {
       lineBreak: false,
     });
   if (rest) {
     doc
-      .fillColor(COLORS.gold)
+      .fillColor(COLORS.accent)
       .text(rest, textX + firstW, 16, {
         lineBreak: false,
       });
@@ -318,13 +340,13 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   doc
     .moveTo(MARGIN, y)
     .lineTo(PAGE.width - MARGIN, y)
-    .strokeColor(COLORS.charcoal)
+    .strokeColor(COLORS.slate)
     .lineWidth(1.1)
     .stroke();
 
   y += 5;
   doc
-    .fillColor(COLORS.gold)
+    .fillColor(COLORS.accent)
     .font(FONT.medium)
     .fontSize(8)
     .text(shop.tagline, MARGIN, y, {
@@ -337,7 +359,7 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   doc
     .moveTo(MARGIN, y)
     .lineTo(PAGE.width - MARGIN, y)
-    .strokeColor(COLORS.charcoal)
+    .strokeColor(COLORS.slate)
     .lineWidth(1.1)
     .stroke();
 
@@ -350,7 +372,7 @@ function drawInvoiceBar(
   withGst: boolean,
 ) {
   const h = 22;
-  doc.rect(MARGIN, y, CONTENT_WIDTH, h).fill(COLORS.goldSoft);
+  doc.rect(MARGIN, y, CONTENT_WIDTH, h).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
 
   if (withGst) {
@@ -367,7 +389,7 @@ function drawInvoiceBar(
   }
 
   doc
-    .fillColor(COLORS.gold)
+    .fillColor(COLORS.accent)
     .font(FONT.bold)
     .fontSize(11)
     .text(withGst ? "TAX INVOICE" : "BILL", MARGIN, y + 5, {
@@ -401,7 +423,7 @@ function drawCustomerMeta(
   doc
     .moveTo(MARGIN + leftW, y)
     .lineTo(MARGIN + leftW, y + h)
-    .strokeColor(COLORS.charcoal)
+    .strokeColor(COLORS.slate)
     .lineWidth(0.9)
     .stroke();
 
@@ -468,7 +490,7 @@ function drawColumnLines(
     doc
       .moveTo(x, y)
       .lineTo(x, y + h)
-      .strokeColor(COLORS.charcoal)
+      .strokeColor(COLORS.slate)
       .lineWidth(0.7)
       .stroke();
   }
@@ -588,7 +610,7 @@ function drawItemsTable(
 
   const headerH = 20;
   let x = MARGIN;
-  doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.goldSoft);
+  doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, headerH);
 
   for (const col of cols) {
@@ -672,7 +694,7 @@ function drawItemsTable(
     y = tableBodyBottom;
   }
 
-  doc.rect(MARGIN, y, CONTENT_WIDTH, footH).fill(COLORS.goldSoft);
+  doc.rect(MARGIN, y, CONTENT_WIDTH, footH).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, footH);
   doc
     .fillColor(COLORS.ink)
@@ -762,7 +784,7 @@ function drawExchangeBox(
   const h = headerH + rows.length * rowH + 10 + (cashReturn > 0 ? 14 : 0);
 
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, h);
-  doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.goldSoft);
+  doc.rect(MARGIN, y, CONTENT_WIDTH, headerH).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, headerH);
   doc
     .fillColor(COLORS.ink)
@@ -863,11 +885,11 @@ function drawPlainTotalsSection(
   doc
     .moveTo(MARGIN + payW, y)
     .lineTo(MARGIN + payW, y + bandH)
-    .strokeColor(COLORS.charcoal)
+    .strokeColor(COLORS.slate)
     .lineWidth(0.9)
     .stroke();
 
-  doc.rect(MARGIN, y, payW, 18).fill(COLORS.goldSoft);
+  doc.rect(MARGIN, y, payW, 18).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, y, payW, 18);
   doc
     .fillColor(COLORS.ink)
@@ -944,7 +966,7 @@ function drawPlainTotalsSection(
   }
 
   const totalX = MARGIN + payW;
-  doc.rect(totalX, y, totalW, bandH).fill(COLORS.goldSoft);
+  doc.rect(totalX, y, totalW, bandH).fill(COLORS.accentSoft);
   strokeBox(doc, totalX, y, totalW, bandH);
 
   let ty = y + (payCustomerAmount > 0 || discountAmount > 0 ? 10 : 22);
@@ -970,7 +992,7 @@ function drawPlainTotalsSection(
 
   if (payCustomerAmount > 0) {
     doc
-      .fillColor(COLORS.gold)
+      .fillColor(COLORS.accent)
       .font(FONT.bold)
       .fontSize(7)
       .text("Total Payable", totalX + 8, ty, {
@@ -1003,7 +1025,7 @@ function drawPlainTotalsSection(
       });
   } else {
     doc
-      .fillColor(COLORS.gold)
+      .fillColor(COLORS.accent)
       .font(FONT.bold)
       .fontSize(8)
       .text("Total Payable", totalX + 8, ty, {
@@ -1065,7 +1087,7 @@ function drawTotalsSection(
   doc
     .moveTo(rx, y)
     .lineTo(rx, y + upperBoxH)
-    .strokeColor(COLORS.charcoal)
+    .strokeColor(COLORS.slate)
     .lineWidth(0.9)
     .stroke();
 
@@ -1108,10 +1130,10 @@ function drawTotalsSection(
 
   // Full-width total after tax
   const barY = y + upperBoxH;
-  doc.rect(MARGIN, barY, CONTENT_WIDTH, totalBarH).fill(COLORS.goldSoft);
+  doc.rect(MARGIN, barY, CONTENT_WIDTH, totalBarH).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, barY, CONTENT_WIDTH, totalBarH);
   doc
-    .fillColor(COLORS.gold)
+    .fillColor(COLORS.accent)
     .font(FONT.bold)
     .fontSize(10)
     .text("Total Amount After Tax", MARGIN + 10, barY + 8, {
@@ -1155,7 +1177,7 @@ function drawFooter(doc: PDFKit.PDFDocument) {
   doc
     .moveTo(MARGIN, y - 6)
     .lineTo(PAGE.width - MARGIN, y - 6)
-    .strokeColor(COLORS.charcoal)
+    .strokeColor(COLORS.slate)
     .lineWidth(0.8)
     .stroke();
 
@@ -1182,7 +1204,7 @@ function drawFooter(doc: PDFKit.PDFDocument) {
   }
 
   doc
-    .fillColor(COLORS.gold)
+    .fillColor(COLORS.accent)
     .font(FONT.regular)
     .fontSize(11)
     .text(`Thank you for shopping with ${shop.name}`, MARGIN, PAGE.height - 20, {
