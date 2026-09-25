@@ -49,7 +49,7 @@ export function assertSqliteFile(buffer: Buffer) {
   }
   if (!buffer.subarray(0, 16).equals(SQLITE_HEADER)) {
     throw new Error(
-      "Uploaded file is not a SQLite database (.db). Use a Suraj Mobile backup .db file.",
+      "Uploaded file is not a SQLite database (.db). Use a Babu Mobile backup .db file.",
     );
   }
 }

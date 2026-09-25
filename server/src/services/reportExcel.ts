@@ -281,7 +281,7 @@ function addSummarySheet(
   );
 
   const rows: Array<[string, string | number]> = [
-    ["Shop", process.env.SHOP_NAME || "Suraj Mobile"],
+    ["Shop", process.env.SHOP_NAME || "Babu Mobile"],
     [
       "Report type",
       scope === "today"
@@ -832,7 +832,7 @@ function addTodayItemsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
 export async function buildReportWorkbook(scope: ReportScope, now = new Date()) {
   const bills = await fetchBills(scope, now);
   const wb = new ExcelJS.Workbook();
-  wb.creator = process.env.SHOP_NAME || "Suraj Mobile";
+  wb.creator = process.env.SHOP_NAME || "Babu Mobile";
   wb.created = now;
 
   if (scope === "all") {
@@ -877,8 +877,8 @@ export async function buildReportWorkbook(scope: ReportScope, now = new Date()) 
   const dateLabel = istDateString(now);
   const filename =
     scope === "today"
-      ? `SurajMobile-Today-${dateLabel}.xlsx`
-      : `SurajMobile-FullBackup-${dateLabel}.xlsx`;
+      ? `BabuMobile-Today-${dateLabel}.xlsx`
+      : `BabuMobile-FullBackup-${dateLabel}.xlsx`;
 
   return {
     buffer,

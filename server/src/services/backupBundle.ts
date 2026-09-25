@@ -36,7 +36,7 @@ export async function buildBackupZipBuffer(): Promise<{
     }),
   );
 
-  const filename = `SurajMobile-Backup-${istDateString()}.zip`;
+  const filename = `BabuMobile-Backup-${istDateString()}.zip`;
   return {
     buffer,
     filename,
@@ -67,7 +67,7 @@ export async function extractSqliteBackupBuffer(
   );
   if (!entries.length) {
     throw new Error(
-      "Zip has no .db file. Use a Suraj Mobile backup zip or a raw .db file.",
+      "Zip has no .db file. Use a Babu Mobile backup zip or a raw .db file.",
     );
   }
 

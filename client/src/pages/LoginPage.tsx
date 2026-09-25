@@ -209,7 +209,7 @@ export function LoginPage() {
           <div className="login-mobile-rays" aria-hidden />
           <div className="login-mobile-glow" aria-hidden />
           <div className="login-mobile-hero-txt">
-            <p className="login-mobile-name">Suraj Mobile</p>
+            <p className="login-mobile-name">Babu Mobile</p>
             <p className="login-mobile-meta">9516533556 · Balaghat</p>
           </div>
         </header>
@@ -229,7 +229,7 @@ export function LoginPage() {
           <div className="login-bp-top">
             <SurajMark className="login-logo" />
             <div className="login-bp-name">
-              Suraj Mobile
+              Babu Mobile
               <small>9516533556 · Balaghat</small>
             </div>
           </div>
@@ -254,7 +254,7 @@ export function LoginPage() {
                   <div className="login-rc-head">
                     <SurajMark className="login-rc-sun" />
                     <div className="login-rc-shop">
-                      Suraj Mobile
+                      Babu Mobile
                       <small>TAX INVOICE</small>
                     </div>
                   </div>
@@ -395,7 +395,7 @@ export function LoginPage() {
         <section className="login-form-pane">
           <img
             src="/suraj_mobile_icon.png"
-            alt="Suraj Mobile"
+            alt="Babu Mobile"
             className="login-fp-logo"
           />
           <h2>{heading}</h2>

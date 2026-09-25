@@ -12,7 +12,7 @@ import {
 
 type BillWithItems = Bill & { items: BillItem[] };
 
-/** Logo palette: charcoal + gold (exact Suraj Mobile wordmark colors) */
+/** Logo palette: charcoal + gold */
 const COLORS = {
   charcoal: "#494D53",
   gold: "#C49333",
@@ -23,14 +23,14 @@ const COLORS = {
 };
 
 const shop = {
-  name: process.env.SHOP_NAME || "Suraj Mobile",
+  name: process.env.SHOP_NAME || "Babu Mobile",
   tagline:
     process.env.SHOP_TAGLINE || "Deals In - All New & Second Hand Phones",
   address:
     process.env.SHOP_ADDRESS ||
     "Near Jain Mandir, Beside Arihant Institute Main Road Balaghat (M.P) 481001",
   phone: process.env.SHOP_PHONE || "9516533556",
-  instagram: process.env.SHOP_INSTAGRAM || "@surajmobileofficial",
+  instagram: process.env.SHOP_INSTAGRAM || "",
   gstin: process.env.SHOP_GSTIN || "23FAAPB2709A1ZP",
 };
 

@@ -101,7 +101,7 @@ export function AppShell() {
             to="/"
             onClick={onMainNavClick}
             className="flex items-center gap-3 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
-            aria-label="Suraj Mobile — New Bill"
+            aria-label="Babu Mobile — New Bill"
           >
             <img
               src="/suraj_mobile_icon.png"
@@ -110,7 +110,7 @@ export function AppShell() {
             />
             <div>
               <p className="font-display text-lg font-semibold tracking-tight text-ink-900">
-                Suraj Mobile
+                Babu Mobile
               </p>
               <p className="text-xs text-ink-500">
                 {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·

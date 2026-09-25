@@ -132,7 +132,7 @@ authRouter.post("/forgot-password", async (req, res, next) => {
     const otp = String(randomInt(100000, 1000000));
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
     const names = users.map((user) => user.name).join(", ");
-    const shop = process.env.SHOP_NAME || "Suraj Mobile";
+    const shop = process.env.SHOP_NAME || "Babu Mobile";
     const mail = await sendPlainEmail({
       subject: `${shop} password reset OTP (${phone})`,
       text: [
@@ -174,7 +174,7 @@ authRouter.post("/forgot-password", async (req, res, next) => {
     ) {
       res.status(503).json({
         error:
-          "Could not send the OTP to the shop Gmail. Open surajmobile33556@gmail.com (including Spam). If this keeps failing, the mail service on the server needs a working Resend key.",
+          "Could not send the OTP to the shop email address. If this keeps failing, the mail service on the server needs a working Resend key.",
         detail: message,
       });
       return;
