@@ -715,7 +715,7 @@ body,
 
 .babu-main .field,
 .babu-main .tb-search,
-.babu-main input:not([type="checkbox"]):not([type="radio"]):not(.bg-transparent),
+.babu-main input:not([type="checkbox"]):not([type="radio"]):not([class~="bg-transparent"]),
 .babu-main select,
 .babu-main textarea {
   border: 1px solid var(--app-line) !important;
@@ -727,7 +727,7 @@ body,
 
 .babu-main .field:focus,
 .babu-main .tb-search:focus-within,
-.babu-main input:not([type="checkbox"]):not([type="radio"]):not(.bg-transparent):focus,
+.babu-main input:not([type="checkbox"]):not([type="radio"]):not([class~="bg-transparent"]):focus,
 .babu-main select:focus,
 .babu-main textarea:focus {
   border-color: var(--accent) !important;
