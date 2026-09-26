@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Cable, Minus, Plus, Search, Store } from "lucide-react";
+import { Cable, Minus, Plus, Search, Store, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import {
   SerialScanFieldButton,
@@ -12,6 +12,24 @@ import { BackButton, SearchClearButton } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
 import type { Supplier } from "../types";
+
+/** An accessory already filled in and waiting to be saved with the rest. */
+type QueuedAccessory = {
+  key: string;
+  name: string;
+  purchasePrice: number;
+  serials: string[];
+};
+
+function insertAt<T>(list: T[], index: number, item: T) {
+  const next = [...list];
+  next.splice(Math.min(Math.max(index, 0), next.length), 0, item);
+  return next;
+}
+
+function cleanSerial(value: string) {
+  return value.replace(/\s+/g, "").trim();
+}
 
 function clampQty(value: number) {
   if (!Number.isFinite(value)) return 1;
@@ -70,12 +88,14 @@ function AccessoryNameSearch({
   value,
   suggestions,
   disabled,
+  required = true,
   onChange,
 }: {
   id?: string;
   value: string;
   suggestions: string[];
   disabled?: boolean;
+  required?: boolean;
   onChange: (value: string) => void;
 }) {
   const listId = useId();
@@ -138,7 +158,7 @@ function AccessoryNameSearch({
           className="min-w-0 flex-1 bg-transparent py-3 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] sm:text-[14.5px]"
           value={value}
           disabled={disabled}
-          required
+          required={required}
           autoComplete="off"
           spellCheck={false}
           placeholder="e.g. 20W USB-C Adapter, Cover…"
@@ -230,6 +250,12 @@ export function AddAccessoriesPage() {
   const [useNewSupplier, setUseNewSupplier] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queued, setQueued] = useState<QueuedAccessory[]>([]);
+  /** A queued accessory currently loaded back into the form, and where it came from. */
+  const [editing, setEditing] = useState<{
+    index: number;
+    original: QueuedAccessory;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -279,51 +305,171 @@ export function AddAccessoriesPage() {
     });
   }
 
-  async function save(event: React.FormEvent) {
-    event.preventDefault();
+  function supplierError(): string | null {
+    if (useNewSupplier) {
+      if (!supplierName.trim()) return "Enter the supplier name";
+      if (supplierPhone.replace(/\D/g, "").length < 10) {
+        return "Enter a valid 10-digit supplier phone";
+      }
+      return null;
+    }
+    return supplierId ? null : "Select a supplier";
+  }
+
+  const currentIsBlank =
+    !name.trim() &&
+    !purchasePrice.trim() &&
+    serials.every((serial) => !serial.trim());
+
+  /** Validates the accessory in the form, including serial clashes with queued ones. */
+  function readCurrent(
+    others: QueuedAccessory[] = queued,
+  ): { line: QueuedAccessory } | { error: string } {
     const trimmedName = name.trim();
     const price = Number(purchasePrice);
-    const cleaned = serials.map((s) => s.replace(/\s+/g, "").trim());
+    const cleaned = serials.map(cleanSerial);
 
-    if (trimmedName.length < 2) {
-      setError("Enter the accessory name");
-      return;
-    }
-    if (useNewSupplier) {
-      if (!supplierName.trim()) {
-        setError("Enter the supplier name");
-        return;
-      }
-      const phone = supplierPhone.replace(/\D/g, "");
-      if (phone.length < 10) {
-        setError("Enter a valid 10-digit supplier phone");
-        return;
-      }
-    } else if (!supplierId) {
-      setError("Select a supplier");
-      return;
-    }
-    if (!Number.isFinite(price) || price < 0) {
-      setError("Enter a valid purchase price");
-      return;
+    if (trimmedName.length < 2) return { error: "Enter the accessory name" };
+    if (!purchasePrice.trim() || !Number.isFinite(price) || price < 0) {
+      return { error: "Enter a valid purchase price" };
     }
     if (cleaned.some((s) => s.length < 3)) {
-      setError("Enter a serial number for each unit (min 3 characters)");
+      return { error: "Enter a serial number for each unit (min 3 characters)" };
+    }
+    const taken = new Set(
+      others.flatMap((line) => line.serials.map((s) => s.toLowerCase())),
+    );
+    const seen = new Set<string>();
+    for (const serial of cleaned) {
+      const key = serial.toLowerCase();
+      if (seen.has(key)) return { error: "Serial numbers must be unique" };
+      if (taken.has(key)) {
+        return { error: `Serial ${serial} is already added above` };
+      }
+      seen.add(key);
+    }
+
+    return {
+      line: {
+        key:
+          editing?.original.key ??
+          `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: trimmedName,
+        purchasePrice: price,
+        serials: cleaned,
+      },
+    };
+  }
+
+  function resetCurrent() {
+    setName("");
+    setQty(1);
+    setSerials([""]);
+    setPurchasePrice("");
+  }
+
+  function addAnother() {
+    const supplierIssue = supplierError();
+    if (supplierIssue) {
+      setError(supplierIssue);
       return;
     }
-    const unique = new Set(cleaned.map((s) => s.toLowerCase()));
-    if (unique.size !== cleaned.length) {
-      setError("Serial numbers must be unique");
+    const result = readCurrent();
+    if ("error" in result) {
+      setError(result.error);
       return;
+    }
+    setError(null);
+    setQueued((current) =>
+      editing
+        ? insertAt(current, editing.index, result.line)
+        : [...current, result.line],
+    );
+    setEditing(null);
+    resetCurrent();
+    requestAnimationFrame(() => document.getElementById("acc-name")?.focus());
+  }
+
+  function removeQueued(key: string) {
+    const removedIndex = queued.findIndex((line) => line.key === key);
+    setQueued((current) => current.filter((line) => line.key !== key));
+    if (editing && removedIndex >= 0 && removedIndex < editing.index) {
+      setEditing({ ...editing, index: editing.index - 1 });
+    }
+  }
+
+  /** Load a queued accessory back into the form. A filled-in form is queued first. */
+  function openQueued(key: string) {
+    if (saving) return;
+    let list = queued;
+
+    if (!currentIsBlank) {
+      const result = readCurrent(queued.filter((line) => line.key !== key));
+      if ("error" in result) {
+        setError(`Finish or clear the accessory below first — ${result.error}`);
+        return;
+      }
+      list = editing
+        ? insertAt(list, editing.index, result.line)
+        : [...list, result.line];
+    } else if (editing) {
+      // Untouched edit: put the original back before switching.
+      list = insertAt(list, editing.index, editing.original);
+    }
+
+    const index = list.findIndex((line) => line.key === key);
+    if (index < 0) return;
+    const line = list[index]!;
+    setQueued(list.filter((item) => item.key !== key));
+    setEditing({ index, original: line });
+    setError(null);
+    setName(line.name);
+    setPurchasePrice(String(line.purchasePrice));
+    setSerials(line.serials);
+    setQty(line.serials.length);
+    requestAnimationFrame(() => document.getElementById("acc-name")?.focus());
+  }
+
+  function cancelEdit() {
+    if (!editing) return;
+    setQueued((current) => insertAt(current, editing.index, editing.original));
+    setEditing(null);
+    setError(null);
+    resetCurrent();
+  }
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const supplierIssue = supplierError();
+    if (supplierIssue) {
+      setError(supplierIssue);
+      return;
+    }
+
+    // An empty form is fine once something is queued — save just the queue.
+    let lines = queued;
+    if (currentIsBlank && editing) {
+      lines = insertAt(queued, editing.index, editing.original);
+    } else if (!(queued.length > 0 && currentIsBlank)) {
+      const result = readCurrent();
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      lines = editing
+        ? insertAt(queued, editing.index, result.line)
+        : [...queued, result.line];
     }
 
     setSaving(true);
     setError(null);
     try {
       await api.createAccessories({
-        name: trimmedName,
-        purchasePrice: price,
-        serials: cleaned,
+        items: lines.map(({ name: lineName, purchasePrice: linePrice, serials: lineSerials }) => ({
+          name: lineName,
+          purchasePrice: linePrice,
+          serials: lineSerials,
+        })),
         supplierId: useNewSupplier ? null : supplierId,
         supplierName: useNewSupplier ? supplierName.trim() : null,
         supplierPhone: useNewSupplier
@@ -340,6 +486,16 @@ export function AddAccessoriesPage() {
 
   const unitCount = clampQty(qty);
   const priceNum = Number(purchasePrice) || 0;
+  const queuedUnits = queued.reduce((sum, line) => sum + line.serials.length, 0);
+  // Once something is queued, an untouched form is optional (saves just the queue).
+  const currentOptional = (queued.length > 0 || editing !== null) && currentIsBlank;
+  const totalUnits =
+    queuedUnits +
+    (currentOptional
+      ? editing && currentIsBlank
+        ? editing.original.serials.length
+        : 0
+      : unitCount);
 
   return (
     <div className="mx-auto max-w-lg">
@@ -456,6 +612,87 @@ export function AddAccessoriesPage() {
           )}
         </section>
 
+        {queued.length > 0 || editing ? (
+          <div className="space-y-2">
+            {queued.map((line, index) => {
+              const position =
+                editing && index >= editing.index ? index + 2 : index + 1;
+              return (
+              <div
+                key={line.key}
+                role="button"
+                tabIndex={saving ? -1 : 0}
+                aria-label={`Edit accessory ${position}: ${line.name}`}
+                onClick={() => openQueued(line.key)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openQueued(line.key);
+                  }
+                }}
+                className="cursor-pointer rounded-[14px] border border-ink-100 bg-[#FBFCFD] px-4 py-3 transition hover:border-tide-500 focus-visible:border-tide-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-tide-400/20 dark:border-ink-100 dark:bg-surface-muted"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+                      Accessory {position}
+                    </p>
+                    <p className="mt-0.5 truncate font-semibold text-ink-900">
+                      {line.name}
+                    </p>
+                    <p className="mt-0.5 text-[12.5px] text-ink-500">
+                      {line.serials.length} × {formatINR(line.purchasePrice)}
+                      {line.serials.length > 1
+                        ? ` = ${formatINR(line.purchasePrice * line.serials.length)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeQueued(line.key);
+                    }}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    disabled={saving}
+                    aria-label={`Remove ${line.name}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Remove
+                  </button>
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <p className="min-w-0 break-all font-mono text-[12px] text-ink-500">
+                    {line.serials.join(" · ")}
+                  </p>
+                  <span className="shrink-0 text-[11.5px] font-semibold text-tide-600 dark:text-tide-400">
+                    Tap to edit
+                  </span>
+                </div>
+              </div>
+              );
+            })}
+            <div className="flex items-center justify-between gap-3 px-1 pt-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+                {editing
+                  ? `Editing accessory ${editing.index + 1}`
+                  : `Accessory ${queued.length + 1}${currentIsBlank ? " · optional" : ""}`}
+              </p>
+              {editing ? (
+                <button
+                  type="button"
+                  className="text-[12px] font-semibold text-ink-500 underline-offset-2 hover:text-ink-900 hover:underline"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                >
+                  Cancel edit
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div>
           <label className="label required" htmlFor="acc-name">
             Accessory name
@@ -465,6 +702,7 @@ export function AddAccessoriesPage() {
             value={name}
             suggestions={suggestions}
             disabled={saving}
+            required={!currentOptional}
             onChange={setName}
           />
         </div>
@@ -494,7 +732,7 @@ export function AddAccessoriesPage() {
               step="0.01"
               value={purchasePrice}
               disabled={saving}
-              required
+              required={!currentOptional}
               placeholder="Per unit"
               onChange={(e) => setPurchasePrice(e.target.value)}
             />
@@ -522,7 +760,7 @@ export function AddAccessoriesPage() {
                   value={serial}
                   disabled={saving}
                   placeholder="Scan or type serial"
-                  required
+                  required={!currentOptional}
                   onChange={(e) => {
                     const next = [...serials];
                     next[index] = e.target.value;
@@ -542,6 +780,16 @@ export function AddAccessoriesPage() {
           ))}
         </div>
 
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-tide-500 hover:bg-tide-100 hover:text-tide-600 dark:border-ink-300 dark:hover:border-tide-400 dark:hover:bg-tide-100/40 dark:hover:text-tide-400"
+          onClick={addAnother}
+          disabled={saving}
+        >
+          <Plus className="h-[17px] w-[17px]" strokeWidth={2.2} />
+          {editing ? "Done editing · add another" : "Add another accessory"}
+        </button>
+
         {error ? (
           <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">
             {error}
@@ -560,8 +808,8 @@ export function AddAccessoriesPage() {
           <button type="submit" className="btn-primary flex-1" disabled={saving}>
             {saving
               ? "Saving…"
-              : unitCount > 1
-                ? `Add ${unitCount} accessories`
+              : totalUnits > 1
+                ? `Add ${totalUnits} accessories`
                 : "Add accessory"}
           </button>
         </div>

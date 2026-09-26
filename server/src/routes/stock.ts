@@ -216,29 +216,47 @@ stockRouter.get("/accessory-names", async (_req, res, next) => {
   }
 });
 
-const createAccessoriesSchema = z
-  .object({
-    name: z.string().trim().min(2, "Accessory name is required").max(100),
-    purchasePrice: z.coerce
-      .number({ invalid_type_error: "Purchase price is required" })
-      .min(0, "Purchase price cannot be negative"),
-    serials: z
-      .array(z.string().trim().min(1, "Serial number is required").max(40))
-      .min(1, "Add at least one serial number")
-      .max(50),
-    supplierId: z.string().trim().optional().nullable(),
-    supplierName: z.string().trim().min(2).max(100).optional().nullable(),
-    supplierPhone: z.string().trim().max(15).optional().nullable(),
-  })
-  .superRefine((data, ctx) => {
-    if (!data.supplierId?.trim() && !data.supplierName?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select or enter a supplier",
-        path: ["supplierId"],
-      });
+const accessoryLineSchema = z.object({
+  name: z.string().trim().min(2, "Accessory name is required").max(100),
+  purchasePrice: z.coerce
+    .number({ invalid_type_error: "Purchase price is required" })
+    .min(0, "Purchase price cannot be negative"),
+  serials: z
+    .array(z.string().trim().min(1, "Serial number is required").max(40))
+    .min(1, "Add at least one serial number")
+    .max(50),
+});
+
+/**
+ * One purchase of one or more accessory types from the same supplier.
+ * Accepts `items: [...]`, or the older single-accessory shape
+ * (`name`, `purchasePrice`, `serials` at the top level).
+ */
+const createAccessoriesSchema = z.preprocess(
+  (raw) => {
+    if (raw && typeof raw === "object" && !Array.isArray((raw as { items?: unknown }).items)) {
+      const { name, purchasePrice, serials, ...rest } = raw as Record<string, unknown>;
+      return { ...rest, items: [{ name, purchasePrice, serials }] };
     }
-  });
+    return raw;
+  },
+  z
+    .object({
+      items: z.array(accessoryLineSchema).min(1).max(20),
+      supplierId: z.string().trim().optional().nullable(),
+      supplierName: z.string().trim().min(2).max(100).optional().nullable(),
+      supplierPhone: z.string().trim().max(15).optional().nullable(),
+    })
+    .superRefine((data, ctx) => {
+      if (!data.supplierId?.trim() && !data.supplierName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Select or enter a supplier",
+          path: ["supplierId"],
+        });
+      }
+    }),
+);
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -255,9 +273,12 @@ stockRouter.post("/accessories", async (req, res, next) => {
       return;
     }
 
-    const name = parsed.data.name.trim();
-    const purchasePrice = parsed.data.purchasePrice;
-    const serials = parsed.data.serials.map((s) => cleanId(s));
+    const lines = parsed.data.items.map((line) => ({
+      name: line.name.trim(),
+      purchasePrice: line.purchasePrice,
+      serials: line.serials.map((s) => cleanId(s)),
+    }));
+    const serials = lines.flatMap((line) => line.serials);
 
     if (serials.some((s) => s.length < 3)) {
       res.status(400).json({ error: "Each serial number must be at least 3 characters" });
@@ -301,7 +322,9 @@ stockRouter.post("/accessories", async (req, res, next) => {
     }
 
     const purchaseDate = new Date();
-    const totalAmount = round2(purchasePrice * serials.length);
+    const totalAmount = round2(
+      lines.reduce((sum, line) => sum + line.purchasePrice * line.serials.length, 0),
+    );
 
     const created = await prisma.$transaction(async (tx) => {
       const purchase = await tx.purchase.create({
@@ -317,40 +340,42 @@ stockRouter.post("/accessories", async (req, res, next) => {
       });
 
       const items = [];
-      for (const serialNumber of serials) {
-        const item = await tx.stockItem.create({
-          data: {
-            kind: "ACCESSORY",
-            condition: "NEW",
-            platform: "ACCESSORY",
-            mobileName: name,
-            storage: "",
-            ram: "",
-            color: "",
-            imei: null,
-            serialNumber,
-            purchasePrice,
-            suppliers: serializeSuppliers([supplier!.name]),
-            supplierId: supplier!.id,
-            status: "AVAILABLE",
-            createdAt: purchaseDate,
-            createdByUserId: req.user?.id || null,
-            createdByName: req.user?.name || null,
-          },
-          include: {
-            supplier: { select: { id: true, name: true, isExchange: true } },
-            purchaseItem: {
-              select: { purchase: { select: { note: true } } },
+      for (const { name, purchasePrice, serials: lineSerials } of lines) {
+        for (const serialNumber of lineSerials) {
+          const item = await tx.stockItem.create({
+            data: {
+              kind: "ACCESSORY",
+              condition: "NEW",
+              platform: "ACCESSORY",
+              mobileName: name,
+              storage: "",
+              ram: "",
+              color: "",
+              imei: null,
+              serialNumber,
+              purchasePrice,
+              suppliers: serializeSuppliers([supplier!.name]),
+              supplierId: supplier!.id,
+              status: "AVAILABLE",
+              createdAt: purchaseDate,
+              createdByUserId: req.user?.id || null,
+              createdByName: req.user?.name || null,
             },
-          },
-        });
-        await tx.purchaseItem.create({
-          data: {
-            purchaseId: purchase.id,
-            stockItemId: item.id,
-          },
-        });
-        items.push(item);
+            include: {
+              supplier: { select: { id: true, name: true, isExchange: true } },
+              purchaseItem: {
+                select: { purchase: { select: { note: true } } },
+              },
+            },
+          });
+          await tx.purchaseItem.create({
+            data: {
+              purchaseId: purchase.id,
+              stockItemId: item.id,
+            },
+          });
+          items.push(item);
+        }
       }
       return items;
     });

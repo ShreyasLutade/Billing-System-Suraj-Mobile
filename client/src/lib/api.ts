@@ -284,10 +284,13 @@ export const api = {
   },
   listAccessoryNames: () =>
     request<{ data: string[] }>("/stock/accessory-names"),
+  /** One purchase of one or more accessory types from the same supplier. */
   createAccessories: (payload: {
-    name: string;
-    purchasePrice: number;
-    serials: string[];
+    items: Array<{
+      name: string;
+      purchasePrice: number;
+      serials: string[];
+    }>;
     supplierId?: string | null;
     supplierName?: string | null;
     supplierPhone?: string | null;
