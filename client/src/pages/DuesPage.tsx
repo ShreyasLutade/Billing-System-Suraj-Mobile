@@ -65,6 +65,7 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
   { value: "phone", label: "Number" },
   { value: "imei", label: "IMEI" },
   { value: "product", label: "Product" },
+  { value: "finance", label: "Finance" },
 ];
 
 function searchPlaceholder(
@@ -74,6 +75,7 @@ function searchPlaceholder(
   if (scope === "phone") return "Search by number…";
   if (scope === "imei") return "Search by IMEI…";
   if (scope === "product") return "Search by product…";
+  if (scope === "finance") return "Search by finance company…";
   if (tab === "finance") {
     return "Search finance, customer, invoice…";
   }
@@ -242,10 +244,13 @@ export function DuesPage() {
   }, [filterOpen]);
 
   const searchQuery = query.trim();
+  // Customer dues have no finance company, so "Finance" only applies on the Finance tab.
+  const activeScope: BillSearchScope =
+    tab === "customer" && searchScope === "finance" ? "all" : searchScope;
 
   const filteredDues =
     data?.dues.filter((due) =>
-      matchesDueSearch(due, searchQuery, { scope: searchScope }),
+      matchesDueSearch(due, searchQuery, { scope: activeScope }),
     ) || [];
 
   const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
@@ -367,8 +372,8 @@ export function DuesPage() {
               id="dues-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={searchPlaceholder(searchScope, tab)}
-              aria-label={searchPlaceholder(searchScope, tab)}
+              placeholder={searchPlaceholder(activeScope, tab)}
+              aria-label={searchPlaceholder(activeScope, tab)}
             />
             <SearchClearButton
               visible={Boolean(query)}
@@ -404,8 +409,10 @@ export function DuesPage() {
                     Match search on
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {SCOPE_CHIPS.map((chip) => {
-                      const on = searchScope === chip.value;
+                    {SCOPE_CHIPS.filter(
+                      (chip) => tab === "finance" || chip.value !== "finance",
+                    ).map((chip) => {
+                      const on = activeScope === chip.value;
                       return (
                         <button
                           key={chip.value}

@@ -105,6 +105,7 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
   { value: "phone", label: "Number" },
   { value: "imei", label: "IMEI" },
   { value: "product", label: "Product" },
+  { value: "finance", label: "Finance" },
 ];
 
 const PAY = {
@@ -128,6 +129,7 @@ function searchPlaceholder(scope: BillSearchScope) {
   if (scope === "phone") return "Search by number…";
   if (scope === "imei") return "Search by IMEI…";
   if (scope === "product") return "Search by product…";
+  if (scope === "finance") return "Search by finance company…";
   return "Search customer, phone, invoice…";
 }
 

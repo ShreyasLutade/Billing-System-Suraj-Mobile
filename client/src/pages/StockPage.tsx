@@ -37,6 +37,9 @@ const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "total", label: "Total value" },
 ];
 
+/** Sort keys based on purchase cost — admin only. */
+const COST_SORT_KEYS: SortKey[] = ["avg", "total"];
+
 function stockSortLabel(key: SortKey, dir: 1 | -1) {
   if (key === "latest") {
     return dir === -1 ? "Newest" : "Oldest";
@@ -264,7 +267,13 @@ export function StockPage() {
   useEffect(() => {
     if (itemFromUrl) setSelectedKeyState(itemFromUrl);
   }, [itemFromUrl]);
-  const [sortKey, setSortKey] = useSessionState<SortKey>("stock.sortKey", "model");
+  const [storedSortKey, setSortKey] = useSessionState<SortKey>("stock.sortKey", "model");
+  // Staff never see cost, so they can't sort by it either.
+  const sortKey: SortKey =
+    !isAdmin && COST_SORT_KEYS.includes(storedSortKey) ? "model" : storedSortKey;
+  const sortFieldOptions = isAdmin
+    ? SORT_FIELD_OPTIONS
+    : SORT_FIELD_OPTIONS.filter((option) => !COST_SORT_KEYS.includes(option.key));
   const [sortDir, setSortDir] = useSessionState<1 | -1>("stock.sortDir", 1);
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
@@ -555,15 +564,22 @@ export function StockPage() {
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#0E1626] px-3.5 py-2 shadow-soft dark:border dark:border-ink-100 dark:!bg-surface-elevated">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55 dark:!text-ink-500">
-            Stock value
-          </p>
-          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-white dark:!text-[#F8FAFC]">
-            {loading ? "…" : formatINR(summaryValue)}
-          </p>
-        </div>
+      <div
+        className={clsx(
+          "mb-3 grid grid-cols-1 gap-2",
+          isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2",
+        )}
+      >
+        {isAdmin ? (
+          <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#0E1626] px-3.5 py-2 shadow-soft dark:border dark:border-ink-100 dark:!bg-surface-elevated">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55 dark:!text-ink-500">
+              Stock value
+            </p>
+            <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-white dark:!text-[#F8FAFC]">
+              {loading ? "…" : formatINR(summaryValue)}
+            </p>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft dark:border-ink-100 dark:!bg-surface">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
             Units in stock
@@ -691,7 +707,7 @@ export function StockPage() {
                     Sort by
                   </p>
                   <div className="space-y-0.5">
-                    {SORT_FIELD_OPTIONS.map((option) => {
+                    {sortFieldOptions.map((option) => {
                       const on = sortKey === option.key;
                       return (
                         <button
@@ -729,14 +745,18 @@ export function StockPage() {
 
           <div className="ledger-card">
             <div className="ledger-scroll">
-              <table className="ledger-table min-w-[36rem]">
+              <table className="ledger-table">
                 <thead>
                   <tr>
                     <th>Model</th>
                     <th>Variant</th>
                     <th className="text-center">Qty</th>
-                    <th className="text-right">Avg price</th>
-                    <th className="text-right">Total value</th>
+                    {isAdmin ? (
+                      <>
+                        <th className="text-right">Avg price</th>
+                        <th className="text-right">Total value</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -764,12 +784,16 @@ export function StockPage() {
                             {group.quantity}
                           </span>
                         </td>
-                        <td className="text-right tabular-nums text-ink-500">
-                          {formatINR(group.avgPrice)}
-                        </td>
-                        <td className="text-right tabular-nums font-bold text-ink-900">
-                          {formatINR(group.totalValue)}
-                        </td>
+                        {isAdmin ? (
+                          <>
+                            <td className="text-right tabular-nums text-ink-500">
+                              {formatINR(group.avgPrice)}
+                            </td>
+                            <td className="text-right tabular-nums font-bold text-ink-900">
+                              {formatINR(group.totalValue)}
+                            </td>
+                          </>
+                        ) : null}
                       </tr>
                     );
                   })}
@@ -778,10 +802,14 @@ export function StockPage() {
                   <tr>
                     <td colSpan={2}>Total</td>
                     <td className="text-center tabular-nums">{totalQty}</td>
-                    <td className="text-right text-ink-300">—</td>
-                    <td className="text-right text-[15px] tabular-nums">
-                      {formatINR(totalValue)}
-                    </td>
+                    {isAdmin ? (
+                      <>
+                        <td className="text-right text-ink-300">—</td>
+                        <td className="text-right text-[15px] tabular-nums">
+                          {formatINR(totalValue)}
+                        </td>
+                      </>
+                    ) : null}
                   </tr>
                 </tfoot>
               </table>
@@ -862,8 +890,13 @@ function StockProductDetail({
           </span>
         </div>
         <p className="mt-1 text-sm text-ink-500">
-          {group.quantity} unit{group.quantity === 1 ? "" : "s"} · Avg{" "}
-          {formatINR(group.avgPrice)} · Total {formatINR(group.totalValue)}
+          {group.quantity} unit{group.quantity === 1 ? "" : "s"}
+          {isAdmin ? (
+            <>
+              {" · Avg "}
+              {formatINR(group.avgPrice)} · Total {formatINR(group.totalValue)}
+            </>
+          ) : null}
           {group.supplierName ? (
             <>
               {" · "}
@@ -889,12 +922,12 @@ function StockProductDetail({
 
       <div className="ledger-card">
         <div className="ledger-scroll">
-          <table className="ledger-table min-w-[44rem]">
+          <table className="ledger-table">
             <thead>
               <tr>
                 <th>Purchase date</th>
                 <th>Supplier name</th>
-                <th className="text-right">Price</th>
+                {isAdmin ? <th className="text-right">Price</th> : null}
                 <th>{isAccessory ? "Serial" : "IMEI / Serial"}</th>
                 <th className="w-[1%] text-right">Action</th>
               </tr>
@@ -933,9 +966,11 @@ function StockProductDetail({
                       </>
                     ) : null}
                   </td>
-                  <td className="text-right tabular-nums text-ink-800">
-                    {formatINR(unit.purchasePrice)}
-                  </td>
+                  {isAdmin ? (
+                    <td className="text-right tabular-nums text-ink-800">
+                      {formatINR(unit.purchasePrice)}
+                    </td>
+                  ) : null}
                   <td className="font-mono text-ink-800">
                     {formatStockUnitId(unit)}
                   </td>
