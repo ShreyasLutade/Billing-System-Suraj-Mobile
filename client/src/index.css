@@ -368,6 +368,131 @@ body,
   color: var(--accent);
 }
 
+/* Sidebar account menu: the name card toggles Dark mode / Restore / Logout. */
+.babu-user-menu {
+  position: relative;
+}
+
+.babu-user-card-btn {
+  width: 100%;
+  border: 1px solid transparent;
+  color: var(--app-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.babu-user-card-btn:hover,
+.babu-user-card-btn.is-open {
+  border-color: var(--app-line);
+  background: color-mix(in srgb, var(--app-field) 80%, var(--app-line));
+}
+
+.babu-user-card-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.babu-user-card-btn > div {
+  min-width: 0;
+}
+
+.babu-user-card-btn small {
+  color: var(--app-muted);
+}
+
+.babu-user-chevron {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-left: auto;
+  color: var(--app-muted);
+  transition: transform 0.2s ease;
+}
+
+.babu-user-card-btn.is-open .babu-user-chevron {
+  transform: translateX(2px);
+  color: var(--accent);
+}
+
+/* Opens beside the card, just outside the sidebar (16px padding + 1px border + 12px gap). */
+.babu-user-menu-pop {
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 29px);
+  z-index: 30;
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  background: var(--app-card);
+  box-shadow: 0 18px 40px -18px rgba(11, 18, 32, 0.45);
+  animation: babuMenuIn 0.16s ease-out;
+}
+
+@keyframes babuMenuIn {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
+.babu-user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--app-ink);
+  font: 600 14px "DM Sans", sans-serif;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.babu-user-menu-item svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  stroke-width: 1.8;
+}
+
+.babu-user-menu-item:hover,
+.babu-user-menu-item:focus-visible {
+  background: var(--app-field);
+  color: var(--accent);
+  outline: none;
+}
+
+.babu-user-menu-item.is-danger:hover,
+.babu-user-menu-item.is-danger:focus-visible {
+  color: #e0364f;
+}
+
+/* Collapsed sidebar: avatar only, menu opens to the right. */
+.babu-shell.is-sidebar-collapsed .babu-user-chevron {
+  display: none;
+}
+
+/* Collapsed: 48px card centred in 56px, so ~14px to the sidebar edge + 12px gap. */
+.babu-shell.is-sidebar-collapsed .babu-user-menu-pop {
+  left: calc(100% + 26px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .babu-user-menu-pop {
+    animation: none;
+  }
+}
+
 .babu-main {
   position: relative;
   min-width: 0;
@@ -3484,4 +3609,16 @@ html.dark .login-brand {
   html.dark .login-page-forgot .login-form-pane {
     background: #ffffff !important;
   }
+}
+
+/* Login form brand: ".login-fp-brand span" styles the phone line as a block —
+   keep the NX mark inline beside the name instead. */
+.login-fp-brand strong .brand-suffix,
+html.dark .login-fp-brand strong .brand-suffix {
+  display: inline;
+  margin-top: 0;
+  font-size: 0.42em;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--p1);
 }

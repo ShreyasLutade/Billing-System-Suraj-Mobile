@@ -176,7 +176,13 @@ export function LoginPage() {
         : "Reset password";
   const subtitle =
     view === "login"
-      ? "Sign in to start billing, track stock and collect dues."
+      ? (
+          <>
+            Mobiles, accessories, repairs — all billed here.
+            <br />
+            Sign in to open the counter.
+          </>
+        )
       : view === "forgot-phone"
         ? "Enter the account mobile. OTP goes to the shop Gmail."
         : `OTP sent to ${otpEmail || "the shop Gmail"}.`;
@@ -291,8 +297,8 @@ export function LoginPage() {
           </div>
           {view === "login" ? (
             <h2 className="login-welcome-heading">
-              <span>Open the shop,</span>
-              <strong>one tap away.</strong>
+              <span>Stock, bills, dues —</span>
+              <strong>all in your pocket.</strong>
             </h2>
           ) : (
             <h2>{heading}</h2>

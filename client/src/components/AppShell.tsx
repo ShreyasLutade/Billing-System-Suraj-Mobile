@@ -40,6 +40,27 @@ export function AppShell() {
   const [openDueCount, setOpenDueCount] = useState<number | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Sidebar account menu: close on outside click or Escape.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUserMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [userMenuOpen]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -172,25 +193,63 @@ export function AppShell() {
         </nav>
 
         <div className="babu-sidebar-foot">
-          <div className="babu-user-card">
-            <span>{(user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")).slice(0, 1).toUpperCase()}</span>
-            <div>
-              <strong>{user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")}</strong>
-              <small>{user?.phone || "7581817575"}</small>
-            </div>
+          <div className="babu-user-menu" ref={userMenuRef}>
+            {userMenuOpen ? (
+              <div className="babu-user-menu-pop" role="menu" aria-label="Account">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="babu-user-menu-item"
+                  onClick={() => {
+                    toggleTheme();
+                    setUserMenuOpen(false);
+                  }}
+                >
+                  {theme === "dark" ? <Sun /> : <Moon />}
+                  {theme === "dark" ? "Light mode" : "Dark mode"}
+                </button>
+                {isAdmin ? (
+                  <Link
+                    to="/backup"
+                    role="menuitem"
+                    className="babu-user-menu-item"
+                    onClick={() => {
+                      onMainNavClick();
+                      setUserMenuOpen(false);
+                    }}
+                  >
+                    <Package /> Restore data
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="babu-user-menu-item is-danger"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setShowLogoutConfirm(true);
+                  }}
+                >
+                  <LogOut /> Logout
+                </button>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className={clsx("babu-user-card babu-user-card-btn", userMenuOpen && "is-open")}
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              title="Account options"
+              onClick={() => setUserMenuOpen((open) => !open)}
+            >
+              <span>{(user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")).slice(0, 1).toUpperCase()}</span>
+              <div>
+                <strong>{user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")}</strong>
+                <small>{user?.phone || "7581817575"}</small>
+              </div>
+              <ChevronRight className="babu-user-chevron" aria-hidden />
+            </button>
           </div>
-          <button type="button" className="babu-utility-button" onClick={toggleTheme}>
-            {theme === "dark" ? <Sun /> : <Moon />}
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </button>
-          {isAdmin ? (
-            <Link to="/backup" onClick={onMainNavClick} className="babu-utility-button">
-              <Package /> Restore data
-            </Link>
-          ) : null}
-          <button type="button" className="babu-utility-button" onClick={() => setShowLogoutConfirm(true)}>
-            <LogOut /> Logout
-          </button>
         </div>
       </aside>
 
