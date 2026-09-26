@@ -84,13 +84,15 @@ export function AppShell() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden">
+    // Pinned to the visible viewport: on iOS, 100vh (h-screen) is taller than the
+    // screen, which let the whole page shift up under the fixed header.
+    <div className="fixed inset-0 flex flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-tide-400/20 blur-3xl animate-float" />
         <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-ink-900/10 blur-3xl dark:bg-tide-400/10" />
       </div>
 
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/50 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/50 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
         <div
           className={clsx(
             "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",
@@ -199,10 +201,10 @@ export function AppShell() {
       <main
         ref={mainRef}
         className={clsx(
-          "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto scroll-pt-28 px-4 pb-28 sm:px-6 sm:scroll-pt-32 sm:pb-8",
+          "relative mx-auto min-h-0 flex-1 w-full max-w-6xl overflow-y-auto overscroll-y-contain scroll-pt-28 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:scroll-pt-32 sm:pb-8",
           isOnline
-            ? "pt-[6.5rem] sm:pt-[6.75rem]"
-            : "pt-[8.5rem] sm:pt-[8.75rem]",
+            ? "pt-[calc(6.5rem+env(safe-area-inset-top))] sm:pt-[calc(6.75rem+env(safe-area-inset-top))]"
+            : "pt-[calc(8.5rem+env(safe-area-inset-top))] sm:pt-[calc(8.75rem+env(safe-area-inset-top))]",
         )}
       >
         <motion.div
@@ -214,7 +216,7 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
         <div
           className={clsx(
             "mx-auto grid max-w-lg gap-1",
@@ -250,7 +252,6 @@ export function AppShell() {
           ))}
         </div>
       </nav>
-      <div className="h-20 md:hidden" />
 
       <AnimatePresence>
         {showScrollToTop ? (

@@ -128,6 +128,8 @@ body,
 body {
   margin: 0;
   height: 100vh;
+  /* iOS: 100vh is the toolbar-hidden height, which lets the page shift under the header. */
+  height: 100dvh;
   overflow: hidden;
   font-family: "Manrope", system-ui, -apple-system, sans-serif;
   background-image: var(--bg-mesh);
