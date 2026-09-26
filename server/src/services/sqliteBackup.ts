@@ -144,8 +144,9 @@ export async function restoreSqliteFromBuffer(buffer: Buffer): Promise<{
 
   try {
     // Flush WAL so the main file is complete before we move it aside.
+    // The PRAGMA returns a row, so it must go through $queryRaw (executeRaw rejects results).
     try {
-      await prisma.$executeRawUnsafe(`PRAGMA wal_checkpoint(TRUNCATE)`);
+      await prisma.$queryRawUnsafe(`PRAGMA wal_checkpoint(TRUNCATE)`);
     } catch {
       // Ignore if DB is not in WAL mode or checkpoint fails.
     }
