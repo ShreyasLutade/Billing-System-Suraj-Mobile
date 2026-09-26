@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { format } from "date-fns";
+import {
+  format,
+  isSameDay,
+  isSameYear,
+  isValid,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subDays,
+} from "date-fns";
 import {
   ArrowDownUp,
   Banknote,
+  CalendarDays,
   ChartColumn,
   Check,
   ChevronDown,
@@ -110,6 +121,58 @@ function formatChange(pct: number | null) {
   return { text: `${abs}%`, up: null as boolean | null };
 }
 
+/**
+ * Dates covered by the selected period, in local time. Week and month run up to
+ * today (later days have no bills yet), matching the server’s week start (Monday).
+ */
+function periodDateRangeLabel(
+  period: AnalyticsPeriodValue,
+  customFrom: string,
+  customTo: string,
+  now = new Date(),
+) {
+  const today = startOfDay(now);
+  const parseDay = (value: string) => {
+    if (!value) return null;
+    const day = parseISO(value);
+    return isValid(day) ? day : null;
+  };
+
+  let from: Date | null;
+  let to: Date | null = today;
+  switch (period) {
+    case "today":
+      from = today;
+      break;
+    case "yesterday":
+      from = to = subDays(today, 1);
+      break;
+    case "week":
+      from = startOfWeek(today, { weekStartsOn: 1 });
+      break;
+    case "month":
+      from = startOfMonth(today);
+      break;
+    case "custom":
+      from = parseDay(customFrom);
+      to = parseDay(customTo);
+      break;
+    default:
+      from = null;
+  }
+
+  const full = (day: Date) => format(day, "d MMM yyyy");
+  if (from && to) {
+    if (isSameDay(from, to)) return full(from);
+    return isSameYear(from, to)
+      ? `${format(from, "d MMM")} – ${full(to)}`
+      : `${full(from)} – ${full(to)}`;
+  }
+  if (from) return `From ${full(from)}`;
+  if (to) return `Up to ${full(to)}`;
+  return null;
+}
+
 export function AnalyticsPage() {
   const location = useLocation();
   const { theme } = useTheme();
@@ -136,6 +199,8 @@ export function AnalyticsPage() {
   );
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
+
+  const periodRangeLabel = periodDateRangeLabel(period, customFrom, customTo);
 
   const customRangeReady =
     period === "custom" && Boolean(customFrom || customTo);
@@ -328,9 +393,17 @@ export function AnalyticsPage() {
                 }}
               />
               <div className="relative">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8EA0BC]">
-                  Total collected · {data.periodLabel.toLowerCase()}
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8EA0BC]">
+                    Total collected · {data.periodLabel.toLowerCase()}
+                  </p>
+                  {periodRangeLabel ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[12px] font-semibold tabular-nums text-white/90">
+                      <CalendarDays className="h-3.5 w-3.5 text-[#8EA0BC]" aria-hidden />
+                      {periodRangeLabel}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-2.5 font-display text-[clamp(2.125rem,6vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
                   {formatINR(summary.collected)}
                 </p>
