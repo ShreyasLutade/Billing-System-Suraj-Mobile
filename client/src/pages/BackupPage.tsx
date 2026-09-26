@@ -110,10 +110,22 @@ export function BackupPage() {
     setError(null);
     setMessage(null);
     try {
-      await api.restoreDatabase(file, confirm.trim());
-      setMessage("Database restored. Restarting server…");
-      void waitForRestart();
+      const { data } = await api.restoreDatabase(file, confirm.trim());
+      if (data.restarting) {
+        setMessage("Database restored. Restarting server…");
+        void waitForRestart();
+        return;
+      }
+      // Restored in place — no restart. Sign in again against the restored users.
+      setMessage(data.message || "Database restored. Please sign in again.");
+      window.setTimeout(() => window.location.assign("/login"), 1500);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 503) {
+        // File swapped but the server has to restart to load it.
+        setMessage("Database restored. Restarting server…");
+        void waitForRestart();
+        return;
+      }
       setError(err instanceof ApiError ? err.message : "Restore failed");
       setRestoring(false);
     }
