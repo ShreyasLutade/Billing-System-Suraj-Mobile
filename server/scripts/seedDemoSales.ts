@@ -38,7 +38,7 @@ async function sellUnit(input: {
       create: { id: 1, counter: 1 },
       update: { counter: { increment: 1 } },
     });
-    const invoiceNumber = `SMS-${year}-${String(sequence.counter).padStart(4, "0")}`;
+    const invoiceNumber = `BM-${year}-${String(sequence.counter).padStart(4, "0")}`;
 
     const bill = await tx.bill.create({
       data: {

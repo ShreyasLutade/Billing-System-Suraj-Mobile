@@ -45,13 +45,13 @@ async function nextInvoiceNumber(
   withGst = false,
 ) {
   if (withGst) {
-    // Separate series for GST submission invoices: SMS-GST-3000, 3001, …
+    // Separate series for GST submission invoices: BM-GST-3000, 3001, …
     const sequence = await tx.invoiceSequence.upsert({
       where: { id: 2 },
       create: { id: 2, counter: 3000 },
       update: { counter: { increment: 1 } },
     });
-    return `SMS-GST-${sequence.counter}`;
+    return `BM-GST-${sequence.counter}`;
   }
 
   const year = new Date().getFullYear();
@@ -60,7 +60,7 @@ async function nextInvoiceNumber(
     create: { id: 1, counter: 1 },
     update: { counter: { increment: 1 } },
   });
-  return `SMS-${year}-${String(sequence.counter).padStart(4, "0")}`;
+  return `BM-${year}-${String(sequence.counter).padStart(4, "0")}`;
 }
 
 function totalsForPersist(

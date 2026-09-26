@@ -26,14 +26,15 @@ export async function renumberShopBillsFrom3000(
   });
 
   const planned = shopBills.map((bill, index) => {
-    const yearMatch = bill.invoiceNumber.match(/^SMS-(\d{4})-/);
+    // Older bills were numbered SMS-YYYY-NNNN; newer ones BM-YYYY-NNNN.
+    const yearMatch = bill.invoiceNumber.match(/^(?:BM|SMS)-(\d{4})-/);
     const year = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
     const nextNumber = START + index;
     return {
       id: bill.id,
       customerName: bill.customerName,
       from: bill.invoiceNumber,
-      to: `SMS-${year}-${String(nextNumber).padStart(4, "0")}`,
+      to: `BM-${year}-${String(nextNumber).padStart(4, "0")}`,
     };
   });
 
@@ -42,7 +43,7 @@ export async function renumberShopBillsFrom3000(
     planned,
     shopSequenceBefore: sequence?.counter ?? null,
     shopSequenceAfter: SEQUENCE_COUNTER_FOR_NEXT_3004,
-    nextShopInvoice: `SMS-${new Date().getFullYear()}-${String(SEQUENCE_COUNTER_FOR_NEXT_3004 + 1).padStart(4, "0")}`,
+    nextShopInvoice: `BM-${new Date().getFullYear()}-${String(SEQUENCE_COUNTER_FOR_NEXT_3004 + 1).padStart(4, "0")}`,
   };
 
   if (!options.apply) return preview;
