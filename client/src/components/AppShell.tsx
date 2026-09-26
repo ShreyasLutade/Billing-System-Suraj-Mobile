@@ -28,6 +28,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
 import { api } from "../lib/api";
+import { BrandName, BRAND_NAME_TEXT } from "./BrandName";
 
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
@@ -142,10 +143,12 @@ export function AppShell() {
         >
           {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
         </button>
-        <Link to="/" onClick={onMainNavClick} className="babu-brand" aria-label="Babu Mobile — New Bill">
+        <Link to="/" onClick={onMainNavClick} className="babu-brand" aria-label={`${BRAND_NAME_TEXT} — New Bill`}>
           <img src="/babu_mobile_icon.svg" alt="" />
           <span>
-            <strong>Babu Mobile</strong>
+            <strong>
+              <BrandName />
+            </strong>
             <small>Balaghat</small>
           </span>
         </Link>
@@ -192,9 +195,11 @@ export function AppShell() {
       </aside>
 
       <header className="babu-mobile-header">
-        <Link to="/" onClick={onMainNavClick} className="babu-mobile-brand" aria-label="Babu Mobile — New Bill">
+        <Link to="/" onClick={onMainNavClick} className="babu-mobile-brand" aria-label={`${BRAND_NAME_TEXT} — New Bill`}>
           <img src="/babu_mobile_icon.svg" alt="" />
-          <strong>Babu Mobile</strong>
+          <strong>
+            <BrandName />
+          </strong>
         </Link>
         <button
           type="button"
@@ -231,7 +236,9 @@ export function AppShell() {
                 <div className="babu-brand">
                   <img src="/babu_mobile_icon.svg" alt="" />
                   <span>
-                    <strong>Babu Mobile</strong>
+                    <strong>
+                      <BrandName />
+                    </strong>
                     <small>Balaghat</small>
                   </span>
                 </div>

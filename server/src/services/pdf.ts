@@ -25,11 +25,13 @@ const COLORS = {
 
 const shop = {
   name: process.env.SHOP_NAME || "Babu Mobile",
+  /** Small mark drawn after the shop name in the invoice header. */
+  nameSuffix: (process.env.SHOP_NAME_SUFFIX ?? "NX").trim(),
   tagline:
     process.env.SHOP_TAGLINE || "Deals In - All New & Second Hand Phones",
   address:
     process.env.SHOP_ADDRESS ||
-    "Near Jain Mandir, Beside Arihant Institute Main Road Balaghat (M.P) 481001",
+    "Novelty House Road, Balaghat (M.P.) 481001",
   phone: process.env.SHOP_PHONE || "7581817575",
   instagram: process.env.SHOP_INSTAGRAM || "@babumobile_nx_balaghat",
   gstin: process.env.SHOP_GSTIN || "23FAAPB2709A1ZP",
@@ -44,14 +46,25 @@ const FONT = {
   medium: "Manrope-Medium",
   semibold: "Manrope-SemiBold",
   bold: "Manrope-Bold",
+  /** Noto Sans Devanagari — Manrope has no Hindi glyphs. */
+  hindi: "NotoSansDevanagari",
+  hindiBold: "NotoSansDevanagari-SemiBold",
 } as const;
-const FOOTER_BLOCK_H = 78;
+const FOOTER_BLOCK_H = 92;
 
 function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.regular, path.join(FONTS_DIR, "Manrope-Regular.ttf"));
   doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
   doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
   doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
+  doc.registerFont(
+    FONT.hindi,
+    path.join(FONTS_DIR, "NotoSansDevanagari-Regular.ttf"),
+  );
+  doc.registerFont(
+    FONT.hindiBold,
+    path.join(FONTS_DIR, "NotoSansDevanagari-SemiBold.ttf"),
+  );
 }
 
 function exchangeItemsForPdf(bill: BillWithItems): BillExchangeItem[] {
@@ -279,31 +292,85 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   const textX = MARGIN + logoW + 14;
   const textW = CONTENT_WIDTH - logoW - 14;
 
-  // Distinct display font — first word slate, rest in the bright accent
+  // Wordmark: first word in the logo gradient, the rest in solid slate, with a
+  // fading gradient underline. Shrinks to fit if the shop name is long.
   const title = shop.name.toUpperCase();
   const parts = title.split(/\s+/);
   const first = parts[0] || title;
   const rest = parts.slice(1).join(" ");
-  doc.font(FONT.bold).fontSize(24);
-  const firstW = doc.widthOfString(first + (rest ? " " : ""));
+  const suffix = shop.nameSuffix.toUpperCase();
+  const tracking = 1.4;
+  const wordGap = 9;
+  const suffixGap = 4;
+  let size = 28;
+  let firstW = 0;
+  let restW = 0;
+  let suffixW = 0;
+  const suffixSize = () => Math.round(size * 0.4 * 10) / 10;
+  const wordmarkW = () =>
+    firstW +
+    (rest ? wordGap + restW : 0) +
+    (suffix ? suffixGap + suffixW : 0);
+  for (; size >= 16; size -= 1) {
+    doc.font(FONT.bold).fontSize(size);
+    firstW = doc.widthOfString(first, { characterSpacing: tracking });
+    doc.font(FONT.semibold).fontSize(size);
+    restW = rest ? doc.widthOfString(rest, { characterSpacing: tracking }) : 0;
+    doc.font(FONT.bold).fontSize(suffixSize());
+    suffixW = suffix ? doc.widthOfString(suffix, { characterSpacing: 0.6 }) : 0;
+    if (wordmarkW() <= textW) break;
+  }
+  const nameY = 12;
+  const nameW = wordmarkW();
+
+  const nameGrad = doc.linearGradient(textX, 0, textX + firstW, 0);
+  nameGrad.stop(0, COLORS.gradStart).stop(1, COLORS.gradEnd);
   doc
-    .fillColor(COLORS.slate)
-    .text(first + (rest ? " " : ""), textX, 16, {
-      lineBreak: false,
-    });
+    .font(FONT.bold)
+    .fontSize(size)
+    .fillColor(nameGrad)
+    .text(first, textX, nameY, { lineBreak: false, characterSpacing: tracking });
   if (rest) {
     doc
-      .fillColor(COLORS.accent)
-      .text(rest, textX + firstW, 16, {
+      .font(FONT.semibold)
+      .fontSize(size)
+      .fillColor(COLORS.slate)
+      .text(rest, textX + firstW + wordGap, nameY, {
         lineBreak: false,
+        characterSpacing: tracking,
       });
   }
+  if (suffix) {
+    // Sits on the same baseline as the name, like a small tag after it.
+    const ascenderOf = (fontSize: number) =>
+      ((doc as unknown as { _font: { ascender: number } })._font.ascender / 1000) *
+      fontSize;
+    doc.font(FONT.semibold).fontSize(size);
+    const nameBaseline = nameY + ascenderOf(size);
+    doc.font(FONT.bold).fontSize(suffixSize());
+    doc
+      .fillColor(COLORS.accent)
+      .text(
+        suffix,
+        textX + firstW + (rest ? wordGap + restW : 0) + suffixGap,
+        nameBaseline - ascenderOf(suffixSize()),
+        { lineBreak: false, characterSpacing: 0.6 },
+      );
+  }
+
+  const underlineY = nameY + size * 1.26;
+  const underlineGrad = doc.linearGradient(textX, 0, textX + nameW, 0);
+  underlineGrad
+    .stop(0, COLORS.gradStart)
+    .stop(0.55, COLORS.gradEnd)
+    .stop(1, COLORS.gradEnd, 0);
+  doc.roundedRect(textX, underlineY, nameW, 2.6, 1.3).fill(underlineGrad);
 
   doc
     .fillColor(COLORS.ink)
     .font(FONT.regular)
     .fontSize(8)
-    .text(shop.address, textX, 44, {
+    .text(shop.address, textX, underlineY + 8, {
       width: textW,
       align: "left",
     });
@@ -605,8 +672,15 @@ function drawItemsTable(
     totalBarH +
     8 +
     declH;
+  // Notes print between the totals and the terms footer — leave room for them.
+  const notesH = bill.notes
+    ? doc
+        .font(FONT.regular)
+        .fontSize(7.5)
+        .heightOfString(`Notes: ${bill.notes}`, { width: CONTENT_WIDTH - 40 }) + 8
+    : 0;
   const tableBodyBottom =
-    PAGE.height - MARGIN - FOOTER_BLOCK_H - 8 - totalsBlockH - footH;
+    PAGE.height - MARGIN - FOOTER_BLOCK_H - 8 - totalsBlockH - footH - notesH;
 
   const headerH = 20;
   let x = MARGIN;
@@ -1181,33 +1255,51 @@ function drawFooter(doc: PDFKit.PDFDocument) {
     .lineWidth(0.8)
     .stroke();
 
+  // Same wording as the shop’s printed bill book.
   doc
     .fillColor(COLORS.ink)
-    .font(FONT.bold)
-    .fontSize(8)
-    .text("Terms and Conditions", MARGIN, y, { lineBreak: false });
+    .font(FONT.hindiBold)
+    .fontSize(8.5)
+    .text("नियम एवं शर्तें", MARGIN, y - 1, { lineBreak: false });
 
   const terms = [
-    "1. Goods once sold will not be taken back, exchanged or refunded.",
-    "2. Warranty & insurance terms are as provided by the company / service centre.",
-    "3. Customer has inspected the device at purchase; shop is not responsible thereafter.",
-    "4. Subject to Balaghat jurisdiction.",
+    "1. बिका हुआ माल वापस नहीं होगा और न बदला जायेगा।",
+    "2. वारंटी या गारंटी केवल कंपनी के सर्विस सेंटर द्वारा कंपनी के शर्तों एवं नियमों अनुसार ही होगा।",
+    "3. सर्विस सेंटर में लगने वाला समय ग्राहक को देना होगा।",
+    "4. किसी भी वाद-विवाद बालाघाट न्यायालय के अंतर्गत होगा।",
+    "5. मैंने यह सामान अपनी पसंद से अच्छी तरह से देख कर एवं चेक कर लिया है।",
   ];
   let ty = y + 12;
-  doc.fillColor(COLORS.muted).font(FONT.regular).fontSize(6.5);
+  doc.fillColor(COLORS.muted).font(FONT.hindi).fontSize(7);
   for (const term of terms) {
     doc.text(term, MARGIN, ty, {
       width: CONTENT_WIDTH,
       lineBreak: false,
     });
-    ty += 9;
+    ty += 10;
   }
+
+  ty += 2;
+  doc
+    .fillColor(COLORS.ink)
+    .font(FONT.bold)
+    .fontSize(6.8)
+    .text("No guarantee / No warranty: ", MARGIN, ty, {
+      continued: true,
+      lineBreak: false,
+    })
+    .fillColor(COLORS.muted)
+    .font(FONT.regular)
+    .text(
+      "UV Glass / Display · Water / Liquid Damage · Battery Health · Update Line / Display Green · Physical Damage",
+      { lineBreak: false },
+    );
 
   doc
     .fillColor(COLORS.accent)
     .font(FONT.regular)
     .fontSize(11)
-    .text(`Thank you for shopping with ${shop.name}`, MARGIN, PAGE.height - 20, {
+    .text(`Thank you for shopping with ${[shop.name, shop.nameSuffix].filter(Boolean).join(" ")}`, MARGIN, PAGE.height - 20, {
       width: CONTENT_WIDTH,
       align: "center",
       lineBreak: false,

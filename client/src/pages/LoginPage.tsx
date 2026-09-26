@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { BrandName } from "../components/BrandName";
 import { api } from "../lib/api";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -199,7 +200,9 @@ export function LoginPage() {
           <div className="login-mobile-rays" aria-hidden />
           <div className="login-mobile-glow" aria-hidden />
           <div className="login-mobile-hero-txt">
-            <p className="login-mobile-name">Babu Mobile</p>
+            <p className="login-mobile-name">
+              <BrandName />
+            </p>
             <p className="login-mobile-meta">7581817575 · Balaghat</p>
           </div>
         </header>
@@ -215,7 +218,7 @@ export function LoginPage() {
           <div className="login-bp-top">
                     <BabuMark className="login-logo" />
             <div className="login-bp-name">
-              Babu Mobile
+              <BrandName />
               <small>7581817575 · Balaghat</small>
             </div>
           </div>
@@ -280,7 +283,9 @@ export function LoginPage() {
           <div className="login-fp-brand">
             <BabuMark className="login-fp-mark" />
             <div>
-              <strong>Babu Mobile</strong>
+              <strong>
+                <BrandName />
+              </strong>
               <span>Balaghat · 7581817575</span>
             </div>
           </div>

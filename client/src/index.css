@@ -405,6 +405,24 @@ body,
   display: none;
 }
 
+/* Small "NX" after the shop name, sitting on the name's baseline (see BrandName). */
+.brand-suffix {
+  margin-left: 0.2em;
+  font-size: 0.42em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 0;
+  vertical-align: baseline;
+  color: var(--p1);
+}
+
+/* On the login page's gradient panels the name is white — keep NX readable there. */
+.login-mobile-name .brand-suffix,
+.login-bp-name .brand-suffix {
+  color: inherit;
+  opacity: 0.85;
+}
+
 .babu-page-enter {
   animation: babuPageEnter 0.35s ease-out;
 }

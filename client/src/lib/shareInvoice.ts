@@ -24,7 +24,7 @@ export async function shareInvoicePdf(
 
   const withFile: ShareData = {
     title: `Invoice ${label}`,
-    text: `Invoice ${label} — Babu Mobile`,
+    text: `Invoice ${label} — Babu Mobile NX`,
     files: [file],
   };
 
