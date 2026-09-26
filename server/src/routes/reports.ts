@@ -158,26 +158,35 @@ reportsRouter.post(
         req.file.buffer,
         req.file.originalname || "",
       );
-      const result = await restoreSqliteFromBuffer(dbBuffer);
+      let result: Awaited<ReturnType<typeof restoreSqliteFromBuffer>>;
+      try {
+        result = await restoreSqliteFromBuffer(dbBuffer);
+      } catch (error) {
+        // The file may already be swapped but Prisma could not reconnect. Exit
+        // non-zero so Railway (restart policy ON_FAILURE) starts a fresh process.
+        console.error("[backup] Restore reconnect failed — restarting", error);
+        res.status(503).json({
+          error:
+            "Database file replaced, but the server must restart to load it. Refresh in a minute.",
+          data: { restarting: true },
+        });
+        setTimeout(() => process.exit(1), 750);
+        return;
+      }
+
+      console.log(
+        `[backup] SQLite restored in-process (${result.bytes} bytes); previous copy: ${result.previousBackupPath || "none"}`,
+      );
       res.json({
         data: {
           ok: true,
           bytes: result.bytes,
           restoredPath: result.restoredPath,
           previousBackupPath: result.previousBackupPath || null,
-          restarting: true,
-          message:
-            "Database restored. Server is restarting — refresh the page in a few seconds.",
+          restarting: false,
+          message: "Database restored. Please sign in again.",
         },
       });
-
-      // Fresh Prisma connections require a process restart.
-      setTimeout(() => {
-        console.log(
-          "[backup] Exiting after SQLite restore so the process restarts",
-        );
-        process.exit(0);
-      }, 750);
     } catch (error) {
       next(error);
     }

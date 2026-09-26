@@ -113,8 +113,8 @@ async function removeSidecars(dbPath: string) {
 }
 
 /**
- * Replace the live SQLite file with an uploaded backup.
- * Caller should restart the process after a successful response so Prisma reconnects cleanly.
+ * Replace the live SQLite file with an uploaded backup, then reconnect Prisma to
+ * the new file in-process (no restart). Throws if reconnecting fails.
  */
 export async function restoreSqliteFromBuffer(buffer: Buffer): Promise<{
   restoredPath: string;
@@ -160,6 +160,12 @@ export async function restoreSqliteFromBuffer(buffer: Buffer): Promise<{
     await removeSidecars(livePath);
     await fs.promises.rename(incomingPath, livePath);
     await removeSidecars(livePath);
+
+    // A request during the swap may have lazily reopened the old file; drop that
+    // connection, then open the restored file.
+    await prisma.$disconnect();
+    await prisma.$connect();
+    await prisma.$queryRawUnsafe("SELECT 1");
 
     return {
       restoredPath: livePath,
