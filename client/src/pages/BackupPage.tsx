@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DatabaseBackup, Download, Mail, Upload } from "lucide-react";
+import { DatabaseBackup, Download, Loader2, Mail, Upload } from "lucide-react";
 import { BackLink, PageHeader } from "../components/ui";
 import { ApiError, api } from "../lib/api";
 
@@ -22,6 +22,8 @@ export function BackupPage() {
   const [downloading, setDownloading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  /** Seconds since the restore finished, while waiting for the server to come back. */
+  const [restartSeconds, setRestartSeconds] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -108,18 +110,48 @@ export function BackupPage() {
     setError(null);
     setMessage(null);
     try {
-      const { data } = await api.restoreDatabase(file, confirm.trim());
-      setMessage(
-        data.message ||
-          "Database restored. Waiting for server restart — refresh shortly.",
-      );
-      setTimeout(() => {
-        window.location.assign("/login");
-      }, 2500);
+      await api.restoreDatabase(file, confirm.trim());
+      setMessage("Database restored. Restarting server…");
+      void waitForRestart();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Restore failed");
       setRestoring(false);
     }
+  }
+
+  /**
+   * The server exits after a restore and Railway starts it again (~20–60s).
+   * Poll /api/health and open the login page only once it answers.
+   */
+  async function waitForRestart() {
+    const started = Date.now();
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    setRestartSeconds(0);
+    const tick = window.setInterval(() => {
+      setRestartSeconds(Math.round((Date.now() - started) / 1000));
+    }, 1000);
+
+    // Give the old process time to exit so we don’t get an answer from it.
+    await sleep(4000);
+    while (Date.now() - started < 180_000) {
+      try {
+        await api.health();
+        window.clearInterval(tick);
+        setMessage("Server is back. Opening login…");
+        window.location.assign("/login");
+        return;
+      } catch {
+        await sleep(2000);
+      }
+    }
+
+    window.clearInterval(tick);
+    setRestartSeconds(null);
+    setMessage(null);
+    setError(
+      "Database restored, but the server is taking longer than usual to restart. Wait a minute and refresh this page. If it still doesn’t load, check the Railway logs.",
+    );
+    setRestoring(false);
   }
 
   return (
@@ -268,7 +300,19 @@ export function BackupPage() {
           className="mt-4 rounded-2xl border border-tide-200 bg-tide-50 px-4 py-3 text-sm text-tide-900 dark:border-tide-400/30 dark:bg-tide-400/10 dark:text-tide-100"
           role="status"
         >
-          {message}
+          {restartSeconds !== null ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              <span>
+                {message} <span className="tabular-nums">{restartSeconds}s</span>
+                <span className="mt-0.5 block text-xs opacity-80">
+                  Keep this page open — you’ll be taken to the login page when it’s back.
+                </span>
+              </span>
+            </span>
+          ) : (
+            message
+          )}
         </p>
       ) : null}
       {error ? (
