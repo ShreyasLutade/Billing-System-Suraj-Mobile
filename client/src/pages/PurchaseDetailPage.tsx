@@ -21,12 +21,13 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+// IMEI / Serial never narrower than its text, so it cannot run into Status.
 const COL_TEMPLATE =
-  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_max-content_max-content]";
+  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(max-content,1.1fr)_6.5rem_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(max-content,1.2fr)_7rem_max-content_max-content]";
 
-/** Same columns without "Purchase price" — staff never see cost. */
+/** Staff: no "Purchase price" (cost) and no "Action" (edit/delete are admin only). */
 const COL_TEMPLATE_STAFF =
-  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_max-content_max-content]";
+  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(max-content,1.1fr)_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(max-content,1.2fr)_max-content]";
 
 const ROW_GRID = "col-span-full grid grid-cols-subgrid items-center";
 
@@ -219,10 +220,18 @@ export function PurchaseDetailPage() {
                     Purchase price
                   </div>
                 ) : null}
-                <div className="border-r border-[#EEF1F5] px-2 py-2 dark:border-[rgb(var(--color-line))]">
+                <div
+                  className={clsx(
+                    "px-2 py-2",
+                    isAdmin &&
+                      "border-r border-[#EEF1F5] dark:border-[rgb(var(--color-line))]",
+                  )}
+                >
                   Status
                 </div>
-                <div className="px-2 py-2 text-right">Action</div>
+                {isAdmin ? (
+                  <div className="px-2 py-2 text-right">Action</div>
+                ) : null}
               </div>
 
               {purchase.items.map((row, index) => {
@@ -317,7 +326,13 @@ export function PurchaseDetailPage() {
                         {formatINR(item.purchasePrice)}
                       </div>
                     ) : null}
-                    <div className="relative z-20 whitespace-nowrap border-r border-[#EEF1F5] px-2 py-1.5 dark:border-[rgb(var(--color-line))]">
+                    <div
+                      className={clsx(
+                        "relative z-20 whitespace-nowrap px-2 py-1.5",
+                        isAdmin &&
+                          "border-r border-[#EEF1F5] dark:border-[rgb(var(--color-line))]",
+                      )}
+                    >
                       {sold ? (
                         <div className="relative z-20 space-y-0.5">
                           {billId ? (
@@ -356,8 +371,8 @@ export function PurchaseDetailPage() {
                       )}
                     </div>
 
-                    <div className="relative z-20 whitespace-nowrap px-2 py-1.5 text-right">
-                      {isAdmin ? (
+                    {isAdmin ? (
+                      <div className="relative z-20 whitespace-nowrap px-2 py-1.5 text-right">
                         <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             type="button"
@@ -386,10 +401,8 @@ export function PurchaseDetailPage() {
                             </button>
                           ) : null}
                         </div>
-                      ) : (
-                        <span className="text-ink-300">—</span>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
 
                     {sold ? (
                       <div
