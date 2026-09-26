@@ -393,13 +393,14 @@ export function AnalyticsPage() {
                 }}
               />
               <div className="relative">
-                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8EA0BC]">
+                {/* Label left, date chip top-right — on one line, chip shrinks on phones. */}
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <p className="min-w-0 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8EA0BC] sm:text-[11px] sm:tracking-[0.14em]">
                     Total collected · {data.periodLabel.toLowerCase()}
                   </p>
                   {periodRangeLabel ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[12px] font-semibold tabular-nums text-white/90">
-                      <CalendarDays className="h-3.5 w-3.5 text-[#8EA0BC]" aria-hidden />
+                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[12px]">
+                      <CalendarDays className="h-3 w-3 text-[#8EA0BC] sm:h-3.5 sm:w-3.5" aria-hidden />
                       {periodRangeLabel}
                     </span>
                   ) : null}
