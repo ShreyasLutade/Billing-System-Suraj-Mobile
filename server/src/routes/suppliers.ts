@@ -119,6 +119,8 @@ suppliersRouter.get("/mobiles", async (req, res, next) => {
           select: {
             purchase: {
               select: {
+                id: true,
+                supplierId: true,
                 purchaseDate: true,
                 supplier: { select: { id: true, name: true } },
               },
@@ -154,6 +156,10 @@ suppliersRouter.get("/mobiles", async (req, res, next) => {
         purchaseDate: (purchase?.purchaseDate || item.createdAt).toISOString(),
         supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
         sale: bill ? { billId: bill.id, invoiceNumber: bill.invoiceNumber } : null,
+        // Opens /suppliers/:supplierId/purchases/:id with this unit highlighted.
+        purchase: purchase
+          ? { id: purchase.id, supplierId: purchase.supplierId }
+          : null,
       };
     });
 
