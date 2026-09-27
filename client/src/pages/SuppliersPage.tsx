@@ -82,6 +82,22 @@ function compareSuppliers(a: Supplier, b: Supplier, key: SortKey, dir: SortDir) 
   return (a.stockAvailable - b.stockAvailable) * dir;
 }
 
+/**
+ * Hide suppliers with nothing left — no stock, nothing purchased, and no money
+ * purchased/paid/outstanding (e.g. after every mobile under them was deleted).
+ * Anyone with an amount still recorded stays visible so dues aren’t hidden.
+ */
+function supplierHasActivity(s: Supplier) {
+  const qtyPurchased = s.stockPurchased ?? s.stockAvailable + s.stockSold;
+  return (
+    s.stockAvailable > 0 ||
+    qtyPurchased > 0 ||
+    Math.abs(s.totalPurchased) > 0.005 ||
+    Math.abs(s.totalPaid) > 0.005 ||
+    Math.abs(s.outstanding) > 0.005
+  );
+}
+
 export function SuppliersPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -196,9 +212,10 @@ export function SuppliersPage() {
 
   const filtered = useMemo(() => {
     if (imeiMode) return [];
+    const active = suppliers.filter(supplierHasActivity);
     const matched = !query.trim()
-      ? suppliers
-      : suppliers.filter((s) =>
+      ? active
+      : active.filter((s) =>
           matchesElasticFields([s.name, s.phone], query),
         );
     return [...matched].sort((a, b) =>
