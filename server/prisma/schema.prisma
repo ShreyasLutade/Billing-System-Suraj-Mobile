@@ -328,3 +328,50 @@ model SupplierPayment {
   @@index([supplierId])
   @@index([paidAt])
 }
+
+/// Repair desk intake — kept separate from shop bills and stock.
+model RepairJob {
+  id                 String    @id @default(cuid())
+  /// BMR-0001, BMR-0002, …
+  jobNumber          String    @unique
+  customerName       String
+  customerPhone      String
+  customerAddress    String?
+  deviceName         String
+  /// IOS | ANDROID
+  platform           String
+  color              String?
+  /// Older jobs only — intake now asks for colour instead.
+  ram                String?
+  storage            String?
+  /// LIKE_NEW | GOOD | FAIR | DAMAGED | DEAD
+  condition          String
+  conditionNotes     String?
+  /// What the customer says is wrong.
+  problemDescription String    @default("")
+  /// Quoted at intake (optional).
+  estimatedCost      Float?
+  /// Charged when the job is finished.
+  finalCharge        Float?
+  /// RECEIVED → REPAIRED → DELIVERED
+  status             String    @default("RECEIVED")
+  /// FIXED | NOT_FIXED — set when the work is done.
+  outcome            String?
+  /// What was done (parts changed, etc.).
+  repairNotes        String?
+  repairedAt         DateTime?
+  deliveredAt        DateTime?
+  /// Browser-compressed WebP/JPEG (≈80–200 KB each).
+  frontPhoto         Bytes?
+  frontPhotoType     String?
+  backPhoto          Bytes?
+  backPhotoType      String?
+  createdByUserId    String?
+  createdByName      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([customerPhone])
+  @@index([status])
+}

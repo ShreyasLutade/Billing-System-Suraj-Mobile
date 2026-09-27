@@ -4,6 +4,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { BrandName } from "../components/BrandName";
+import {
+  cancelSectionChoice,
+  requestSectionChoice,
+} from "../components/SectionGate";
 import { api } from "../lib/api";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -102,10 +106,14 @@ export function LoginPage() {
       return;
     }
     setSubmitting(true);
+    // Set before login: once signed in, the guest guard redirects straight away,
+    // and the section chooser reads this flag on the next page.
+    requestSectionChoice();
     try {
       await login(phone.trim(), password);
       navigate(from, { replace: true });
     } catch (err) {
+      cancelSectionChoice();
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setSubmitting(false);

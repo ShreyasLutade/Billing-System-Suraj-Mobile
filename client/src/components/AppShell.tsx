@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FilePlus2,
+  History,
   LogOut,
   Menu,
   Moon,
@@ -21,6 +22,7 @@ import {
   Sun,
   Truck,
   Wallet,
+  Wrench,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -30,7 +32,23 @@ import { clearListUiSession } from "../hooks/useSessionState";
 import { api } from "../lib/api";
 import { BrandName, BRAND_NAME_TEXT } from "./BrandName";
 
-export function AppShell() {
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof FilePlus2;
+  /** Only highlight on an exact match (section home). */
+  end?: boolean;
+};
+
+/**
+ * Shared layout for both counters: the mobile shop (billing, stock…) and the
+ * separate repair desk. Same sidebar, phone header, bottom nav and menus;
+ * only the links and the "switch section" item differ.
+ */
+export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) {
+  const isRepair = section === "repair";
+  const homePath = isRepair ? "/repair" : "/";
+  const homeLabel = isRepair ? "New repair" : "New Bill";
   const { isAdmin, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -72,7 +90,7 @@ export function AppShell() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isRepair) return;
     let active = true;
     void api
       .listDues("all")
@@ -133,14 +151,27 @@ export function AppShell() {
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const links = [
-    { to: "/", label: "New Bill", icon: FilePlus2 },
-    { to: "/bills", label: "Bills", icon: ReceiptText },
-    { to: "/dues", label: "Dues", icon: Wallet },
-    { to: "/stock", label: "Stock", icon: Package },
-    { to: "/suppliers", label: "Suppliers", icon: Truck },
-    ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
-  ];
+  const links: NavItem[] = isRepair
+    ? [
+        { to: "/repair", label: "New Repair", icon: Wrench, end: true },
+        { to: "/repair/history", label: "History", icon: History },
+        ...(isAdmin
+          ? [{ to: "/repair/analytics", label: "Analytics", icon: BarChart3 }]
+          : []),
+      ]
+    : [
+        { to: "/", label: "New Bill", icon: FilePlus2, end: true },
+        { to: "/bills", label: "Bills", icon: ReceiptText },
+        { to: "/dues", label: "Dues", icon: Wallet },
+        { to: "/stock", label: "Stock", icon: Package },
+        { to: "/suppliers", label: "Suppliers", icon: Truck },
+        ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
+      ];
+
+  /** Account-menu item that jumps to the other counter. */
+  const switchTo = isRepair
+    ? { to: "/", label: "Mobile shop", icon: ReceiptText }
+    : { to: "/repair", label: "Repair shop", icon: Wrench };
 
   function onMainNavClick() {
     // Header / bottom nav = fresh list. Detail → back keeps search via session.
@@ -164,13 +195,13 @@ export function AppShell() {
         >
           {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
         </button>
-        <Link to="/" onClick={onMainNavClick} className="babu-brand" aria-label={`${BRAND_NAME_TEXT} — New Bill`}>
+        <Link to={homePath} onClick={onMainNavClick} className="babu-brand" aria-label={`${BRAND_NAME_TEXT} — ${homeLabel}`}>
           <img src="/babu_mobile_icon.svg" alt="" />
           <span>
             <strong>
               <BrandName />
             </strong>
-            <small>Balaghat</small>
+            <small>{isRepair ? "Repair desk" : "Balaghat"}</small>
           </span>
         </Link>
 
@@ -179,7 +210,7 @@ export function AppShell() {
             <NavLink
               key={link.to}
               to={link.to}
-              end={link.to === "/"}
+              end={link.end}
               onClick={onMainNavClick}
               className={({ isActive }) => clsx("babu-nav-link", isActive && "is-active")}
             >
@@ -196,6 +227,14 @@ export function AppShell() {
           <div className="babu-user-menu" ref={userMenuRef}>
             {userMenuOpen ? (
               <div className="babu-user-menu-pop" role="menu" aria-label="Account">
+                <Link
+                  to={switchTo.to}
+                  role="menuitem"
+                  className="babu-user-menu-item"
+                  onClick={() => setUserMenuOpen(false)}
+                >
+                  <switchTo.icon /> {switchTo.label}
+                </Link>
                 <button
                   type="button"
                   role="menuitem"
@@ -254,7 +293,7 @@ export function AppShell() {
       </aside>
 
       <header className="babu-mobile-header">
-        <Link to="/" onClick={onMainNavClick} className="babu-mobile-brand" aria-label={`${BRAND_NAME_TEXT} — New Bill`}>
+        <Link to={homePath} onClick={onMainNavClick} className="babu-mobile-brand" aria-label={`${BRAND_NAME_TEXT} — ${homeLabel}`}>
           <img src="/babu_mobile_icon.svg" alt="" />
           <strong>
             <BrandName />
@@ -298,7 +337,7 @@ export function AppShell() {
                     <strong>
                       <BrandName />
                     </strong>
-                    <small>Balaghat</small>
+                    <small>{isRepair ? "Repair desk" : "Balaghat"}</small>
                   </span>
                 </div>
                 <button
@@ -319,6 +358,13 @@ export function AppShell() {
                     <small>{user?.phone || "7581817575"}</small>
                   </div>
                 </div>
+                <Link
+                  to={switchTo.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="babu-utility-button"
+                >
+                  <switchTo.icon /> {switchTo.label}
+                </Link>
                 <button type="button" className="babu-utility-button" onClick={toggleTheme}>
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
@@ -360,12 +406,16 @@ export function AppShell() {
         </div>
       </main>
 
-      <nav className="babu-mobile-nav" aria-label="Mobile navigation">
+      <nav
+        className="babu-mobile-nav"
+        aria-label="Mobile navigation"
+        style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }}
+      >
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
-            end={link.to === "/"}
+            end={link.end}
             onClick={onMainNavClick}
             className={({ isActive }) => clsx("babu-mobile-link", isActive && "is-active")}
           >

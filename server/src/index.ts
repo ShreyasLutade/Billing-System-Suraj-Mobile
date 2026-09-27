@@ -17,6 +17,7 @@ import { stockRouter } from "./routes/stock";
 import { suppliersRouter } from "./routes/suppliers";
 import { purchasesRouter } from "./routes/purchases";
 import { phoneModelsRouter } from "./routes/phoneModels";
+import { repairsRouter } from "./routes/repairs";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 import { prisma } from "./lib/prisma";
@@ -86,6 +87,7 @@ app.use("/api/suppliers", requireAuth, suppliersRouter);
 app.use("/api/purchases", requireAuth, purchasesRouter);
 app.use("/api/phone-models", requireAuth, phoneModelsRouter);
 app.use("/api/dues", requireAuth, duesRouter);
+app.use("/api/repairs", requireAuth, repairsRouter);
 app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 
 if (!serveClient) {

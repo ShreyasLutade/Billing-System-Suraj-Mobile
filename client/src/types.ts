@@ -490,3 +490,65 @@ export type AuthUser = {
   role: "ADMIN" | "STAFF";
 };
 
+
+export type RepairPlatform = "IOS" | "ANDROID";
+export type RepairCondition = "LIKE_NEW" | "GOOD" | "FAIR" | "DAMAGED" | "DEAD";
+export type RepairStatus = "RECEIVED" | "REPAIRED" | "DELIVERED";
+export type RepairOutcome = "FIXED" | "NOT_FIXED";
+
+/** A repair-desk intake. Photos are fetched separately (see api.repairPhotoUrl). */
+export type RepairJob = {
+  id: string;
+  jobNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string | null;
+  deviceName: string;
+  platform: RepairPlatform;
+  color: string | null;
+  /** Older jobs only — intake now asks for colour instead. */
+  ram: string | null;
+  storage: string | null;
+  /** Only on older jobs — intake no longer asks for it. */
+  condition: RepairCondition | null;
+  conditionNotes: string | null;
+  problemDescription: string;
+  estimatedCost: number | null;
+  finalCharge: number | null;
+  status: RepairStatus;
+  outcome: RepairOutcome | null;
+  repairNotes: string | null;
+  repairedAt: string | null;
+  deliveredAt: string | null;
+  hasFrontPhoto: boolean;
+  hasBackPhoto: boolean;
+  createdByName: string | null;
+  createdAt: string;
+};
+
+export type RepairAnalytics = {
+  period: "today" | "yesterday" | "week" | "month" | "all";
+  periodLabel: string;
+  /** Final charges of phones delivered in the period. */
+  revenue: number;
+  deliveredCount: number;
+  averageCharge: number;
+  receivedCount: number;
+  fixedCount: number;
+  notFixedCount: number;
+  fixRate: number | null;
+  /** Current, not period-bound. */
+  waitingCount: number;
+  readyCount: number;
+  readyValue: number;
+  topDevices: Array<{ deviceName: string; count: number }>;
+  recentDelivered: Array<{
+    id: string;
+    jobNumber: string;
+    customerName: string;
+    deviceName: string;
+    outcome: RepairOutcome | null;
+    finalCharge: number | null;
+    deliveredAt: string | null;
+  }>;
+};

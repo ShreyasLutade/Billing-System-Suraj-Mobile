@@ -10,6 +10,10 @@ import type {
   MobileCatalog,
   PhoneModel,
   Purchase,
+  RepairAnalytics,
+  RepairJob,
+  RepairOutcome,
+  RepairStatus,
   StockHistory,
   StockImeiTrace,
   StockItem,
@@ -630,6 +634,76 @@ export const api = {
       excelFilename: response.headers.get("X-Excel-Filename") || null,
       dbFilename: response.headers.get("X-Db-Filename") || null,
     };
+  },
+  listRepairJobs: (q = "", status: RepairStatus | "" = "") => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (status) params.set("status", status);
+    const query = params.toString();
+    return request<{ data: RepairJob[] }>(`/repairs${query ? `?${query}` : ""}`);
+  },
+  repairAnalytics: (period: RepairAnalytics["period"]) =>
+    request<{ data: RepairAnalytics }>(`/repairs/analytics?period=${period}`),
+  updateRepairStatus: (
+    id: string,
+    payload: {
+      status: RepairStatus;
+      outcome?: RepairOutcome;
+      finalCharge?: number | null;
+      repairNotes?: string;
+    },
+  ) =>
+    request<{ data: RepairJob }>(`/repairs/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  /** Repair slip PDF; token in the URL like bill PDFs so it opens in a new tab. */
+  repairSlipUrl: (id: string, download = false) => {
+    const token = getAuthToken();
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    if (download) params.set("download", "1");
+    return `${API_BASE}/repairs/${id}/slip?${params.toString()}`;
+  },
+  getRepairJob: (id: string) => request<{ data: RepairJob }>(`/repairs/${id}`),
+  /** Multipart: text fields plus optional frontPhoto / backPhoto (already compressed). */
+  createRepairJob: async (form: FormData) => {
+    const token = getAuthToken();
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/repairs`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+    } catch {
+      throw new ApiError("Cannot reach the server. Check your connection.", 0);
+    }
+    if (!response.ok) {
+      let message = "Could not save the repair";
+      try {
+        const body = await response.json();
+        message = body.error || message;
+        const firstField = body.details?.fieldErrors
+          ? Object.values(body.details.fieldErrors).flat()[0]
+          : null;
+        if (typeof firstField === "string") message = firstField;
+        if (body.details?.formErrors?.[0]) message = body.details.formErrors[0];
+      } catch {
+        /* keep default */
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.json() as Promise<{ data: RepairJob }>;
+  },
+  /** Photos need the auth header, so load them as blobs and hand back an object URL. */
+  loadRepairPhoto: async (id: string, side: "front" | "back") => {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE}/repairs/${id}/photo/${side}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) throw new ApiError("Photo not available", response.status);
+    return URL.createObjectURL(await response.blob());
   },
   restoreDatabase: async (file: File, confirm: string) => {
     const token = getAuthToken();

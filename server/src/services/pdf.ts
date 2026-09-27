@@ -12,7 +12,7 @@ import {
 type BillWithItems = Bill & { items: BillItem[] };
 
 /** App theme palette: slate blue + bright sky (matches the web UI). */
-const COLORS = {
+export const COLORS = {
   slate: "#3E4F8A",
   accent: "#0A9FE0",
   accentSoft: "#E3F3FF",
@@ -23,7 +23,7 @@ const COLORS = {
   gradEnd: "#5D73B6",
 };
 
-const shop = {
+export const shop = {
   name: process.env.SHOP_NAME || "Babu Mobile",
   /** Small mark drawn after the shop name in the invoice header. */
   nameSuffix: (process.env.SHOP_NAME_SUFFIX ?? "NX").trim(),
@@ -41,7 +41,7 @@ const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 28;
 const CONTENT_WIDTH = PAGE.width - MARGIN * 2;
 const FONTS_DIR = path.join(__dirname, "../../assets/fonts");
-const FONT = {
+export const FONT = {
   regular: "Manrope",
   medium: "Manrope-Medium",
   semibold: "Manrope-SemiBold",
@@ -52,7 +52,7 @@ const FONT = {
 } as const;
 const FOOTER_BLOCK_H = 92;
 
-function registerFonts(doc: PDFKit.PDFDocument) {
+export function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.regular, path.join(FONTS_DIR, "Manrope-Regular.ttf"));
   doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
   doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
@@ -126,7 +126,7 @@ function computePayCustomerAmount(bill: BillWithItems, withGst: boolean) {
   return round2(exchangeCashReturnAmount(bill) + excess);
 }
 
-function money(amount: number) {
+export function money(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
@@ -249,7 +249,7 @@ function drawInstagramIcon(
 }
 
 /** Babu Mobile "B" mark (client/public/babu_mobile_icon.svg) drawn as vectors in theme colours. */
-function drawBabuLogo(
+export function drawBabuLogo(
   doc: PDFKit.PDFDocument,
   x: number,
   y: number,
