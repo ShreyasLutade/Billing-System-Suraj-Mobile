@@ -104,6 +104,66 @@ suppliersRouter.get("/", async (_req, res, next) => {
 });
 
 /**
+ * Every mobile ever purchased (in stock or sold) with its supplier and purchase
+ * date, for the Suppliers page model search ("iPhone 14" → who sold us each one).
+ * Purchase price is admin only.
+ */
+suppliersRouter.get("/mobiles", async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const items = await prisma.stockItem.findMany({
+      where: { NOT: { kind: "ACCESSORY" } },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        purchaseItem: {
+          select: {
+            purchase: {
+              select: {
+                purchaseDate: true,
+                supplier: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        billItems: {
+          select: { bill: { select: { id: true, invoiceNumber: true } } },
+          orderBy: { bill: { billDate: "desc" } },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const data = items.map((item) => {
+      const purchase = item.purchaseItem?.purchase || null;
+      const supplier = item.supplier || purchase?.supplier || null;
+      const bill = item.billItems[0]?.bill || null;
+      return {
+        id: item.id,
+        mobileName: item.mobileName,
+        platform: item.platform,
+        condition: item.condition,
+        storage: item.storage,
+        ram: item.ram,
+        color: item.color,
+        // Archived units keep "IMEI~id" so the live unit can reuse the IMEI.
+        imei: item.imei ? item.imei.split("~")[0] : null,
+        serialNumber: item.serialNumber,
+        status: item.status,
+        purchasePrice: isAdmin ? item.purchasePrice : null,
+        purchaseDate: (purchase?.purchaseDate || item.createdAt).toISOString(),
+        supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
+        sale: bill ? { billId: bill.id, invoiceNumber: bill.invoiceNumber } : null,
+      };
+    });
+
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * Admin Excel export of mobiles for a supplier (by name contains).
  * Example: GET /api/suppliers/export-mobiles?name=Tally&condition=NEW
  */

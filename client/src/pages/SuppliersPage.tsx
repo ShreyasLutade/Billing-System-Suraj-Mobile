@@ -13,11 +13,14 @@ import {
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
-import { ApiError, api, formatINR } from "../lib/api";
-import { matchesElasticFields } from "../lib/elasticSearch";
+import { ApiError, api, formatINR, formatStockUnitId } from "../lib/api";
+import {
+  matchesElasticFields,
+  normalizeSearchText,
+} from "../lib/elasticSearch";
 import { fromState } from "../lib/navMemory";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
-import type { StockImeiTrace, Supplier } from "../types";
+import type { StockImeiTrace, Supplier, SupplierMobile } from "../types";
 
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
@@ -37,6 +40,39 @@ function stockSpecLabel(stock: StockImeiTrace["stock"]) {
       : "",
   ].filter(Boolean);
   return parts.join(" · ");
+}
+
+function mobileSpecLabel(m: SupplierMobile) {
+  return [
+    m.storage ? formatCapacityLabel(m.storage) : "",
+    m.platform === "ANDROID" && m.ram ? formatCapacityLabel(m.ram) : "",
+    m.color,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Strict model match on the mobile name only (not colour/storage): every query
+ * word must start a word of the name, and numbers must match whole
+ * ("iphone 12" matches "iPhone 12 Pro" but not "iPhone 13"; "red" matches
+ * "Redmi" but not a red iPhone).
+ */
+function matchesModel(m: SupplierMobile, query: string) {
+  const words = normalizeSearchText(m.mobileName).split(" ");
+  const parts = normalizeSearchText(query).split(" ").filter(Boolean);
+  return parts.every((q, i) =>
+    // A number still being typed (last word) matches as a prefix, so
+    // "iphone 1" lists 11/12/13… and "iphone 12" narrows to the 12 only.
+    /^\d+$/.test(q) && i < parts.length - 1
+      ? words.includes(q)
+      : words.some((w) => w.startsWith(q)),
+  );
+}
+
+/** Model search kicks in from 3 characters (e.g. "i14", "iphone 14"). */
+function isModelQuery(query: string) {
+  return normalizeSearchText(query).replace(/\s+/g, "").length >= 3;
 }
 
 type SortKey = "latest" | "name" | "outstanding" | "purchased" | "stock";
@@ -112,6 +148,9 @@ export function SuppliersPage() {
   const [imeiLoading, setImeiLoading] = useState(false);
   const [imeiError, setImeiError] = useState<string | null>(null);
   const imeiAbortRef = useRef<AbortController | null>(null);
+  const [mobiles, setMobiles] = useState<SupplierMobile[] | null>(null);
+  const [mobilesError, setMobilesError] = useState<string | null>(null);
+  const mobilesRequested = useRef(false);
 
   async function load() {
     setLoading(true);
@@ -198,6 +237,37 @@ export function SuppliersPage() {
   }, [query]);
 
   const imeiMode = looksLikeImei(query);
+  const modelMode = !imeiMode && isModelQuery(query);
+
+  // Load every purchased mobile once, the first time a model is searched.
+  useEffect(() => {
+    if (!modelMode || mobilesRequested.current) return;
+    mobilesRequested.current = true;
+    void (async () => {
+      try {
+        const { data } = await api.listSupplierMobiles();
+        setMobiles(data);
+        setMobilesError(null);
+      } catch (err) {
+        mobilesRequested.current = false;
+        setMobilesError(
+          err instanceof Error ? err.message : "Could not load mobiles",
+        );
+      }
+    })();
+  }, [modelMode]);
+
+  const mobileMatches = useMemo(() => {
+    if (!modelMode || !mobiles) return [];
+    return mobiles
+      .filter((m) => matchesModel(m, query))
+      .sort(
+        (a, b) =>
+          new Date(b.purchaseDate).getTime() -
+          new Date(a.purchaseDate).getTime(),
+      );
+  }, [mobiles, query, modelMode]);
+  const mobilesLoading = modelMode && !mobiles && !mobilesError;
 
   const filtered = useMemo(() => {
     if (imeiMode) return [];
@@ -250,8 +320,8 @@ export function SuppliersPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search supplier or scan / type IMEI…"
-              aria-label="Search supplier or IMEI"
+              placeholder="Search supplier, model or IMEI…"
+              aria-label="Search supplier, model or IMEI"
               className="font-mono tracking-wide"
               inputMode="search"
               autoComplete="off"
@@ -285,13 +355,33 @@ export function SuppliersPage() {
         </div>
       ) : null}
 
+      {modelMode ? (
+        mobilesLoading ? (
+          <LoadingBlock label="Finding mobiles…" />
+        ) : mobilesError ? (
+          <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
+            {mobilesError}
+          </div>
+        ) : mobileMatches.length ? (
+          <MobileMatchesTable
+            mobiles={mobileMatches}
+            query={query}
+            showCost={isAdmin}
+          />
+        ) : null
+      ) : null}
+
       {loading ? (
         <LoadingBlock label="Loading suppliers…" />
       ) : imeiMode ? null : filtered.length === 0 ? (
+        modelMode && (mobilesLoading || mobileMatches.length) ? null : (
         <EmptyState
-          title={query.trim() ? "No matching suppliers" : "No suppliers yet"}
-          description="Suppliers appear here after you add stock from the Stock page. You can also scan an IMEI to trace a unit."
+          title={
+            query.trim() ? "No matching suppliers or mobiles" : "No suppliers yet"
+          }
+          description="Suppliers appear here after you add stock from the Stock page. Search a model (e.g. iPhone 14) or scan an IMEI to trace units."
         />
+        )
       ) : (
         <>
           <div className="mb-2.5 flex items-center justify-between gap-3 px-1 text-[13px] text-ink-500">
@@ -507,6 +597,139 @@ export function SuppliersPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Every purchase of the searched model, with the supplier it came from. */
+function MobileMatchesTable({
+  mobiles,
+  query,
+  showCost,
+}: {
+  mobiles: SupplierMobile[];
+  query: string;
+  showCost: boolean;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const reveal = useInfiniteReveal(mobiles, `${query}|${mobiles.length}`);
+  const supplierCount = new Set(
+    mobiles.map((m) => m.supplier?.id ?? "none"),
+  ).size;
+  const totalCost = mobiles.reduce((sum, m) => sum + (m.purchasePrice ?? 0), 0);
+
+  return (
+    <div className="mb-5">
+      <div className="mb-2.5 px-1 text-[13px] text-ink-500">
+        <b className="font-semibold text-ink-900">{mobiles.length}</b> mobile
+        {mobiles.length === 1 ? "" : "s"} matching “{query.trim()}” from{" "}
+        <b className="font-semibold text-ink-900">{supplierCount}</b> supplier
+        {supplierCount === 1 ? "" : "s"}
+      </div>
+      <div className="ledger-card">
+        <div className="ledger-scroll">
+          <table className="ledger-table">
+            <thead>
+              <tr>
+                <th>Mobile</th>
+                <th>IMEI / Serial</th>
+                <th>Purchase date</th>
+                <th>Supplier</th>
+                {showCost ? <th className="text-right">Purchase price</th> : null}
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reveal.visibleItems.map((m) => {
+                const sold = m.status === "SOLD";
+                return (
+                  <tr
+                    key={m.id}
+                    className={m.supplier ? "ledger-row-click" : undefined}
+                    onClick={() => {
+                      if (!m.supplier) return;
+                      navigate(`/suppliers/${m.supplier.id}`, {
+                        state: fromState(location),
+                      });
+                    }}
+                  >
+                    <td className="whitespace-normal">
+                      <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-ink-900">
+                        {m.mobileName}
+                        {m.condition === "USED" ? (
+                          <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                            Old
+                          </span>
+                        ) : null}
+                      </span>
+                      {mobileSpecLabel(m) ? (
+                        <span className="block text-[12px] text-ink-400">
+                          {mobileSpecLabel(m)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="font-mono text-[12.5px] tabular-nums text-ink-500">
+                      {formatStockUnitId(m)}
+                    </td>
+                    <td className="tabular-nums text-ink-500">
+                      {format(new Date(m.purchaseDate), "dd MMM yyyy")}
+                    </td>
+                    <td className="font-semibold text-ink-900">
+                      {m.supplier?.name || "—"}
+                    </td>
+                    {showCost ? (
+                      <td className="text-right tabular-nums text-ink-900">
+                        {formatINR(m.purchasePrice ?? 0)}
+                      </td>
+                    ) : null}
+                    <td>
+                      {sold ? (
+                        m.sale ? (
+                          <Link
+                            to={`/bills/${m.sale.billId}`}
+                            state={fromState(location)}
+                            className="text-[12.5px] font-semibold text-rose-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Sold · {m.sale.invoiceNumber}
+                          </Link>
+                        ) : (
+                          <span className="text-[12.5px] font-semibold text-rose-600">
+                            Sold
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[12.5px] font-semibold text-tide-600">
+                          In stock
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {showCost ? (
+              <tfoot>
+                <tr>
+                  <td colSpan={4}>Total</td>
+                  <td className="text-right tabular-nums">
+                    {formatINR(totalCost)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
+        </div>
+        <LoadMoreSentinel
+          sentinelRef={reveal.sentinelRef}
+          hasMore={reveal.hasMore}
+          loadingMore={reveal.loadingMore}
+          totalCount={reveal.totalCount}
+          showEnd={false}
+        />
+      </div>
     </div>
   );
 }

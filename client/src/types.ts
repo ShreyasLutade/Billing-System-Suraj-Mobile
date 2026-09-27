@@ -352,6 +352,25 @@ export type Purchase = {
   }>;
 };
 
+/** A purchased mobile (in stock or sold) with where it came from. */
+export type SupplierMobile = {
+  id: string;
+  mobileName: string;
+  platform: string;
+  condition: "NEW" | "USED" | string;
+  storage: string;
+  ram: string;
+  color: string;
+  imei: string | null;
+  serialNumber: string | null;
+  status: "AVAILABLE" | "SOLD" | string;
+  /** Null for staff — purchase amounts are admin only. */
+  purchasePrice: number | null;
+  purchaseDate: string;
+  supplier: { id: string; name: string } | null;
+  sale: { billId: string; invoiceNumber: string } | null;
+};
+
 export type SupplierDetail = Supplier & {
   purchases: Purchase[];
   payments?: SupplierPayment[];

@@ -19,6 +19,7 @@ import type {
   StockItem,
   Supplier,
   SupplierDetail,
+  SupplierMobile,
   SupplierPayment,
 } from "../types";
 
@@ -368,6 +369,8 @@ export const api = {
   stockHistory: (id: string) =>
     request<{ data: StockHistory }>(`/stock/${id}/history`),
   listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
+  listSupplierMobiles: () =>
+    request<{ data: SupplierMobile[] }>("/suppliers/mobiles"),
   getSupplier: (id: string) =>
     request<{ data: SupplierDetail }>(`/suppliers/${id}`),
   downloadSupplierMobilesExport: async (
