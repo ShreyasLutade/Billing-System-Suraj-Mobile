@@ -86,7 +86,7 @@ Edit in `server/.env`:
 
 ## Automatic Excel + database email
 
-Nightly Excel reports are emailed as a **full dump 3×/week** at **11:00 PM IST** on **Tuesday, Friday, and Sunday** (`REPORT_CRON`).  
+Nightly Excel reports are emailed as a **full dump every day** at **11:00 PM IST** (`REPORT_CRON`; only its minute and hour are used).  
 Each send also attaches a **SQLite `.db` snapshot** (when `DATABASE_URL` is `file:...`) so you can restore the shop from email.
 
 Admin UI: **/backup** — email Excel + `.db` now, or upload a `.db` to restore (overwrites live data; server restarts).
@@ -102,7 +102,7 @@ Railway typically **blocks outbound SMTP** (ports 465/587 time out). Use [Resend
 ```env
 REPORT_EMAIL_TO=surajmobile33556@gmail.com
 RESEND_API_KEY=re_xxxxxxxx
-REPORT_CRON=0 23 * * 0,2,5
+REPORT_CRON=0 23 * * *
 REPORT_CRON_ENABLED=true
 REPORT_CRON_SECRET=long-random-cron-secret
 ```
@@ -125,6 +125,6 @@ Admin can trigger manually: `POST /api/reports/send` with `{ "scope": "today" }`
 
 ### Railway Cron Job (optional but reliable)
 
-- Schedule: `0 23 * * 0,2,5` Asia/Kolkata (Tue + Fri + Sun 11:00 PM IST), or `30 17 * * 0,2,5` UTC  
+- Schedule: `0 23 * * *` Asia/Kolkata (daily 11:00 PM IST), or `30 17 * * *` UTC  
 - `POST https://YOUR_APP.up.railway.app/api/reports/cron/run`  
 - Header: `Authorization: Bearer <REPORT_CRON_SECRET>`
