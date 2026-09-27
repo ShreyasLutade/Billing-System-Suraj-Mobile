@@ -366,7 +366,7 @@ export function SuppliersPage() {
           <MobileMatchesTable
             mobiles={mobileMatches}
             query={query}
-            showCost={isAdmin}
+            showCost
           />
         ) : null
       ) : null}

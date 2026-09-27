@@ -1,10 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../lib/prisma";
-import {
-  IST_TIMEZONE,
-  istDateString,
-  isReportDayIST,
-} from "../lib/ist";
+import { IST_TIMEZONE, istDateString } from "../lib/ist";
 import { buildReportWorkbook, type ReportScope } from "./reportExcel";
 import {
   getReportMailConfig,
@@ -18,8 +14,8 @@ import {
 
 let started = false;
 
-/** Default: 11:00 PM IST on Tuesday, Friday, and Sunday. */
-const DEFAULT_REPORT_CRON = "0 23 * * 0,2,5";
+/** Default: 11:00 PM IST every day. */
+const DEFAULT_REPORT_CRON = "0 23 * * *";
 
 function cronHourMinute() {
   const expression = process.env.REPORT_CRON || DEFAULT_REPORT_CRON;
@@ -149,20 +145,10 @@ export async function runBillingReport(
 }
 
 /**
- * Scheduled job: full billing dump on Tuesday, Friday, and Sunday only.
+ * Scheduled job: full billing dump every day.
  * Manual admin endpoints can still send "today" or "all" anytime.
  */
 export async function runScheduledReports(options: { force?: boolean } = {}) {
-  if (!options.force && !isReportDayIST()) {
-    console.log(
-      "[reports] Not a report day (Tue/Fri/Sun IST) — skipping scheduled full dump",
-    );
-    return {
-      all: null as Awaited<ReturnType<typeof runBillingReport>> | null,
-      skippedDay: true as const,
-    };
-  }
-
   const all = await runBillingReport("all", options).catch((error) => {
     console.error("[reports] Full dump report failed:", error);
     return null;
@@ -173,16 +159,12 @@ export async function runScheduledReports(options: { force?: boolean } = {}) {
 
 /**
  * If the process missed the in-memory cron (common on Railway redeploys),
- * send the full dump once on Tue/Fri/Sun after the cron time if it hasn't gone out yet.
+ * send the full dump once after the cron time if today's hasn't gone out yet.
  */
 export async function catchUpMissedReports() {
   const { configured } = getReportMailConfig();
   if (!configured) return;
   if ((process.env.REPORT_CRON_ENABLED || "true").toLowerCase() === "false") {
-    return;
-  }
-  if (!isReportDayIST()) {
-    console.log("[reports] Catch-up skipped — not Tue/Fri/Sun (IST)");
     return;
   }
   if (!isPastReportCronTime()) {
@@ -214,8 +196,11 @@ export function startDailyReportScheduler() {
     return;
   }
 
-  // Tuesday + Friday + Sunday at 11:00 PM India time (full dump each time)
-  const expression = process.env.REPORT_CRON || DEFAULT_REPORT_CRON;
+  // Every day at the configured India time (default 11:00 PM). Only the
+  // minute/hour of REPORT_CRON are used, so an old weekday-only value still
+  // sends daily.
+  const { hour, minute } = cronHourMinute();
+  const expression = `${minute} ${hour} * * *`;
 
   if (!cron.validate(expression)) {
     console.error(`[reports] Invalid REPORT_CRON expression: ${expression}`);
@@ -237,7 +222,7 @@ export function startDailyReportScheduler() {
     `[reports] From ${from}${provider === "smtp" ? ` (SMTP user ${user})` : ""}`,
   );
   console.log(
-    "[reports] Full dump 3×/week: Tuesday + Friday + Sunday (IST)",
+    "[reports] Full dump daily (IST)",
   );
 
   // Non-blocking SMTP probe + same-day catch-up after listen window.

@@ -106,11 +106,10 @@ suppliersRouter.get("/", async (_req, res, next) => {
 /**
  * Every mobile ever purchased (in stock or sold) with its supplier and purchase
  * date, for the Suppliers page model search ("iPhone 14" → who sold us each one).
- * Purchase price is admin only.
+ * Babu shows supplier amounts to every user, so the price is always sent.
  */
-suppliersRouter.get("/mobiles", async (req, res, next) => {
+suppliersRouter.get("/mobiles", async (_req, res, next) => {
   try {
-    const isAdmin = req.user?.role === "ADMIN";
     const items = await prisma.stockItem.findMany({
       where: { NOT: { kind: "ACCESSORY" } },
       include: {
@@ -152,7 +151,7 @@ suppliersRouter.get("/mobiles", async (req, res, next) => {
         imei: item.imei ? item.imei.split("~")[0] : null,
         serialNumber: item.serialNumber,
         status: item.status,
-        purchasePrice: isAdmin ? item.purchasePrice : null,
+        purchasePrice: item.purchasePrice,
         purchaseDate: (purchase?.purchaseDate || item.createdAt).toISOString(),
         supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
         sale: bill ? { billId: bill.id, invoiceNumber: bill.invoiceNumber } : null,
