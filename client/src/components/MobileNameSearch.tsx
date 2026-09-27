@@ -168,7 +168,7 @@ export function MobileNameSearch({
           "flex cursor-text items-center gap-2 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition",
           compact ? "min-h-[40px]" : "min-h-[48px] gap-2.5",
           open &&
-            "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+            "border-tide-500 shadow-[0_0_0_4px_rgba(255,168,0,.2)]",
           disabled && "cursor-not-allowed opacity-55",
         )}
         onMouseDown={(event) => {
@@ -278,7 +278,7 @@ export function MobileNameSearch({
                       aria-selected={active}
                       className={
                         active
-                          ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-[#E7F8F1] dark:bg-tide-100/40"
+                          ? "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left bg-tide-100 dark:bg-tide-100/40"
                           : "flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 text-left hover:bg-[#F4F7FA] dark:hover:bg-surface-muted"
                       }
                       onMouseEnter={() => setHighlight(index)}

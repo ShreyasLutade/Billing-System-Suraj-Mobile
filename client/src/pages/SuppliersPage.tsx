@@ -521,7 +521,7 @@ export function SuppliersPage() {
               Click a supplier to open the ledger. Or{" "}
               <Link
                 to="/stock"
-                className="font-medium text-[#2563EB] hover:underline"
+                className="font-medium text-tide-600 hover:underline"
               >
                 go to Stock
               </Link>
@@ -606,13 +606,13 @@ function ImeiTraceCard({
                   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold",
                   sold
                     ? "bg-rose-50 text-rose-600"
-                    : "bg-[#E8F1FE] text-[#2563EB]",
+                    : "bg-[#E8F1FE] text-tide-600",
                 )}
               >
                 <span
                   className={clsx(
                     "h-1.5 w-1.5 rounded-full",
-                    sold ? "bg-rose-500" : "bg-[#3B82F6]",
+                    sold ? "bg-rose-500" : "bg-tide-500",
                   )}
                 />
                 {sold ? "Sold" : "In stock"}
@@ -695,7 +695,7 @@ function ImeiTraceCard({
                 <Link
                   to={`/bills/${sale.billId}`}
                   state={fromState(location)}
-                  className="max-w-[60%] truncate text-right text-[13px] font-semibold text-[#2563EB] underline-offset-2 hover:underline sm:text-sm"
+                  className="max-w-[60%] truncate text-right text-[13px] font-semibold text-tide-600 underline-offset-2 hover:underline sm:text-sm"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {sale.invoiceNumber}

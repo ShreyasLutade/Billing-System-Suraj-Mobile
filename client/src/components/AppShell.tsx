@@ -92,7 +92,7 @@ export function AppShell() {
         <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-ink-900/10 blur-3xl dark:bg-tide-400/10" />
       </div>
 
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/50 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-ink-100 bg-white pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
         <div
           className={clsx(
             "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",

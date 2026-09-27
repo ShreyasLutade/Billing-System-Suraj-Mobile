@@ -212,19 +212,19 @@ export function ExchangeMobileFields({
         </div>
         <div>
           <label
-            className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-[0.07em] text-[#0E9E76]"
+            className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-[0.07em] text-tide-600"
             htmlFor={`${idPrefix}-value`}
           >
             Exchange value
             <span className="ml-0.5 text-[#B76E00]"> *</span>
           </label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-tide-600">
               ₹
             </span>
             <input
               id={`${idPrefix}-value`}
-              className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)]"
+              className="w-full rounded-[11px] border border-tide-400/50 bg-tide-100 py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-tide-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,168,0,.2)]"
               type="number"
               min={0}
               step="0.01"

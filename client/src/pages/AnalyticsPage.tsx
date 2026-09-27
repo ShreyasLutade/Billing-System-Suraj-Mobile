@@ -389,7 +389,7 @@ export function AnalyticsPage() {
                 className="pointer-events-none absolute inset-0 opacity-50"
                 style={{
                   background:
-                    "radial-gradient(60% 90% at 92% 8%, rgba(18,184,134,.16), transparent 60%)",
+                    "radial-gradient(60% 90% at 92% 8%, rgba(255,168,0,.16), transparent 60%)",
                 }}
               />
               <div className="relative">
@@ -803,7 +803,7 @@ export function AnalyticsPage() {
                             className={clsx(
                               "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
                               on
-                                ? "bg-[#F1F5FF] font-semibold text-ink-900"
+                                ? "bg-tide-100/60 font-semibold text-ink-900"
                                 : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
                             )}
                             onClick={() => setSortKey(option.key)}
@@ -811,7 +811,7 @@ export function AnalyticsPage() {
                             {option.label}
                             <Check
                               className={clsx(
-                                "h-[15px] w-[15px] text-[#2563EB]",
+                                "h-[15px] w-[15px] text-tide-600",
                                 on ? "opacity-100" : "opacity-0",
                               )}
                               strokeWidth={2.6}

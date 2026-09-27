@@ -225,7 +225,7 @@ export function BillDetailPage() {
               {bill.invoiceNumber}
             </h1>
             {bill.withGst ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F0FE] px-[11px] py-1 text-xs font-semibold text-[#2563EB]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-[11px] py-1 text-xs font-semibold text-tide-600">
                 GST invoice
               </span>
             ) : fullyPaid ? (
@@ -324,7 +324,7 @@ export function BillDetailPage() {
         <div className="min-w-0 space-y-4">
           <section className="bd-card">
             <div className="flex items-center gap-3.5">
-              <div className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] bg-gradient-to-br from-[#12B886] to-[#0E9E76] text-white">
+              <div className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] bg-gradient-to-br from-[#ffe100] to-[#ffa800] text-[#1f1600]">
                 <UserRound className="h-[22px] w-[22px]" strokeWidth={2} />
               </div>
               <div className="min-w-0">
@@ -386,7 +386,7 @@ export function BillDetailPage() {
                         ) : null}
                       </div>
                       {specs ? (
-                        <p className="mt-1 text-[13px] font-medium text-[#0E9E76]">
+                        <p className="mt-1 text-[13px] font-medium text-tide-600">
                           {specs}
                         </p>
                       ) : null}
@@ -413,7 +413,7 @@ export function BillDetailPage() {
           {!bill.withGst && bill.isExchange ? (
             <section className="bd-card">
               <div className="mb-4 flex items-center gap-2.5">
-                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#E7F8F1] text-[#0E9E76]">
+                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-tide-100 text-tide-600">
                   <ArrowLeftRight className="h-[15px] w-[15px]" strokeWidth={2} />
                 </span>
                 <h2 className="font-display text-base font-semibold text-[#0E1626]">
@@ -1051,7 +1051,7 @@ function PurchaseHistoryCard({
             <Link
               to={`/suppliers/${row.supplier.id}`}
               state={fromState(location)}
-              className="text-sm font-semibold text-[#2563EB] underline-offset-2 hover:underline"
+              className="text-sm font-semibold text-tide-600 underline-offset-2 hover:underline"
             >
               {row.supplier.name}
             </Link>

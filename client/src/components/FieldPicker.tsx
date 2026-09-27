@@ -282,7 +282,7 @@ export function FieldPicker({
               <div className="border-t border-ink-100 p-2">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13.5px] font-semibold text-[#0E9E76] transition hover:bg-[#E7F8F1] dark:text-tide-400 dark:hover:bg-tide-100/40"
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13.5px] font-semibold text-tide-600 transition hover:bg-tide-100 dark:text-tide-400 dark:hover:bg-tide-100/40"
                   onClick={() => {
                     close();
                     footerAction.onClick();
@@ -322,7 +322,7 @@ export function FieldPicker({
           className={clsx(
             "flex min-h-[48px] min-w-0 items-center gap-2.5 overflow-hidden rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition dark:border-ink-100 dark:bg-surface-elevated",
             open &&
-              "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+              "border-tide-500 shadow-[0_0_0_4px_rgba(255,168,0,.2)]",
             disabled && "cursor-not-allowed opacity-55",
           )}
           onPointerDown={(event) => {
@@ -401,7 +401,7 @@ export function FieldPicker({
           className={clsx(
             "flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 py-2.5 text-left text-base transition dark:border-ink-100 dark:bg-surface-elevated dark:text-ink-900 sm:text-[14.5px]",
             open &&
-              "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+              "border-tide-500 shadow-[0_0_0_4px_rgba(255,168,0,.2)]",
             !value && "text-[#9AA6B6]",
             disabled && "cursor-not-allowed opacity-55",
           )}
@@ -541,7 +541,7 @@ function PickerOption({
       className={clsx(
         "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-[11px] py-2.5 pl-2.5 pr-1.5 text-left transition sm:gap-3 sm:px-2.5",
         active
-          ? "bg-[#E7F8F1] dark:bg-tide-100/40"
+          ? "bg-tide-100 dark:bg-tide-100/40"
           : "hover:bg-[#F4F7FA] active:bg-[#F4F7FA] dark:hover:bg-surface-muted dark:active:bg-surface-muted",
       )}
       onClick={onSelect}
@@ -598,7 +598,7 @@ function PickerOption({
 
       <Check
         className={clsx(
-          "hidden h-[18px] w-[18px] shrink-0 text-[#0E9E76] transition dark:text-tide-400 sm:block",
+          "hidden h-[18px] w-[18px] shrink-0 text-tide-600 transition dark:text-tide-400 sm:block",
           active ? "opacity-100" : "opacity-0",
         )}
         strokeWidth={2.6}
