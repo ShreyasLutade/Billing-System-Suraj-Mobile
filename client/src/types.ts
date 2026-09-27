@@ -369,6 +369,7 @@ export type SupplierMobile = {
   purchaseDate: string;
   supplier: { id: string; name: string } | null;
   sale: { billId: string; invoiceNumber: string } | null;
+  purchase: { id: string; supplierId: string } | null;
 };
 
 export type SupplierDetail = Supplier & {

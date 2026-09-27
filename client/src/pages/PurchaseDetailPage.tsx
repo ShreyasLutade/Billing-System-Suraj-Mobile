@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
@@ -62,6 +62,13 @@ export function PurchaseDetailPage() {
   const from = readFromState(location.state);
   const origin = readOriginState(location.state);
   const supplierState = origin ? { from: origin } : undefined;
+  // Set when opened from the Suppliers page model search — mark that unit.
+  const highlightStockId =
+    location.state && typeof location.state === "object"
+      ? ((location.state as { highlightStockId?: unknown }).highlightStockId as
+          | string
+          | undefined)
+      : undefined;
   const { isAdmin } = useAuth();
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +107,16 @@ export function PurchaseDetailPage() {
       active = false;
     };
   }, [purchaseId, supplierId]);
+
+  // Bring the highlighted unit into view once, after the purchase loads.
+  const scrolledToHighlight = useRef(false);
+  useEffect(() => {
+    if (!purchase || !highlightStockId || scrolledToHighlight.current) return;
+    scrolledToHighlight.current = true;
+    document
+      .querySelector(`[data-stock-id="${CSS.escape(highlightStockId)}"]`)
+      ?.scrollIntoView({ block: "center" });
+  }, [purchase, highlightStockId]);
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -218,6 +235,7 @@ export function PurchaseDetailPage() {
                 const item = row.stockItem;
                 const sold = item.status === "SOLD";
                 const billId = item.soldBillId;
+                const highlighted = item.id === highlightStockId;
                 const openBill = () => {
                   if (sold && billId) {
                     navigate(`/bills/${billId}`, { state: fromState(location) });
@@ -227,6 +245,7 @@ export function PurchaseDetailPage() {
                 return (
                   <div
                     key={row.id}
+                    data-stock-id={item.id}
                     role={sold && billId ? "link" : undefined}
                     tabIndex={sold && billId ? 0 : undefined}
                     onClick={openBill}
@@ -249,6 +268,9 @@ export function PurchaseDetailPage() {
                       sold &&
                         billId &&
                         "cursor-pointer hover:bg-rose-50 dark:hover:!bg-rose-950/60",
+                      highlighted &&
+                        "shadow-[inset_4px_0_0_rgb(var(--color-tide-500)),inset_0_0_0_2px_rgb(var(--color-tide-500)/0.55)]",
+                      highlighted && !sold && "!bg-tide-100",
                     )}
                     title={
                       sold && billId

@@ -643,14 +643,21 @@ function MobileMatchesTable({
             <tbody>
               {reveal.visibleItems.map((m) => {
                 const sold = m.status === "SOLD";
+                // Open the purchase this unit came in on (the mobile detail
+                // page), falling back to the supplier ledger.
+                const target = m.purchase
+                  ? `/suppliers/${m.purchase.supplierId}/purchases/${m.purchase.id}`
+                  : m.supplier
+                    ? `/suppliers/${m.supplier.id}`
+                    : null;
                 return (
                   <tr
                     key={m.id}
-                    className={m.supplier ? "ledger-row-click" : undefined}
+                    className={target ? "ledger-row-click" : undefined}
                     onClick={() => {
-                      if (!m.supplier) return;
-                      navigate(`/suppliers/${m.supplier.id}`, {
-                        state: fromState(location),
+                      if (!target) return;
+                      navigate(target, {
+                        state: { ...fromState(location), highlightStockId: m.id },
                       });
                     }}
                   >
