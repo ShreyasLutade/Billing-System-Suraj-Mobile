@@ -24,6 +24,10 @@ function formatDate(value: string) {
 const COL_TEMPLATE =
   "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_max-content_max-content]";
 
+/** Same columns without "Purchase price" — staff never see cost. */
+const COL_TEMPLATE_STAFF =
+  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_max-content_max-content]";
+
 const ROW_GRID = "col-span-full grid grid-cols-subgrid items-center";
 
 function toEditUnit(item: PurchaseStockRef, purchase: Purchase): StockItem {
@@ -180,8 +184,8 @@ export function PurchaseDetailPage() {
         </h1>
         <p className="mt-1 text-sm text-ink-500">
           {purchase.condition === "USED" ? "Second hand" : "New"} ·{" "}
-          {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"} ·{" "}
-          {formatINR(purchase.totalAmount)}
+          {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"}
+          {isAdmin ? <> · {formatINR(purchase.totalAmount)}</> : null}
           {purchase.paidAt ? " · Paid" : " · Unpaid"}
         </p>
       </div>
@@ -200,7 +204,12 @@ export function PurchaseDetailPage() {
       ) : (
         <div className="ledger-card">
           <div className="ledger-scroll">
-            <div className={clsx("min-w-[52rem] grid", COL_TEMPLATE)}>
+            <div
+              className={clsx(
+                "grid",
+                isAdmin ? COL_TEMPLATE : COL_TEMPLATE_STAFF,
+              )}
+            >
               <div
                 className={clsx(
                   ROW_GRID,
@@ -222,9 +231,11 @@ export function PurchaseDetailPage() {
                 <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
                   IMEI / Serial
                 </div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2 text-right dark:border-[rgb(var(--color-line))]">
-                  Purchase price
-                </div>
+                {isAdmin ? (
+                  <div className="border-r border-[#EEF1F5] px-3 py-2 text-right dark:border-[rgb(var(--color-line))]">
+                    Purchase price
+                  </div>
+                ) : null}
                 <div className="border-r border-[#EEF1F5] px-2 py-2 dark:border-[rgb(var(--color-line))]">
                   Status
                 </div>
@@ -318,14 +329,16 @@ export function PurchaseDetailPage() {
                     >
                       {formatStockUnitId(item)}
                     </div>
-                    <div
-                      className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1.5 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
-                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
-                      )}
-                    >
-                      {formatINR(item.purchasePrice)}
-                    </div>
+                    {isAdmin ? (
+                      <div
+                        className={clsx(
+                          "border-r border-[#EEF1F5] px-3 py-1.5 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
+                          sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
+                        )}
+                      >
+                        {formatINR(item.purchasePrice)}
+                      </div>
+                    ) : null}
                     <div className="relative z-20 whitespace-nowrap border-r border-[#EEF1F5] px-2 py-1.5 dark:border-[rgb(var(--color-line))]">
                       {sold ? (
                         <div className="relative z-20 space-y-0.5">

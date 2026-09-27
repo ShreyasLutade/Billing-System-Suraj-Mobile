@@ -364,7 +364,8 @@ export type SupplierMobile = {
   imei: string | null;
   serialNumber: string | null;
   status: "AVAILABLE" | "SOLD" | string;
-  purchasePrice: number;
+  /** Null for staff — purchase amounts are admin only. */
+  purchasePrice: number | null;
   purchaseDate: string;
   supplier: { id: string; name: string } | null;
   sale: { billId: string; invoiceNumber: string } | null;

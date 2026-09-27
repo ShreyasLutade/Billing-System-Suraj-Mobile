@@ -145,11 +145,13 @@ export function SupplierDetailPage() {
             · {data.stockAvailable} in stock · {data.purchaseCount} purchase
             {data.purchaseCount === 1 ? "" : "s"}
           </p>
-          <p className="mt-2 text-sm">
-            <span className="rounded border border-ink-200 bg-ink-50 px-2 py-0.5 font-semibold text-ink-900">
-              Outstanding {formatINR(data.outstanding)}
-            </span>
-          </p>
+          {isAdmin ? (
+            <p className="mt-2 text-sm">
+              <span className="rounded border border-ink-200 bg-ink-50 px-2 py-0.5 font-semibold text-ink-900">
+                Outstanding {formatINR(data.outstanding)}
+              </span>
+            </p>
+          ) : null}
           {isAdmin ? (
             <div className="mt-3 flex gap-2">
               <button
@@ -219,12 +221,12 @@ export function SupplierDetailPage() {
         ) : (
           <div className="ledger-card">
             <div className="ledger-scroll">
-              <table className="ledger-table min-w-[28rem]">
+              <table className="ledger-table">
                 <thead>
                   <tr>
                     <th>Date</th>
                     <th className="text-right">Qty</th>
-                    <th className="text-right">Amount</th>
+                    {isAdmin ? <th className="text-right">Amount</th> : null}
                     <th className="text-right">Status</th>
                   </tr>
                 </thead>
@@ -267,9 +269,11 @@ export function SupplierDetailPage() {
                         <td className="text-right text-base font-semibold tabular-nums text-ink-900">
                           {p.items.length}
                         </td>
-                        <td className="text-right tabular-nums font-semibold text-ink-900">
-                          {formatINR(p.totalAmount)}
-                        </td>
+                        {isAdmin ? (
+                          <td className="text-right tabular-nums font-semibold text-ink-900">
+                            {formatINR(p.totalAmount)}
+                          </td>
+                        ) : null}
                         <td className="text-right">
                           {paid ? (
                             <span className="inline-flex items-center gap-1 rounded border border-tide-500/30 bg-tide-100/80 px-2 py-1 text-xs font-semibold text-bright dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400">
@@ -311,12 +315,12 @@ export function SupplierDetailPage() {
         ) : (
           <div className="ledger-card">
             <div className="ledger-scroll">
-              <table className="ledger-table min-w-[36rem]">
+              <table className="ledger-table">
                 <thead>
                   <tr>
                     <th>Product</th>
                     <th>IMEI / Serial</th>
-                    <th className="text-right">Price</th>
+                    {isAdmin ? <th className="text-right">Price</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -342,9 +346,11 @@ export function SupplierDetailPage() {
                       <td className="font-mono text-ink-500">
                         {formatStockUnitId(item)}
                       </td>
-                      <td className="text-right tabular-nums font-bold text-ink-900">
-                        {formatINR(item.purchasePrice)}
-                      </td>
+                      {isAdmin ? (
+                        <td className="text-right tabular-nums font-bold text-ink-900">
+                          {formatINR(item.purchasePrice)}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -404,9 +410,11 @@ export function SupplierDetailPage() {
                   <span className="text-ink-500">Qty · </span>
                   {confirmPurchase.items.length}
                 </p>
-                <p className="text-base font-semibold text-ink-900">
-                  Amount {formatINR(confirmPurchase.totalAmount)}
-                </p>
+                {isAdmin ? (
+                  <p className="text-base font-semibold text-ink-900">
+                    Amount {formatINR(confirmPurchase.totalAmount)}
+                  </p>
+                ) : null}
                 <p className="text-ink-500">
                   This will reduce outstanding for {data.name}.
                 </p>

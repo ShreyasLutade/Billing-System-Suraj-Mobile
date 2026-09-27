@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowDownUp, ChevronDown, Phone, Search, Smartphone } from "lucide-react";
 import clsx from "clsx";
+import { useAuth } from "../auth/AuthContext";
 import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
 import {
   EmptyState,
@@ -86,6 +87,9 @@ const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "stock", label: "In stock" },
 ];
 
+/** Sort keys based on purchase amounts — admin only. */
+const COST_SORT_KEYS: SortKey[] = ["outstanding", "purchased"];
+
 function supplierSortLabel(key: SortKey, dir: SortDir) {
   if (key === "latest") return dir === -1 ? "Newest" : "Oldest";
   if (key === "name") return dir === 1 ? "A → Z" : "Z → A";
@@ -137,10 +141,17 @@ export function SuppliersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useSessionState("suppliers.query", "");
-  const [sortKey, setSortKey] = useSessionState<SortKey>(
+  const { isAdmin } = useAuth();
+  const [storedSortKey, setSortKey] = useSessionState<SortKey>(
     "suppliers.sortKey",
     "latest",
   );
+  // Staff never see purchase amounts, so they can't sort by them either.
+  const sortKey: SortKey =
+    !isAdmin && COST_SORT_KEYS.includes(storedSortKey) ? "latest" : storedSortKey;
+  const sortFieldOptions = isAdmin
+    ? SORT_FIELD_OPTIONS
+    : SORT_FIELD_OPTIONS.filter((option) => !COST_SORT_KEYS.includes(option.key));
   const [sortDir, setSortDir] = useSessionState<SortDir>("suppliers.sortDir", -1);
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
@@ -349,7 +360,7 @@ export function SuppliersPage() {
             ) : imeiError ? (
               <EmptyState title={imeiError} description="Try another IMEI." />
             ) : imeiTrace ? (
-              <ImeiTraceCard trace={imeiTrace} />
+              <ImeiTraceCard trace={imeiTrace} showCost={isAdmin} />
             ) : null}
           </div>
         </div>
@@ -366,7 +377,7 @@ export function SuppliersPage() {
           <MobileMatchesTable
             mobiles={mobileMatches}
             query={query}
-            showCost
+            showCost={isAdmin}
           />
         ) : null
       ) : null}
@@ -464,7 +475,7 @@ export function SuppliersPage() {
                     Sort by
                   </p>
                   <div className="space-y-0.5">
-                    {SORT_FIELD_OPTIONS.map((option) => {
+                    {sortFieldOptions.map((option) => {
                       const on = sortKey === option.key;
                       return (
                         <button
@@ -500,16 +511,20 @@ export function SuppliersPage() {
 
           <div className="ledger-card">
             <div className="ledger-scroll">
-              <table className="ledger-table min-w-[48rem]">
+              <table className="ledger-table">
                 <thead>
                   <tr>
                     <th>Supplier</th>
                     <th>Phone</th>
                     <th className="text-right">In stock</th>
                     <th className="text-right">Qty purchased</th>
-                    <th className="text-right">Purchased</th>
-                    <th className="text-right">Paid</th>
-                    <th className="text-right">Outstanding</th>
+                    {isAdmin ? (
+                      <>
+                        <th className="text-right">Purchased</th>
+                        <th className="text-right">Paid</th>
+                        <th className="text-right">Outstanding</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -547,15 +562,19 @@ export function SuppliersPage() {
                       <td className="text-right tabular-nums text-ink-500">
                         {s.stockPurchased ?? s.stockAvailable + s.stockSold}
                       </td>
-                      <td className="text-right tabular-nums text-ink-500">
-                        {formatINR(s.totalPurchased)}
-                      </td>
-                      <td className="text-right tabular-nums text-ink-500">
-                        {formatINR(s.totalPaid)}
-                      </td>
-                      <td className="text-right tabular-nums font-bold text-ink-900">
-                        {formatINR(s.outstanding)}
-                      </td>
+                      {isAdmin ? (
+                        <>
+                          <td className="text-right tabular-nums text-ink-500">
+                            {formatINR(s.totalPurchased)}
+                          </td>
+                          <td className="text-right tabular-nums text-ink-500">
+                            {formatINR(s.totalPaid)}
+                          </td>
+                          <td className="text-right tabular-nums font-bold text-ink-900">
+                            {formatINR(s.outstanding)}
+                          </td>
+                        </>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -564,15 +583,19 @@ export function SuppliersPage() {
                     <td colSpan={2}>Total</td>
                     <td className="text-right tabular-nums">{totals.stock}</td>
                     <td className="text-right tabular-nums">{totals.qty}</td>
-                    <td className="text-right tabular-nums">
-                      {formatINR(totals.purchased)}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {formatINR(totals.paid)}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {formatINR(totals.outstanding)}
-                    </td>
+                    {isAdmin ? (
+                      <>
+                        <td className="text-right tabular-nums">
+                          {formatINR(totals.purchased)}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {formatINR(totals.paid)}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {formatINR(totals.outstanding)}
+                        </td>
+                      </>
+                    ) : null}
                   </tr>
                 </tfoot>
               </table>
@@ -754,7 +777,13 @@ function formatPhoneGroups(phone: string) {
   return phone;
 }
 
-function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
+function ImeiTraceCard({
+  trace,
+  showCost,
+}: {
+  trace: StockImeiTrace;
+  showCost: boolean;
+}) {
   const location = useLocation();
   const { stock, supplier, purchaseDate, costPrice, sale } = trace;
   const sold = stock.status === "SOLD" || Boolean(sale);
@@ -858,14 +887,16 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
         ) : null}
 
         <div className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
-          <div className="flex items-center justify-between gap-3 rounded-[16px] bg-[#F3F5F8] px-4 py-3.5 dark:bg-surface-muted">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-              Cost price
-            </p>
-            <p className="font-display text-xl font-semibold tabular-nums tracking-tight text-ink-900 sm:text-2xl">
-              {formatINR(costPrice)}
-            </p>
-          </div>
+          {showCost ? (
+            <div className="flex items-center justify-between gap-3 rounded-[16px] bg-[#F3F5F8] px-4 py-3.5 dark:bg-surface-muted">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+                Cost price
+              </p>
+              <p className="font-display text-xl font-semibold tabular-nums tracking-tight text-ink-900 sm:text-2xl">
+                {formatINR(costPrice)}
+              </p>
+            </div>
+          ) : null}
 
           <div className="rounded-[16px] border border-[#EEF1F5] px-4 dark:border-ink-100">
             <div className="flex items-center justify-between gap-3 border-b border-[#EEF1F5] py-3.5 dark:border-ink-100">
