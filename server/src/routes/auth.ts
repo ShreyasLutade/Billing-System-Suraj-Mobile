@@ -264,39 +264,27 @@ const SEED_USERS: Array<{
   role: Role;
 }> = [
   {
-    phone: "9302222585",
-    password: "Surajbudhwani@123",
-    name: "Suraj Admin",
-    role: "ADMIN",
-  },
-  {
     phone: "7038006342",
     password: "Shreyas@026",
     name: "Shreyas Admin",
     role: "ADMIN",
   },
   {
-    phone: "6265086510",
+    phone: "7581817575",
+    password: "Babumobile@123",
+    name: "Hareesh",
+    role: "ADMIN",
+  },
+  {
+    phone: "7581887575",
     password: "Shop@123",
-    name: "Anuj",
+    name: "Staff-1",
     role: "STAFF",
   },
   {
-    phone: "8989192440",
+    phone: "7581847575",
     password: "Shop@123",
-    name: "Chhatresh",
-    role: "STAFF",
-  },
-  {
-    phone: "8962948807",
-    password: "Shop@123",
-    name: "Mayank",
-    role: "STAFF",
-  },
-  {
-    phone: "9893179033",
-    password: "Shop@123",
-    name: "Anish",
+    name: "Staff-2",
     role: "STAFF",
   },
 ];
