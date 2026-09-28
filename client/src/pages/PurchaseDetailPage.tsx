@@ -185,8 +185,16 @@ export function PurchaseDetailPage() {
         <p className="mt-1 text-sm text-ink-500">
           {purchase.condition === "USED" ? "Second hand" : "New"} ·{" "}
           {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"}
-          {isAdmin ? <> · {formatINR(purchase.totalAmount)}</> : null}
-          {purchase.paidAt ? " · Paid" : " · Unpaid"}
+          {isAdmin ? (
+            <>
+              {" "}· {formatINR(purchase.totalAmount)}
+              {purchase.paidAt
+                ? " · Paid"
+                : (purchase.paidAmount ?? 0) > 0
+                  ? ` · ${formatINR(Math.max(purchase.totalAmount - (purchase.paidAmount ?? 0), 0))} left`
+                  : " · Unpaid"}
+            </>
+          ) : null}
         </p>
       </div>
 

@@ -21,6 +21,12 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+/** What's still owed on a purchase (0 once marked paid). */
+function purchaseRemaining(p: Purchase) {
+  if (p.paidAt) return 0;
+  return Math.max(p.totalAmount - (p.paidAmount ?? 0), 0);
+}
+
 function addedByLabel(name?: string | null) {
   const first = name?.trim().split(/\s+/)[0];
   return first || null;
@@ -44,6 +50,16 @@ export function SupplierDetailPage() {
   );
   const [confirmPurchase, setConfirmPurchase] = useState<Purchase | null>(null);
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [payMode, setPayMode] = useState<"full" | "custom">("full");
+  const [customAmount, setCustomAmount] = useState("");
+  const [payError, setPayError] = useState<string | null>(null);
+
+  function openMarkPaid(purchase: Purchase) {
+    setPayMode("full");
+    setCustomAmount("");
+    setPayError(null);
+    setConfirmPurchase(purchase);
+  }
 
   async function load() {
     if (!id) return;
@@ -65,14 +81,27 @@ export function SupplierDetailPage() {
 
   async function confirmMarkPaid() {
     if (!confirmPurchase) return;
+    let amount: number | undefined;
+    if (payMode === "custom") {
+      amount = Number(customAmount);
+      const remaining = purchaseRemaining(confirmPurchase);
+      if (!customAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+        setPayError("Enter the amount paid");
+        return;
+      }
+      if (amount > remaining + 0.005) {
+        setPayError(`Amount can't be more than ${formatINR(remaining)} left`);
+        return;
+      }
+    }
     setMarkingPaid(true);
-    setError(null);
+    setPayError(null);
     try {
-      await api.markPurchasePaid(confirmPurchase.id);
+      await api.markPurchasePaid(confirmPurchase.id, amount);
       setConfirmPurchase(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to mark as paid");
+      setPayError(err instanceof Error ? err.message : "Failed to mark as paid");
     } finally {
       setMarkingPaid(false);
     }
@@ -226,13 +255,18 @@ export function SupplierDetailPage() {
                   <tr>
                     <th>Date</th>
                     <th className="text-right">Qty</th>
-                    {isAdmin ? <th className="text-right">Amount</th> : null}
-                    <th className="text-right">Status</th>
+                    {isAdmin ? (
+                      <>
+                        <th className="text-right">Amount</th>
+                        <th className="text-right">Status</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
                   {data.purchases.map((p) => {
                     const paid = Boolean(p.paidAt);
+                    const partPaid = !paid && (p.paidAmount ?? 0) > 0;
                     const addedBy = addedByLabel(p.createdByName);
                     return (
                       <tr
@@ -270,10 +304,10 @@ export function SupplierDetailPage() {
                           {p.items.length}
                         </td>
                         {isAdmin ? (
+                          <>
                           <td className="text-right tabular-nums font-semibold text-ink-900">
                             {formatINR(p.totalAmount)}
                           </td>
-                        ) : null}
                         <td className="text-right">
                           {paid ? (
                             <span className="inline-flex items-center gap-1 rounded border border-tide-500/30 bg-tide-100/80 px-2 py-1 text-xs font-semibold text-bright dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400">
@@ -286,13 +320,20 @@ export function SupplierDetailPage() {
                               className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-300"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setConfirmPurchase(p);
+                                openMarkPaid(p);
                               }}
                             >
                               Mark paid
                             </button>
                           )}
+                          {partPaid ? (
+                            <span className="mt-1 block text-[11px] font-medium tabular-nums text-ink-500">
+                              {formatINR(purchaseRemaining(p))} left
+                            </span>
+                          ) : null}
                         </td>
+                          </>
+                        ) : null}
                       </tr>
                     );
                   })}
@@ -361,7 +402,7 @@ export function SupplierDetailPage() {
       ) : null}
 
       <AnimatePresence>
-        {confirmPurchase ? (
+        {isAdmin && confirmPurchase ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}
@@ -410,15 +451,88 @@ export function SupplierDetailPage() {
                   <span className="text-ink-500">Qty · </span>
                   {confirmPurchase.items.length}
                 </p>
-                {isAdmin ? (
-                  <p className="text-base font-semibold text-ink-900">
-                    Amount {formatINR(confirmPurchase.totalAmount)}
+                <p className="text-base font-semibold text-ink-900">
+                  Amount {formatINR(confirmPurchase.totalAmount)}
+                </p>
+                {(confirmPurchase.paidAmount ?? 0) > 0 ? (
+                  <p>
+                    <span className="text-ink-500">Already paid · </span>
+                    {formatINR(confirmPurchase.paidAmount ?? 0)}
+                    <span className="text-ink-500"> · Left · </span>
+                    <span className="font-semibold text-ink-900">
+                      {formatINR(purchaseRemaining(confirmPurchase))}
+                    </span>
                   </p>
                 ) : null}
-                <p className="text-ink-500">
-                  This will reduce outstanding for {data.name}.
-                </p>
+
+                <div
+                  className="grid grid-cols-2 gap-2 pt-2"
+                  role="radiogroup"
+                  aria-label="How much was paid"
+                >
+                  {(
+                    [
+                      { value: "full", label: "Fully paid" },
+                      { value: "custom", label: "Custom" },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={payMode === option.value}
+                      className={clsx(
+                        "rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                        payMode === option.value
+                          ? "border-tide-500 bg-tide-100/80 text-bright dark:border-tide-400 dark:bg-tide-400/15 dark:text-tide-400"
+                          : "border-ink-100 text-ink-600 hover:bg-ink-50",
+                      )}
+                      onClick={() => {
+                        setPayMode(option.value);
+                        setPayError(null);
+                      }}
+                      disabled={markingPaid}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                {payMode === "custom" ? (
+                  <label className="block pt-1">
+                    <span className="mb-1 block text-xs font-semibold text-ink-500">
+                      Amount paid now (max {formatINR(purchaseRemaining(confirmPurchase))})
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="0.01"
+                      className="field w-full"
+                      placeholder="0"
+                      value={customAmount}
+                      autoFocus
+                      onChange={(event) => {
+                        setCustomAmount(event.target.value);
+                        setPayError(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void confirmMarkPaid();
+                      }}
+                      disabled={markingPaid}
+                    />
+                  </label>
+                ) : (
+                  <p className="text-ink-500">
+                    This will clear the full {formatINR(purchaseRemaining(confirmPurchase))} for {data.name}.
+                  </p>
+                )}
               </div>
+              {payError ? (
+                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
+                  {payError}
+                </p>
+              ) : null}
               <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
@@ -435,7 +549,7 @@ export function SupplierDetailPage() {
                   disabled={markingPaid}
                 >
                   <Check className="h-4 w-4" />
-                  {markingPaid ? "Saving…" : "Confirm paid"}
+                  {markingPaid ? "Saving…" : "Confirm"}
                 </button>
               </div>
             </motion.div>

@@ -291,6 +291,8 @@ model Purchase {
   condition    String    @default("NEW")
   /// When set, this purchase is fully paid to the supplier
   paidAt       DateTime?
+  /// Paid so far while not fully paid (custom part payments)
+  paidAmount   Float     @default(0)
   createdByUserId String?
   createdByName   String?
   createdAt    DateTime  @default(now())

@@ -25,7 +25,12 @@ async function supplierLedgerStats(supplierId: string) {
     await Promise.all([
       prisma.purchase.findMany({
         where: { supplierId },
-        select: { totalAmount: true, paidAt: true, note: true },
+        select: {
+          totalAmount: true,
+          paidAt: true,
+          paidAmount: true,
+          note: true,
+        },
       }),
       prisma.stockItem.count({
         where: { supplierId, status: "AVAILABLE" },
@@ -43,7 +48,9 @@ async function supplierLedgerStats(supplierId: string) {
   for (const purchase of purchases) {
     const amount = purchase.totalAmount || 0;
     totalPurchased += amount;
-    if (purchase.paidAt) totalPaid += amount;
+    totalPaid += purchase.paidAt
+      ? amount
+      : Math.min(purchase.paidAmount || 0, amount);
   }
 
   totalPurchased = round2(totalPurchased);

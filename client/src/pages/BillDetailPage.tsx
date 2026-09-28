@@ -7,6 +7,7 @@ import {
   Check,
   Download,
   History,
+  PackageCheck,
   Pencil,
   Phone,
   RotateCcw,
@@ -107,7 +108,9 @@ export function BillDetailPage() {
     void loadBill();
   }, [loadBill]);
 
-  async function confirmDelete(mode: "delete" | "return" = "delete") {
+  async function confirmDelete(
+    mode: "delete" | "return" | "restock" = "delete",
+  ) {
     if (!bill || !isAdmin) return;
     setDeleting(true);
     setDeleteError(null);
@@ -120,7 +123,9 @@ export function BillDetailPage() {
           ? err.message
           : mode === "return"
             ? "Failed to return this bill to stock"
-            : "Failed to delete bill",
+            : mode === "restock"
+              ? "Failed to put these mobiles back in stock"
+              : "Failed to delete bill",
       );
     } finally {
       setDeleting(false);
@@ -893,7 +898,7 @@ export function BillDetailPage() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="delete-bill-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift"
+              className="w-full max-w-md overflow-hidden sm:max-w-lg rounded-3xl border border-white/70 bg-white shadow-lift"
               initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -920,6 +925,16 @@ export function BillDetailPage() {
               <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
                 {bill.items.some((item) => item.stockItemId) ? (
                   <p>
+                    <span className="font-semibold text-ink-800">
+                      Return to Stock
+                    </span>
+                    {" → "}bill removed, mobiles back in stock under their
+                    original supplier, as if never sold (customer changed
+                    their mind).
+                  </p>
+                ) : null}
+                {bill.items.some((item) => item.stockItemId) ? (
+                  <p>
                     <span className="font-semibold text-ink-800">Return</span>
                     {" → "}mobiles go back to second-hand stock (adds a Return
                     card).
@@ -941,17 +956,29 @@ export function BillDetailPage() {
               ) : null}
 
               <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
+                {bill.items.some((item) => item.stockItemId) ? (
+                  <button
+                    type="button"
+                    className="btn-secondary btn-outline-dark whitespace-nowrap"
+                    onClick={() => void confirmDelete("restock")}
+                    disabled={deleting}
+                  >
+                    <PackageCheck className="h-4 w-4" />
+                    {deleting ? "Working…" : "Return to Stock"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-secondary whitespace-nowrap"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
+                  className="btn-danger whitespace-nowrap"
                   onClick={() => void confirmDelete("delete")}
                   disabled={deleting}
                 >
@@ -961,7 +988,7 @@ export function BillDetailPage() {
                 {bill.items.some((item) => item.stockItemId) ? (
                   <button
                     type="button"
-                    className="btn-primary"
+                    className="btn-primary whitespace-nowrap"
                     onClick={() => void confirmDelete("return")}
                     disabled={deleting}
                   >

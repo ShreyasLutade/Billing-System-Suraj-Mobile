@@ -938,6 +938,11 @@ body,
   color: var(--app-ink) !important;
 }
 
+/* Secondary button that still needs to stand out (e.g. Return to Stock). */
+.babu-main .btn-secondary.btn-outline-dark {
+  border-color: var(--app-ink) !important;
+}
+
 .babu-main .tb-tabs {
   background: var(--app-field) !important;
 }

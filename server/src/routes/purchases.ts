@@ -399,8 +399,19 @@ purchasesRouter.patch("/:id/condition", requireAdmin, async (req, res, next) => 
   }
 });
 
-purchasesRouter.post("/:id/mark-paid", async (req, res, next) => {
+const markPaidSchema = z.object({
+  /** Omit to mark the whole purchase paid; otherwise a part payment. */
+  amount: z.number().positive().optional(),
+});
+
+purchasesRouter.post("/:id/mark-paid", requireAdmin, async (req, res, next) => {
   try {
+    const parsed = markPaidSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Enter a valid amount" });
+      return;
+    }
+
     const purchase = await prisma.purchase.findUnique({
       where: { id: req.params.id },
       include: {
@@ -417,9 +428,24 @@ purchasesRouter.post("/:id/mark-paid", async (req, res, next) => {
       return;
     }
 
+    const total = purchase.totalAmount || 0;
+    const alreadyPaid = Math.min(purchase.paidAmount || 0, total);
+    const remaining = Math.round((total - alreadyPaid) * 100) / 100;
+    const amount = parsed.data.amount ?? remaining;
+    if (amount > remaining + 0.005) {
+      res.status(400).json({
+        error: `Amount is more than the ₹${remaining.toLocaleString("en-IN")} left to pay`,
+      });
+      return;
+    }
+    const newPaid = Math.round((alreadyPaid + amount) * 100) / 100;
+    const fullyPaid = newPaid >= total - 0.005;
+
     const updated = await prisma.purchase.update({
       where: { id: purchase.id },
-      data: { paidAt: new Date() },
+      data: fullyPaid
+        ? { paidAt: new Date(), paidAmount: total }
+        : { paidAmount: newPaid },
       include: {
         supplier: true,
         items: { include: { stockItem: true } },

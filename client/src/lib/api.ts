@@ -198,7 +198,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  deleteBill: (id: string, mode: "delete" | "return" = "delete") =>
+  deleteBill: (
+    id: string,
+    mode: "delete" | "return" | "restock" = "delete",
+  ) =>
     request<{ data: { id: string; invoiceNumber: string; mode?: string } }>(
       `/bills/${id}`,
       {
@@ -519,9 +522,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  markPurchasePaid: (id: string) =>
+  /** No amount = mark the whole purchase paid; with amount = part payment. */
+  markPurchasePaid: (id: string, amount?: number) =>
     request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
       method: "POST",
+      body: JSON.stringify(amount === undefined ? {} : { amount }),
     }),
   getPurchase: (id: string) =>
     request<{ data: Purchase }>(`/purchases/${id}`),
