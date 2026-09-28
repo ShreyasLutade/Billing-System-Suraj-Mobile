@@ -168,10 +168,11 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
         ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
       ];
 
-  /** Account-menu item that jumps to the other counter. */
-  const switchTo = isRepair
-    ? { to: "/", label: "Mobile shop", icon: ReceiptText }
-    : { to: "/repair", label: "Repair shop", icon: Wrench };
+  // Repair shop is in development — "switch counter" menu item hidden.
+  // /** Account-menu item that jumps to the other counter. */
+  // const switchTo = isRepair
+  //   ? { to: "/", label: "Mobile shop", icon: ReceiptText }
+  //   : { to: "/repair", label: "Repair shop", icon: Wrench };
 
   function onMainNavClick() {
     // Header / bottom nav = fresh list. Detail → back keeps search via session.
@@ -227,6 +228,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
           <div className="babu-user-menu" ref={userMenuRef}>
             {userMenuOpen ? (
               <div className="babu-user-menu-pop" role="menu" aria-label="Account">
+                {/* Repair shop is in development.
                 <Link
                   to={switchTo.to}
                   role="menuitem"
@@ -235,6 +237,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                 >
                   <switchTo.icon /> {switchTo.label}
                 </Link>
+                */}
                 <button
                   type="button"
                   role="menuitem"
@@ -358,6 +361,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     <small>{user?.phone || "7581817575"}</small>
                   </div>
                 </div>
+                {/* Repair shop is in development.
                 <Link
                   to={switchTo.to}
                   onClick={() => setMobileMenuOpen(false)}
@@ -365,6 +369,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                 >
                   <switchTo.icon /> {switchTo.label}
                 </Link>
+                */}
                 <button type="button" className="babu-utility-button" onClick={toggleTheme}>
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
