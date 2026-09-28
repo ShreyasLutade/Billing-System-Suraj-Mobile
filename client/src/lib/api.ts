@@ -695,14 +695,21 @@ export function formatINR(amount: number) {
 }
 
 /** Display IMEI and/or serial for a stock unit. */
+/** Sold units bought back later keep their old ID as `ID~stockId`; show just ID. */
+function liveStockId(value?: string | null) {
+  return value ? value.split("~")[0] : value;
+}
+
 export function formatStockUnitId(item: {
   imei?: string | null;
   serialNumber?: string | null;
 }) {
-  if (item.imei && item.serialNumber) {
-    return `${item.imei} · SN ${item.serialNumber}`;
+  const imei = liveStockId(item.imei);
+  const serialNumber = liveStockId(item.serialNumber);
+  if (imei && serialNumber) {
+    return `${imei} · SN ${serialNumber}`;
   }
-  return item.imei || item.serialNumber || "—";
+  return imei || serialNumber || "—";
 }
 
 export function formatFinanceCompanies(

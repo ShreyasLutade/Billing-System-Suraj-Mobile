@@ -6,6 +6,7 @@ import { upsertSupplierByName } from "../services/suppliers";
 import { upsertPhoneModel } from "../services/phoneModels";
 import { requireAdmin } from "../middleware/auth";
 import { setPurchaseCondition } from "../services/fixPurchaseCondition";
+import { retireStockImei } from "../services/stockSync";
 
 export const purchasesRouter = Router();
 
@@ -223,26 +224,43 @@ purchasesRouter.post("/", async (req, res, next) => {
       return;
     }
 
+    // Only IMEIs/serials still in stock block a new purchase. A sold phone can be
+    // bought back: its old row keeps its history under a retired IMEI (same
+    // as a re-exchange in stockSync).
+    const soldImeiOwners: Array<{ id: string; imei: string }> = [];
     if (imeis.length) {
       const existingImei = await prisma.stockItem.findMany({
         where: { imei: { in: imeis } },
-        select: { imei: true },
+        select: { id: true, imei: true, status: true },
       });
-      if (existingImei.length) {
+      const inStock = existingImei.filter((e) => e.status === "AVAILABLE");
+      if (inStock.length) {
         res.status(409).json({
-          error: `IMEI already in stock: ${existingImei.map((e) => e.imei).join(", ")}`,
+          error: `IMEI already in stock: ${inStock.map((e) => e.imei).join(", ")}`,
         });
         return;
       }
+      for (const e of existingImei) {
+        if (e.imei) soldImeiOwners.push({ id: e.id, imei: e.imei });
+      }
     }
+    const soldSerialOwners: Array<{ id: string; serialNumber: string }> = [];
     if (serials.length) {
       const existingSerial = await prisma.stockItem.findMany({
         where: { serialNumber: { in: serials } },
-        select: { serialNumber: true },
+        select: { id: true, serialNumber: true, status: true },
       });
-      if (existingSerial.length) {
+      for (const e of existingSerial) {
+        if (e.status !== "AVAILABLE" && e.serialNumber) {
+          soldSerialOwners.push({ id: e.id, serialNumber: e.serialNumber });
+        }
+      }
+      const inStockSerials = existingSerial.filter(
+        (e) => e.status === "AVAILABLE",
+      );
+      if (inStockSerials.length) {
         res.status(409).json({
-          error: `Serial already in stock: ${existingSerial
+          error: `Serial already in stock: ${inStockSerials
             .map((e) => e.serialNumber)
             .join(", ")}`,
         });
@@ -278,6 +296,19 @@ purchasesRouter.post("/", async (req, res, next) => {
     );
 
     const purchase = await prisma.$transaction(async (tx) => {
+      for (const owner of soldImeiOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { imei: retireStockImei(owner.imei, owner.id) },
+        });
+      }
+      for (const owner of soldSerialOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { serialNumber: retireStockImei(owner.serialNumber, owner.id) },
+        });
+      }
+
       const created = await tx.purchase.create({
         data: {
           supplierId: supplier!.id,
