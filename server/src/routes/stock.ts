@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { normalizeCapacity } from "../lib/capacity";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
-import { intakeKindFromNote } from "../services/stockSync";
+import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
 
 export const stockRouter = Router();
 
@@ -291,15 +291,18 @@ stockRouter.post("/accessories", async (req, res, next) => {
       return;
     }
 
+    // Only in-stock serials block; sold ones are retired in the transaction.
+    const soldSerialOwners: Array<{ id: string; serialNumber: string }> = [];
     for (const serial of serials) {
       const existing = await prisma.stockItem.findUnique({
         where: { serialNumber: serial },
-        select: { id: true },
+        select: { id: true, status: true },
       });
-      if (existing) {
+      if (existing?.status === "AVAILABLE") {
         res.status(409).json({ error: `Serial ${serial} is already in stock` });
         return;
       }
+      if (existing) soldSerialOwners.push({ id: existing.id, serialNumber: serial });
     }
 
     let supplier = parsed.data.supplierId
@@ -327,6 +330,13 @@ stockRouter.post("/accessories", async (req, res, next) => {
     );
 
     const created = await prisma.$transaction(async (tx) => {
+      for (const owner of soldSerialOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { serialNumber: retireStockImei(owner.serialNumber, owner.id) },
+        });
+      }
+
       const purchase = await tx.purchase.create({
         data: {
           supplierId: supplier!.id,
@@ -626,23 +636,22 @@ stockRouter.post("/", async (req, res, next) => {
     const imei = cleanId(data.imei) || null;
     const serialNumber = cleanId(data.serialNumber) || null;
 
-    if (imei) {
-      const existingImei = await prisma.stockItem.findUnique({ where: { imei } });
-      if (existingImei) {
-        res.status(409).json({ error: `IMEI ${imei} is already in stock` });
-        return;
-      }
+    // Only an in-stock IMEI/serial blocks; sold ones are retired below.
+    const soldImeiOwner = imei
+      ? await prisma.stockItem.findUnique({ where: { imei } })
+      : null;
+    if (soldImeiOwner?.status === "AVAILABLE") {
+      res.status(409).json({ error: `IMEI ${imei} is already in stock` });
+      return;
     }
-    if (serialNumber) {
-      const existingSerial = await prisma.stockItem.findUnique({
-        where: { serialNumber },
-      });
-      if (existingSerial) {
-        res
-          .status(409)
-          .json({ error: `Serial ${serialNumber} is already in stock` });
-        return;
-      }
+    const soldSerialOwner = serialNumber
+      ? await prisma.stockItem.findUnique({ where: { serialNumber } })
+      : null;
+    if (soldSerialOwner?.status === "AVAILABLE") {
+      res
+        .status(409)
+        .json({ error: `Serial ${serialNumber} is already in stock` });
+      return;
     }
 
     let supplier = data.supplierId
@@ -659,6 +668,21 @@ stockRouter.post("/", async (req, res, next) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      if (soldImeiOwner && imei) {
+        await tx.stockItem.update({
+          where: { id: soldImeiOwner.id },
+          data: { imei: retireStockImei(imei, soldImeiOwner.id) },
+        });
+      }
+      if (soldSerialOwner && serialNumber) {
+        await tx.stockItem.update({
+          where: { id: soldSerialOwner.id },
+          data: {
+            serialNumber: retireStockImei(serialNumber, soldSerialOwner.id),
+          },
+        });
+      }
+
       const purchase = await tx.purchase.create({
         data: {
           supplierId: supplier!.id,
