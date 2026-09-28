@@ -10,7 +10,6 @@ import {
   PackageCheck,
   Pencil,
   Phone,
-  RotateCcw,
   Share2,
   Trash2,
   Undo2,
@@ -109,7 +108,7 @@ export function BillDetailPage() {
   }, [loadBill]);
 
   async function confirmDelete(
-    mode: "delete" | "return" | "restock" = "delete",
+    mode: "delete" | "restock" = "delete",
   ) {
     if (!bill || !isAdmin) return;
     setDeleting(true);
@@ -121,11 +120,9 @@ export function BillDetailPage() {
       setDeleteError(
         err instanceof Error
           ? err.message
-          : mode === "return"
-            ? "Failed to return this bill to stock"
-            : mode === "restock"
-              ? "Failed to put these mobiles back in stock"
-              : "Failed to delete bill",
+          : mode === "restock"
+            ? "Failed to put these mobiles back in stock"
+            : "Failed to delete bill",
       );
     } finally {
       setDeleting(false);
@@ -932,13 +929,6 @@ export function BillDetailPage() {
                     original supplier, as if never sold (customer changed
                     their mind).
                   </p>
-                ) : null}
-                {bill.items.some((item) => item.stockItemId) ? (
-                  <p>
-                    <span className="font-semibold text-ink-800">Return</span>
-                    {" → "}mobiles go back to second-hand stock (adds a Return
-                    card).
-                  </p>
                 ) : (
                   <p>This bill has no stock mobile to return.</p>
                 )}
@@ -985,17 +975,6 @@ export function BillDetailPage() {
                   <Trash2 className="h-4 w-4" />
                   {deleting ? "Working…" : "Delete"}
                 </button>
-                {bill.items.some((item) => item.stockItemId) ? (
-                  <button
-                    type="button"
-                    className="btn-primary whitespace-nowrap"
-                    onClick={() => void confirmDelete("return")}
-                    disabled={deleting}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    {deleting ? "Working…" : "Return"}
-                  </button>
-                ) : null}
               </div>
             </motion.div>
           </motion.div>
