@@ -409,6 +409,58 @@ suppliersRouter.patch("/:id", async (req, res, next) => {
   }
 });
 
+/**
+ * Admin only: remove a supplier with its purchases, payments and unsold
+ * phones. Refused while any of its phones is on a bill, same rule as
+ * deleting a single stock unit.
+ */
+suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const existing = await prisma.supplier.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+
+    const stockWhere = {
+      OR: [
+        { supplierId: existing.id },
+        { purchaseItem: { purchase: { supplierId: existing.id } } },
+      ],
+    };
+    const soldCount = await prisma.stockItem.count({
+      where: {
+        AND: [
+          stockWhere,
+          { OR: [{ status: "SOLD" }, { billItems: { some: {} } }] },
+        ],
+      },
+    });
+    if (soldCount > 0) {
+      res.status(400).json({
+        error: `${soldCount} phone${soldCount === 1 ? " from this supplier is" : "s from this supplier are"} on a bill. Remove ${soldCount === 1 ? "it" : "them"} from the bill first.`,
+      });
+      return;
+    }
+
+    const removed = await prisma.$transaction(async (tx) => {
+      // Purchase items cascade with their stock; payments cascade with the supplier.
+      const stock = await tx.stockItem.deleteMany({ where: stockWhere });
+      const purchases = await tx.purchase.deleteMany({
+        where: { supplierId: existing.id },
+      });
+      await tx.supplier.delete({ where: { id: existing.id } });
+      return { stock: stock.count, purchases: purchases.count };
+    });
+
+    res.json({ data: { id: existing.id, ...removed } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 suppliersRouter.post("/:id/payments", async (req, res, next) => {
   try {
     const supplier = await prisma.supplier.findUnique({

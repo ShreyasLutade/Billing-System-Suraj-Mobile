@@ -369,6 +369,11 @@ export const api = {
   stockHistory: (id: string) =>
     request<{ data: StockHistory }>(`/stock/${id}/history`),
   listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
+  deleteSupplier: (id: string) =>
+    request<{ data: { id: string; stock: number; purchases: number } }>(
+      `/suppliers/${id}`,
+      { method: "DELETE" },
+    ),
   listSupplierMobiles: () =>
     request<{ data: SupplierMobile[] }>("/suppliers/mobiles"),
   getSupplier: (id: string) =>
