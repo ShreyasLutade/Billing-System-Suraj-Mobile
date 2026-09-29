@@ -36,3 +36,12 @@ export function analyticsExchangesPath(
   const params = periodSearchParams(period, customFrom, customTo);
   return `/analytics/exchanges?${params.toString()}`;
 }
+
+export function analyticsPurchasesPath(
+  period: AnalyticsPeriodValue,
+  customFrom = "",
+  customTo = "",
+) {
+  const params = periodSearchParams(period, customFrom, customTo);
+  return `/analytics/purchases?${params.toString()}`;
+}

@@ -170,6 +170,10 @@ export type AnalyticsSummary = {
     count: number;
     value: number;
   };
+  purchaseHistory?: {
+    count: number;
+    value: number;
+  };
   periodBills: Array<{
     id: string;
     invoiceNumber: string;
@@ -228,6 +232,35 @@ export type AnalyticsExchangesSummary = {
   count: number;
   totalValue: number;
   items: AnalyticsExchangeItem[];
+};
+
+/** A mobile bought from a supplier (Analytics → Purchase history). */
+export type AnalyticsPurchaseItem = {
+  id: string;
+  purchaseId: string;
+  purchaseDate: string;
+  supplierId: string;
+  supplierName: string;
+  mobileName: string;
+  color: string;
+  storage: string;
+  ram: string;
+  platform: string;
+  condition: string;
+  imei: string | null;
+  serialNumber: string | null;
+  price: number;
+  status: string;
+};
+
+export type AnalyticsPurchasesSummary = {
+  period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
+  periodLabel: string;
+  from: string | null;
+  to: string | null;
+  count: number;
+  totalValue: number;
+  items: AnalyticsPurchaseItem[];
 };
 
 export type FinanceCompany = {
