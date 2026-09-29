@@ -942,7 +942,7 @@ function StockProductDetail({
                 <th>Supplier name</th>
                 {isAdmin ? <th className="text-right">Price</th> : null}
                 <th>{isAccessory ? "Serial" : "IMEI / Serial"}</th>
-                <th className="w-[1%] text-right">Action</th>
+                {isAdmin ? <th className="w-[1%] text-right">Action</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -987,9 +987,10 @@ function StockProductDetail({
                   <td className="font-mono text-ink-800">
                     {formatStockUnitId(unit)}
                   </td>
+                  {isAdmin ? (
                   <td className="w-[1%] whitespace-nowrap text-right">
                     <div className="inline-flex items-center justify-end gap-1.5">
-                      {isAdmin && !isAccessory ? (
+                      {!isAccessory ? (
                         <button
                           type="button"
                           className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 disabled:opacity-50 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"
@@ -1010,6 +1011,7 @@ function StockProductDetail({
                       </button>
                     </div>
                   </td>
+                  ) : null}
                 </tr>
                 );
               })}
