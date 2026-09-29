@@ -600,10 +600,10 @@ export function AnalyticsPage() {
 
           {/* KPI cards */}
           <section
-            className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
+            className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-8 sm:gap-4 xl:grid-cols-5"
             aria-label="Payment breakdown"
           >
-            {kpis.map((kpi) => {
+            {kpis.map((kpi, index) => {
               const Icon = kpi.icon;
               const to = analyticsPaymentsPath(
                 kpi.key as PaymentMode,
@@ -616,26 +616,32 @@ export function AnalyticsPage() {
                   key={kpi.key}
                   to={to}
                   state={fromState(location)}
-                  className="interactive-card group rounded-2xl border border-ink-100/80 bg-white/90 p-5 shadow-soft"
+                  className={clsx(
+                    "interactive-card group rounded-2xl border border-ink-100/80 bg-white/90 p-3 shadow-soft sm:p-5",
+                    // Odd one out spans the row on 2-column layouts.
+                    index === kpis.length - 1 &&
+                      kpis.length % 2 === 1 &&
+                      "col-span-2 xl:col-span-1",
+                  )}
                 >
-                  <div className="mb-4 flex items-center justify-between">
+                  <div className="mb-2 flex items-center justify-between sm:mb-4">
                     <div
-                      className="grid h-[34px] w-[34px] place-items-center rounded-[10px]"
+                      className="grid h-7 w-7 place-items-center rounded-[8px] sm:h-[34px] sm:w-[34px] sm:rounded-[10px]"
                       style={mixSurface(kpi.colors, dark)}
                     >
-                      <Icon className="h-[17px] w-[17px]" strokeWidth={2.25} />
+                      <Icon className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" strokeWidth={2.25} />
                     </div>
                     <span
-                      className="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                      className="rounded-full px-2 py-0.5 text-[11px] font-bold sm:px-2.5 sm:text-xs"
                       style={mixSurface(kpi.colors, dark)}
                     >
                       {formatShare(kpi.share)}
                     </span>
                   </div>
-                  <p className="mb-1 text-[12.5px] font-medium text-ink-500">
+                  <p className="mb-0.5 truncate text-[11.5px] font-medium text-ink-500 sm:mb-1 sm:text-[12.5px]">
                     {kpi.name}
                   </p>
-                  <p className="font-display text-2xl font-bold leading-tight tracking-tight text-ink-900 tabular-nums">
+                  <p className="font-display text-[1.05rem] font-bold leading-tight tracking-tight text-ink-900 tabular-nums sm:text-2xl">
                     {formatINR(kpi.value)}
                   </p>
                 </Link>
@@ -714,34 +720,34 @@ export function AnalyticsPage() {
           </section>
 
           <section
-            className="mb-8 overflow-hidden rounded-[1.125rem] border border-ink-100/80 bg-white/90 p-5 shadow-soft sm:p-6"
+            className="mb-6 overflow-hidden rounded-[1.125rem] border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-soft sm:mb-8 sm:p-6"
             aria-label="Accessories revenue"
           >
-            <div className="flex flex-wrap items-center justify-between gap-5">
-              <div className="flex min-w-0 items-start gap-3.5">
+            <div className="flex items-center justify-between gap-3 sm:gap-5">
+              <div className="flex min-w-0 items-center gap-2.5 sm:items-start sm:gap-3.5">
                 <div
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px]"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] sm:h-11 sm:w-11 sm:rounded-[12px]"
                   style={mixSurface(MIX.online, dark)}
                 >
-                  <Headphones className="h-5 w-5" strokeWidth={2.1} />
+                  <Headphones className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.1} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-400 sm:text-[11px] sm:tracking-[0.14em]">
                     Accessories revenue
                   </p>
-                  <p className="mt-1.5 font-display text-[clamp(1.5rem,4vw,2rem)] font-bold leading-none tracking-tight text-ink-900 tabular-nums">
+                  <p className="mt-0.5 font-display text-lg font-bold leading-tight tracking-tight text-ink-900 tabular-nums sm:mt-1.5 sm:text-[clamp(1.5rem,4vw,2rem)] sm:leading-none">
                     {formatINR(summary.accessoriesRevenue ?? 0)}
                   </p>
-                  <p className="mt-2 text-[13px] text-ink-500">
+                  <p className="mt-2 hidden text-[13px] text-ink-500 sm:block">
                     Cases, glass, chargers, earphones & more
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+              <div className="shrink-0 text-right">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-400 sm:text-[11px] sm:tracking-[0.12em]">
                   Items sold
                 </p>
-                <p className="mt-1.5 font-display text-2xl font-bold tabular-nums text-ink-900">
+                <p className="mt-0.5 font-display text-lg font-bold tabular-nums text-ink-900 sm:mt-1.5 sm:text-2xl">
                   {summary.accessoriesSold ?? 0}
                 </p>
               </div>
