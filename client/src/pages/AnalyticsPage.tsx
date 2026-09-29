@@ -599,15 +599,12 @@ export function AnalyticsPage() {
           >
             {kpis.map((kpi) => {
               const Icon = kpi.icon;
-              const to =
-                kpi.key === "due"
-                  ? "/dues"
-                  : analyticsPaymentsPath(
-                      kpi.key as PaymentMode,
-                      period,
-                      customFrom,
-                      customTo,
-                    );
+              const to = analyticsPaymentsPath(
+                kpi.key as PaymentMode,
+                period,
+                customFrom,
+                customTo,
+              );
               return (
                 <Link
                   key={kpi.key}

@@ -1,6 +1,6 @@
 import type { AnalyticsPeriodValue } from "../components/PeriodFilter";
 
-export type PaymentMode = "cash" | "online" | "card" | "finance";
+export type PaymentMode = "cash" | "online" | "card" | "finance" | "due";
 
 function periodSearchParams(
   period: AnalyticsPeriodValue,
