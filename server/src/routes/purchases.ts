@@ -430,7 +430,7 @@ purchasesRouter.patch("/:id/condition", requireAdmin, async (req, res, next) => 
   }
 });
 
-purchasesRouter.post("/:id/mark-paid", async (req, res, next) => {
+purchasesRouter.post("/:id/mark-paid", requireAdmin, async (req, res, next) => {
   try {
     const purchase = await prisma.purchase.findUnique({
       where: { id: req.params.id },

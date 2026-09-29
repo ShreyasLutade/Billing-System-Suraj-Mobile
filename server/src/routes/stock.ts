@@ -928,7 +928,7 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
-stockRouter.delete("/:id", async (req, res, next) => {
+stockRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
     const existing = await prisma.stockItem.findUnique({
       where: { id: req.params.id },

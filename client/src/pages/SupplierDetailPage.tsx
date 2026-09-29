@@ -226,8 +226,12 @@ export function SupplierDetailPage() {
                   <tr>
                     <th>Date</th>
                     <th className="text-right">Qty</th>
-                    {isAdmin ? <th className="text-right">Amount</th> : null}
-                    <th className="text-right">Status</th>
+                    {isAdmin ? (
+                      <>
+                        <th className="text-right">Amount</th>
+                        <th className="text-right">Status</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -270,10 +274,10 @@ export function SupplierDetailPage() {
                           {p.items.length}
                         </td>
                         {isAdmin ? (
+                          <>
                           <td className="text-right tabular-nums font-semibold text-ink-900">
                             {formatINR(p.totalAmount)}
                           </td>
-                        ) : null}
                         <td className="text-right">
                           {paid ? (
                             <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-400">
@@ -293,6 +297,8 @@ export function SupplierDetailPage() {
                             </button>
                           )}
                         </td>
+                          </>
+                        ) : null}
                       </tr>
                     );
                   })}
@@ -361,7 +367,7 @@ export function SupplierDetailPage() {
       ) : null}
 
       <AnimatePresence>
-        {confirmPurchase ? (
+        {isAdmin && confirmPurchase ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}
