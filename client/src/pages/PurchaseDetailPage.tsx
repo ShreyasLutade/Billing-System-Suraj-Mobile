@@ -31,15 +31,25 @@ const COL_TEMPLATE_STAFF =
 
 const ROW_GRID = "col-span-full grid grid-cols-subgrid items-center";
 
+function unitCondition(item: PurchaseStockRef, purchase: Purchase) {
+  if (item.condition === "USED" || item.condition === "NEW") return item.condition;
+  return purchase.condition === "USED" ? "USED" : "NEW";
+}
+
+/** "New", "Second hand", or "New & second hand" once units were switched. */
+function purchaseConditionLabel(purchase: Purchase) {
+  const conditions = new Set(
+    purchase.items.map((row) => unitCondition(row.stockItem, purchase)),
+  );
+  if (conditions.size > 1) return "New & second hand";
+  const only = conditions.values().next().value ?? purchase.condition;
+  return only === "USED" ? "Second hand" : "New";
+}
+
 function toEditUnit(item: PurchaseStockRef, purchase: Purchase): StockItem {
   return {
     id: item.id,
-    condition:
-      item.condition === "USED" || item.condition === "NEW"
-        ? item.condition
-        : purchase.condition === "USED"
-          ? "USED"
-          : "NEW",
+    condition: unitCondition(item, purchase),
     platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
     mobileName: item.mobileName,
     storage: item.storage || "",
@@ -184,7 +194,7 @@ export function PurchaseDetailPage() {
           Purchase · {formatDate(purchase.purchaseDate)}
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          {purchase.condition === "USED" ? "Second hand" : "New"} ·{" "}
+          {purchaseConditionLabel(purchase)} ·{" "}
           {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"}
           {isAdmin ? <> · {formatINR(purchase.totalAmount)}</> : null}
           {purchase.paidAt ? " · Paid" : " · Unpaid"}
@@ -305,6 +315,14 @@ export function PurchaseDetailPage() {
                       )}
                     >
                       {item.mobileName}
+                      {unitCondition(item, purchase) !==
+                      (purchase.condition === "USED" ? "USED" : "NEW") ? (
+                        <span className="ml-1.5 whitespace-nowrap rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                          {unitCondition(item, purchase) === "USED"
+                            ? "Second hand"
+                            : "New"}
+                        </span>
+                      ) : null}
                     </div>
                     <div
                       className={clsx(
@@ -567,6 +585,7 @@ export function PurchaseDetailPage() {
                               stockItem: {
                                 ...row.stockItem,
                                 mobileName: updated.mobileName,
+                                condition: updated.condition,
                                 purchasePrice: updated.purchasePrice,
                                 imei: updated.imei,
                                 serialNumber: updated.serialNumber,

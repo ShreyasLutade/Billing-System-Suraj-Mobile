@@ -51,6 +51,9 @@ export function EditStockUnitModal({
   const [platform, setPlatform] = useState<"IOS" | "ANDROID">(
     unit.platform === "ANDROID" ? "ANDROID" : "IOS",
   );
+  const [condition, setCondition] = useState<"NEW" | "USED">(
+    unit.condition === "USED" ? "USED" : "NEW",
+  );
   const [mobileName, setMobileName] = useState(unit.mobileName);
   const [storage, setStorage] = useState(unit.storage || "");
   const [ram, setRam] = useState(unit.ram || "");
@@ -161,6 +164,7 @@ export function EditStockUnitModal({
       const { data } = await api.updateStockItem(unit.id, {
         mobileName: name,
         platform,
+        condition,
         storage: nextStorage,
         ram: nextRam,
         color: nextColor,
@@ -277,6 +281,26 @@ export function EditStockUnitModal({
                     disabled={busy}
                   >
                     {option === "IOS" ? "iOS" : "Android"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="label required">Condition</span>
+              <div className="inline-flex w-full gap-0.5 rounded-[10px] bg-[#EBEDF1] p-0.5 dark:bg-surface-muted">
+                {(["NEW", "USED"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={clsx(
+                      "inline-flex flex-1 items-center justify-center rounded-lg px-3 py-1.5 text-[13px] transition",
+                      condition === option ? "segment-on" : "segment-off",
+                    )}
+                    onClick={() => setCondition(option)}
+                    disabled={busy}
+                  >
+                    {option === "NEW" ? "New" : "Second hand"}
                   </button>
                 ))}
               </div>

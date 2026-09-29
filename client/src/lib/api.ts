@@ -339,6 +339,7 @@ export const api = {
     payload: {
       mobileName: string;
       platform: "IOS" | "ANDROID";
+      condition?: "NEW" | "USED";
       storage: string;
       ram?: string;
       color: string;

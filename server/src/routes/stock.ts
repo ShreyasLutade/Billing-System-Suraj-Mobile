@@ -710,6 +710,8 @@ const updateStockSchema = z
   .object({
     mobileName: z.string().trim().min(2, "Mobile name is required").max(100),
     platform: z.enum(["IOS", "ANDROID"]),
+    /** NEW | USED — omit to keep the unit's current condition. */
+    condition: z.enum(["NEW", "USED"]).optional(),
     storage: z.string().trim().min(1, "Storage is required").max(30),
     ram: z.string().trim().max(30).optional().default(""),
     color: z.string().trim().min(1, "Color is required").max(40),
@@ -840,11 +842,13 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
     const ram =
       platform === "ANDROID" ? normalizeCapacity(data.ram || "") : "";
     const color = data.color.trim();
+    const condition = data.condition ?? existing.condition;
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.stockItem.update({
         where: { id: existing.id },
         data: {
+          condition,
           mobileName,
           platform,
           storage,
@@ -868,7 +872,11 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
       if (purchaseId) {
         const siblings = await tx.purchaseItem.findMany({
           where: { purchaseId },
-          include: { stockItem: { select: { id: true, purchasePrice: true } } },
+          include: {
+            stockItem: {
+              select: { id: true, purchasePrice: true, condition: true },
+            },
+          },
         });
         const totalAmount = siblings.reduce((sum, row) => {
           const price =
@@ -878,11 +886,20 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
           return sum + price;
         }, 0);
 
+        // The purchase is labelled New / Second hand as a whole: follow the
+        // unit only once every unit in it has the same condition.
+        const allSameCondition = siblings.every(
+          (row) =>
+            row.stockItemId === existing.id ||
+            row.stockItem.condition === condition,
+        );
+
         await tx.purchase.update({
           where: { id: purchaseId },
           data: {
             supplierId: supplier!.id,
             totalAmount,
+            ...(allSameCondition ? { condition } : {}),
           },
         });
       }
@@ -892,6 +909,7 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
         where: { stockItemId: existing.id },
         data: {
           productName: mobileName,
+          condition,
           platform,
           storage,
           ram,
