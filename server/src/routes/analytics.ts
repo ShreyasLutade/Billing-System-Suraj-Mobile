@@ -18,7 +18,7 @@ import {
   type ActivityPeriod,
   type PeriodRange,
 } from "../lib/period";
-import { EXCHANGE_NOTE_PREFIX } from "../services/stockSync";
+import { EXCHANGE_NOTE_PREFIX, RETURN_NOTE_PREFIX } from "../services/stockSync";
 
 export const analyticsRouter = Router();
 
@@ -300,6 +300,85 @@ async function analyzePeriod(
   };
 }
 
+/**
+ * Mobiles bought from suppliers in the period (by purchase date). Skips
+ * customer exchange/return intakes (own card) and accessories.
+ */
+async function loadPurchaseHistory(
+  purchaseDateFilter: ReturnType<typeof toDateFilter>,
+) {
+  const rows = await prisma.purchaseItem.findMany({
+    where: {
+      stockItem: { kind: "MOBILE" },
+      purchase: {
+        ...(purchaseDateFilter ? { purchaseDate: purchaseDateFilter } : {}),
+        // A plain NOT would also drop purchases with no note (SQL NULL).
+        OR: [
+          { note: null },
+          {
+            NOT: [
+              { note: { startsWith: EXCHANGE_NOTE_PREFIX } },
+              { note: { startsWith: RETURN_NOTE_PREFIX } },
+            ],
+          },
+        ],
+      },
+    },
+    orderBy: [
+      { purchase: { purchaseDate: "desc" } },
+      { purchase: { createdAt: "desc" } },
+    ],
+    select: {
+      purchase: {
+        select: {
+          id: true,
+          purchaseDate: true,
+          supplier: { select: { id: true, name: true } },
+        },
+      },
+      stockItem: {
+        select: {
+          id: true,
+          mobileName: true,
+          color: true,
+          storage: true,
+          ram: true,
+          platform: true,
+          condition: true,
+          imei: true,
+          serialNumber: true,
+          purchasePrice: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  const items = rows.map(({ purchase, stockItem: stock }) => ({
+    id: stock.id,
+    purchaseId: purchase.id,
+    purchaseDate: purchase.purchaseDate.toISOString(),
+    supplierId: purchase.supplier.id,
+    supplierName: purchase.supplier.name,
+    mobileName: stock.mobileName,
+    color: stock.color,
+    storage: stock.storage,
+    ram: stock.ram,
+    platform: stock.platform,
+    condition: stock.condition,
+    imei: stock.imei,
+    serialNumber: stock.serialNumber,
+    price: round2(stock.purchasePrice || 0),
+    status: stock.status,
+  }));
+
+  return {
+    count: items.length,
+    totalValue: round2(items.reduce((sum, item) => sum + item.price, 0)),
+    items,
+  };
+}
+
 async function loadExchangeIntake(
   purchaseDateFilter: ReturnType<typeof toDateFilter>,
 ) {
@@ -511,6 +590,9 @@ analyticsRouter.get("/summary", async (req, res, next) => {
     const exchangeIntake = await loadExchangeIntake(
       period === "all" ? undefined : billDateFilter,
     );
+    const purchaseHistory = await loadPurchaseHistory(
+      period === "all" ? undefined : billDateFilter,
+    );
 
     res.json({
       data: {
@@ -561,6 +643,10 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           count: exchangeIntake.count,
           value: exchangeIntake.totalValue,
         },
+        purchaseHistory: {
+          count: purchaseHistory.count,
+          value: purchaseHistory.totalValue,
+        },
         periodBills,
         paymentSources,
       },
@@ -603,6 +689,46 @@ analyticsRouter.get("/exchanges", async (req, res, next) => {
         count: exchangeIntake.count,
         totalValue: exchangeIntake.totalValue,
         items: exchangeIntake.items,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analyticsRouter.get("/purchases", async (req, res, next) => {
+  try {
+    const customFrom = parseDayParam(req.query.from, false);
+    const customTo = parseDayParam(req.query.to, true);
+    const hasCustomRange = Boolean(customFrom || customTo);
+
+    const period: ActivityPeriod | "custom" = hasCustomRange
+      ? "custom"
+      : isActivityPeriod(req.query.period)
+        ? req.query.period
+        : "all";
+
+    const range: PeriodRange = hasCustomRange
+      ? { from: customFrom, to: customTo }
+      : getPeriodRange(period === "custom" ? "all" : period);
+
+    const purchaseDateFilter = toDateFilter(range);
+    const history = await loadPurchaseHistory(
+      period === "all" ? undefined : purchaseDateFilter,
+    );
+
+    res.json({
+      data: {
+        period,
+        periodLabel:
+          period === "custom"
+            ? customPeriodLabel(customFrom, customTo)
+            : periodLabel(period),
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+        count: history.count,
+        totalValue: history.totalValue,
+        items: history.items,
       },
     });
   } catch (error) {

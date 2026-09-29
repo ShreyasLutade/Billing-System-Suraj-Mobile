@@ -8,6 +8,7 @@ import { ThemeProvider } from "./theme/ThemeContext";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
+import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
 import { BackupPage } from "./pages/BackupPage";
 import { AddAccessoriesPage } from "./pages/AddAccessoriesPage";
 import { AddStockPage } from "./pages/AddStockPage";
@@ -79,6 +80,10 @@ export default function App() {
                     <Route
                       path="analytics/exchanges"
                       element={<AnalyticsExchangesPage />}
+                    />
+                    <Route
+                      path="analytics/purchases"
+                      element={<AnalyticsPurchasesPage />}
                     />
                     <Route path="backup" element={<BackupPage />} />
                   </Route>
