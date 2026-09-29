@@ -421,10 +421,23 @@ export function StockPage() {
   }
 
   function applyEditedUnit(updated: StockItem) {
-    setItems((current) =>
-      current.map((row) => (row.id === updated.id ? updated : row)),
-    );
-    setSelectedKey(stockGroupKey(updated));
+    // New ↔ Second hand moves the unit to the other tab's list.
+    const leftTab =
+      (tab === "NEW" || tab === "USED") && updated.condition !== tab;
+    if (leftTab) {
+      const next = items.filter((row) => row.id !== updated.id);
+      setItems(next);
+      setSelectedKey(
+        next.some((row) => stockGroupKey(row) === stockGroupKey(updated))
+          ? stockGroupKey(updated)
+          : null,
+      );
+    } else {
+      setItems((current) =>
+        current.map((row) => (row.id === updated.id ? updated : row)),
+      );
+      setSelectedKey(stockGroupKey(updated));
+    }
     setError(null);
   }
 
