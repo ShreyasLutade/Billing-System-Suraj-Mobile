@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import clsx from "clsx";
+import { useVisualViewportStyle } from "../hooks/useVisualViewport";
 import { api, formatINR } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
 import type { Supplier } from "../types";
@@ -47,6 +48,8 @@ export function PaySupplierModal({
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // Keep the dialog in the visible area above the phone keyboard.
+  const viewportStyle = useVisualViewportStyle(open);
 
   // Only suppliers that are actually owed money can be paid.
   const payable = useMemo(
@@ -154,7 +157,8 @@ export function PaySupplierModal({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/45 p-4"
+          style={viewportStyle}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -245,7 +249,7 @@ export function PaySupplierModal({
                   <ul
                     id="pay-supplier-list"
                     role="listbox"
-                    className="absolute inset-x-0 top-[calc(100%+6px)] z-10 max-h-60 overflow-y-auto rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_8px_20px_rgba(16,25,40,.10),0_24px_60px_rgba(16,25,40,.16)] dark:bg-surface-elevated"
+                    className="absolute inset-x-0 top-[calc(100%+6px)] z-10 max-h-44 overflow-y-auto rounded-2xl border border-ink-100 bg-white p-1.5 shadow-[0_8px_20px_rgba(16,25,40,.10),0_24px_60px_rgba(16,25,40,.16)] dark:bg-surface-elevated"
                   >
                     {matches.length ? (
                       matches.map((s) => (
