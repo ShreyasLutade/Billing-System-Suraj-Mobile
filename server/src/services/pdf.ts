@@ -47,7 +47,7 @@ export const FONT = {
   semibold: "Manrope-SemiBold",
   bold: "Manrope-Bold",
   /** Chubby display face for the shop name wordmark. */
-  display: "TitanOne",
+  display: "LilitaOne",
   /** Noto Sans Devanagari — Manrope has no Hindi glyphs. */
   hindi: "NotoSansDevanagari",
   hindiBold: "NotoSansDevanagari-SemiBold",
@@ -59,7 +59,7 @@ export function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
   doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
   doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
-  doc.registerFont(FONT.display, path.join(FONTS_DIR, "TitanOne-Regular.ttf"));
+  doc.registerFont(FONT.display, path.join(FONTS_DIR, "LilitaOne-Regular.ttf"));
   doc.registerFont(
     FONT.hindi,
     path.join(FONTS_DIR, "NotoSansDevanagari-Regular.ttf"),
