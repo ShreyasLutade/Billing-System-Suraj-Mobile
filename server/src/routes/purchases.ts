@@ -135,6 +135,9 @@ purchasesRouter.get("/:id", async (req, res, next) => {
             stockItem: {
               select: {
                 ...stockItemSelect,
+                productReturn: {
+                  select: { createdAt: true, note: true, invoiceNumber: true, billId: true },
+                },
                 billItems: {
                   orderBy: { bill: { billDate: "desc" } },
                   take: 1,
@@ -168,7 +171,11 @@ purchasesRouter.get("/:id", async (req, res, next) => {
         items: purchase.items.map((item) => {
           const saleLine = item.stockItem.billItems[0];
           const sale = saleLine?.bill;
-          const { billItems: _billItems, ...stockItem } = item.stockItem;
+          const {
+            billItems: _billItems,
+            productReturn,
+            ...stockItem
+          } = item.stockItem;
           return {
             ...item,
             stockItem: {
@@ -176,6 +183,15 @@ purchasesRouter.get("/:id", async (req, res, next) => {
               soldBillId: sale?.id ?? null,
               soldInvoiceNumber: sale?.invoiceNumber ?? null,
               soldCustomerName: sale?.customerName ?? null,
+              // Sent back to the supplier (customer got a replacement / refund).
+              returned: productReturn
+                ? {
+                    createdAt: productReturn.createdAt.toISOString(),
+                    note: productReturn.note,
+                    invoiceNumber: productReturn.invoiceNumber,
+                    billId: productReturn.billId,
+                  }
+                : null,
               // Selling price only for admins (staff never receive it).
               soldPrice: isAdmin
                 ? saleLine != null

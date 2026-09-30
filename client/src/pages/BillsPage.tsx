@@ -7,11 +7,12 @@ import {
   ChevronDown,
   Download,
   Filter,
-  Plus,
+  RefreshCcw,
   Search,
   Share2,
 } from "lucide-react";
 import clsx from "clsx";
+import { useAuth } from "../auth/AuthContext";
 import {
   ACTIVITY_PERIOD_OPTIONS,
   type ActivityPeriodValue,
@@ -195,6 +196,7 @@ function soldProductLabel(bill: Bill): string | null {
 export function BillsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useAuth();
   const [tab, setTab] = usePersistedTab(
     "tab",
     "bills.tab",
@@ -338,10 +340,16 @@ export function BillsPage() {
         title="Bills"
         description="Every bill with its payment split. Search by name, phone, product or IMEI — filters stack with the period."
         action={
-          <Link to="/" state={fromState(location)} className="btn-primary">
-            <Plus className="h-4 w-4" />
-            New bill
-          </Link>
+          isAdmin ? (
+            <Link
+              to="/bills/replace"
+              state={fromState(location)}
+              className="btn-primary self-center"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Replace product
+            </Link>
+          ) : null
         }
       />
 

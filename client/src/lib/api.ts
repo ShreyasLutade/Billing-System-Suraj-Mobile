@@ -11,6 +11,7 @@ import type {
   MobileCatalog,
   PhoneModel,
   Purchase,
+  ReturnLookup,
   RepairAnalytics,
   RepairJob,
   RepairOutcome,
@@ -180,6 +181,19 @@ export const api = {
     );
   },
   getBill: (id: string) => request<{ data: Bill }>(`/bills/${id}`),
+  /** Find a sold unit by IMEI or serial number (Replace product). */
+  lookupReturnUnit: (code: string) =>
+    request<{ data: ReturnLookup }>(
+      `/returns/lookup?${new URLSearchParams({ code })}`,
+    ),
+  /** Mark a sold unit replaced / returned to its supplier. */
+  createProductReturn: (stockItemId: string, note?: string) =>
+    request<{
+      data: { id: string; billId: string; amount: number; creditApplied: number };
+    }>("/returns", {
+      method: "POST",
+      body: JSON.stringify({ stockItemId, note: note || null }),
+    }),
   lookupCustomerByPhone: (phone: string, init?: RequestInit) =>
     request<{
       data: {

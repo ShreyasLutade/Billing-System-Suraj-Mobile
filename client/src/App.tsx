@@ -20,6 +20,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
 import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
+import { ReplaceProductPage } from "./pages/ReplaceProductPage";
 // import { RepairAnalyticsPage } from "./pages/RepairAnalyticsPage";
 // import { RepairHistoryPage } from "./pages/RepairHistoryPage";
 // import { RepairHomePage } from "./pages/RepairHomePage";
@@ -72,6 +73,7 @@ export default function App() {
                   />
                   <Route path="suppliers/:id" element={<SupplierDetailPage />} />
                   <Route element={<RequireAdmin />}>
+                    <Route path="bills/replace" element={<ReplaceProductPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route
                       path="analytics/payments"

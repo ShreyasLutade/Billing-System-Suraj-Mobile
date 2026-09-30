@@ -810,14 +810,22 @@ function MobileMatchesTable({
                           <Link
                             to={`/bills/${m.sale.billId}`}
                             state={fromState(location)}
-                            className="text-[12.5px] font-semibold text-rose-600 hover:underline"
+                            className={clsx(
+                              "text-[12.5px] font-semibold hover:underline",
+                              m.returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
+                            )}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            Sold · {m.sale.invoiceNumber}
+                            {m.returned ? "Returned / Replaced" : "Sold"} · {m.sale.invoiceNumber}
                           </Link>
                         ) : (
-                          <span className="text-[12.5px] font-semibold text-rose-600">
-                            Sold
+                          <span
+                            className={clsx(
+                              "text-[12.5px] font-semibold",
+                              m.returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
+                            )}
+                          >
+                            {m.returned ? "Returned / Replaced" : "Sold"}
                           </span>
                         )
                       ) : (

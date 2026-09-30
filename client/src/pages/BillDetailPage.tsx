@@ -10,6 +10,7 @@ import {
   PackageCheck,
   Pencil,
   Phone,
+  RefreshCcw,
   Share2,
   Trash2,
   Undo2,
@@ -240,6 +241,12 @@ export function BillDetailPage() {
                 ● {formatINR(bill.dueAmount)} due
               </span>
             )}
+            {(bill.productReturns?.length || 0) > 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-[11px] py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300">
+                <RefreshCcw className="h-[13px] w-[13px]" strokeWidth={2.4} />
+                Product replaced / returned
+              </span>
+            ) : null}
           </div>
           <p className="mt-1.5 text-[13px] text-[#7A8699]">{meta}</p>
         </div>
@@ -368,11 +375,20 @@ export function BillDetailPage() {
                     ? `Warranty ${item.warrantyMonths} mo`
                     : null,
                 ].filter(Boolean);
+                const itemReturn = bill.productReturns?.find(
+                  (r) =>
+                    (item.id && r.billItemId === item.id) ||
+                    (item.stockItemId && r.stockItemId === item.stockItemId),
+                );
 
                 return (
                   <div
                     key={item.id || `${item.productName}-${index}`}
-                    className="flex items-start justify-between gap-4"
+                    className={clsx(
+                      "flex items-start justify-between gap-4",
+                      itemReturn &&
+                        "-mx-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 dark:border-amber-500/30 dark:bg-amber-500/10",
+                    )}
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-[#0E1626]">
@@ -384,6 +400,11 @@ export function BillDetailPage() {
                         ) : item.condition === "NEW" ? (
                           <span className="rounded-md bg-tide-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-bright dark:bg-tide-100/50 dark:text-tide-400">
                             NEW
+                          </span>
+                        ) : null}
+                        {itemReturn ? (
+                          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                            Replaced / Returned
                           </span>
                         ) : null}
                       </div>
@@ -402,6 +423,14 @@ export function BillDetailPage() {
                           </span>
                         ))}
                       </p>
+                      {itemReturn ? (
+                        <p className="mt-1 text-[12.5px] font-medium text-amber-800 dark:text-amber-300">
+                          Replaced / returned on{" "}
+                          {format(new Date(itemReturn.createdAt), "dd MMM yyyy")}
+                          {itemReturn.createdByName ? ` by ${itemReturn.createdByName}` : ""}
+                          {itemReturn.note ? ` — ${itemReturn.note}` : ""}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="shrink-0 whitespace-nowrap font-display text-[17px] font-bold tabular-nums text-[#0E1626]">
                       {formatINR(item.amount || 0)}

@@ -250,6 +250,7 @@ model StockItem {
   billItems     BillItem[]
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   purchaseItem  PurchaseItem?
+  productReturn ProductReturn?
 
   @@index([kind])
   @@index([condition])
@@ -274,6 +275,7 @@ model Supplier {
   purchases  Purchase[]
   payments   SupplierPayment[]
   stockItems StockItem[]
+  productReturns ProductReturn[]
 
   @@index([name])
   @@index([isExchange])
@@ -314,6 +316,34 @@ model PurchaseItem {
   stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
 
   @@index([purchaseId])
+}
+
+/// A sold unit sent back to its supplier (customer got a replacement or
+/// refund). Its purchase price is credited to the supplier: the credit is
+/// applied to unpaid purchases like a payment (creditApplied); any part that
+/// could not be applied (nothing left unpaid) stays as supplier credit.
+model ProductReturn {
+  id              String    @id @default(cuid())
+  stockItemId     String    @unique
+  supplierId      String?
+  /// Bill the unit was sold on (snapshot, the bill may change later)
+  billId          String?
+  billItemId      String?
+  invoiceNumber   String?
+  customerName    String?
+  /// Purchase price credited to the supplier
+  amount          Float     @default(0)
+  creditApplied   Float     @default(0)
+  note            String?
+  createdByUserId String?
+  createdByName   String?
+  createdAt       DateTime  @default(now())
+  stockItem       StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([billId])
+  @@index([createdAt])
 }
 
 model SupplierPayment {

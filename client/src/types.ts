@@ -101,6 +101,8 @@ export type Bill = {
   exchangeItems?: BillExchangeItem[];
   /** Purchase provenance for stock-linked line items (bill detail only). */
   purchaseHistory?: BillPurchaseHistoryItem[];
+  /** Products on this bill sent back to the supplier (replaced / returned). */
+  productReturns?: BillProductReturn[];
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;
@@ -331,6 +333,10 @@ export type Supplier = {
   stockSold: number;
   /** Total units purchased from this supplier (available + sold). */
   stockPurchased: number;
+  /** Purchase price of units returned to this supplier. */
+  totalReturned?: number;
+  /** Return credit not yet used against a purchase (supplier owes us). */
+  supplierCredit?: number;
   /** True when this party is a customer who gave a phone in exchange. */
   isExchange?: boolean;
   hasExchangeIntake?: boolean;
@@ -362,6 +368,13 @@ export type PurchaseStockRef = {
   soldBillId?: string | null;
   soldInvoiceNumber?: string | null;
   soldCustomerName?: string | null;
+  /** Sent back to the supplier after being sold. */
+  returned?: {
+    createdAt: string;
+    note: string | null;
+    invoiceNumber: string | null;
+    billId: string | null;
+  } | null;
   /** Selling price from the sale bill — admin only. */
   soldPrice?: number | null;
 };
@@ -404,6 +417,7 @@ export type SupplierMobile = {
   purchaseDate: string;
   supplier: { id: string; name: string } | null;
   sale: { billId: string; invoiceNumber: string } | null;
+  returned?: boolean;
   purchase: { id: string; supplierId: string } | null;
 };
 
@@ -606,4 +620,37 @@ export type RepairAnalytics = {
     finalCharge: number | null;
     deliveredAt: string | null;
   }>;
+};
+
+export type BillProductReturn = {
+  billItemId: string | null;
+  stockItemId: string;
+  note: string | null;
+  createdAt: string;
+  createdByName: string | null;
+};
+
+/** A sold unit found by IMEI / serial for Replace product. */
+export type ReturnLookup = {
+  stockItemId: string;
+  mobileName: string;
+  storage: string;
+  ram: string;
+  color: string;
+  platform: string;
+  condition: string;
+  imei: string | null;
+  serialNumber: string | null;
+  purchasePrice: number | null;
+  purchaseDate: string | null;
+  supplier: { id: string; name: string } | null;
+  bill: {
+    id: string;
+    billItemId: string;
+    invoiceNumber: string;
+    billDate: string;
+    customerName: string;
+    customerPhone: string;
+  };
+  alreadyReturned: { createdAt: string; note: string | null } | null;
 };

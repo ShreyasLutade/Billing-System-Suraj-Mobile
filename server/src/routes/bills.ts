@@ -616,7 +616,23 @@ billsRouter.get("/:id", async (req, res, next) => {
       req.user?.role === "ADMIN"
         ? await enrichBillPurchaseHistory(bill.items)
         : [];
-    res.json({ data: { ...data, purchaseHistory } });
+    // Products on this bill that were replaced / returned to the supplier.
+    const returns = await prisma.productReturn.findMany({
+      where: { billId: bill.id },
+      select: {
+        billItemId: true,
+        stockItemId: true,
+        note: true,
+        createdAt: true,
+        createdByName: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    const productReturns = returns.map((r) => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+    }));
+    res.json({ data: { ...data, purchaseHistory, productReturns } });
   } catch (error) {
     next(error);
   }
