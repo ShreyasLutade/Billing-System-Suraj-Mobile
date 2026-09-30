@@ -12,7 +12,7 @@ import { BrandName } from "../components/BrandName";
 import { api } from "../lib/api";
 import { useTheme } from "../theme/ThemeContext";
 
-/** Babu Mobile mark — a phone-shaped B with camera and signal details. */
+/** Babu Mobile mark — "BM" with a soft shadow, a yellow dot and signal waves. */
 function BabuMark({ className }: { className?: string }) {
   return (
     <svg
@@ -23,26 +23,34 @@ function BabuMark({ className }: { className?: string }) {
       aria-hidden
     >
       <defs>
-        <linearGradient id="babu-mark-gradient" x1="8" y1="4" x2="58" y2="60">
+        <linearGradient
+          id="babu-mark-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1="8"
+          y1="4"
+          x2="58"
+          y2="60"
+        >
           <stop stopColor="#1ABAFF" />
           <stop offset="0.62" stopColor="#3F95E0" />
           <stop offset="1" stopColor="#5D73B6" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="20" fill="url(#babu-mark-gradient)" />
+      <g strokeWidth="5.4" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M13.5 20.5V47.5M13.5 20.5H21a6.5 6.5 0 0 1 0 13H13.5M13.5 33.5H22.5a7 7 0 0 1 0 14H13.5M35 47.5V20.5L43.5 35L52 20.5V47.5"
+          stroke="#0F2A55"
+          strokeOpacity="0.25"
+          transform="translate(1.2 1.6)"
+        />
+        <path d="M13.5 20.5V47.5M13.5 20.5H21a6.5 6.5 0 0 1 0 13H13.5M13.5 33.5H22.5a7 7 0 0 1 0 14H13.5M35 47.5V20.5L43.5 35L52 20.5V47.5" stroke="white" />
+      </g>
+      <circle cx="43.5" cy="44.5" r="2.4" fill="#FFD23F" />
       <path
-        d="M22 15V49M22 15H33a8.5 8.5 0 0 1 0 17H22M22 32H35a8.5 8.5 0 0 1 0 17H22"
+        d="M50 8.5a7.5 7.5 0 0 1 6 6M50 4a12 12 0 0 1 10.5 10.5"
         stroke="white"
-        strokeWidth="6.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="33" cy="23.5" r="2.3" fill="#1ABAFF" />
-      <rect x="29" y="39.5" width="9" height="3" rx="1.5" fill="#1ABAFF" />
-      <path
-        d="M46 13a10 10 0 0 1 6 6M46 8a15 15 0 0 1 10 10"
-        stroke="white"
-        strokeWidth="2.6"
+        strokeWidth="2.3"
         strokeLinecap="round"
         opacity="0.9"
       />

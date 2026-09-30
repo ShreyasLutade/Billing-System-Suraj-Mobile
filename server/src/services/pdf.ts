@@ -46,6 +46,8 @@ export const FONT = {
   medium: "Manrope-Medium",
   semibold: "Manrope-SemiBold",
   bold: "Manrope-Bold",
+  /** Chubby display face for the shop name wordmark. */
+  display: "TitanOne",
   /** Noto Sans Devanagari — Manrope has no Hindi glyphs. */
   hindi: "NotoSansDevanagari",
   hindiBold: "NotoSansDevanagari-SemiBold",
@@ -57,6 +59,7 @@ export function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
   doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
   doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
+  doc.registerFont(FONT.display, path.join(FONTS_DIR, "TitanOne-Regular.ttf"));
   doc.registerFont(
     FONT.hindi,
     path.join(FONTS_DIR, "NotoSansDevanagari-Regular.ttf"),
@@ -65,6 +68,34 @@ export function registerFonts(doc: PDFKit.PDFDocument) {
     FONT.hindiBold,
     path.join(FONTS_DIR, "NotoSansDevanagari-SemiBold.ttf"),
   );
+}
+
+/** Distance from a text box's top to its baseline, for the current font. */
+export function ascenderOf(doc: PDFKit.PDFDocument, fontSize: number) {
+  return (
+    ((doc as unknown as { _font: { ascender: number } })._font.ascender / 1000) *
+    fontSize
+  );
+}
+
+/**
+ * Shop-name wordmark: chubby display face in solid dark ink. Returns the
+ * text width.
+ */
+export function drawWordmarkText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  tracking = 0.5,
+) {
+  doc.font(FONT.display).fontSize(size);
+  const width = doc.widthOfString(text, { characterSpacing: tracking });
+  doc
+    .fillColor(COLORS.ink)
+    .text(text, x, y, { lineBreak: false, characterSpacing: tracking });
+  return width;
 }
 
 function exchangeItemsForPdf(bill: BillWithItems): BillExchangeItem[] {
@@ -262,20 +293,32 @@ export function drawBabuLogo(
   grad.stop(0, COLORS.gradStart).stop(1, COLORS.gradEnd);
   doc.roundedRect(0, 0, 64, 64, 20).fill(grad);
 
+  // "BM" in white strokes over a soft shadow, a yellow dot in the M and
+  // signal waves (same mark as the app icon).
+  const letters =
+    "M13.5 20.5V47.5M13.5 20.5H21a6.5 6.5 0 0 1 0 13H13.5M13.5 33.5H22.5a7 7 0 0 1 0 14H13.5M35 47.5V20.5L43.5 35L52 20.5V47.5";
+  doc.save();
+  doc.translate(1.2, 1.6);
   doc
-    .path(
-      "M22 15V49M22 15H33a8.5 8.5 0 0 1 0 17H22M22 32H35a8.5 8.5 0 0 1 0 17H22",
-    )
-    .lineWidth(6.5)
+    .path(letters)
+    .lineWidth(5.4)
     .lineCap("round")
     .lineJoin("round")
+    .strokeOpacity(0.25)
+    .stroke("#0F2A55");
+  doc.restore();
+  doc
+    .path(letters)
+    .lineWidth(5.4)
+    .lineCap("round")
+    .lineJoin("round")
+    .strokeOpacity(1)
     .stroke(COLORS.white);
-  doc.circle(33, 23.5, 2.3).fill(COLORS.gradStart);
-  doc.roundedRect(29, 39.5, 9, 3, 1.5).fill(COLORS.gradStart);
+  doc.circle(43.5, 44.5, 2.4).fill("#FFD23F");
 
   doc
-    .path("M46 13a10 10 0 0 1 6 6M46 8a15 15 0 0 1 10 10")
-    .lineWidth(2.6)
+    .path("M50 8.5a7.5 7.5 0 0 1 6 6M50 4a12 12 0 0 1 10.5 10.5")
+    .lineWidth(2.3)
     .lineCap("round")
     .strokeOpacity(0.9)
     .stroke(COLORS.white);
@@ -292,73 +335,42 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   const textX = MARGIN + logoW + 14;
   const textW = CONTENT_WIDTH - logoW - 14;
 
-  // Wordmark: first word in the logo gradient, the rest in solid slate, with a
-  // fading gradient underline. Shrinks to fit if the shop name is long.
+  // Wordmark: chubby display face in solid dark ink, a small NX tag on the
+  // baseline and a fading gradient underline.
+  // Shrinks to fit if the shop name is long.
   const title = shop.name.toUpperCase();
-  const parts = title.split(/\s+/);
-  const first = parts[0] || title;
-  const rest = parts.slice(1).join(" ");
   const suffix = shop.nameSuffix.toUpperCase();
-  const tracking = 1.4;
-  const wordGap = 9;
-  const suffixGap = 4;
-  let size = 28;
-  let firstW = 0;
-  let restW = 0;
+  const tracking = 0.5;
+  const suffixGap = 5;
+  let size = 30;
+  let titleW = 0;
   let suffixW = 0;
   const suffixSize = () => Math.round(size * 0.4 * 10) / 10;
-  const wordmarkW = () =>
-    firstW +
-    (rest ? wordGap + restW : 0) +
-    (suffix ? suffixGap + suffixW : 0);
   for (; size >= 16; size -= 1) {
-    doc.font(FONT.bold).fontSize(size);
-    firstW = doc.widthOfString(first, { characterSpacing: tracking });
-    doc.font(FONT.semibold).fontSize(size);
-    restW = rest ? doc.widthOfString(rest, { characterSpacing: tracking }) : 0;
+    doc.font(FONT.display).fontSize(size);
+    titleW = doc.widthOfString(title, { characterSpacing: tracking });
     doc.font(FONT.bold).fontSize(suffixSize());
     suffixW = suffix ? doc.widthOfString(suffix, { characterSpacing: 0.6 }) : 0;
-    if (wordmarkW() <= textW) break;
+    if (titleW + (suffix ? suffixGap + suffixW : 0) <= textW) break;
   }
   const nameY = 12;
-  const nameW = wordmarkW();
+  const nameW = titleW + (suffix ? suffixGap + suffixW : 0);
 
-  const nameGrad = doc.linearGradient(textX, 0, textX + firstW, 0);
-  nameGrad.stop(0, COLORS.gradStart).stop(1, COLORS.gradEnd);
-  doc
-    .font(FONT.bold)
-    .fontSize(size)
-    .fillColor(nameGrad)
-    .text(first, textX, nameY, { lineBreak: false, characterSpacing: tracking });
-  if (rest) {
-    doc
-      .font(FONT.semibold)
-      .fontSize(size)
-      .fillColor(COLORS.slate)
-      .text(rest, textX + firstW + wordGap, nameY, {
-        lineBreak: false,
-        characterSpacing: tracking,
-      });
-  }
+  drawWordmarkText(doc, title, textX, nameY, size, tracking);
+  doc.font(FONT.display).fontSize(size);
+  const nameBaseline = nameY + ascenderOf(doc, size);
   if (suffix) {
     // Sits on the same baseline as the name, like a small tag after it.
-    const ascenderOf = (fontSize: number) =>
-      ((doc as unknown as { _font: { ascender: number } })._font.ascender / 1000) *
-      fontSize;
-    doc.font(FONT.semibold).fontSize(size);
-    const nameBaseline = nameY + ascenderOf(size);
     doc.font(FONT.bold).fontSize(suffixSize());
     doc
       .fillColor(COLORS.accent)
-      .text(
-        suffix,
-        textX + firstW + (rest ? wordGap + restW : 0) + suffixGap,
-        nameBaseline - ascenderOf(suffixSize()),
-        { lineBreak: false, characterSpacing: 0.6 },
-      );
+      .text(suffix, textX + titleW + suffixGap, nameBaseline - ascenderOf(doc, suffixSize()), {
+        lineBreak: false,
+        characterSpacing: 0.6,
+      });
   }
 
-  const underlineY = nameY + size * 1.26;
+  const underlineY = nameBaseline + size * 0.26;
   const underlineGrad = doc.linearGradient(textX, 0, textX + nameW, 0);
   underlineGrad
     .stop(0, COLORS.gradStart)

@@ -2,7 +2,16 @@ import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import { format } from "date-fns";
 import { prisma } from "../lib/prisma";
-import { COLORS, FONT, drawBabuLogo, money, registerFonts, shop } from "./pdf";
+import {
+  COLORS,
+  FONT,
+  ascenderOf,
+  drawBabuLogo,
+  drawWordmarkText,
+  money,
+  registerFonts,
+  shop,
+} from "./pdf";
 
 /**
  * Supplier statement (account ledger) as an A4 PDF.
@@ -219,16 +228,19 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   const logo = 40;
   drawBabuLogo(doc, M, 26, logo);
   const x = M + logo + 12;
-  doc
-    .font(FONT.bold)
-    .fontSize(17)
-    .fillColor(COLORS.slate)
-    .text(
-      [shop.name.toUpperCase(), shop.nameSuffix.toUpperCase()].filter(Boolean).join(" "),
-      x,
-      27,
-      { lineBreak: false, characterSpacing: 0.8 },
-    );
+  const nameY = 22;
+  const size = 19;
+  const nameW = drawWordmarkText(doc, shop.name.toUpperCase(), x, nameY, size);
+  if (shop.nameSuffix) {
+    doc.font(FONT.display).fontSize(size);
+    const baseline = nameY + ascenderOf(doc, size);
+    doc.font(FONT.bold).fontSize(7.5);
+    doc
+      .fillColor(COLORS.accent)
+      .text(shop.nameSuffix.toUpperCase(), x + nameW + 4, baseline - ascenderOf(doc, 7.5), {
+        lineBreak: false,
+      });
+  }
   doc
     .font(FONT.regular)
     .fontSize(8)

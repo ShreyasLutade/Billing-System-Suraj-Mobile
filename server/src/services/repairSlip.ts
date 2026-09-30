@@ -1,7 +1,16 @@
 import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import { format } from "date-fns";
-import { COLORS, FONT, drawBabuLogo, money, registerFonts, shop } from "./pdf";
+import {
+  COLORS,
+  FONT,
+  ascenderOf,
+  drawBabuLogo,
+  drawWordmarkText,
+  money,
+  registerFonts,
+  shop,
+} from "./pdf";
 
 /** Fields the slip needs (matches the repairs route select). */
 export type RepairSlipJob = {
@@ -59,31 +68,16 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   drawBabuLogo(doc, M, 20, logo);
   const x = M + logo + 10;
 
-  // Wordmark: first word in the logo gradient, rest slate, small NX on the baseline.
-  const parts = shop.name.toUpperCase().split(/\s+/);
-  const first = parts[0] || "";
-  const rest = parts.slice(1).join(" ");
+  // Same wordmark as the invoice: chubby dark name, NX on the baseline.
   const size = 18;
-  const nameY = 21;
-  doc.font(FONT.bold).fontSize(size);
-  const firstW = doc.widthOfString(first, { characterSpacing: 1 });
-  const grad = doc.linearGradient(x, 0, x + firstW, 0);
-  grad.stop(0, COLORS.gradStart).stop(1, COLORS.gradEnd);
-  doc.fillColor(grad).text(first, x, nameY, { lineBreak: false, characterSpacing: 1 });
-  let cx = x + firstW + 6;
-  if (rest) {
-    doc
-      .font(FONT.semibold)
-      .fontSize(size)
-      .fillColor(COLORS.slate)
-      .text(rest, cx, nameY, { lineBreak: false, characterSpacing: 1 });
-    cx += doc.widthOfString(rest, { characterSpacing: 1 }) + 3;
-  }
+  const nameY = 17;
+  const nameW = drawWordmarkText(doc, shop.name.toUpperCase(), x, nameY, size);
   if (shop.nameSuffix) {
     const small = 7.5;
+    doc.font(FONT.display).fontSize(size);
+    const baseline = nameY + ascenderOf(doc, size);
     doc.font(FONT.bold).fontSize(small).fillColor(COLORS.accent);
-    // Align the suffix baseline with the name's (≈ 0.93 of the size for Manrope).
-    doc.text(shop.nameSuffix.toUpperCase(), cx, nameY + size * 0.93 - small * 0.93, {
+    doc.text(shop.nameSuffix.toUpperCase(), x + nameW + 4, baseline - ascenderOf(doc, small), {
       lineBreak: false,
     });
   }

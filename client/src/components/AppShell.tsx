@@ -197,7 +197,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
           {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
         </button>
         <Link to={homePath} onClick={onMainNavClick} className="babu-brand" aria-label={`${BRAND_NAME_TEXT} — ${homeLabel}`}>
-          <img src="/babu_mobile_icon.svg" alt="" />
+          <img src="/babu_mobile_icon.svg?v=3" alt="" />
           <span>
             <strong>
               <BrandName />
@@ -297,7 +297,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
 
       <header className="babu-mobile-header">
         <Link to={homePath} onClick={onMainNavClick} className="babu-mobile-brand" aria-label={`${BRAND_NAME_TEXT} — ${homeLabel}`}>
-          <img src="/babu_mobile_icon.svg" alt="" />
+          <img src="/babu_mobile_icon.svg?v=3" alt="" />
           <strong>
             <BrandName />
           </strong>
@@ -335,7 +335,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
             >
               <div className="babu-drawer-head">
                 <div className="babu-brand">
-                  <img src="/babu_mobile_icon.svg" alt="" />
+                  <img src="/babu_mobile_icon.svg?v=3" alt="" />
                   <span>
                     <strong>
                       <BrandName />

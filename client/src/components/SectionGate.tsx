@@ -51,7 +51,7 @@ export function SectionGate() {
         <div className="section-gate" role="dialog" aria-modal="true" aria-labelledby="section-gate-title">
           <div className="section-gate-card">
             <div className="section-gate-head">
-              <img src="/babu_mobile_icon.svg" alt="" className="section-gate-logo" />
+              <img src="/babu_mobile_icon.svg?v=3" alt="" className="section-gate-logo" />
               <p className="section-gate-brand">
                 <BrandName />
               </p>
