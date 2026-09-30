@@ -4,7 +4,9 @@ import { format } from "date-fns";
 import {
   ArrowDownUp,
   ChevronDown,
+  Download,
   IndianRupee,
+  Loader2,
   Phone,
   Search,
   Smartphone,
@@ -151,6 +153,21 @@ export function SuppliersPage() {
   const [error, setError] = useState<string | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [payNotice, setPayNotice] = useState<string | null>(null);
+  const [statementBusyId, setStatementBusyId] = useState<string | null>(null);
+
+  async function downloadStatement(supplier: Supplier) {
+    setStatementBusyId(supplier.id);
+    setError(null);
+    try {
+      await api.downloadSupplierStatement(supplier.id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not download statement",
+      );
+    } finally {
+      setStatementBusyId(null);
+    }
+  }
   const [query, setQuery] = useSessionState("suppliers.query", "");
   const { isAdmin } = useAuth();
   const [storedSortKey, setSortKey] = useSessionState<SortKey>(
@@ -563,6 +580,7 @@ export function SuppliersPage() {
                         <th className="text-right">Purchased</th>
                         <th className="text-right">Paid</th>
                         <th className="text-right">Outstanding</th>
+                        <th className="text-center">Statement</th>
                       </>
                     ) : null}
                   </tr>
@@ -613,6 +631,25 @@ export function SuppliersPage() {
                           <td className="text-right tabular-nums font-bold text-ink-900">
                             {formatINR(s.outstanding)}
                           </td>
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="inline-grid h-7 w-7 place-items-center rounded-lg text-ink-500 transition hover:bg-tide-100 hover:text-tide-600 disabled:opacity-50"
+                              aria-label={`Download statement for ${s.name}`}
+                              title="Download statement (PDF)"
+                              disabled={statementBusyId !== null}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void downloadStatement(s);
+                              }}
+                            >
+                              {statementBusyId === s.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </button>
+                          </td>
                         </>
                       ) : null}
                     </tr>
@@ -634,6 +671,7 @@ export function SuppliersPage() {
                         <td className="text-right tabular-nums">
                           {formatINR(totals.outstanding)}
                         </td>
+                        <td />
                       </>
                     ) : null}
                   </tr>

@@ -21,7 +21,6 @@ import type {
   Supplier,
   SupplierDetail,
   SupplierMobile,
-  SupplierPayment,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -501,22 +500,36 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  createSupplierPayment: (
-    id: string,
-    payload: {
-      amount: number;
-      method: "cash" | "online" | "na";
-      paidAt?: string | null;
-      note?: string | null;
-    },
-  ) =>
-    request<{ data: SupplierPayment; ledger: Supplier }>(
-      `/suppliers/${id}/payments`,
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
-    ),
+  /** Download the supplier statement PDF (purchases Cr / payments Dr). */
+  downloadSupplierStatement: async (supplierId: string) => {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/statement`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download statement";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "supplier-statement.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
   createPurchase: (payload: {
     supplierId?: string | null;
     supplierName?: string | null;
