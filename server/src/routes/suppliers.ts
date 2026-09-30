@@ -468,6 +468,113 @@ suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
+const paySupplierSchema = z.object({
+  /** Omit to clear everything outstanding; otherwise a part payment. */
+  amount: z.number().positive().finite().optional(),
+});
+
+/**
+ * Admin only: pay a supplier against their outstanding. The amount is applied
+ * to unpaid purchases oldest first (same fields as a per-purchase mark-paid),
+ * and can never be more than what is outstanding.
+ */
+suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = paySupplierSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Enter a valid amount" });
+      return;
+    }
+    // Work in paise so rounding can't leave ₹0.01 behind or overpay.
+    const requestedPaise =
+      parsed.data.amount === undefined
+        ? null
+        : Math.round(parsed.data.amount * 100);
+    if (requestedPaise !== null && requestedPaise <= 0) {
+      res.status(400).json({ error: "Enter an amount above ₹0" });
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findUnique({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (!supplier) return { status: 404, error: "Supplier not found" } as const;
+
+      const unpaid = await tx.purchase.findMany({
+        where: { supplierId: supplier.id, paidAt: null },
+        select: { id: true, totalAmount: true, paidAmount: true },
+        orderBy: [{ purchaseDate: "asc" }, { createdAt: "asc" }],
+      });
+      const open = unpaid
+        .map((p) => {
+          const totalPaise = Math.round((p.totalAmount || 0) * 100);
+          const paidPaise = Math.min(
+            Math.round((p.paidAmount || 0) * 100),
+            totalPaise,
+          );
+          return { ...p, totalPaise, leftPaise: totalPaise - paidPaise, paidPaise };
+        })
+        .filter((p) => p.leftPaise > 0);
+      const outstandingPaise = open.reduce((sum, p) => sum + p.leftPaise, 0);
+
+      if (outstandingPaise <= 0) {
+        return { status: 400, error: "Nothing is outstanding for this supplier" } as const;
+      }
+      if (requestedPaise !== null && requestedPaise > outstandingPaise) {
+        return {
+          status: 400,
+          error: `Amount is more than the ₹${(outstandingPaise / 100).toLocaleString("en-IN", {
+            minimumFractionDigits: outstandingPaise % 100 ? 2 : 0,
+            maximumFractionDigits: 2,
+          })} outstanding`,
+        } as const;
+      }
+
+      let leftToApply = requestedPaise ?? outstandingPaise;
+      let purchasesCleared = 0;
+      const now = new Date();
+      for (const p of open) {
+        if (leftToApply <= 0) break;
+        const apply = Math.min(leftToApply, p.leftPaise);
+        leftToApply -= apply;
+        const newPaidPaise = p.paidPaise + apply;
+        const fullyPaid = newPaidPaise >= p.totalPaise;
+        if (fullyPaid) purchasesCleared += 1;
+        await tx.purchase.update({
+          where: { id: p.id },
+          data: fullyPaid
+            ? { paidAt: now, paidAmount: p.totalAmount }
+            : { paidAmount: newPaidPaise / 100 },
+        });
+      }
+
+      const paidPaise = (requestedPaise ?? outstandingPaise) - leftToApply;
+      return {
+        status: 200,
+        paid: paidPaise / 100,
+        purchasesCleared,
+        outstanding: (outstandingPaise - paidPaise) / 100,
+      } as const;
+    });
+
+    if (result.status !== 200) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({
+      data: {
+        paid: result.paid,
+        purchasesCleared: result.purchasesCleared,
+        outstanding: result.outstanding,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 suppliersRouter.post("/:id/payments", async (req, res, next) => {
   try {
     const supplier = await prisma.supplier.findUnique({

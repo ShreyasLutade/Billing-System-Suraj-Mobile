@@ -85,23 +85,36 @@ export function PageHeader({
   title,
   description,
   action,
+  titleAction,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
   action?: ReactNode;
+  /** Shown on the same line as the title (right side), on every screen size. */
+  titleAction?: ReactNode;
 }) {
+  const heading = (
+    <h1 className="babu-page-title font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
+      {title}
+    </h1>
+  );
   return (
     <div className="babu-page-header mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+      <div className={titleAction ? "w-full min-w-0 flex-1" : undefined}>
         {eyebrow ? (
           <p className="babu-eyebrow mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="babu-page-title font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
-          {title}
-        </h1>
+        {titleAction ? (
+          <div className="flex items-center justify-between gap-3">
+            {heading}
+            {titleAction}
+          </div>
+        ) : (
+          heading
+        )}
         {description ? (
           <p className="babu-page-description mt-2 max-w-2xl text-sm leading-relaxed text-ink-500 sm:text-base">
             {description}

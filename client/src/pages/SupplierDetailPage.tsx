@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Download, X } from "lucide-react";
+import { Check, Download, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
@@ -48,17 +48,23 @@ export function SupplierDetailPage() {
     ["purchases", "stock"] as const,
     "purchases",
   );
-  const [confirmPurchase, setConfirmPurchase] = useState<Purchase | null>(null);
-  const [markingPaid, setMarkingPaid] = useState(false);
-  const [payMode, setPayMode] = useState<"full" | "custom">("full");
-  const [customAmount, setCustomAmount] = useState("");
-  const [payError, setPayError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  function openMarkPaid(purchase: Purchase) {
-    setPayMode("full");
-    setCustomAmount("");
-    setPayError(null);
-    setConfirmPurchase(purchase);
+  async function deleteSupplier() {
+    if (!id) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteSupplier(id);
+      navigate(from ?? "/suppliers", { replace: true });
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete supplier",
+      );
+      setDeleting(false);
+    }
   }
 
   async function load() {
@@ -78,34 +84,6 @@ export function SupplierDetailPage() {
   useEffect(() => {
     void load();
   }, [id]);
-
-  async function confirmMarkPaid() {
-    if (!confirmPurchase) return;
-    let amount: number | undefined;
-    if (payMode === "custom") {
-      amount = Number(customAmount);
-      const remaining = purchaseRemaining(confirmPurchase);
-      if (!customAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
-        setPayError("Enter the amount paid");
-        return;
-      }
-      if (amount > remaining + 0.005) {
-        setPayError(`Amount can't be more than ${formatINR(remaining)} left`);
-        return;
-      }
-    }
-    setMarkingPaid(true);
-    setPayError(null);
-    try {
-      await api.markPurchasePaid(confirmPurchase.id, amount);
-      setConfirmPurchase(null);
-      await load();
-    } catch (err) {
-      setPayError(err instanceof Error ? err.message : "Failed to mark as paid");
-    } finally {
-      setMarkingPaid(false);
-    }
-  }
 
   async function exportMobilesExcel(condition: "NEW" | "USED") {
     if (!id) return;
@@ -204,6 +182,19 @@ export function SupplierDetailPage() {
             </div>
           ) : null}
         </div>
+        {isAdmin ? (
+          <button
+            type="button"
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-[11px] border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
+            onClick={() => {
+              setDeleteError(null);
+              setConfirmDelete(true);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete supplier
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -315,16 +306,10 @@ export function SupplierDetailPage() {
                               Paid
                             </span>
                           ) : (
-                            <button
-                              type="button"
-                              className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-300"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openMarkPaid(p);
-                              }}
-                            >
-                              Mark paid
-                            </button>
+                            // Payments are made with "Pay supplier" on the Suppliers page.
+                            <span className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400">
+                              {partPaid ? "Part paid" : "Unpaid"}
+                            </span>
                           )}
                           {partPaid ? (
                             <span className="mt-1 block text-[11px] font-medium tabular-nums text-ink-500">
@@ -402,154 +387,80 @@ export function SupplierDetailPage() {
       ) : null}
 
       <AnimatePresence>
-        {isAdmin && confirmPurchase ? (
+        {isAdmin && confirmDelete ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => !markingPaid && setConfirmPurchase(null)}
+            onClick={() => !deleting && setConfirmDelete(false)}
           >
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-labelledby="mark-paid-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift"
+              aria-labelledby="delete-supplier-title"
+              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
               initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-                    Confirm
-                  </p>
-                  <h2
-                    id="mark-paid-title"
-                    className="mt-1 font-display text-xl font-semibold text-ink-900"
-                  >
-                    Mark this purchase as paid?
-                  </h2>
-                </div>
+                <h2
+                  id="delete-supplier-title"
+                  className="mt-0.5 font-display text-xl font-semibold text-ink-900"
+                >
+                  Delete {data.name}?
+                </h2>
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                  onClick={() => setConfirmPurchase(null)}
-                  disabled={markingPaid}
+                  className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
+                  onClick={() => !deleting && setConfirmDelete(false)}
                   aria-label="Close"
+                  disabled={deleting}
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
+
               <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
                 <p>
-                  <span className="text-ink-500">Date · </span>
-                  {formatDate(confirmPurchase.purchaseDate)}
+                  This will permanently remove{" "}
+                  <span className="font-semibold text-ink-800">{data.name}</span>{" "}
+                  with all its purchases and payments.
                 </p>
-                <p>
-                  <span className="text-ink-500">Qty · </span>
-                  {confirmPurchase.items.length}
-                </p>
-                <p className="text-base font-semibold text-ink-900">
-                  Amount {formatINR(confirmPurchase.totalAmount)}
-                </p>
-                {(confirmPurchase.paidAmount ?? 0) > 0 ? (
+                {data.stockAvailable > 0 ? (
                   <p>
-                    <span className="text-ink-500">Already paid · </span>
-                    {formatINR(confirmPurchase.paidAmount ?? 0)}
-                    <span className="text-ink-500"> · Left · </span>
-                    <span className="font-semibold text-ink-900">
-                      {formatINR(purchaseRemaining(confirmPurchase))}
-                    </span>
+                    Its {data.stockAvailable} phone
+                    {data.stockAvailable === 1 ? "" : "s"} in stock will also be
+                    removed.
                   </p>
                 ) : null}
-
-                <div
-                  className="grid grid-cols-2 gap-2 pt-2"
-                  role="radiogroup"
-                  aria-label="How much was paid"
-                >
-                  {(
-                    [
-                      { value: "full", label: "Fully paid" },
-                      { value: "custom", label: "Custom" },
-                    ] as const
-                  ).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={payMode === option.value}
-                      className={clsx(
-                        "rounded-xl border px-3 py-2 text-sm font-semibold transition",
-                        payMode === option.value
-                          ? "border-tide-500 bg-tide-100/80 text-bright dark:border-tide-400 dark:bg-tide-400/15 dark:text-tide-400"
-                          : "border-ink-100 text-ink-600 hover:bg-ink-50",
-                      )}
-                      onClick={() => {
-                        setPayMode(option.value);
-                        setPayError(null);
-                      }}
-                      disabled={markingPaid}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
-                {payMode === "custom" ? (
-                  <label className="block pt-1">
-                    <span className="mb-1 block text-xs font-semibold text-ink-500">
-                      Amount paid now (max {formatINR(purchaseRemaining(confirmPurchase))})
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="0.01"
-                      className="field w-full"
-                      placeholder="0"
-                      value={customAmount}
-                      autoFocus
-                      onChange={(event) => {
-                        setCustomAmount(event.target.value);
-                        setPayError(null);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") void confirmMarkPaid();
-                      }}
-                      disabled={markingPaid}
-                    />
-                  </label>
-                ) : (
-                  <p className="text-ink-500">
-                    This will clear the full {formatINR(purchaseRemaining(confirmPurchase))} for {data.name}.
-                  </p>
-                )}
               </div>
-              {payError ? (
+
+              {deleteError ? (
                 <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {payError}
+                  {deleteError}
                 </p>
               ) : null}
+
               <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setConfirmPurchase(null)}
-                  disabled={markingPaid}
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="btn-primary"
-                  onClick={() => void confirmMarkPaid()}
-                  disabled={markingPaid}
+                  className="btn-danger"
+                  onClick={() => void deleteSupplier()}
+                  disabled={deleting}
                 >
-                  <Check className="h-4 w-4" />
-                  {markingPaid ? "Saving…" : "Confirm"}
+                  <Trash2 className="h-4 w-4" />
+                  {deleting ? "Deleting…" : "Delete"}
                 </button>
               </div>
             </motion.div>

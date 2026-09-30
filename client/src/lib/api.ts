@@ -540,6 +540,14 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   /** No amount = mark the whole purchase paid; with amount = part payment. */
+  /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
+  paySupplier: (id: string, amount?: number) =>
+    request<{
+      data: { paid: number; purchasesCleared: number; outstanding: number };
+    }>(`/suppliers/${id}/pay`, {
+      method: "POST",
+      body: JSON.stringify(amount === undefined ? {} : { amount }),
+    }),
   markPurchasePaid: (id: string, amount?: number) =>
     request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
       method: "POST",

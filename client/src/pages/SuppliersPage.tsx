@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownUp,
   ChevronDown,
+  IndianRupee,
   Phone,
   Search,
   Smartphone,
-  Trash2,
   X,
 } from "lucide-react";
 import clsx from "clsx";
@@ -21,6 +20,7 @@ import {
   SearchClearButton,
 } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
+import { PaySupplierModal } from "../components/PaySupplierModal";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
 import { ApiError, api, formatINR, formatStockUnitId } from "../lib/api";
@@ -149,6 +149,8 @@ export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payNotice, setPayNotice] = useState<string | null>(null);
   const [query, setQuery] = useSessionState("suppliers.query", "");
   const { isAdmin } = useAuth();
   const [storedSortKey, setSortKey] = useSessionState<SortKey>(
@@ -171,9 +173,6 @@ export function SuppliersPage() {
   const [mobiles, setMobiles] = useState<SupplierMobile[] | null>(null);
   const [mobilesError, setMobilesError] = useState<string | null>(null);
   const mobilesRequested = useRef(false);
-  const [pendingDelete, setPendingDelete] = useState<Supplier | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -191,24 +190,6 @@ export function SuppliersPage() {
   useEffect(() => {
     void load();
   }, []);
-
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await api.deleteSupplier(pendingDelete.id);
-      const removedId = pendingDelete.id;
-      setPendingDelete(null);
-      setSuppliers((list) => list.filter((s) => s.id !== removedId));
-    } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete supplier",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   useEffect(() => {
     if (!sortOpen) return;
@@ -352,7 +333,36 @@ export function SuppliersPage() {
       <PageHeader
         title="Suppliers"
         description="Supplier ledger — purchases, payments, and outstanding."
+        titleAction={
+          isAdmin ? (
+            <button
+              type="button"
+              className="btn-primary shrink-0"
+              onClick={() => {
+                setPayNotice(null);
+                setPayOpen(true);
+              }}
+            >
+              <IndianRupee className="h-4 w-4" />
+              Pay supplier
+            </button>
+          ) : null
+        }
       />
+
+      {payNotice ? (
+        <div className="mb-3 flex items-start justify-between gap-3 rounded-[14px] border border-[#BFE9D6] bg-[#E7F8F1] px-4 py-3 text-sm font-medium text-[#0B7A5B] dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <span>{payNotice}</span>
+          <button
+            type="button"
+            className="shrink-0 opacity-70 hover:opacity-100"
+            aria-label="Dismiss"
+            onClick={() => setPayNotice(null)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
 
       <div className="tb-toolbar">
         <div className="tb-searchrow">
@@ -553,7 +563,6 @@ export function SuppliersPage() {
                         <th className="text-right">Purchased</th>
                         <th className="text-right">Paid</th>
                         <th className="text-right">Outstanding</th>
-                        <th className="text-right">Action</th>
                       </>
                     ) : null}
                   </tr>
@@ -604,21 +613,6 @@ export function SuppliersPage() {
                           <td className="text-right tabular-nums font-bold text-ink-900">
                             {formatINR(s.outstanding)}
                           </td>
-                          <td className="text-right">
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
-                              disabled={deleting}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDeleteError(null);
-                                setPendingDelete(s);
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              Delete
-                            </button>
-                          </td>
                         </>
                       ) : null}
                     </tr>
@@ -640,7 +634,6 @@ export function SuppliersPage() {
                         <td className="text-right tabular-nums">
                           {formatINR(totals.outstanding)}
                         </td>
-                        <td />
                       </>
                     ) : null}
                   </tr>
@@ -668,89 +661,18 @@ export function SuppliersPage() {
         </>
       )}
 
-      <AnimatePresence>
-        {isAdmin && pendingDelete ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => !deleting && setPendingDelete(null)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-supplier-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <h2
-                  id="delete-supplier-title"
-                  className="mt-0.5 font-display text-xl font-semibold text-ink-900"
-                >
-                  Delete {pendingDelete.name}?
-                </h2>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                  onClick={() => !deleting && setPendingDelete(null)}
-                  aria-label="Close"
-                  disabled={deleting}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
-                <p>
-                  This will permanently remove{" "}
-                  <span className="font-semibold text-ink-800">
-                    {pendingDelete.name}
-                  </span>{" "}
-                  with all its purchases and payments.
-                </p>
-                {pendingDelete.stockAvailable > 0 ? (
-                  <p>
-                    Its {pendingDelete.stockAvailable} phone
-                    {pendingDelete.stockAvailable === 1 ? "" : "s"} in stock
-                    will also be removed.
-                  </p>
-                ) : null}
-              </div>
-
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
-
-              <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setPendingDelete(null)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => void confirmDelete()}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      {isAdmin ? (
+        <PaySupplierModal
+          open={payOpen}
+          suppliers={suppliers}
+          onClose={() => setPayOpen(false)}
+          onPaid={(message) => {
+            setPayOpen(false);
+            setPayNotice(message);
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
