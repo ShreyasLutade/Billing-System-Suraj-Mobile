@@ -52,6 +52,11 @@ export function SupplierDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  function openDeleteSupplier() {
+    setDeleteError(null);
+    setConfirmDelete(true);
+  }
+
   async function deleteSupplier() {
     if (!id) return;
     setDeleting(true);
@@ -179,17 +184,23 @@ export function SupplierDetailPage() {
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                 {exporting === "USED" ? "Exporting…" : "Export old"}
               </button>
+              {/* Phones: delete sits in this row, aligned with the exports. */}
+              <button
+                type="button"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border border-rose-200 bg-rose-50 px-2 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 sm:hidden"
+                onClick={openDeleteSupplier}
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                Delete
+              </button>
             </div>
           ) : null}
         </div>
         {isAdmin ? (
           <button
             type="button"
-            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-[11px] border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
-            onClick={() => {
-              setDeleteError(null);
-              setConfirmDelete(true);
-            }}
+            className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-[11px] border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 sm:inline-flex"
+            onClick={openDeleteSupplier}
           >
             <Trash2 className="h-4 w-4" />
             Delete supplier
