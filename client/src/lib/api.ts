@@ -24,6 +24,23 @@ import type {
   SupplierMobile,
 } from "../types";
 
+/** Something deleted that can still be undone (kept a few days). */
+export type RecycleBinEntry = {
+  id: string;
+  kind: "BILL" | "SUPPLIER" | "STOCK";
+  label: string;
+  detail: string | null;
+  deletedAt: string;
+  deletedByName: string | null;
+  /** When it is removed for good. */
+  expiresAt: string;
+};
+
+/** Paid to the supplier while entering a purchase (omit = unpaid). */
+export type PaymentAtPurchase =
+  | { mode: "FULL" | "UNPAID" }
+  | { mode: "CUSTOM"; amount: number };
+
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "suraj_billing_token";
 
@@ -331,6 +348,7 @@ export const api = {
     supplierId?: string | null;
     supplierName?: string | null;
     supplierPhone?: string | null;
+    payment?: PaymentAtPurchase | null;
   }) =>
     request<{ data: StockItem[] }>("/stock/accessories", {
       method: "POST",
@@ -401,6 +419,18 @@ export const api = {
     }),
   stockHistory: (id: string) =>
     request<{ data: StockHistory }>(`/stock/${id}/history`),
+  /** Admin: things deleted in the last few days (meta.days). */
+  listRecycleBin: () =>
+    request<{ data: RecycleBinEntry[]; meta: { days: number } }>("/recycle-bin"),
+  /** Undo a delete. 409 with a reason when it can't be restored any more. */
+  restoreRecycleBinEntry: (id: string) =>
+    request<{ data: { kind: RecycleBinEntry["kind"]; label: string; path: string } }>(
+      `/recycle-bin/${id}/restore`,
+      { method: "POST" },
+    ),
+  /** Delete everything in the bin for good. */
+  emptyRecycleBin: () =>
+    request<{ data: { removed: number } }>("/recycle-bin", { method: "DELETE" }),
   listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
   deleteSupplier: (id: string) =>
     request<{ data: { id: string; stock: number; purchases: number } }>(
@@ -561,6 +591,7 @@ export const api = {
       serialNumber?: string;
       purchasePrice: number;
     }>;
+    payment?: PaymentAtPurchase | null;
   }) =>
     request<{ data: Purchase }>("/purchases", {
       method: "POST",

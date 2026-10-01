@@ -149,7 +149,10 @@ model BillItem {
   imei1          String?
   imei2          String?
   serialNumber   String?
+  /// Older bills only: warranty as a number of months
   warrantyMonths Int?
+  /// Free text, e.g. "1 year", "6 months", "No warranty"
+  warranty       String?
   bill           Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
   mobileCatalog  MobileCatalog? @relation(fields: [mobileCatalogId], references: [id])
   stockItem      StockItem? @relation(fields: [stockItemId], references: [id])
@@ -301,6 +304,8 @@ model Purchase {
   updatedAt    DateTime  @updatedAt
   supplier     Supplier  @relation(fields: [supplierId], references: [id])
   items        PurchaseItem[]
+  /// Payment made while entering this purchase (Fully paid / Custom paid)
+  payments     SupplierPayment[]
 
   @@index([supplierId])
   @@index([purchaseDate])
@@ -354,11 +359,31 @@ model SupplierPayment {
   method     String
   paidAt     DateTime @default(now())
   note       String?
+  /// Set when paid while entering this purchase ("Paid at purchase")
+  purchaseId String?
   createdAt  DateTime @default(now())
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
   @@index([paidAt])
+  @@index([purchaseId])
+}
+
+/// Recycle bin: a snapshot of everything a delete removed, kept for 3 days so
+/// the delete can be undone. `payload` is JSON (rows by table).
+model RecycleBinEntry {
+  id            String   @id @default(cuid())
+  /// BILL | SUPPLIER | STOCK
+  kind          String
+  label         String
+  detail        String?
+  payload       String
+  deletedAt     DateTime @default(now())
+  deletedById   String?
+  deletedByName String?
+
+  @@index([deletedAt])
 }
 
 /// Repair desk intake — kept separate from shop bills and stock.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
+import { AnimatePresence } from "framer-motion";
 import {
   ArrowDownUp,
   Cable,
@@ -17,6 +18,7 @@ import type { AddStockLocationState } from "./AddStockPage";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
@@ -236,6 +238,9 @@ export function StockPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useSessionState("stock.query", "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** Unit waiting on the delete warning. */
+  const [pendingRemove, setPendingRemove] = useState<StockItem | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [editingUnit, setEditingUnit] = useState<StockItem | null>(null);
   const [selectedKey, setSelectedKeyState] = useState<string | null>(
     () => itemFromUrl,
@@ -395,17 +400,12 @@ export function StockPage() {
   );
 
   async function removeItem(item: StockItem) {
-    if (
-      !window.confirm(
-        `Remove ${item.mobileName} (${formatStockUnitId(item)}) from stock?`,
-      )
-    ) {
-      return;
-    }
     setDeletingId(item.id);
+    setRemoveError(null);
     setError(null);
     try {
       await api.deleteStockItem(item.id);
+      setPendingRemove(null);
       setItems((current) => {
         const next = current.filter((row) => row.id !== item.id);
         if (!next.some((row) => stockGroupKey(row) === stockGroupKey(item))) {
@@ -414,7 +414,7 @@ export function StockPage() {
         return next;
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove item");
+      setRemoveError(err instanceof Error ? err.message : "Failed to remove item");
     } finally {
       setDeletingId(null);
     }
@@ -456,8 +456,38 @@ export function StockPage() {
           isAdmin={isAdmin}
           onBack={() => setSelectedKey(null)}
           onEdit={setEditingUnit}
-          onRemove={(unit) => void removeItem(unit)}
+          onRemove={(unit) => {
+            setRemoveError(null);
+            setPendingRemove(unit);
+          }}
         />
+        <AnimatePresence>
+          {pendingRemove ? (
+            <DangerConfirmModal
+              undoDays={RECYCLE_BIN_DAYS}
+              key="remove-stock"
+              title={
+                pendingRemove.kind === "ACCESSORY"
+                  ? "Delete this accessory?"
+                  : "Delete this phone?"
+              }
+              subtitle={
+                <>
+                  {pendingRemove.mobileName} ·{" "}
+                  <span className="font-mono">
+                    {formatStockUnitId(pendingRemove)}
+                  </span>
+                </>
+              }
+              points={["It is removed from stock and from its purchase."]}
+              cancelLabel="Keep it"
+              working={deletingId === pendingRemove.id}
+              error={removeError}
+              onCancel={() => deletingId === null && setPendingRemove(null)}
+              onConfirm={() => void removeItem(pendingRemove)}
+            />
+          ) : null}
+        </AnimatePresence>
         {editingUnit && isAdmin && editingUnit.kind !== "ACCESSORY" ? (
           <EditStockUnitModal
             unit={editingUnit}

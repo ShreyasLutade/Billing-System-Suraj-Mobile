@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { Check, Download, Trash2, X } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { Download, Trash2 } from "lucide-react";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, formatStockUnitId } from "../lib/api";
-import type { Purchase, SupplierDetail } from "../types";
+import type { SupplierDetail } from "../types";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { backLabel, fromState, readFromState } from "../lib/navMemory";
 
@@ -19,12 +20,6 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(date);
-}
-
-/** What's still owed on a purchase (0 once marked paid). */
-function purchaseRemaining(p: Purchase) {
-  if (p.paidAt) return 0;
-  return Math.max(p.totalAmount - (p.paidAmount ?? 0), 0);
 }
 
 function addedByLabel(name?: string | null) {
@@ -257,18 +252,11 @@ export function SupplierDetailPage() {
                   <tr>
                     <th>Date</th>
                     <th className="text-right">Qty</th>
-                    {isAdmin ? (
-                      <>
-                        <th className="text-right">Amount</th>
-                        <th className="text-right">Status</th>
-                      </>
-                    ) : null}
+                    {isAdmin ? <th className="text-right">Amount</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {data.purchases.map((p) => {
-                    const paid = Boolean(p.paidAt);
-                    const partPaid = !paid && (p.paidAmount ?? 0) > 0;
                     const addedBy = addedByLabel(p.createdByName);
                     return (
                       <tr
@@ -306,29 +294,9 @@ export function SupplierDetailPage() {
                           {p.items.length}
                         </td>
                         {isAdmin ? (
-                          <>
                           <td className="text-right tabular-nums font-semibold text-ink-900">
                             {formatINR(p.totalAmount)}
                           </td>
-                        <td className="text-right">
-                          {paid ? (
-                            <span className="inline-flex items-center gap-1 rounded border border-tide-500/30 bg-tide-100/80 px-2 py-1 text-xs font-semibold text-bright dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400">
-                              <Check className="h-3.5 w-3.5" />
-                              Paid
-                            </span>
-                          ) : (
-                            // Payments are made with "Pay supplier" on the Suppliers page.
-                            <span className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400">
-                              {partPaid ? "Part paid" : "Unpaid"}
-                            </span>
-                          )}
-                          {partPaid ? (
-                            <span className="mt-1 block text-[11px] font-medium tabular-nums text-ink-500">
-                              {formatINR(purchaseRemaining(p))} left
-                            </span>
-                          ) : null}
-                        </td>
-                          </>
                         ) : null}
                       </tr>
                     );
@@ -399,83 +367,24 @@ export function SupplierDetailPage() {
 
       <AnimatePresence>
         {isAdmin && confirmDelete ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => !deleting && setConfirmDelete(false)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-supplier-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <h2
-                  id="delete-supplier-title"
-                  className="mt-0.5 font-display text-xl font-semibold text-ink-900"
-                >
-                  Delete {data.name}?
-                </h2>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                  onClick={() => !deleting && setConfirmDelete(false)}
-                  aria-label="Close"
-                  disabled={deleting}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
-                <p>
-                  This will permanently remove{" "}
-                  <span className="font-semibold text-ink-800">{data.name}</span>{" "}
-                  with all its purchases and payments.
-                </p>
-                {data.stockAvailable > 0 ? (
-                  <p>
-                    Its {data.stockAvailable} phone
-                    {data.stockAvailable === 1 ? "" : "s"} in stock will also be
-                    removed.
-                  </p>
-                ) : null}
-              </div>
-
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
-
-              <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => void deleteSupplier()}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <DangerConfirmModal
+            undoDays={RECYCLE_BIN_DAYS}
+            title="Delete supplier?"
+            subtitle={data.name}
+            points={[
+              "The supplier is removed with all its purchases and payments.",
+              ...(data.stockAvailable > 0
+                ? [
+                    `Its ${data.stockAvailable} phone${data.stockAvailable === 1 ? "" : "s"} in stock will also be deleted.`,
+                  ]
+                : []),
+            ]}
+            cancelLabel="Keep supplier"
+            working={deleting}
+            error={deleteError}
+            onCancel={() => !deleting && setConfirmDelete(false)}
+            onConfirm={() => void deleteSupplier()}
+          />
         ) : null}
       </AnimatePresence>
     </div>

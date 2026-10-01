@@ -15,7 +15,10 @@ export type BillItem = {
   imei1?: string | null;
   imei2?: string | null;
   serialNumber?: string | null;
+  /** Older bills only; new bills use `warranty`. */
   warrantyMonths?: number | null;
+  /** Free text, e.g. "1 year", "6 months", "No warranty". */
+  warranty?: string | null;
 };
 
 export type DuePayment = {

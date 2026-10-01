@@ -35,6 +35,8 @@ export const billItemSchema = z
     imei2: z.string().trim().optional().nullable(),
     serialNumber: z.string().trim().optional().nullable(),
     warrantyMonths: z.number().int().positive().optional().nullable(),
+    /** Free text ("1 year", "6 months", "No warranty"); replaces warrantyMonths. */
+    warranty: z.string().trim().max(80).optional().nullable(),
   })
   .superRefine((item, ctx) => {
     if (!item.platform || item.platform === "ACCESSORY") return;
@@ -361,7 +363,9 @@ export function computeBillTotals(input: CreateBillInput) {
       imei1: item.imei1 || null,
       imei2: item.imei2 || null,
       serialNumber: item.serialNumber || null,
-      warrantyMonths: item.warrantyMonths ?? null,
+      // Text wins; months are only kept for clients that still send them.
+      warranty: item.warranty || null,
+      warrantyMonths: item.warranty ? null : (item.warrantyMonths ?? null),
       amount: amount.toNumber(),
       base: base.toNumber(),
       gstAmount: gstAmount.toNumber(),

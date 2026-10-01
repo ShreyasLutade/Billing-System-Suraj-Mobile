@@ -477,6 +477,22 @@ body,
   color: #e0364f;
 }
 
+/* Always-red menu entry (Recycle bin). */
+.babu-user-menu-item.is-red,
+.babu-utility-button.is-red,
+.babu-shell.is-sidebar-collapsed .babu-utility-button.is-red svg {
+  color: #e0364f;
+}
+.babu-user-menu-item.is-red:hover,
+.babu-user-menu-item.is-red:focus-visible {
+  color: #c81e3a;
+  background: rgba(224, 54, 79, 0.08);
+}
+.babu-utility-button.is-red:hover {
+  border-color: #e0364f;
+  color: #c81e3a;
+}
+
 /* Collapsed sidebar: avatar only, menu opens to the right. */
 .babu-shell.is-sidebar-collapsed .babu-user-chevron {
   display: none;

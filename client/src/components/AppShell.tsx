@@ -20,6 +20,7 @@ import {
   Package,
   ReceiptText,
   Sun,
+  Trash2,
   Truck,
   Wallet,
   Wrench,
@@ -263,6 +264,19 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     <Package /> Restore data
                   </Link>
                 ) : null}
+                {isAdmin ? (
+                  <Link
+                    to="/recycle-bin"
+                    role="menuitem"
+                    className="babu-user-menu-item is-red"
+                    onClick={() => {
+                      onMainNavClick();
+                      setUserMenuOpen(false);
+                    }}
+                  >
+                    <Trash2 /> Recycle bin
+                  </Link>
+                ) : null}
                 <button
                   type="button"
                   role="menuitem"
@@ -384,6 +398,18 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     className="babu-utility-button"
                   >
                     <Package /> Restore data
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <Link
+                    to="/recycle-bin"
+                    onClick={() => {
+                      onMainNavClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="babu-utility-button is-red"
+                  >
+                    <Trash2 /> Recycle bin
                   </Link>
                 ) : null}
                 <button

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { SquarePen, Trash2, X } from "lucide-react";
+import { SquarePen, Trash2 } from "lucide-react";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
@@ -492,85 +493,29 @@ export function PurchaseDetailPage() {
 
       <AnimatePresence>
         {isAdmin && pendingDelete ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => !deleting && setPendingDelete(null)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-purchase-unit-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <h2
-                  id="delete-purchase-unit-title"
-                  className="mt-0.5 font-display text-xl font-semibold text-ink-900"
-                >
-                  Delete {pendingDelete.mobileName}?
-                </h2>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                  onClick={() => !deleting && setPendingDelete(null)}
-                  aria-label="Close"
-                  disabled={deleting}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
-                <p>
-                  This will permanently remove{" "}
-                  <span className="font-semibold text-ink-800">
-                    {pendingDelete.mobileName}
-                  </span>{" "}
-                  (
-                  <span className="font-mono text-ink-800">
-                    {formatStockUnitId(pendingDelete)}
-                  </span>
-                  ) from this purchase and from stock.
-                </p>
-                {purchase.items.length === 1 ? (
-                  <p>This is the only phone in the purchase, so the purchase will also be removed.</p>
-                ) : null}
-              </div>
-
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
-
-              <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setPendingDelete(null)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => void confirmDelete()}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <DangerConfirmModal
+            undoDays={RECYCLE_BIN_DAYS}
+            title="Delete this phone?"
+            subtitle={
+              <>
+                {pendingDelete.mobileName} ·{" "}
+                <span className="font-mono">
+                  {formatStockUnitId(pendingDelete)}
+                </span>
+              </>
+            }
+            points={[
+              "The phone is removed from this purchase and from stock.",
+              ...(purchase.items.length === 1
+                ? ["It's the only phone in the purchase, so the purchase is removed too."]
+                : []),
+            ]}
+            cancelLabel="Keep phone"
+            working={deleting}
+            error={deleteError}
+            onCancel={() => !deleting && setPendingDelete(null)}
+            onConfirm={() => void confirmDelete()}
+          />
         ) : null}
       </AnimatePresence>
 

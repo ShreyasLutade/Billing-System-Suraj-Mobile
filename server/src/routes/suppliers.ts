@@ -11,6 +11,7 @@ import {
   applyPendingReturnCredits,
   settlePendingReturnCredits,
 } from "../services/productReturns";
+import { binSupplier } from "../services/recycleBin";
 import { format } from "date-fns";
 
 export const suppliersRouter = Router();
@@ -469,6 +470,16 @@ suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
     }
 
     const removed = await prisma.$transaction(async (tx) => {
+      const stockIds = await tx.stockItem.findMany({
+        where: stockWhere,
+        select: { id: true },
+      });
+      await binSupplier(
+        tx,
+        existing.id,
+        stockIds.map((s) => s.id),
+        req.user,
+      );
       // Purchase items cascade with their stock; payments cascade with the supplier.
       const stock = await tx.stockItem.deleteMany({ where: stockWhere });
       const purchases = await tx.purchase.deleteMany({

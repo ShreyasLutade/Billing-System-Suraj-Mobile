@@ -30,6 +30,7 @@ import {
   totalExchangeValue,
 } from "../lib/exchangeItems";
 import { requireAdmin } from "../middleware/auth";
+import { binBill } from "../services/recycleBin";
 
 export const billsRouter = Router();
 
@@ -809,6 +810,7 @@ billsRouter.post("/", async (req, res, next) => {
               imei2: item.imei2,
               serialNumber: item.serialNumber,
               warrantyMonths: item.warrantyMonths,
+              warranty: item.warranty,
             })),
           },
         },
@@ -1098,6 +1100,7 @@ billsRouter.put("/:id", async (req, res, next) => {
               imei2: item.imei2,
               serialNumber: item.serialNumber,
               warrantyMonths: item.warrantyMonths,
+              warranty: item.warranty,
             })),
           },
         },
@@ -1207,6 +1210,8 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
         return;
       }
 
+      // Keep a copy in the recycle bin so the delete can be undone.
+      await binBill(tx, existing.id, mode, req.user);
       await clearExchangeStock(tx, existing.invoiceNumber);
       await tx.bill.delete({ where: { id: existing.id } });
       if (mode === "restock") {

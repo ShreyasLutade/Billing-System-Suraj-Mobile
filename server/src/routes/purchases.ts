@@ -7,6 +7,11 @@ import { upsertPhoneModel } from "../services/phoneModels";
 import { requireAdmin } from "../middleware/auth";
 import { setPurchaseCondition } from "../services/fixPurchaseCondition";
 import { retireStockImei } from "../services/stockSync";
+import {
+  paymentAtPurchaseError,
+  paymentAtPurchaseSchema,
+  recordPaymentAtPurchase,
+} from "../services/purchasePayment";
 
 export const purchasesRouter = Router();
 
@@ -74,6 +79,8 @@ const createPurchaseSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
   purchaseDate: z.string().trim().optional().nullable(),
   items: z.array(purchaseItemSchema).min(1, "Add at least one mobile"),
+  /** Paid while entering the purchase (admin only). Omit = unpaid. */
+  payment: paymentAtPurchaseSchema.optional().nullable(),
 });
 
 purchasesRouter.get("/", async (req, res, next) => {
@@ -220,6 +227,14 @@ purchasesRouter.post("/", async (req, res, next) => {
     }
 
     const data = parsed.data;
+    if (
+      data.payment &&
+      data.payment.mode !== "UNPAID" &&
+      req.user?.role !== "ADMIN"
+    ) {
+      res.status(403).json({ error: "Only an admin can record a payment" });
+      return;
+    }
     const units = data.items.map((item) => ({
       imei: cleanId(item.imei) || null,
       serialNumber: cleanId(item.serialNumber) || null,
@@ -310,6 +325,11 @@ purchasesRouter.post("/", async (req, res, next) => {
     const totalAmount = round2(
       data.items.reduce((sum, item) => sum + item.purchasePrice, 0),
     );
+    const paymentError = paymentAtPurchaseError(data.payment, totalAmount);
+    if (paymentError) {
+      res.status(400).json({ error: paymentError });
+      return;
+    }
 
     const purchase = await prisma.$transaction(async (tx) => {
       for (const owner of soldImeiOwners) {
@@ -372,6 +392,8 @@ purchasesRouter.post("/", async (req, res, next) => {
         });
         stockItems.push(stock);
       }
+
+      await recordPaymentAtPurchase(tx, created, data.payment);
 
       return tx.purchase.findUniqueOrThrow({
         where: { id: created.id },

@@ -47,6 +47,7 @@ import {
   type DiffLine,
 } from "../lib/billDiff";
 import { ApiError, api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { warrantyText } from "../lib/warranty";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
 import { billsHomePath, readFromState } from "../lib/navMemory";
 import type {
@@ -79,7 +80,7 @@ const blankItem = (): DraftItem => ({
   gstPercent: 0,
   imei1: "",
   serialNumber: "",
-  warrantyMonths: undefined,
+  warranty: "",
 });
 
 const STOCK_AVATAR_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -562,7 +563,8 @@ export function CreateBillPage() {
             gstPercent: item.gstPercent,
             imei1: item.imei1 || "",
             serialNumber: item.serialNumber || "",
-            warrantyMonths: item.warrantyMonths ?? undefined,
+            // Older bills only have months; edit them as text.
+            warranty: warrantyText(item),
           }))
         : [blankItem()],
     );
@@ -1572,7 +1574,7 @@ export function CreateBillPage() {
           imei1: item.imei1 || null,
           imei2: null,
           serialNumber: item.serialNumber || null,
-          warrantyMonths: item.warrantyMonths || null,
+          warranty: item.warranty?.trim() || null,
         })),
       };
     }
@@ -1714,7 +1716,7 @@ export function CreateBillPage() {
         imei1: item.imei1 || null,
         imei2: null,
         serialNumber: item.serialNumber || null,
-        warrantyMonths: item.warrantyMonths || null,
+        warranty: item.warranty?.trim() || null,
       })),
     };
   }
@@ -2694,20 +2696,19 @@ export function CreateBillPage() {
                     ) : null}
                   </div>
                   <div>
-                    <label className="label">Warranty</label>
+                    <label className="label" htmlFor={`warranty-${item.key}`}>
+                      Warranty
+                    </label>
                     <input
+                      id={`warranty-${item.key}`}
                       className="field"
-                      type="number"
-                      min={1}
-                      value={item.warrantyMonths || ""}
+                      type="text"
+                      maxLength={80}
+                      value={item.warranty || ""}
                       onChange={(e) =>
-                        updateItem(item.key, {
-                          warrantyMonths: e.target.value
-                            ? Number(e.target.value)
-                            : undefined,
-                        })
+                        updateItem(item.key, { warranty: e.target.value })
                       }
-                      placeholder="Months"
+                      placeholder="e.g. 1 year, 6 months"
                     />
                   </div>
                 </div>

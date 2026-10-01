@@ -8,6 +8,14 @@ import {
   scanFieldInputClass,
 } from "../components/BarcodeImeiScanner";
 import { FieldPicker } from "../components/FieldPicker";
+import {
+  PaymentAtPurchaseField,
+  blankPayment,
+  paymentDraftError,
+  paymentPayload,
+  type PaymentDraft,
+} from "../components/PaymentAtPurchaseField";
+import { useAuth } from "../auth/AuthContext";
 import { BackButton, SearchClearButton } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
@@ -25,6 +33,10 @@ function insertAt<T>(list: T[], index: number, item: T) {
   const next = [...list];
   next.splice(Math.min(Math.max(index, 0), next.length), 0, item);
   return next;
+}
+
+function linesTotal(lines: QueuedAccessory[]) {
+  return lines.reduce((sum, line) => sum + line.purchasePrice * line.serials.length, 0);
 }
 
 function cleanSerial(value: string) {
@@ -238,6 +250,9 @@ function AccessoryNameSearch({
 
 export function AddAccessoriesPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  /** Paying a supplier is admin only; staff purchases stay unpaid. */
+  const [payment, setPayment] = useState<PaymentDraft>(blankPayment);
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [serials, setSerials] = useState<string[]>([""]);
@@ -461,6 +476,13 @@ export function AddAccessoriesPage() {
         : [...queued, result.line];
     }
 
+    const total = linesTotal(lines);
+    const paymentIssue = isAdmin ? paymentDraftError(payment, total) : null;
+    if (paymentIssue) {
+      setError(paymentIssue);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -475,6 +497,7 @@ export function AddAccessoriesPage() {
         supplierPhone: useNewSupplier
           ? supplierPhone.replace(/\D/g, "")
           : null,
+        payment: isAdmin ? paymentPayload(payment, total) : null,
       });
       goBack();
     } catch (err) {
@@ -496,6 +519,13 @@ export function AddAccessoriesPage() {
         ? editing.original.serials.length
         : 0
       : unitCount);
+  const purchaseTotal =
+    linesTotal(queued) +
+    (currentOptional
+      ? editing && currentIsBlank
+        ? linesTotal([editing.original])
+        : 0
+      : priceNum * unitCount);
 
   return (
     <div className="mx-auto max-w-lg">
@@ -789,6 +819,24 @@ export function AddAccessoriesPage() {
           <Plus className="h-[17px] w-[17px]" strokeWidth={2.2} />
           {editing ? "Done editing · add another" : "Add another accessory"}
         </button>
+
+        {isAdmin ? (
+          <section className="rounded-[14px] border border-ink-100 bg-[#FBFCFD] p-3.5 dark:border-ink-100 dark:bg-surface-muted">
+            <div className="mb-2.5 flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold text-ink-900">Total purchase</span>
+              <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                {formatINR(purchaseTotal)}
+              </span>
+            </div>
+            <PaymentAtPurchaseField
+              idPrefix="acc-payment"
+              value={payment}
+              total={purchaseTotal}
+              disabled={saving}
+              onChange={setPayment}
+            />
+          </section>
+        ) : null}
 
         {error ? (
           <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">

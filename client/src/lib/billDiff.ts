@@ -1,4 +1,5 @@
 import { formatINR } from "./api";
+import { warrantyText } from "./warranty";
 import type { Bill, CreateBillPayload } from "../types";
 
 export type DiffKind = "added" | "removed" | "updated";
@@ -56,7 +57,7 @@ export type BillSnapshot = {
     gstPercent: number;
     imei1: string;
     serialNumber: string;
-    warrantyMonths: number | null;
+    warranty: string;
     amount: number;
   }>;
 };
@@ -168,7 +169,7 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
       gstPercent: item.gstPercent,
       imei1: item.imei1 || "",
       serialNumber: item.serialNumber || "",
-      warrantyMonths: item.warrantyMonths ?? null,
+      warranty: warrantyText(item),
       amount: item.amount ?? item.rate * item.quantity,
     })),
   };
@@ -230,7 +231,7 @@ export function payloadToSnapshot(
       gstPercent: item.gstPercent,
       imei1: item.imei1 || "",
       serialNumber: item.serialNumber || "",
-      warrantyMonths: item.warrantyMonths ?? null,
+      warranty: warrantyText(item),
       amount: totals.items[index]?.amount ?? item.rate * item.quantity,
     })),
   };
@@ -412,7 +413,7 @@ export function diffBillSnapshots(
       `GST ${prev.gstPercent}%`,
       prev.imei1 ? `IMEI ${prev.imei1}` : null,
       prev.serialNumber ? `Serial ${prev.serialNumber}` : null,
-      prev.warrantyMonths ? `Warranty ${prev.warrantyMonths}m` : null,
+      prev.warranty ? `Warranty ${prev.warranty}` : null,
       money(prev.amount),
     ]
       .filter(Boolean)
@@ -428,7 +429,7 @@ export function diffBillSnapshots(
       `GST ${next.gstPercent}%`,
       next.imei1 ? `IMEI ${next.imei1}` : null,
       next.serialNumber ? `Serial ${next.serialNumber}` : null,
-      next.warrantyMonths ? `Warranty ${next.warrantyMonths}m` : null,
+      next.warranty ? `Warranty ${next.warranty}` : null,
       money(next.amount),
     ]
       .filter(Boolean)

@@ -190,6 +190,7 @@ function addItemsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
     { header: "imei2", key: "imei2", width: 18 },
     { header: "serialNumber", key: "serialNumber", width: 16 },
     { header: "warrantyMonths", key: "warrantyMonths", width: 14 },
+    { header: "warranty", key: "warranty", width: 20 },
   ];
   styleHeader(sheet);
 
@@ -215,6 +216,7 @@ function addItemsSheet(wb: ExcelJS.Workbook, bills: BillWithItems[]) {
         imei2: item.imei2 || "",
         serialNumber: item.serialNumber || "",
         warrantyMonths: item.warrantyMonths ?? "",
+        warranty: item.warranty || "",
       });
     }
   }

@@ -20,8 +20,14 @@ import {
 import clsx from "clsx";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
+import {
+  DeletePermanentlyModal,
+  RECYCLE_BIN_DAYS,
+  ReturnToStockConfirmModal,
+} from "../components/RemoveConfirmModals";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, round2 } from "../lib/api";
+import { warrantyText } from "../lib/warranty";
 import {
   financeSlotAmounts,
   financeSlotOptions,
@@ -77,6 +83,9 @@ export function BillDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [removeStep, setRemoveStep] = useState<"delete" | "restock" | null>(
+    null,
+  );
   const [markingFinance, setMarkingFinance] = useState(false);
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [showFinanceConfirm, setShowFinanceConfirm] = useState(false);
@@ -107,6 +116,18 @@ export function BillDetailPage() {
   useEffect(() => {
     void loadBill();
   }, [loadBill]);
+
+  /** Delete / Return to Stock each get their own confirmation first. */
+  function openRemoveStep(step: "delete" | "restock") {
+    setDeleteError(null);
+    setRemoveStep(step);
+  }
+
+  function closeRemoveStep() {
+    if (deleting) return;
+    setRemoveStep(null);
+    setDeleteError(null);
+  }
 
   async function confirmDelete(
     mode: "delete" | "restock" = "delete",
@@ -371,8 +392,8 @@ export function BillDetailPage() {
                   `GST ${item.gstPercent}%`,
                   item.imei1 ? `IMEI ${item.imei1}` : null,
                   item.serialNumber ? `Serial ${item.serialNumber}` : null,
-                  item.warrantyMonths
-                    ? `Warranty ${item.warrantyMonths} mo`
+                  warrantyText(item)
+                    ? `Warranty ${warrantyText(item)}`
                     : null,
                 ].filter(Boolean);
                 const itemReturn = bill.productReturns?.find(
@@ -912,7 +933,7 @@ export function BillDetailPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isAdmin && showDeleteConfirm ? (
+        {isAdmin && showDeleteConfirm && !removeStep ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}
@@ -963,27 +984,24 @@ export function BillDetailPage() {
                 )}
                 <p>
                   <span className="font-semibold text-ink-800">Delete</span>
-                  {" → "}invoice removed, mobiles permanently deleted from
-                  stock.
+                  {" → "}invoice removed, mobiles deleted from stock.
+                </p>
+                <p className="text-xs text-ink-500">
+                  Either way you can undo it from the Recycle bin for{" "}
+                  {RECYCLE_BIN_DAYS} days.
                 </p>
               </div>
-
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
 
               <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
                 {bill.items.some((item) => item.stockItemId) ? (
                   <button
                     type="button"
                     className="btn-secondary btn-outline-dark whitespace-nowrap"
-                    onClick={() => void confirmDelete("restock")}
+                    onClick={() => openRemoveStep("restock")}
                     disabled={deleting}
                   >
                     <PackageCheck className="h-4 w-4" />
-                    {deleting ? "Working…" : "Return to Stock"}
+                    Return to Stock
                   </button>
                 ) : (
                   <button
@@ -998,15 +1016,38 @@ export function BillDetailPage() {
                 <button
                   type="button"
                   className="btn-danger whitespace-nowrap"
-                  onClick={() => void confirmDelete("delete")}
+                  onClick={() => openRemoveStep("delete")}
                   disabled={deleting}
                 >
                   <Trash2 className="h-4 w-4" />
-                  {deleting ? "Working…" : "Delete"}
+                  Delete
                 </button>
               </div>
             </motion.div>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAdmin && removeStep === "restock" ? (
+          <ReturnToStockConfirmModal
+            key="restock"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("restock")}
+          />
+        ) : null}
+        {isAdmin && removeStep === "delete" ? (
+          <DeletePermanentlyModal
+            key="delete"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("delete")}
+          />
         ) : null}
       </AnimatePresence>
     </div>

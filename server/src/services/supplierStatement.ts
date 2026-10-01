@@ -29,6 +29,10 @@ type Entry = {
   qty: number | null;
   credit: number;
   debit: number;
+  /** Purchase entries: the purchase id. */
+  purchaseId?: string;
+  /** Payment made at purchase: the purchase it belongs under. */
+  paidFor?: string;
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -123,20 +127,26 @@ export async function buildSupplierStatement(supplierId: string) {
       qty: p.items.length,
       credit: total,
       debit: 0,
+      purchaseId: p.id,
     });
   }
 
   let recorded = 0;
   for (const pay of supplier.payments) {
     recorded += pay.amount;
+    // Paid while entering the purchase (Fully paid / Custom paid).
+    const atPurchase = Boolean(pay.purchaseId);
     entries.push({
       date: pay.paidAt,
       kind: "payment",
-      particulars: "Payment",
-      detail: pay.note || "",
+      particulars: atPurchase ? "Paid at purchase" : "Payment",
+      detail: atPurchase
+        ? (pay.note || "").replace(/ at purchase$/, "")
+        : pay.note || "",
       qty: null,
       credit: 0,
       debit: pay.amount,
+      paidFor: pay.purchaseId ?? undefined,
     });
   }
 
@@ -206,6 +216,13 @@ export async function buildSupplierStatement(supplierId: string) {
       a.date.getTime() - b.date.getTime() ||
       (a.kind === b.kind ? 0 : a.kind === "purchase" ? -1 : b.kind === "purchase" ? 1 : 0),
   );
+  // A payment made at purchase goes right under its own purchase.
+  const tied = entries.filter((e) => e.paidFor);
+  const ordered = entries.flatMap((e) => {
+    if (e.paidFor) return [];
+    return e.purchaseId ? [e, ...tied.filter((t) => t.paidFor === e.purchaseId)] : [e];
+  });
+  entries.splice(0, entries.length, ...ordered);
 
   const totalCredit = round2(entries.reduce((s, e) => s + e.credit, 0));
   const totalDebit = round2(entries.reduce((s, e) => s + e.debit, 0));

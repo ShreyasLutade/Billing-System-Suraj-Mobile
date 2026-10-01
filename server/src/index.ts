@@ -21,6 +21,8 @@ import { phoneModelsRouter } from "./routes/phoneModels";
 import { repairsRouter } from "./routes/repairs";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
+import { startRecycleBinPurge } from "./services/recycleBin";
+import { recycleBinRouter } from "./routes/recycleBin";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
 import { ensurePhoneModelsSeeded } from "./services/phoneModels";
@@ -91,6 +93,7 @@ app.use("/api/phone-models", requireAuth, phoneModelsRouter);
 app.use("/api/dues", requireAuth, duesRouter);
 app.use("/api/repairs", requireAuth, repairsRouter);
 app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
+app.use("/api/recycle-bin", requireAuth, requireAdmin, recycleBinRouter);
 
 if (!serveClient) {
   app.get("/", (_req, res) => {
@@ -216,6 +219,7 @@ async function start() {
     console.warn("[stock] Sold-as-available repair skipped:", error);
   }
   startDailyReportScheduler();
+  startRecycleBinPurge();
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`Babu Billing API running on http://localhost:${port}`);
     if (serveClient) {

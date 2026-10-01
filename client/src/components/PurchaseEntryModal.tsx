@@ -25,6 +25,15 @@ import {
   invalidatePhoneModelCache,
 } from "./MobileNameSearch";
 import { BackButton } from "./ui";
+import {
+  PaymentAtPurchaseField,
+  blankPayment,
+  paidNow,
+  paymentDraftError,
+  paymentPayload,
+  type PaymentDraft,
+} from "./PaymentAtPurchaseField";
+import { useAuth } from "../auth/AuthContext";
 import { api, formatINR } from "../lib/api";
 import type { PhoneModel, Purchase, Supplier } from "../types";
 import clsx from "clsx";
@@ -228,6 +237,9 @@ export function PurchaseEntryModal({
   layout?: "modal" | "page";
 }) {
   const isPage = layout === "page";
+  const { isAdmin } = useAuth();
+  /** Paying a supplier is admin only; staff purchases stay unpaid. */
+  const [payment, setPayment] = useState<PaymentDraft>(blankPayment);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierId, setSupplierId] = useState(fixedSupplier?.id || "");
   const [supplierName, setSupplierName] = useState(fixedSupplier?.name || "");
@@ -409,6 +421,14 @@ export function PurchaseEntryModal({
       }
     }
 
+    const paymentIssue = isAdmin
+      ? paymentDraftError(payment, purchaseTotal)
+      : null;
+    if (paymentIssue) {
+      setError(paymentIssue);
+      return;
+    }
+
     setConfirmOpen(true);
   }
 
@@ -441,6 +461,7 @@ export function PurchaseEntryModal({
           serialNumber: item.serialNumber,
           purchasePrice: Number(item.purchasePrice),
         })),
+        payment: isAdmin ? paymentPayload(payment, purchaseTotal) : null,
       });
       invalidatePhoneModelCache();
       onCreated(data);
@@ -494,6 +515,7 @@ export function PurchaseEntryModal({
       condition={condition}
       items={confirmItems}
       total={purchaseTotal}
+      paidNow={isAdmin ? paidNow(payment, purchaseTotal) : null}
       saving={saving}
       error={error}
       onCancel={() => {
@@ -817,6 +839,17 @@ export function PurchaseEntryModal({
                   <Smartphone className="h-3.5 w-3.5" />
                   {unitCount} unit{unitCount === 1 ? "" : "s"}
                 </span>
+
+                {isAdmin ? (
+                  <div className="mt-3 border-t border-ink-100 pt-3">
+                    <PaymentAtPurchaseField
+                      value={payment}
+                      total={purchaseTotal}
+                      disabled={saving}
+                      onChange={setPayment}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-2.5 border-t border-ink-100 bg-[#FAFBFC] px-5 py-4 dark:border-ink-100 dark:bg-surface-muted">
@@ -1077,6 +1110,23 @@ export function PurchaseEntryModal({
               </button>
             ) : null}
           </div>
+
+          {isAdmin ? (
+            <div className="rounded-xl border border-ink-200 bg-white p-3">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <span className="text-sm font-semibold text-ink-900">Total purchase</span>
+                <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                  {formatINR(purchaseTotal)}
+                </span>
+              </div>
+              <PaymentAtPurchaseField
+                value={payment}
+                total={purchaseTotal}
+                disabled={saving}
+                onChange={setPayment}
+              />
+            </div>
+          ) : null}
         </div>
 
         {error ? (
