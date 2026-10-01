@@ -5,6 +5,7 @@ import { normalizeCapacity } from "../lib/capacity";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
+import { binStockItem } from "../services/recycleBin";
 
 export const stockRouter = Router();
 
@@ -952,6 +953,7 @@ stockRouter.delete("/:id", requireAdmin, async (req, res, next) => {
     let purchaseDeleted = false;
 
     await prisma.$transaction(async (tx) => {
+      await binStockItem(tx, existing.id, req.user);
       await tx.stockItem.delete({ where: { id: existing.id } });
 
       if (!purchaseId) return;

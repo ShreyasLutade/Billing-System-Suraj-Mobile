@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -10,6 +10,7 @@ import {
   Package,
   ReceiptText,
   Sun,
+  Trash2,
   Truck,
   Wallet,
   X,
@@ -19,6 +20,9 @@ import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
 
+const menuItemClass =
+  "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-700 transition hover:bg-ink-50 hover:text-ink-900 focus-visible:bg-ink-50 focus-visible:outline-none dark:text-ink-100 dark:hover:bg-white/5";
+
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -26,6 +30,33 @@ export function AppShell() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountName = user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff");
+  const location = useLocation();
+
+  // Account menu: close on outside click, Escape, or when the page changes.
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);
@@ -96,7 +127,7 @@ export function AppShell() {
         <div
           className={clsx(
             "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",
-            isAdmin ? "pr-[10.5rem] sm:pr-48" : "pr-[7.25rem] sm:pr-36",
+            "pr-16 sm:pr-20",
           )}
         >
           <Link
@@ -144,46 +175,103 @@ export function AppShell() {
           </nav>
         </div>
 
-        <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 sm:right-6 sm:gap-2">
+        {/* Account circle: opens Dark mode / Restore data / Recycle bin / Logout. */}
+        <div
+          ref={accountMenuRef}
+          className="absolute right-3 top-1/2 -translate-y-1/2 sm:right-6"
+        >
           <button
             type="button"
-            className="btn-secondary px-2.5 py-2 sm:px-3"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            aria-label={
-              theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
-            }
-          >
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
+            className={clsx(
+              "grid h-11 w-11 place-items-center rounded-full bg-ink-900 font-display text-base font-semibold text-white shadow-soft ring-offset-2 transition hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:bg-tide-400 dark:text-ink-50 dark:ring-offset-surface",
+              accountMenuOpen && "ring-2 ring-tide-400",
             )}
-          </button>
-          {isAdmin ? (
-            <Link
-              to="/backup"
-              onClick={onMainNavClick}
-              title="Restore data"
-              aria-label="Restore data"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-100/90 bg-white/80 text-center text-[9px] font-semibold leading-[1.05] text-ink-700 shadow-soft transition hover:border-tide-300 hover:bg-tide-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:border-white/10 dark:bg-surface-muted/80 dark:text-ink-100 dark:hover:bg-tide-400/15"
-            >
-              <span className="px-0.5">
-                Restore
-                <br />
-                Data
-              </span>
-            </Link>
-          ) : null}
-          <button
-            type="button"
-            className="btn-secondary px-3 py-2"
-            onClick={() => setShowLogoutConfirm(true)}
-            title="Log out"
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+            aria-label="Account options"
+            title="Account options"
+            onClick={() => setAccountMenuOpen((open) => !open)}
           >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Logout</span>
+            {accountName.slice(0, 1).toUpperCase()}
           </button>
+
+          <AnimatePresence>
+            {accountMenuOpen ? (
+              <motion.div
+                role="menu"
+                aria-label="Account"
+                className="absolute right-0 top-[calc(100%+0.5rem)] w-60 overflow-hidden rounded-2xl border border-ink-100 bg-white p-1.5 shadow-lift dark:border-white/10 dark:bg-surface-elevated"
+                initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+              >
+                <div className="mb-1 border-b border-ink-100 px-3 pb-2.5 pt-2 dark:border-white/10">
+                  <p className="truncate text-sm font-semibold text-ink-900">
+                    {accountName}
+                  </p>
+                  <p className="truncate text-xs text-ink-500">
+                    {user?.phone || (isAdmin ? "Admin" : "Staff")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItemClass}
+                  onClick={() => {
+                    toggleTheme();
+                    setAccountMenuOpen(false);
+                  }}
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  {theme === "dark" ? "Light mode" : "Dark mode"}
+                </button>
+                {isAdmin ? (
+                  <Link
+                    to="/backup"
+                    role="menuitem"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onMainNavClick();
+                      setAccountMenuOpen(false);
+                    }}
+                  >
+                    <Package className="h-4 w-4" />
+                    Restore data
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <Link
+                    to="/recycle-bin"
+                    role="menuitem"
+                    className={clsx(
+                      menuItemClass,
+                      "!text-rose-600 hover:!bg-rose-50 dark:!text-rose-400 dark:hover:!bg-rose-500/10",
+                    )}
+                    onClick={() => {
+                      onMainNavClick();
+                      setAccountMenuOpen(false);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Recycle bin
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItemClass}
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setShowLogoutConfirm(true);
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
 
         {!isOnline ? (

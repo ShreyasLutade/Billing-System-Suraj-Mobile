@@ -17,6 +17,7 @@ import { upsertCustomerProfile } from "../services/customers";
 import {
   clearExchangeStock,
   deleteStockIds,
+  releaseStockIds,
   exchangePurchaseNote,
   returnBillStockToCustomer,
   syncExchangeStock,
@@ -29,6 +30,7 @@ import {
   totalExchangeValue,
 } from "../lib/exchangeItems";
 import { requireAdmin } from "../middleware/auth";
+import { binBill } from "../services/recycleBin";
 
 export const billsRouter = Router();
 
@@ -1165,9 +1167,14 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
       return;
     }
 
+    // return  → phones become second-hand stock under the customer
+    // restock → sale undone: phones go back to stock under their original
+    //           supplier and purchase, as if never sold
+    // delete  → phones removed from stock
+    const requestedMode = req.body?.mode ?? req.query.mode;
     const mode =
-      req.body?.mode === "return" || req.query.mode === "return"
-        ? "return"
+      requestedMode === "return" || requestedMode === "restock"
+        ? requestedMode
         : "delete";
 
     const stockIds = existing.items
@@ -1175,6 +1182,8 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
       .filter((id): id is string => Boolean(id));
 
     await prisma.$transaction(async (tx) => {
+      // Keep a copy in the recycle bin so the delete can be undone.
+      await binBill(tx, existing.id, mode, req.user);
       if (mode === "return") {
         await returnBillStockToCustomer(tx, {
           ...existing,
@@ -1187,6 +1196,10 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
 
       await clearExchangeStock(tx, existing.invoiceNumber);
       await tx.bill.delete({ where: { id: existing.id } });
+      if (mode === "restock") {
+        await releaseStockIds(tx, stockIds);
+        return;
+      }
       await deleteStockIds(tx, stockIds);
     });
 

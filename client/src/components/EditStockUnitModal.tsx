@@ -11,6 +11,7 @@ import {
   ScanFieldShell,
   scanFieldInputClass,
 } from "./BarcodeImeiScanner";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "./RemoveConfirmModals";
 import { FieldPicker } from "./FieldPicker";
 import { MobileNameSearch } from "./MobileNameSearch";
 
@@ -477,71 +478,17 @@ export function EditStockUnitModal({
       </motion.div>
 
       {confirmRemove ? (
-        <motion.div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-ink-950/50 p-4 sm:items-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => !removing && setConfirmRemove(false)}
-        >
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="remove-stock-title"
-            className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-              <div className="min-w-0">
-                <h2
-                  id="remove-stock-title"
-                  className="font-display text-xl font-semibold text-ink-900"
-                >
-                  Remove this unit?
-                </h2>
-                <p className="mt-1 text-sm text-ink-500">
-                  {unit.mobileName} · {formatStockUnitId(unit)}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                onClick={() => !removing && setConfirmRemove(false)}
-                aria-label="Close"
-                disabled={removing}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
-              <p>
-                This permanently deletes the unit from stock and this purchase.
-                This cannot be undone.
-              </p>
-            </div>
-            <div className="flex gap-2 border-t border-ink-100 px-5 py-4">
-              <button
-                type="button"
-                className="btn-secondary flex-1"
-                onClick={() => setConfirmRemove(false)}
-                disabled={removing}
-              >
-                Keep unit
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
-                onClick={() => void removeUnit()}
-                disabled={removing}
-              >
-                {removing ? "Removing…" : "Yes, remove"}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
+        <DangerConfirmModal
+          key="confirm-remove"
+          title="Delete this unit?"
+          subtitle={`${unit.mobileName} · ${formatStockUnitId(unit)}`}
+          points={["The unit is removed from stock and from its purchase."]}
+          undoDays={RECYCLE_BIN_DAYS}
+          cancelLabel="Keep unit"
+          working={removing}
+          onCancel={() => !removing && setConfirmRemove(false)}
+          onConfirm={() => void removeUnit()}
+        />
       ) : null}
     </AnimatePresence>
   );

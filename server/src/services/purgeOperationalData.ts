@@ -148,6 +148,8 @@ export async function purgeOperationalData(
     await tx.supplierPayment.deleteMany({});
     await tx.supplier.deleteMany({});
     await tx.customer.deleteMany({});
+    // Snapshots of the old data can't be restored on top of a reset.
+    await tx.recycleBinEntry.deleteMany({});
 
     const keptBills = await tx.bill.findMany({
       select: {

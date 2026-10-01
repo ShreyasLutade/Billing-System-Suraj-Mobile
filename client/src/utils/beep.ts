@@ -75,6 +75,40 @@ export function playScanBeep(): void {
   }
 }
 
+/**
+ * Two-tone falling alert for destructive confirmations (e.g. delete a bill).
+ * Synthesised, so it needs no file; call it from a click.
+ */
+export function playWarningSound(): void {
+  try {
+    const audioCtx = getContext();
+    if (!audioCtx) return;
+    const start = audioCtx.currentTime + 0.01;
+    [
+      { freq: 880, at: 0 },
+      { freq: 587, at: 0.2 },
+    ].forEach(({ freq, at }) => {
+      const t0 = start + at;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.35, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.2);
+    });
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([90, 60, 90]);
+    }
+  } catch {
+    // Sound is a nice-to-have.
+  }
+}
+
 export function vibrateOnDetect(): void {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     navigator.vibrate(50);

@@ -7,6 +7,7 @@ import {
   Check,
   Download,
   History,
+  PackageCheck,
   Pencil,
   Phone,
   RotateCcw,
@@ -19,6 +20,12 @@ import {
 import clsx from "clsx";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
+import {
+  DeleteBillModal,
+  RECYCLE_BIN_DAYS,
+  ReturnBillConfirmModal,
+  ReturnToStockConfirmModal,
+} from "../components/RemoveConfirmModals";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, round2 } from "../lib/api";
 import {
@@ -76,6 +83,7 @@ export function BillDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [removeStep, setRemoveStep] = useState<"delete" | "return" | "restock" | null>(null);
   const [markingFinance, setMarkingFinance] = useState(false);
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [showFinanceConfirm, setShowFinanceConfirm] = useState(false);
@@ -107,7 +115,19 @@ export function BillDetailPage() {
     void loadBill();
   }, [loadBill]);
 
-  async function confirmDelete(mode: "delete" | "return" = "delete") {
+  /** Delete / Return each get their own confirmation first. */
+  function openRemoveStep(step: "delete" | "return" | "restock") {
+    setDeleteError(null);
+    setRemoveStep(step);
+  }
+
+  function closeRemoveStep() {
+    if (deleting) return;
+    setRemoveStep(null);
+    setDeleteError(null);
+  }
+
+  async function confirmDelete(mode: "delete" | "return" | "restock" = "delete") {
     if (!bill || !isAdmin) return;
     setDeleting(true);
     setDeleteError(null);
@@ -118,9 +138,11 @@ export function BillDetailPage() {
       setDeleteError(
         err instanceof Error
           ? err.message
-          : mode === "return"
-            ? "Failed to return this bill to stock"
-            : "Failed to delete bill",
+          : mode === "restock"
+            ? "Failed to put these mobiles back in stock"
+            : mode === "return"
+              ? "Failed to return this bill to stock"
+              : "Failed to delete bill",
       );
     } finally {
       setDeleting(false);
@@ -881,7 +903,7 @@ export function BillDetailPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isAdmin && showDeleteConfirm ? (
+        {isAdmin && showDeleteConfirm && !removeStep ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}
@@ -919,59 +941,111 @@ export function BillDetailPage() {
 
               <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
                 {bill.items.some((item) => item.stockItemId) ? (
-                  <p>
-                    <span className="font-semibold text-ink-800">Return</span>
-                    {" → "}mobiles go back to second-hand stock (adds a Return
-                    card).
-                  </p>
+                  <>
+                    <p>
+                      <span className="font-semibold text-ink-800">
+                        Return to Stock
+                      </span>
+                      {" → "}bill removed, mobiles back in stock under their
+                      original supplier, as if never sold (customer changed
+                      their mind).
+                    </p>
+                    <p>
+                      <span className="font-semibold text-ink-800">Return</span>
+                      {" → "}mobiles go back to second-hand stock (adds a Return
+                      card).
+                    </p>
+                  </>
                 ) : (
                   <p>This bill has no stock mobile to return.</p>
                 )}
                 <p>
                   <span className="font-semibold text-ink-800">Delete</span>
-                  {" → "}invoice removed, mobiles permanently deleted from
-                  stock.
+                  {" → "}invoice removed, mobiles deleted from stock.
+                </p>
+                <p className="text-xs text-ink-500">
+                  Either way you can undo it from the Recycle bin for{" "}
+                  {RECYCLE_BIN_DAYS} days.
                 </p>
               </div>
 
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
-
               <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
+                {bill.items.some((item) => item.stockItemId) ? (
+                  <button
+                    type="button"
+                    className="btn-secondary whitespace-nowrap !border-ink-900 dark:!border-ink-100"
+                    onClick={() => openRemoveStep("restock")}
+                    disabled={deleting}
+                  >
+                    <PackageCheck className="h-4 w-4" />
+                    Return to Stock
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-danger"
-                  onClick={() => void confirmDelete("delete")}
+                  onClick={() => openRemoveStep("delete")}
                   disabled={deleting}
                 >
                   <Trash2 className="h-4 w-4" />
-                  {deleting ? "Working…" : "Delete"}
+                  Delete
                 </button>
                 {bill.items.some((item) => item.stockItemId) ? (
                   <button
                     type="button"
                     className="btn-primary"
-                    onClick={() => void confirmDelete("return")}
+                    onClick={() => openRemoveStep("return")}
                     disabled={deleting}
                   >
                     <RotateCcw className="h-4 w-4" />
-                    {deleting ? "Working…" : "Return"}
+                    Return
                   </button>
                 ) : null}
               </div>
             </motion.div>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAdmin && removeStep === "restock" ? (
+          <ReturnToStockConfirmModal
+            key="restock"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("restock")}
+          />
+        ) : null}
+        {isAdmin && removeStep === "return" ? (
+          <ReturnBillConfirmModal
+            key="return"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("return")}
+          />
+        ) : null}
+        {isAdmin && removeStep === "delete" ? (
+          <DeleteBillModal
+            key="delete"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("delete")}
+          />
         ) : null}
       </AnimatePresence>
     </div>
