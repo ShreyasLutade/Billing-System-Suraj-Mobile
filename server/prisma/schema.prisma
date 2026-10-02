@@ -253,7 +253,9 @@ model StockItem {
   billItems     BillItem[]
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   purchaseItem  PurchaseItem?
-  productReturn ProductReturn?
+  productReturn ProductReturn? @relation("ReturnedUnit")
+  /// Set when this unit was given to a customer as a replacement.
+  replacementFor ProductReturn? @relation("ReplacementUnit")
 
   @@index([kind])
   @@index([condition])
@@ -339,11 +341,20 @@ model ProductReturn {
   /// Purchase price credited to the supplier
   amount          Float     @default(0)
   creditApplied   Float     @default(0)
+  /// REPLACE (customer got another unit from stock) | RETURN (customer got
+  /// a refund). Null on entries made before this choice existed.
+  kind            String?
+  /// RETURN: money given back to the customer, and how (cash | online).
+  refundAmount    Float     @default(0)
+  refundMethod    String?
+  /// REPLACE: the unit from stock given to the customer (marked SOLD).
+  replacementStockItemId String? @unique
   note            String?
   createdByUserId String?
   createdByName   String?
   createdAt       DateTime  @default(now())
-  stockItem       StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  stockItem       StockItem @relation("ReturnedUnit", fields: [stockItemId], references: [id], onDelete: Cascade)
+  replacementStock StockItem? @relation("ReplacementUnit", fields: [replacementStockItemId], references: [id], onDelete: SetNull)
   supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])

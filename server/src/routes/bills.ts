@@ -626,14 +626,99 @@ billsRouter.get("/:id", async (req, res, next) => {
         note: true,
         createdAt: true,
         createdByName: true,
+        kind: true,
+        refundAmount: true,
+        refundMethod: true,
+        replacementStock: {
+          select: {
+            id: true,
+            mobileName: true,
+            storage: true,
+            ram: true,
+            color: true,
+            platform: true,
+            condition: true,
+            imei: true,
+            serialNumber: true,
+          },
+        },
       },
       orderBy: { createdAt: "asc" },
     });
-    const productReturns = returns.map((r) => ({
+    const productReturns = returns.map(({ replacementStock, ...r }) => ({
       ...r,
       createdAt: r.createdAt.toISOString(),
+      replacement: replacementStock
+        ? {
+            ...replacementStock,
+            imei: replacementStock.imei ? replacementStock.imei.split("~")[0] : null,
+          }
+        : null,
     }));
-    res.json({ data: { ...data, purchaseHistory, productReturns } });
+
+    // Purchase history also covers units given as replacements (they can
+    // come from a different supplier), and labels the units sent back.
+    let fullHistory: Array<(typeof purchaseHistory)[number] & { label?: string }> =
+      purchaseHistory;
+    if (purchaseHistory.length || returns.length) {
+      // Keyed by the unit that went back (a replacement can be replaced again).
+      const sentBack = new Map(
+        returns.map((r) => [
+          r.stockItemId,
+          r.kind === "RETURN" ? "Returned · sent back to supplier" : "Replaced · sent back to supplier",
+        ]),
+      );
+      fullHistory = purchaseHistory.map((row) => {
+        const item = bill.items.find((i) => i.id === row.billItemId);
+        const label = item?.stockItemId ? sentBack.get(item.stockItemId) : undefined;
+        return label ? { ...row, label } : row;
+      });
+      if (req.user?.role === "ADMIN") {
+        const replacementIds = returns
+          .map((r) => r.replacementStock?.id)
+          .filter((id): id is string => Boolean(id));
+        const units = replacementIds.length
+          ? await prisma.stockItem.findMany({
+              where: { id: { in: replacementIds } },
+              select: {
+                id: true,
+                mobileName: true,
+                platform: true,
+                imei: true,
+                serialNumber: true,
+                purchasePrice: true,
+                createdAt: true,
+                supplier: { select: { id: true, name: true, phone: true, isExchange: true } },
+                purchaseItem: {
+                  select: {
+                    purchase: {
+                      select: {
+                        purchaseDate: true,
+                        supplier: { select: { id: true, name: true, phone: true, isExchange: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            })
+          : [];
+        for (const unit of units) {
+          const purchase = unit.purchaseItem?.purchase;
+          fullHistory.push({
+            billItemId: `replacement-${unit.id}`,
+            productName: unit.mobileName,
+            platform: unit.platform,
+            imei: unit.imei ? unit.imei.split("~")[0] : null,
+            serialNumber: unit.serialNumber,
+            supplier: unit.supplier ?? purchase?.supplier ?? null,
+            purchaseDate: (purchase?.purchaseDate ?? unit.createdAt).toISOString(),
+            costPrice: unit.purchasePrice,
+            label: sentBack.get(unit.id) ?? "Given as replacement",
+          });
+        }
+      }
+    }
+    res.json({ data: { ...data, purchaseHistory: fullHistory, productReturns } });
   } catch (error) {
     next(error);
   }

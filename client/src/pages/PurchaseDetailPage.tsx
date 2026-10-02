@@ -397,7 +397,7 @@ export function PurchaseDetailPage() {
                                 });
                               }}
                             >
-                              {returned ? "Returned / Replaced" : "Sold"}
+                              {returned ? "Returned / Replaced" : item.givenAsReplacement ? "Sold as replacement" : "Sold"}
                               {item.soldInvoiceNumber ?? item.returned?.invoiceNumber
                                 ? ` · ${item.soldInvoiceNumber ?? item.returned?.invoiceNumber}`
                                 : ""}
@@ -409,7 +409,7 @@ export function PurchaseDetailPage() {
                                 returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
                               )}
                             >
-                              {returned ? "Returned / Replaced" : "Sold"}
+                              {returned ? "Returned / Replaced" : item.givenAsReplacement ? "Sold as replacement" : "Sold"}
                             </span>
                           )}
                           {isAdmin &&

@@ -184,9 +184,29 @@ function summarizeBills(bills: BillRow[]) {
   };
 }
 
-function mapPeriodBills(bills: BillRow[]) {
+/** A row in the period's bills list: a sale, or a replacement / return. */
+type PeriodBillRow = {
+  /** Bill to open. */
+  id: string;
+  /** Unique row key (return entries share their bill's id). */
+  entryId: string;
+  kind: "SALE" | "REPLACED" | "RETURNED";
+  refundMethod?: "cash" | "online";
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  billDate: string;
+  productLabel: string;
+  costPrice: number;
+  sellingPrice: number;
+  companyDiscount: number;
+  exchangeValue: number;
+  profit: number;
+};
+
+function mapPeriodBills(bills: BillRow[]): PeriodBillRow[] {
   return bills
-    .map((bill) => {
+    .map((bill): PeriodBillRow | null => {
       const split = splitBillItems(bill.items);
       if (split.mobileSales <= 0 && split.cost <= 0) return null;
       const companyDiscount = round2(bill.companyDiscount || 0);
@@ -204,6 +224,8 @@ function mapPeriodBills(bills: BillRow[]) {
 
       return {
         id: bill.id,
+        entryId: bill.id,
+        kind: "SALE",
         invoiceNumber: bill.invoiceNumber,
         customerName: bill.customerName,
         customerPhone: bill.customerPhone,
@@ -216,7 +238,7 @@ function mapPeriodBills(bills: BillRow[]) {
         profit: round2(sellingPrice - split.cost),
       };
     })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+    .filter((row): row is PeriodBillRow => Boolean(row));
 }
 
 function financeLabel(bill: BillRow) {
@@ -289,13 +311,116 @@ async function loadPeriodBills(
   });
 }
 
+/**
+ * Replace / Return entries made in the period (by the day they were made).
+ *
+ * Return: the customer got `refundAmount` back and the unit went to the
+ * supplier, who credits its cost → revenue −refund, profit −refund +cost.
+ * Replace: a swap — revenue and profit don't change; listed for the record.
+ * Entries from before Replace / Return existed (kind null) change nothing.
+ */
+async function loadReturns(dateFilter: ReturnType<typeof toDateFilter>) {
+  const rows = await prisma.productReturn.findMany({
+    where: {
+      kind: { not: null },
+      ...(dateFilter ? { createdAt: dateFilter } : {}),
+    },
+    select: {
+      id: true,
+      kind: true,
+      amount: true,
+      refundAmount: true,
+      refundMethod: true,
+      billId: true,
+      invoiceNumber: true,
+      customerName: true,
+      createdAt: true,
+      stockItem: { select: { mobileName: true } },
+      replacementStock: { select: { mobileName: true } },
+    },
+  });
+  // Same scope as the rest of Analytics: shop bills, not GST invoices.
+  const billIds = [...new Set(rows.map((r) => r.billId).filter((id): id is string => Boolean(id)))];
+  const bills = new Map(
+    (
+      await prisma.bill.findMany({
+        where: { id: { in: billIds } },
+        select: { id: true, withGst: true, customerPhone: true },
+      })
+    ).map((b) => [b.id, b]),
+  );
+
+  let revenueAdjust = 0;
+  let profitAdjust = 0;
+  /** One row per return / replacement for the period's bills list. */
+  const billRows: PeriodBillRow[] = [];
+  for (const r of rows) {
+    const bill = r.billId ? bills.get(r.billId) : undefined;
+    if (bill?.withGst) continue;
+    const cost = round2(Number(r.amount || 0));
+    const base = {
+      id: r.billId ?? r.id,
+      entryId: r.id,
+      invoiceNumber: r.invoiceNumber ?? "—",
+      customerName: r.customerName ?? "—",
+      customerPhone: bill?.customerPhone ?? "",
+      billDate: r.createdAt.toISOString(),
+      companyDiscount: 0,
+      exchangeValue: 0,
+    };
+    if (r.kind === "RETURN") {
+      // Refund given; the unit's cost comes back from the supplier.
+      const refund = round2(Number(r.refundAmount || 0));
+      revenueAdjust -= refund;
+      profitAdjust += cost - refund;
+      billRows.push({
+        ...base,
+        kind: "RETURNED",
+        refundMethod: r.refundMethod === "online" ? "online" : "cash",
+        productLabel: r.stockItem.mobileName,
+        costPrice: -cost,
+        sellingPrice: -refund,
+        profit: round2(cost - refund),
+      });
+    } else if (r.kind === "REPLACE") {
+      // A swap: revenue and profit stay as they were. Listed for the record
+      // only (the bills list shows cost / selling / profit blank).
+      billRows.push({
+        ...base,
+        kind: "REPLACED",
+        productLabel: `${r.stockItem.mobileName} → ${r.replacementStock?.mobileName ?? "—"}`,
+        costPrice: 0,
+        sellingPrice: 0,
+        profit: 0,
+      });
+    }
+  }
+  return {
+    billRows,
+    revenueAdjust: round2(revenueAdjust),
+    profitAdjust: round2(profitAdjust),
+  };
+}
+
 async function analyzePeriod(
   billDateFilter: ReturnType<typeof toDateFilter>,
 ) {
-  const bills = await loadPeriodBills(billDateFilter);
+  const [bills, returns] = await Promise.all([
+    loadPeriodBills(billDateFilter),
+    loadReturns(billDateFilter),
+  ]);
+  const summary = summarizeBills(bills);
+  // Returns / replacements are listed with the bills (newest first).
+  const periodBills = [...mapPeriodBills(bills), ...returns.billRows].sort(
+    (a, b) => b.billDate.localeCompare(a.billDate),
+  );
   return {
-    summary: summarizeBills(bills),
-    periodBills: mapPeriodBills(bills),
+    summary: {
+      ...summary,
+      sales: round2(summary.sales + returns.revenueAdjust),
+      profit: round2(summary.profit + returns.profitAdjust),
+    },
+    periodBills,
     paymentSources: mapPaymentSources(bills),
   };
 }

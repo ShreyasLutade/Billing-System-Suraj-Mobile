@@ -33,6 +33,8 @@ type Entry = {
   purchaseId?: string;
   /** Payment made at purchase: the purchase it belongs under. */
   paidFor?: string;
+  /** Purchase rows: "Paid at purchase · …" when paid while entering it. */
+  paidNote?: string;
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -58,7 +60,7 @@ function round2(value: number) {
 }
 
 function rupees(amount: number) {
-  return `Rs. ${money(amount)}`;
+  return amount < -0.005 ? `-Rs. ${money(-amount)}` : `Rs. ${money(amount)}`;
 }
 
 function day(date: Date) {
@@ -169,7 +171,14 @@ export async function buildSupplierStatement(supplierId: string) {
     entries.push({
       date: r.createdAt,
       kind: "return",
-      particulars: "Returned / Replaced",
+      // Customer got another unit (Replaced) or a refund (Returned); the
+      // unit came back to this supplier either way.
+      particulars:
+        r.kind === "REPLACE"
+          ? "Replaced · unit sent back"
+          : r.kind === "RETURN"
+            ? "Returned · unit sent back"
+            : "Returned / Replaced",
       detail: [[name, id].filter(Boolean).join(" · "), bill, r.note ? `Note: ${r.note}` : ""]
         .filter(Boolean)
         .join("\n"),
@@ -216,11 +225,22 @@ export async function buildSupplierStatement(supplierId: string) {
       a.date.getTime() - b.date.getTime() ||
       (a.kind === b.kind ? 0 : a.kind === "purchase" ? -1 : b.kind === "purchase" ? 1 : 0),
   );
-  // A payment made at purchase goes right under its own purchase.
+  // A payment made at purchase sits on its purchase's own row: Purchased (Cr)
+  // and Paid (Dr) side by side, with a "Paid at purchase" note.
   const tied = entries.filter((e) => e.paidFor);
   const ordered = entries.flatMap((e) => {
     if (e.paidFor) return [];
-    return e.purchaseId ? [e, ...tied.filter((t) => t.paidFor === e.purchaseId)] : [e];
+    const paid = e.purchaseId ? tied.filter((t) => t.paidFor === e.purchaseId) : [];
+    if (!paid.length) return [e];
+    const amount = round2(paid.reduce((s, t) => s + t.debit, 0));
+    const how = paid.map((t) => t.detail.toLowerCase()).filter(Boolean).join(", ");
+    return [
+      {
+        ...e,
+        debit: round2(e.debit + amount),
+        paidNote: `Paid at purchase${how ? ` · ${how}` : ""}`,
+      },
+    ];
   });
   entries.splice(0, entries.length, ...ordered);
 
@@ -322,7 +342,7 @@ function drawSupplierAndSummary(
     balance > 0.005
       ? { label: "Balance due", value: balance, fill: "#FFF1F2", color: "#BE123C" }
       : balance < -0.005
-        ? { label: "Credit with supplier", value: -balance, fill: "#FFF7E6", color: AMBER }
+        ? { label: "Balance due", value: balance, fill: "#FFF7E6", color: AMBER }
         : { label: "Settled", value: 0, fill: "#E7F8F1", color: GREEN },
   ];
   const gap = 8;
@@ -361,6 +381,10 @@ function rowHeight(doc: PDFKit.PDFDocument, entry: Entry) {
     doc.font(FONT.regular).fontSize(7.5);
     h += 2 + doc.heightOfString(entry.detail, { width });
   }
+  if (entry.paidNote) {
+    doc.font(FONT.medium).fontSize(7.5);
+    h += 2 + doc.heightOfString(entry.paidNote, { width });
+  }
   return Math.max(h, 10) + 12;
 }
 
@@ -397,6 +421,9 @@ function drawRow(
   if (entry.detail) {
     doc.font(FONT.regular).fontSize(7.5).fillColor(COLORS.muted).text(entry.detail, x + PAD, doc.y + 2, { width: pw });
   }
+  if (entry.paidNote) {
+    doc.font(FONT.medium).fontSize(7.5).fillColor(GREEN).text(entry.paidNote, x + PAD, doc.y + 2, { width: pw });
+  }
   x += COLS[1].width;
 
   cell(2, entry.qty === null ? "" : String(entry.qty), FONT.regular, 8.5, COLORS.ink);
@@ -407,7 +434,7 @@ function drawRow(
   x += COLS[4].width;
   cell(
     5,
-    balance < -0.005 ? `${money(-balance)} Cr` : money(balance),
+    balance < -0.005 ? `-${money(-balance)}` : money(balance),
     FONT.bold,
     8.5,
     balance > 0.005 ? COLORS.ink : balance < -0.005 ? AMBER : GREEN,
@@ -434,7 +461,7 @@ function drawTotals(doc: PDFKit.PDFDocument, y: number, credit: number, debit: n
   put(4, money(debit), GREEN);
   put(
     5,
-    balance < -0.005 ? `${money(-balance)} Cr` : money(balance),
+    balance < -0.005 ? `-${money(-balance)}` : money(balance),
     balance > 0.005 ? "#BE123C" : balance < -0.005 ? AMBER : GREEN,
   );
   return y + h;
@@ -452,7 +479,7 @@ function drawFooters(doc: PDFKit.PDFDocument) {
       .fontSize(7.5)
       .fillColor(COLORS.muted)
       .text(
-        "Cr = stock received (adds to what we owe).  Dr = payment made or product returned to the supplier.",
+        "Cr = stock received · Dr = paid or product sent back · Minus balance = supplier credit",
         M,
         y,
         { width: W - 120, lineBreak: false },

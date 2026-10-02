@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
+import { buildSupplierMobilesPdf } from "../services/supplierStockPdf";
 import type { SupplierMobileExportCondition } from "../services/supplierStockExport";
 import { intakeKindFromNote } from "../services/stockSync";
 import { buildSupplierStatement } from "../services/supplierStatement";
@@ -79,7 +80,9 @@ async function supplierLedgerStats(supplierId: string) {
     totalReturned,
     /** Return credit not yet used against a purchase (supplier owes us). */
     supplierCredit: round2(Math.max(creditUnapplied - owedOnPurchases, 0)),
-    outstanding: round2(Math.max(owedOnPurchases - creditUnapplied, 0)),
+    // Negative when the supplier owes us (return credit bigger than what we
+    // owe); it is used up automatically against the next stock we add.
+    outstanding: round2(owedOnPurchases - creditUnapplied),
     stockAvailable,
     stockSold,
     stockPurchased,
@@ -253,7 +256,7 @@ suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
   }
 });
 
-/** Admin Excel export of mobiles for one supplier id. */
+/** Admin PDF of a supplier's new / old mobiles (Export new / Export old). */
 suppliersRouter.get(
   "/:id/mobiles-export",
   requireAdmin,
@@ -266,22 +269,15 @@ suppliersRouter.get(
           .json({ error: "Pass ?condition=NEW or ?condition=USED" });
         return;
       }
-      const exportFile = await buildSupplierMobilesWorkbook(
-        prisma,
-        req.params.id,
-        condition,
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      );
+      const exportFile = await buildSupplierMobilesPdf(req.params.id, condition);
+      res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
         `attachment; filename="${exportFile.filename}"`,
       );
       res.setHeader("X-Unit-Count", String(exportFile.unitCount));
       res.setHeader("X-Sold-Count", String(exportFile.soldCount));
-      res.send(exportFile.buffer);
+      res.send(exportFile.pdf);
     } catch (error) {
       if (error instanceof Error && error.message === "SUPPLIER_NOT_FOUND") {
         res.status(404).json({ error: "Supplier not found" });

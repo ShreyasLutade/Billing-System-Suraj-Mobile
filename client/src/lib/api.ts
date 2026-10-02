@@ -204,12 +204,20 @@ export const api = {
       `/returns/lookup?${new URLSearchParams({ code })}`,
     ),
   /** Mark a sold unit replaced / returned to its supplier. */
-  createProductReturn: (stockItemId: string, note?: string) =>
+  createProductReturn: (payload: {
+    stockItemId: string;
+    note?: string | null;
+    /** REPLACE: give another unit from stock. RETURN: refund the customer. */
+    kind: "REPLACE" | "RETURN";
+    replacementStockItemId?: string | null;
+    refundAmount?: number | null;
+    refundMethod?: "cash" | "online" | null;
+  }) =>
     request<{
       data: { id: string; billId: string; amount: number; creditApplied: number };
     }>("/returns", {
       method: "POST",
-      body: JSON.stringify({ stockItemId, note: note || null }),
+      body: JSON.stringify(payload),
     }),
   lookupCustomerByPhone: (phone: string, init?: RequestInit) =>
     request<{
@@ -454,7 +462,7 @@ export const api = {
       },
     );
     if (!response.ok) {
-      let message = "Could not download Excel";
+      let message = "Could not download PDF";
       try {
         const body = await response.json();
         message = body.error || message;
@@ -466,7 +474,7 @@ export const api = {
     const blob = await response.blob();
     const disposition = response.headers.get("Content-Disposition") || "";
     const match = /filename="?([^"]+)"?/i.exec(disposition);
-    const filename = match?.[1] || `supplier-mobiles.xlsx`;
+    const filename = match?.[1] || `supplier-mobiles.pdf`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

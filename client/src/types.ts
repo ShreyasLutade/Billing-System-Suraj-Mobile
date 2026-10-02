@@ -59,6 +59,8 @@ export type BillPurchaseHistoryItem = {
   } | null;
   purchaseDate: string;
   costPrice: number;
+  /** "Given as replacement" / "Replaced · sent back to supplier" … */
+  label?: string;
 };
 
 export type Bill = {
@@ -179,8 +181,14 @@ export type AnalyticsSummary = {
     count: number;
     value: number;
   };
+  /** Sales, plus Replace / Return entries made in the period. */
   periodBills: Array<{
+    /** Bill to open. */
     id: string;
+    /** Unique row key (return entries share their bill's id). */
+    entryId?: string;
+    kind?: "SALE" | "REPLACED" | "RETURNED";
+    refundMethod?: "cash" | "online";
     invoiceNumber: string;
     customerName: string;
     customerPhone: string;
@@ -371,6 +379,8 @@ export type PurchaseStockRef = {
   soldBillId?: string | null;
   soldInvoiceNumber?: string | null;
   soldCustomerName?: string | null;
+  /** Given to a customer as a replacement (Replace product). */
+  givenAsReplacement?: boolean;
   /** Sent back to the supplier after being sold. */
   returned?: {
     createdAt: string;
@@ -631,6 +641,22 @@ export type BillProductReturn = {
   note: string | null;
   createdAt: string;
   createdByName: string | null;
+  /** REPLACE | RETURN; null on entries made before this choice existed. */
+  kind: "REPLACE" | "RETURN" | null;
+  refundAmount: number;
+  refundMethod: "cash" | "online" | null;
+  /** The unit from stock given to the customer (Replace). */
+  replacement: {
+    id: string;
+    mobileName: string;
+    storage: string;
+    ram: string;
+    color: string;
+    platform: string;
+    condition: string;
+    imei: string | null;
+    serialNumber: string | null;
+  } | null;
 };
 
 /** A sold unit found by IMEI / serial for Replace product. */
@@ -647,6 +673,8 @@ export type ReturnLookup = {
   purchasePrice: number | null;
   purchaseDate: string | null;
   supplier: { id: string; name: string } | null;
+  /** What the customer paid for this item (default refund). */
+  soldPrice: number;
   bill: {
     id: string;
     billItemId: string;

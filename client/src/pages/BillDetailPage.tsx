@@ -37,7 +37,12 @@ import {
   type FinanceSlot,
 } from "../lib/financeSlots";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
-import type { Bill, BillPurchaseHistoryItem, DuePayment } from "../types";
+import type {
+  Bill,
+  BillProductReturn,
+  BillPurchaseHistoryItem,
+  DuePayment,
+} from "../types";
 import { useAuth } from "../auth/AuthContext";
 import {
   backLabel,
@@ -60,6 +65,22 @@ function formatPhoneDisplay(phone: string) {
     return `${digits.slice(0, 5)} ${digits.slice(5)}`;
   }
   return phone;
+}
+
+/** "Replaced" / "Returned"; older entries made before the choice existed. */
+function returnKindLabel(r: BillProductReturn) {
+  if (r.kind === "REPLACE") return "Replaced";
+  if (r.kind === "RETURN") return "Returned";
+  return "Replaced / Returned";
+}
+
+function returnsBadge(returns: BillProductReturn[]) {
+  const kinds = new Set(returns.map(returnKindLabel));
+  if (kinds.size === 1) {
+    const only = [...kinds][0];
+    return only === "Replaced / Returned" ? "Product replaced / returned" : `Product ${only.toLowerCase()}`;
+  }
+  return "Product replaced / returned";
 }
 
 function createdByLabel(bill: Bill) {
@@ -265,7 +286,7 @@ export function BillDetailPage() {
             {(bill.productReturns?.length || 0) > 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-[11px] py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300">
                 <RefreshCcw className="h-[13px] w-[13px]" strokeWidth={2.4} />
-                Product replaced / returned
+                {returnsBadge(bill.productReturns ?? [])}
               </span>
             ) : null}
           </div>
@@ -396,10 +417,17 @@ export function BillDetailPage() {
                     ? `Warranty ${warrantyText(item)}`
                     : null,
                 ].filter(Boolean);
-                const itemReturn = bill.productReturns?.find(
+                // Every replace / return on this line, oldest first (a
+                // replacement can itself be replaced or returned later).
+                const itemReturns = (bill.productReturns ?? []).filter(
                   (r) =>
                     (item.id && r.billItemId === item.id) ||
                     (item.stockItemId && r.stockItemId === item.stockItemId),
+                );
+                const itemReturn = itemReturns[0];
+                const refunded = itemReturns.reduce(
+                  (sum, r) => sum + (r.kind === "RETURN" ? r.refundAmount : 0),
+                  0,
                 );
 
                 return (
@@ -425,7 +453,7 @@ export function BillDetailPage() {
                         ) : null}
                         {itemReturn ? (
                           <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                            Replaced / Returned
+                            {returnKindLabel(itemReturn)}
                           </span>
                         ) : null}
                       </div>
@@ -444,18 +472,63 @@ export function BillDetailPage() {
                           </span>
                         ))}
                       </p>
-                      {itemReturn ? (
-                        <p className="mt-1 text-[12.5px] font-medium text-amber-800 dark:text-amber-300">
-                          Replaced / returned on{" "}
-                          {format(new Date(itemReturn.createdAt), "dd MMM yyyy")}
-                          {itemReturn.createdByName ? ` by ${itemReturn.createdByName}` : ""}
-                          {itemReturn.note ? ` — ${itemReturn.note}` : ""}
+                      {itemReturns.map((r, step) => (
+                        <div key={`${r.stockItemId}-${step}`}>
+                          <p className="mt-1 text-[12.5px] font-medium text-amber-800 dark:text-amber-300">
+                            {step > 0 ? "Then " : ""}
+                            {step > 0
+                              ? returnKindLabel(r).toLowerCase()
+                              : returnKindLabel(r)}{" "}
+                            on {format(new Date(r.createdAt), "dd MMM yyyy")}
+                            {r.createdByName ? ` by ${r.createdByName}` : ""}
+                            {r.kind === "RETURN" && r.refundAmount > 0
+                              ? ` · Refunded ${formatINR(r.refundAmount)}${
+                                  r.refundMethod
+                                    ? ` (${r.refundMethod === "online" ? "Online" : "Cash"})`
+                                    : ""
+                                }`
+                              : ""}
+                            {r.note ? ` — ${r.note}` : ""}
+                          </p>
+                          {r.replacement ? (
+                            <div className="mt-2 rounded-lg border border-tide-500/30 bg-white/80 px-2.5 py-2 dark:bg-surface">
+                              <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-tide-600">
+                                Given instead
+                              </p>
+                              <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[#0E1626]">
+                                {r.replacement.mobileName}
+                                <span className="rounded-md bg-tide-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-bright dark:bg-tide-100/50 dark:text-tide-400">
+                                  {r.replacement.condition === "USED" ? "OLD" : "NEW"}
+                                </span>
+                              </p>
+                              <p className="text-[12.5px] text-[#7A8699]">
+                                {[
+                                  r.replacement.storage,
+                                  r.replacement.platform === "ANDROID" ? r.replacement.ram : null,
+                                  r.replacement.color,
+                                  r.replacement.imei ? `IMEI ${r.replacement.imei}` : null,
+                                  r.replacement.serialNumber
+                                    ? `Serial ${r.replacement.serialNumber}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="whitespace-nowrap font-display text-[17px] font-bold tabular-nums text-[#0E1626]">
+                        {formatINR(item.amount || 0)}
+                      </p>
+                      {refunded > 0 ? (
+                        <p className="whitespace-nowrap text-[12.5px] font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                          −{formatINR(refunded)} refunded
                         </p>
                       ) : null}
                     </div>
-                    <p className="shrink-0 whitespace-nowrap font-display text-[17px] font-bold tabular-nums text-[#0E1626]">
-                      {formatINR(item.amount || 0)}
-                    </p>
                   </div>
                 );
               })}
@@ -1104,8 +1177,18 @@ function PurchaseHistoryCard({
   return (
     <div className="rounded-xl border border-ink-100 bg-ink-50/40 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+        <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
           {multi ? `Purchase ${index + 1}` : "Stock purchase"}
+          {/* Same tags as the items list above. */}
+          {row.label === "Given as replacement" ? (
+            <span className="rounded-md bg-tide-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-bright dark:bg-tide-100/50 dark:text-tide-400">
+              Given instead
+            </span>
+          ) : row.label ? (
+            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+              {row.label.startsWith("Returned") ? "Returned" : "Replaced"}
+            </span>
+          ) : null}
         </p>
         {unitId ? (
           <p className="font-mono text-[11px] tabular-nums text-[#7A8699]">
