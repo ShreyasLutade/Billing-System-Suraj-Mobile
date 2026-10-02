@@ -21,6 +21,9 @@ export const COLORS = {
   white: "#FFFFFF",
   gradStart: "#1ABAFF",
   gradEnd: "#5D73B6",
+  /** BM logo square: dark so it prints black, not grey, in B&W. */
+  logoStart: "#123E80",
+  logoEnd: "#0B1B3F",
 };
 
 export const shop = {
@@ -289,8 +292,10 @@ export function drawBabuLogo(
   doc.save();
   doc.translate(x, y).scale(size / 64);
 
+  // Deep navy (not the light app gradient) so the mark prints near-black
+  // on black & white printers instead of washed-out grey.
   const grad = doc.linearGradient(8, 4, 58, 60);
-  grad.stop(0, COLORS.gradStart).stop(1, COLORS.gradEnd);
+  grad.stop(0, COLORS.logoStart).stop(1, COLORS.logoEnd);
   doc.roundedRect(0, 0, 64, 64, 20).fill(grad);
 
   // "BM" in white strokes over a soft shadow, a yellow dot in the M and
