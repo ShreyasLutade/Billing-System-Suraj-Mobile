@@ -188,7 +188,7 @@ export function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useSessionState<AnalyticsPeriodValue>(
     "analytics.period",
-    "all",
+    "today",
   );
   const [customFrom, setCustomFrom] = useSessionState(
     "analytics.customFrom",
