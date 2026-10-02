@@ -224,7 +224,7 @@ export function EditStockUnitModal({
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-3 sm:items-center sm:p-4"
+        className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:items-center sm:p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -237,12 +237,12 @@ export function EditStockUnitModal({
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
-          className="w-full max-w-lg rounded-2xl border border-white/70 bg-white p-4 shadow-lift dark:border-ink-100 dark:bg-surface-elevated [&_.field]:rounded-xl [&_.field]:px-3 [&_.field]:py-2 [&_.label]:mb-1"
+          className="w-full max-w-lg rounded-2xl border border-white/70 bg-white p-4 shadow-lift [@media(max-height:720px)]:p-3 [@media(max-height:720px)]:[&_.field]:!py-1.5 dark:border-ink-100 dark:bg-surface-elevated [&_.field]:rounded-xl [&_.field]:px-3 [&_.field]:py-2 [&_.label]:mb-1"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="mb-2.5 flex items-start justify-between gap-2">
+          <div className="mb-2.5 flex items-start justify-between gap-2 [@media(max-height:720px)]:mb-1.5">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-tide-600">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-tide-600 [@media(max-height:720px)]:hidden">
                 Edit unit
               </p>
               <h2
@@ -251,7 +251,7 @@ export function EditStockUnitModal({
               >
                 {unitHeading}
               </h2>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-500">
+              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-500 [@media(max-height:720px)]:hidden">
                 {formatStockUnitId(unit)}
               </p>
             </div>
@@ -266,44 +266,54 @@ export function EditStockUnitModal({
             </button>
           </div>
 
-          <div className="space-y-2">
-            <div>
-              <span className="label required">Operating system</span>
-              <div className="inline-flex w-full gap-0.5 rounded-[10px] bg-[#EBEDF1] p-0.5 dark:bg-surface-muted">
-                {(["IOS", "ANDROID"] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={clsx(
-                      "inline-flex flex-1 items-center justify-center rounded-lg px-3 py-1.5 text-[13px] transition",
-                      platform === option ? "segment-on" : "segment-off",
-                    )}
-                    onClick={() => switchPlatform(option)}
-                    disabled={busy}
-                  >
-                    {option === "IOS" ? "iOS" : "Android"}
-                  </button>
-                ))}
+          <div className="space-y-2 [@media(max-height:720px)]:space-y-1.5">
+            {/* OS and condition share a row so the dialog fits phone screens. */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="min-w-0">
+                <span className="label required">OS</span>
+                <div className="inline-flex w-full gap-0.5 rounded-[10px] bg-[#EBEDF1] p-0.5 dark:bg-surface-muted">
+                  {(["IOS", "ANDROID"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={clsx(
+                        "inline-flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] transition",
+                        platform === option ? "segment-on" : "segment-off",
+                      )}
+                      onClick={() => switchPlatform(option)}
+                      disabled={busy}
+                    >
+                      {option === "IOS" ? "iOS" : "Android"}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            <div>
-              <span className="label required">Condition</span>
-              <div className="inline-flex w-full gap-0.5 rounded-[10px] bg-[#EBEDF1] p-0.5 dark:bg-surface-muted">
-                {(["NEW", "USED"] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={clsx(
-                      "inline-flex flex-1 items-center justify-center rounded-lg px-3 py-1.5 text-[13px] transition",
-                      condition === option ? "segment-on" : "segment-off",
-                    )}
-                    onClick={() => setCondition(option)}
-                    disabled={busy}
-                  >
-                    {option === "NEW" ? "New" : "Second hand"}
-                  </button>
-                ))}
+  
+              <div className="min-w-0">
+                <span className="label required">Condition</span>
+                <div className="inline-flex w-full gap-0.5 rounded-[10px] bg-[#EBEDF1] p-0.5 dark:bg-surface-muted">
+                  {(["NEW", "USED"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={clsx(
+                        "inline-flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] transition",
+                        condition === option ? "segment-on" : "segment-off",
+                      )}
+                      onClick={() => setCondition(option)}
+                      disabled={busy}
+                    >
+                      {option === "NEW" ? (
+                        "New"
+                      ) : (
+                        <>
+                          <span className="sm:hidden">Old</span>
+                          <span className="hidden sm:inline">Second hand</span>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -440,50 +450,51 @@ export function EditStockUnitModal({
             </p>
           ) : null}
 
-          <div className="mt-3 flex flex-col gap-2">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="btn-secondary flex-1 !py-2.5"
-                onClick={onClose}
-                disabled={busy}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary flex-1 !py-2.5"
-                onClick={() => void save()}
-                disabled={busy}
-              >
-                {saving ? "Saving…" : "Save changes"}
-              </button>
-            </div>
+          {/* One row: remove (icon) · cancel · save — keeps the dialog short. */}
+          <div className="mt-3 flex gap-2 [@media(max-height:720px)]:mt-2">
             {canRemove ? (
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/40 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:bg-rose-950/50"
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/40 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:bg-rose-950/50"
                 onClick={() => {
                   setError(null);
                   setConfirmRemove(true);
                 }}
                 disabled={busy}
+                aria-label="Remove unit"
+                title="Remove unit"
               >
                 <Trash2 className="h-4 w-4" />
-                Remove unit
+                <span className="hidden sm:inline">Remove</span>
               </button>
             ) : null}
+            <button
+              type="button"
+              className="btn-secondary flex-1 !py-2.5"
+              onClick={onClose}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary flex-1 !py-2.5"
+              onClick={() => void save()}
+              disabled={busy}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
           </div>
         </motion.div>
       </motion.div>
 
       {confirmRemove ? (
         <DangerConfirmModal
+          undoDays={RECYCLE_BIN_DAYS}
           key="confirm-remove"
           title="Delete this unit?"
           subtitle={`${unit.mobileName} · ${formatStockUnitId(unit)}`}
           points={["The unit is removed from stock and from its purchase."]}
-          undoDays={RECYCLE_BIN_DAYS}
           cancelLabel="Keep unit"
           working={removing}
           onCancel={() => !removing && setConfirmRemove(false)}

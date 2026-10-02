@@ -291,12 +291,16 @@ model Purchase {
   condition    String    @default("NEW")
   /// When set, this purchase is fully paid to the supplier
   paidAt       DateTime?
+  /// Paid so far while not fully paid (part payments)
+  paidAmount   Float     @default(0)
   createdByUserId String?
   createdByName   String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   supplier     Supplier  @relation(fields: [supplierId], references: [id])
   items        PurchaseItem[]
+  /// Payment made while entering this purchase (Fully paid / Custom paid)
+  payments     SupplierPayment[]
 
   @@index([supplierId])
   @@index([purchaseDate])
@@ -314,11 +318,11 @@ model PurchaseItem {
   @@index([purchaseId])
 }
 
-/// Recycle bin: a snapshot of everything a delete removed, kept for 3 days so
+/// Recycle bin: a snapshot of everything a delete removed, kept for 30 days so
 /// the delete can be undone. `payload` is JSON (rows by table).
 model RecycleBinEntry {
   id            String   @id @default(cuid())
-  /// BILL | STOCK
+  /// BILL | SUPPLIER | STOCK
   kind          String
   label         String
   detail        String?
@@ -338,9 +342,13 @@ model SupplierPayment {
   method     String
   paidAt     DateTime @default(now())
   note       String?
+  /// Set when paid while entering this purchase ("Paid at purchase")
+  purchaseId String?
   createdAt  DateTime @default(now())
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
   @@index([paidAt])
+  @@index([purchaseId])
 }

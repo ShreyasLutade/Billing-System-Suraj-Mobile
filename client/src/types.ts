@@ -374,6 +374,8 @@ export type Purchase = {
   totalAmount: number;
   condition: "NEW" | "USED" | string;
   paidAt?: string | null;
+  /** Paid so far while not fully paid (part payments). */
+  paidAmount?: number;
   createdByUserId?: string | null;
   createdByName?: string | null;
   createdAt: string;

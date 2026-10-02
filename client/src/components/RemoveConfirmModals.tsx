@@ -1,11 +1,11 @@
 import { useEffect, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Check, PackageCheck, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, PackageCheck, Trash2, X } from "lucide-react";
 import type { Bill, BillItem } from "../types";
 import { playWarningSound } from "../utils/beep";
 
 /** Deleted bills and stock stay in the Recycle bin this long. */
-export const RECYCLE_BIN_DAYS = 3;
+export const RECYCLE_BIN_DAYS = 30;
 
 function stockLines(bill: Bill) {
   return bill.items.filter((item) => item.stockItemId);
@@ -27,51 +27,6 @@ type BillModalProps = {
   onCancel: () => void;
   onConfirm: () => void;
 };
-
-/** Plain confirm for a bill's "Return" (phones become second-hand stock). */
-export function ReturnBillConfirmModal({
-  bill,
-  working,
-  error,
-  onCancel,
-  onConfirm,
-}: BillModalProps) {
-  const lines = stockLines(bill);
-  return (
-    <ConfirmModal
-      title="Return this bill?"
-      subtitle={`${bill.invoiceNumber} · ${bill.customerName}`}
-      confirmLabel="Return"
-      icon={<RotateCcw className="h-4 w-4" />}
-      working={working}
-      error={error}
-      onCancel={onCancel}
-      onConfirm={onConfirm}
-    >
-      <p>
-        The bill is removed and{" "}
-        <span className="font-semibold text-ink-800">
-          {plural(lines.length, "mobile")}
-        </span>{" "}
-        go back to second-hand stock (adds a Return card).
-      </p>
-      <ul className="space-y-1.5">
-        {lines.map((item, index) => (
-          <li
-            key={item.id ?? index}
-            className="flex items-center gap-2 rounded-xl border border-ink-100 bg-ink-50/50 px-3 py-2 text-[13px] font-medium text-ink-800"
-          >
-            <RotateCcw className="h-4 w-4 shrink-0 text-tide-600" />
-            <span className="min-w-0 truncate">{unitLabel(item)}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-ink-500">
-        You can undo this from the Recycle bin for {RECYCLE_BIN_DAYS} days.
-      </p>
-    </ConfirmModal>
-  );
-}
 
 /** Plain confirm for "Return to Stock" (sale undone, as if never sold). */
 export function ReturnToStockConfirmModal({
@@ -145,9 +100,8 @@ export function DeleteBillModal({
       hint={
         lines.length ? (
           <>
-            Sale cancelled? Use{" "}
+            Customer changed their mind? Use{" "}
             <span className="font-semibold text-ink-800">Return to Stock</span>{" "}
-            or <span className="font-semibold text-ink-800">Return</span>{" "}
             instead.
           </>
         ) : null

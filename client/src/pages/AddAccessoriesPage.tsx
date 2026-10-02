@@ -8,6 +8,14 @@ import {
   scanFieldInputClass,
 } from "../components/BarcodeImeiScanner";
 import { FieldPicker } from "../components/FieldPicker";
+import {
+  PaymentAtPurchaseField,
+  blankPayment,
+  paymentDraftError,
+  paymentPayload,
+  type PaymentDraft,
+} from "../components/PaymentAtPurchaseField";
+import { useAuth } from "../auth/AuthContext";
 import { BackButton, SearchClearButton } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
@@ -218,6 +226,9 @@ function AccessoryNameSearch({
 
 export function AddAccessoriesPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  /** Paying a supplier is admin only; staff purchases stay unpaid. */
+  const [payment, setPayment] = useState<PaymentDraft>(blankPayment);
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [serials, setSerials] = useState<string[]>([""]);
@@ -316,6 +327,12 @@ export function AddAccessoriesPage() {
       setError("Serial numbers must be unique");
       return;
     }
+    const total = price * cleaned.length;
+    const paymentIssue = isAdmin ? paymentDraftError(payment, total) : null;
+    if (paymentIssue) {
+      setError(paymentIssue);
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -329,6 +346,7 @@ export function AddAccessoriesPage() {
         supplierPhone: useNewSupplier
           ? supplierPhone.replace(/\D/g, "")
           : null,
+        payment: isAdmin ? paymentPayload(payment, total) : null,
       });
       goBack();
     } catch (err) {
@@ -541,6 +559,24 @@ export function AddAccessoriesPage() {
             </div>
           ))}
         </div>
+
+        {isAdmin ? (
+          <section className="rounded-[14px] border border-ink-100 bg-[#FBFCFD] p-3.5 dark:border-ink-100 dark:bg-surface-muted">
+            <div className="mb-2.5 flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold text-ink-900">Total purchase</span>
+              <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                {formatINR(priceNum * unitCount)}
+              </span>
+            </div>
+            <PaymentAtPurchaseField
+              idPrefix="acc-payment"
+              value={payment}
+              total={priceNum * unitCount}
+              disabled={saving}
+              onChange={setPayment}
+            />
+          </section>
+        ) : null}
 
         {error ? (
           <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">

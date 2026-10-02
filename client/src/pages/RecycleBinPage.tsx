@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Package, ReceiptText, Trash2, Undo2 } from "lucide-react";
+import { Clock, Package, ReceiptText, Trash2, Truck, Undo2 } from "lucide-react";
 import clsx from "clsx";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
-import { ConfirmModal, DangerConfirmModal } from "../components/RemoveConfirmModals";
+import {
+  ConfirmModal,
+  DangerConfirmModal,
+  RECYCLE_BIN_DAYS,
+} from "../components/RemoveConfirmModals";
 import { api, type RecycleBinEntry } from "../lib/api";
 
 const KIND = {
@@ -14,6 +18,13 @@ const KIND = {
     tone: "bg-tide-100 text-tide-600 dark:bg-tide-100/30 dark:text-tide-400",
     restoreText:
       "The bill comes back with its items and payments, and its phones go back to sold (a Return is undone too).",
+  },
+  SUPPLIER: {
+    label: "Supplier",
+    icon: Truck,
+    tone: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+    restoreText:
+      "The supplier comes back with all its purchases, payments and stock.",
   },
   STOCK: {
     label: "Stock",
@@ -46,7 +57,7 @@ function left(iso: string) {
 
 export function RecycleBinPage() {
   const [entries, setEntries] = useState<RecycleBinEntry[]>([]);
-  const [days, setDays] = useState(3);
+  const [days, setDays] = useState(RECYCLE_BIN_DAYS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<RecycleBinEntry | null>(null);
@@ -123,7 +134,7 @@ export function RecycleBinPage() {
       <PageHeader
         eyebrow="Admin"
         title="Recycle bin"
-        description={`Deleted bills and stock stay here for ${days} days, then they are removed for good.`}
+        description={`Deleted bills, suppliers and stock stay here for ${days} days, then they are removed for good.`}
         action={
           <button
             type="button"

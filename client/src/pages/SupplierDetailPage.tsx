@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { Check, Download, X } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { Download, Trash2 } from "lucide-react";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, formatStockUnitId } from "../lib/api";
-import type { Purchase, SupplierDetail } from "../types";
+import type { SupplierDetail } from "../types";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { backLabel, fromState, readFromState } from "../lib/navMemory";
 
@@ -42,8 +43,29 @@ export function SupplierDetailPage() {
     ["purchases", "stock"] as const,
     "purchases",
   );
-  const [confirmPurchase, setConfirmPurchase] = useState<Purchase | null>(null);
-  const [markingPaid, setMarkingPaid] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  function openDeleteSupplier() {
+    setDeleteError(null);
+    setConfirmDelete(true);
+  }
+
+  async function deleteSupplier() {
+    if (!id) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteSupplier(id);
+      navigate(from ?? "/suppliers", { replace: true });
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete supplier",
+      );
+      setDeleting(false);
+    }
+  }
 
   async function load() {
     if (!id) return;
@@ -62,21 +84,6 @@ export function SupplierDetailPage() {
   useEffect(() => {
     void load();
   }, [id]);
-
-  async function confirmMarkPaid() {
-    if (!confirmPurchase) return;
-    setMarkingPaid(true);
-    setError(null);
-    try {
-      await api.markPurchasePaid(confirmPurchase.id);
-      setConfirmPurchase(null);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to mark as paid");
-    } finally {
-      setMarkingPaid(false);
-    }
-  }
 
   async function exportMobilesExcel(condition: "NEW" | "USED") {
     if (!id) return;
@@ -172,9 +179,28 @@ export function SupplierDetailPage() {
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                 {exporting === "USED" ? "Exporting…" : "Export old"}
               </button>
+              {/* Phones: delete sits in this row, aligned with the exports. */}
+              <button
+                type="button"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border border-rose-200 bg-rose-50 px-2 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 sm:hidden"
+                onClick={openDeleteSupplier}
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                Delete
+              </button>
             </div>
           ) : null}
         </div>
+        {isAdmin ? (
+          <button
+            type="button"
+            className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-[11px] border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 sm:inline-flex"
+            onClick={openDeleteSupplier}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete supplier
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -226,17 +252,11 @@ export function SupplierDetailPage() {
                   <tr>
                     <th>Date</th>
                     <th className="text-right">Qty</th>
-                    {isAdmin ? (
-                      <>
-                        <th className="text-right">Amount</th>
-                        <th className="text-right">Status</th>
-                      </>
-                    ) : null}
+                    {isAdmin ? <th className="text-right">Amount</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {data.purchases.map((p) => {
-                    const paid = Boolean(p.paidAt);
                     const addedBy = addedByLabel(p.createdByName);
                     return (
                       <tr
@@ -274,30 +294,9 @@ export function SupplierDetailPage() {
                           {p.items.length}
                         </td>
                         {isAdmin ? (
-                          <>
                           <td className="text-right tabular-nums font-semibold text-ink-900">
                             {formatINR(p.totalAmount)}
                           </td>
-                        <td className="text-right">
-                          {paid ? (
-                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-xs font-semibold text-emerald-600 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-400">
-                              <Check className="h-3.5 w-3.5" />
-                              Paid
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-300"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setConfirmPurchase(p);
-                              }}
-                            >
-                              Mark paid
-                            </button>
-                          )}
-                        </td>
-                          </>
                         ) : null}
                       </tr>
                     );
@@ -367,85 +366,25 @@ export function SupplierDetailPage() {
       ) : null}
 
       <AnimatePresence>
-        {isAdmin && confirmPurchase ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => !markingPaid && setConfirmPurchase(null)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="mark-paid-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-                    Confirm
-                  </p>
-                  <h2
-                    id="mark-paid-title"
-                    className="mt-1 font-display text-xl font-semibold text-ink-900"
-                  >
-                    Mark this purchase as paid?
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                  onClick={() => setConfirmPurchase(null)}
-                  disabled={markingPaid}
-                  aria-label="Close"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
-                <p>
-                  <span className="text-ink-500">Date · </span>
-                  {formatDate(confirmPurchase.purchaseDate)}
-                </p>
-                <p>
-                  <span className="text-ink-500">Qty · </span>
-                  {confirmPurchase.items.length}
-                </p>
-                {isAdmin ? (
-                  <p className="text-base font-semibold text-ink-900">
-                    Amount {formatINR(confirmPurchase.totalAmount)}
-                  </p>
-                ) : null}
-                <p className="text-ink-500">
-                  This will reduce outstanding for {data.name}.
-                </p>
-              </div>
-              <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setConfirmPurchase(null)}
-                  disabled={markingPaid}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => void confirmMarkPaid()}
-                  disabled={markingPaid}
-                >
-                  <Check className="h-4 w-4" />
-                  {markingPaid ? "Saving…" : "Confirm paid"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+        {isAdmin && confirmDelete ? (
+          <DangerConfirmModal
+            undoDays={RECYCLE_BIN_DAYS}
+            title="Delete supplier?"
+            subtitle={data.name}
+            points={[
+              "The supplier is removed with all its purchases and payments.",
+              ...(data.stockAvailable > 0
+                ? [
+                    `Its ${data.stockAvailable} phone${data.stockAvailable === 1 ? "" : "s"} in stock will also be deleted.`,
+                  ]
+                : []),
+            ]}
+            cancelLabel="Keep supplier"
+            working={deleting}
+            error={deleteError}
+            onCancel={() => !deleting && setConfirmDelete(false)}
+            onConfirm={() => void deleteSupplier()}
+          />
         ) : null}
       </AnimatePresence>
     </div>

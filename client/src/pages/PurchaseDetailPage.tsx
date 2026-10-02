@@ -198,7 +198,11 @@ export function PurchaseDetailPage() {
           {purchaseConditionLabel(purchase)} ·{" "}
           {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"}
           {isAdmin ? <> · {formatINR(purchase.totalAmount)}</> : null}
-          {purchase.paidAt ? " · Paid" : " · Unpaid"}
+          {purchase.paidAt
+            ? " · Paid"
+            : isAdmin && (purchase.paidAmount ?? 0) > 0
+              ? ` · ${formatINR(Math.max(purchase.totalAmount - (purchase.paidAmount ?? 0), 0))} left`
+              : " · Unpaid"}
         </p>
       </div>
 

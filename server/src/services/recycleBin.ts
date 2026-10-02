@@ -1,7 +1,17 @@
 import { Prisma } from "@prisma/client";
-import type { Bill, BillItem, DuePayment, Purchase, PurchaseItem, StockItem } from "@prisma/client";
+import type {
+  Bill,
+  BillItem,
+  DuePayment,
+  Purchase,
+  PurchaseItem,
+  StockItem,
+  Supplier,
+  SupplierPayment,
+} from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { exchangePurchaseNote, returnPurchaseNote } from "./stockSync";
+import { setPurchaseTotal } from "./purchasePayment";
 
 /**
  * Recycle bin. A delete saves a JSON snapshot of every row it removes or
@@ -14,10 +24,10 @@ import { exchangePurchaseNote, returnPurchaseNote } from "./stockSync";
 type Tx = Prisma.TransactionClient;
 type User = { id?: string | null; name?: string | null } | null | undefined;
 
-export const BIN_DAYS = 3;
+export const BIN_DAYS = 30;
 const BIN_MS = BIN_DAYS * 24 * 60 * 60 * 1000;
 
-export type BinKind = "BILL" | "STOCK";
+export type BinKind = "BILL" | "SUPPLIER" | "STOCK";
 
 /** An undo that can't be done; the message is shown to the user. */
 export class RestoreError extends Error {}
@@ -60,6 +70,15 @@ type StockPayload = {
   purchaseId: string | null;
   /** Set when the unit was the last in its purchase (purchase deleted too). */
   purchase: Purchase | null;
+  /** Payments made at that purchase (deleted with it). */
+  purchasePayments?: SupplierPayment[];
+};
+
+type SupplierPayload = {
+  supplier: Supplier;
+  purchases: Purchase[];
+  payments: SupplierPayment[];
+  stock: StockSnap;
 };
 
 async function snapshotStock(
@@ -180,22 +199,50 @@ export async function binBill(
   );
 }
 
+/** `stockIds`: every unit the supplier delete will remove. */
+export async function binSupplier(tx: Tx, supplierId: string, stockIds: string[], user: User) {
+  const supplier = await tx.supplier.findUnique({ where: { id: supplierId } });
+  if (!supplier) return;
+  const [purchases, payments, stock] = await Promise.all([
+    tx.purchase.findMany({ where: { supplierId } }),
+    tx.supplierPayment.findMany({ where: { supplierId } }),
+    snapshotStock(tx, stockIds),
+  ]);
+  const payload: SupplierPayload = { supplier, purchases, payments, stock };
+  await addEntry(
+    tx,
+    "SUPPLIER",
+    `Supplier ${supplier.name}`,
+    [
+      `${purchases.length} purchase${purchases.length === 1 ? "" : "s"}`,
+      `${stock.stock.length} item${stock.stock.length === 1 ? "" : "s"} in stock`,
+      supplier.phone || null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    payload,
+    user,
+  );
+}
+
 export async function binStockItem(tx: Tx, stockId: string, user: User) {
   const snap = await snapshotStock(tx, [stockId]);
   const unit = snap.stock[0];
   if (!unit) return;
   const purchaseId = snap.links[0]?.purchaseId ?? null;
   let purchase: Purchase | null = null;
+  let purchasePayments: SupplierPayment[] = [];
   if (purchaseId) {
     const siblings = await tx.purchaseItem.count({ where: { purchaseId } });
     if (siblings <= 1) {
       purchase = await tx.purchase.findUnique({ where: { id: purchaseId } });
+      purchasePayments = await tx.supplierPayment.findMany({ where: { purchaseId } });
     }
   }
   const supplier = unit.supplierId
     ? await tx.supplier.findUnique({ where: { id: unit.supplierId }, select: { name: true } })
     : null;
-  const payload: StockPayload = { stock: snap, purchaseId, purchase };
+  const payload: StockPayload = { stock: snap, purchaseId, purchase, purchasePayments };
   await addEntry(
     tx,
     "STOCK",
@@ -355,12 +402,27 @@ async function restoreBill(tx: Tx, p: BillPayload) {
   return `/bills/${p.bill.id}`;
 }
 
+async function restoreSupplier(tx: Tx, p: SupplierPayload) {
+  const clash = await tx.supplier.findFirst({
+    where: { OR: [{ id: p.supplier.id }, { name: p.supplier.name }] },
+  });
+  if (clash) {
+    throw new RestoreError(`A supplier named "${p.supplier.name}" exists now.`);
+  }
+  await tx.supplier.create({ data: p.supplier });
+  for (const purchase of p.purchases) await tx.purchase.create({ data: purchase });
+  for (const pay of p.payments) await tx.supplierPayment.create({ data: pay });
+  await restoreStock(tx, p.stock);
+  return `/suppliers/${p.supplier.id}`;
+}
+
 async function restoreStockEntry(tx: Tx, p: StockPayload) {
   if (p.purchase) {
     if (!(await supplierExists(tx, p.purchase.supplierId))) {
       throw new RestoreError("Its supplier has been deleted since.");
     }
     await tx.purchase.create({ data: p.purchase });
+    for (const pay of p.purchasePayments ?? []) await tx.supplierPayment.create({ data: pay });
   }
   await restoreStock(tx, p.stock);
   if (p.purchaseId) {
@@ -368,10 +430,11 @@ async function restoreStockEntry(tx: Tx, p: StockPayload) {
       where: { purchaseId: p.purchaseId },
       include: { stockItem: { select: { purchasePrice: true } } },
     });
-    await tx.purchase.update({
-      where: { id: p.purchaseId },
-      data: { totalAmount: links.reduce((sum, l) => sum + l.stockItem.purchasePrice, 0) },
-    });
+    await setPurchaseTotal(
+      tx,
+      p.purchaseId,
+      links.reduce((sum, l) => sum + l.stockItem.purchasePrice, 0),
+    );
   }
   const unit = p.stock.stock[0];
   return unit?.supplierId ? `/suppliers/${unit.supplierId}` : "/stock";
@@ -389,7 +452,9 @@ export async function restoreEntry(id: string) {
       const path =
         entry.kind === "BILL"
           ? await restoreBill(tx, payload as BillPayload)
-          : await restoreStockEntry(tx, payload as StockPayload);
+          : entry.kind === "SUPPLIER"
+            ? await restoreSupplier(tx, payload as SupplierPayload)
+            : await restoreStockEntry(tx, payload as StockPayload);
       await tx.recycleBinEntry.delete({ where: { id } });
       return { kind: entry.kind as BinKind, label: entry.label, path };
     });

@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowDownUp, ChevronDown, Phone, Search, Smartphone } from "lucide-react";
+import {
+  ArrowDownUp,
+  ChevronDown,
+  Download,
+  IndianRupee,
+  Loader2,
+  Phone,
+  Search,
+  Smartphone,
+  X,
+} from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
@@ -12,6 +22,7 @@ import {
   SearchClearButton,
 } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
+import { PaySupplierModal } from "../components/PaySupplierModal";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
 import { ApiError, api, formatINR, formatStockUnitId } from "../lib/api";
@@ -140,6 +151,23 @@ export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payNotice, setPayNotice] = useState<string | null>(null);
+  const [statementBusyId, setStatementBusyId] = useState<string | null>(null);
+
+  async function downloadStatement(supplier: Supplier) {
+    setStatementBusyId(supplier.id);
+    setError(null);
+    try {
+      await api.downloadSupplierStatement(supplier.id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not download statement",
+      );
+    } finally {
+      setStatementBusyId(null);
+    }
+  }
   const [query, setQuery] = useSessionState("suppliers.query", "");
   const { isAdmin } = useAuth();
   const [storedSortKey, setSortKey] = useSessionState<SortKey>(
@@ -322,7 +350,36 @@ export function SuppliersPage() {
       <PageHeader
         title="Suppliers"
         description="Supplier ledger — purchases, payments, and outstanding."
+        action={
+          isAdmin ? (
+            <button
+              type="button"
+              className="btn-primary shrink-0 self-start sm:self-auto"
+              onClick={() => {
+                setPayNotice(null);
+                setPayOpen(true);
+              }}
+            >
+              <IndianRupee className="h-4 w-4" />
+              Pay supplier
+            </button>
+          ) : null
+        }
       />
+
+      {payNotice ? (
+        <div className="mb-3 flex items-start justify-between gap-3 rounded-[14px] border border-[#BFE9D6] bg-[#E7F8F1] px-4 py-3 text-sm font-medium text-[#0B7A5B] dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <span>{payNotice}</span>
+          <button
+            type="button"
+            className="shrink-0 opacity-70 hover:opacity-100"
+            aria-label="Dismiss"
+            onClick={() => setPayNotice(null)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
 
       <div className="tb-toolbar">
         <div className="tb-searchrow">
@@ -523,6 +580,7 @@ export function SuppliersPage() {
                         <th className="text-right">Purchased</th>
                         <th className="text-right">Paid</th>
                         <th className="text-right">Outstanding</th>
+                        <th className="text-center">Statement</th>
                       </>
                     ) : null}
                   </tr>
@@ -573,6 +631,25 @@ export function SuppliersPage() {
                           <td className="text-right tabular-nums font-bold text-ink-900">
                             {formatINR(s.outstanding)}
                           </td>
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="inline-grid h-7 w-7 place-items-center rounded-lg text-ink-500 transition hover:bg-tide-100 hover:text-tide-600 disabled:opacity-50"
+                              aria-label={`Download statement for ${s.name}`}
+                              title="Download statement (PDF)"
+                              disabled={statementBusyId !== null}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void downloadStatement(s);
+                              }}
+                            >
+                              {statementBusyId === s.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </button>
+                          </td>
                         </>
                       ) : null}
                     </tr>
@@ -594,6 +671,7 @@ export function SuppliersPage() {
                         <td className="text-right tabular-nums">
                           {formatINR(totals.outstanding)}
                         </td>
+                        <td />
                       </>
                     ) : null}
                   </tr>
@@ -620,6 +698,19 @@ export function SuppliersPage() {
           </div>
         </>
       )}
+
+      {isAdmin ? (
+        <PaySupplierModal
+          open={payOpen}
+          suppliers={suppliers}
+          onClose={() => setPayOpen(false)}
+          onPaid={(message) => {
+            setPayOpen(false);
+            setPayNotice(message);
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

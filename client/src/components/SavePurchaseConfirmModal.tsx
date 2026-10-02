@@ -14,6 +14,7 @@ export function SavePurchaseConfirmModal({
   condition,
   items,
   total,
+  paidNow = null,
   saving,
   error,
   onCancel,
@@ -23,6 +24,8 @@ export function SavePurchaseConfirmModal({
   condition: "NEW" | "USED";
   items: SavePurchaseItem[];
   total: number;
+  /** Paid to the supplier while saving (null = don't show payment). */
+  paidNow?: number | null;
   saving: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -116,6 +119,34 @@ export function SavePurchaseConfirmModal({
               {formatINR(total)}
             </span>
           </div>
+
+          {paidNow !== null ? (
+            <div className="shrink-0 space-y-1 px-5 pb-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-ink-500">
+                  {paidNow >= total
+                    ? "Fully paid now"
+                    : paidNow > 0
+                      ? "Paid now"
+                      : "Unpaid"}
+                </span>
+                <span className="font-semibold tabular-nums text-emerald-700">
+                  {formatINR(Math.min(paidNow, total))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-ink-500">Outstanding</span>
+                <span
+                  className={clsx(
+                    "font-semibold tabular-nums",
+                    total - paidNow > 0 ? "text-rose-600" : "text-ink-900",
+                  )}
+                >
+                  {formatINR(Math.max(total - paidNow, 0))}
+                </span>
+              </div>
+            </div>
+          ) : null}
 
           {error ? (
             <p className="shrink-0 border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">

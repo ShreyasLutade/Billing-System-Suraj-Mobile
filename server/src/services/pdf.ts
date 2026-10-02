@@ -55,6 +55,24 @@ function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
 }
 
+/** Shop logo (falls back to the icon) for other PDFs, e.g. supplier statements. */
+export function drawShopLogo(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  const logoFile = fs.existsSync(LOGO_PATH)
+    ? LOGO_PATH
+    : fs.existsSync(ICON_PATH)
+      ? ICON_PATH
+      : null;
+  if (logoFile) {
+    doc.image(logoFile, x, y, { fit: [w, h], align: "center", valign: "center" });
+  }
+}
+
 function exchangeItemsForPdf(bill: BillWithItems): BillExchangeItem[] {
   const fromJson = parseExchangeItemsJson(bill.exchangeItemsJson);
   if (fromJson.length) return fromJson;
@@ -1241,3 +1259,6 @@ export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
     doc.end();
   });
 }
+
+// Shared with the supplier statement PDF.
+export { COLORS, FONT, money, registerFonts, shop };

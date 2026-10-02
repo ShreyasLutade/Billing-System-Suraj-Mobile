@@ -17,13 +17,12 @@ import type {
   Supplier,
   SupplierDetail,
   SupplierMobile,
-  SupplierPayment,
 } from "../types";
 
 /** Something deleted that can still be undone (kept a few days). */
 export type RecycleBinEntry = {
   id: string;
-  kind: "BILL" | "STOCK";
+  kind: "BILL" | "SUPPLIER" | "STOCK";
   label: string;
   detail: string | null;
   deletedAt: string;
@@ -31,6 +30,11 @@ export type RecycleBinEntry = {
   /** When it is removed for good. */
   expiresAt: string;
 };
+
+/** Paid to the supplier while entering a purchase (omit = unpaid). */
+export type PaymentAtPurchase =
+  | { mode: "FULL" | "UNPAID" }
+  | { mode: "CUSTOM"; amount: number };
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "suraj_billing_token";
@@ -323,6 +327,7 @@ export const api = {
     supplierId?: string | null;
     supplierName?: string | null;
     supplierPhone?: string | null;
+    payment?: PaymentAtPurchase | null;
   }) =>
     request<{ data: StockItem[] }>("/stock/accessories", {
       method: "POST",
@@ -513,22 +518,50 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  createSupplierPayment: (
-    id: string,
-    payload: {
-      amount: number;
-      method: "cash" | "online" | "na";
-      paidAt?: string | null;
-      note?: string | null;
-    },
-  ) =>
-    request<{ data: SupplierPayment; ledger: Supplier }>(
-      `/suppliers/${id}/payments`,
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
+  /** Admin: delete a supplier (goes to the Recycle bin). */
+  deleteSupplier: (id: string) =>
+    request<{ data: { id: string; stock: number; purchases: number } }>(
+      `/suppliers/${id}`,
+      { method: "DELETE" },
     ),
+  /** Download the supplier statement PDF (purchases Cr / payments Dr). */
+  downloadSupplierStatement: async (supplierId: string) => {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/statement`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download statement";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "supplier-statement.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
+  /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
+  paySupplier: (id: string, amount?: number) =>
+    request<{
+      data: { paid: number; purchasesCleared: number; outstanding: number };
+    }>(`/suppliers/${id}/pay`, {
+      method: "POST",
+      body: JSON.stringify(amount === undefined ? {} : { amount }),
+    }),
   createPurchase: (payload: {
     supplierId?: string | null;
     supplierName?: string | null;
@@ -546,14 +579,17 @@ export const api = {
       serialNumber?: string;
       purchasePrice: number;
     }>;
+    payment?: PaymentAtPurchase | null;
   }) =>
     request<{ data: Purchase }>("/purchases", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  markPurchasePaid: (id: string) =>
+  /** No amount = mark the whole purchase paid; with amount = part payment. */
+  markPurchasePaid: (id: string, amount?: number) =>
     request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
       method: "POST",
+      body: JSON.stringify(amount === undefined ? {} : { amount }),
     }),
   getPurchase: (id: string) =>
     request<{ data: Purchase }>(`/purchases/${id}`),

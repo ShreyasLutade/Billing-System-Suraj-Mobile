@@ -6,6 +6,12 @@ import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
 import { binStockItem } from "../services/recycleBin";
+import {
+  paymentAtPurchaseError,
+  paymentAtPurchaseSchema,
+  recordPaymentAtPurchase,
+  setPurchaseTotal,
+} from "../services/purchasePayment";
 
 export const stockRouter = Router();
 
@@ -230,6 +236,8 @@ const createAccessoriesSchema = z
     supplierId: z.string().trim().optional().nullable(),
     supplierName: z.string().trim().min(2).max(100).optional().nullable(),
     supplierPhone: z.string().trim().max(15).optional().nullable(),
+    /** Paid while entering the purchase (admin only). Omit = unpaid. */
+    payment: paymentAtPurchaseSchema.optional().nullable(),
   })
   .superRefine((data, ctx) => {
     if (!data.supplierId?.trim() && !data.supplierName?.trim()) {
@@ -253,6 +261,11 @@ stockRouter.post("/accessories", async (req, res, next) => {
         error: "Validation failed",
         details: parsed.error.flatten(),
       });
+      return;
+    }
+    const payment = parsed.data.payment;
+    if (payment && payment.mode !== "UNPAID" && req.user?.role !== "ADMIN") {
+      res.status(403).json({ error: "Only an admin can record a payment" });
       return;
     }
 
@@ -306,6 +319,11 @@ stockRouter.post("/accessories", async (req, res, next) => {
 
     const purchaseDate = new Date();
     const totalAmount = round2(purchasePrice * serials.length);
+    const paymentError = paymentAtPurchaseError(payment, totalAmount);
+    if (paymentError) {
+      res.status(400).json({ error: paymentError });
+      return;
+    }
 
     const created = await prisma.$transaction(async (tx) => {
       for (const owner of soldSerialOwners) {
@@ -363,6 +381,7 @@ stockRouter.post("/accessories", async (req, res, next) => {
         });
         items.push(item);
       }
+      await recordPaymentAtPurchase(tx, purchase, payment);
       return items;
     });
 
@@ -899,10 +918,10 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
           where: { id: purchaseId },
           data: {
             supplierId: supplier!.id,
-            totalAmount,
             ...(allSameCondition ? { condition } : {}),
           },
         });
+        await setPurchaseTotal(tx, purchaseId, totalAmount);
       }
 
       // Keep sold bills in sync when identity fields change.
@@ -973,10 +992,7 @@ stockRouter.delete("/:id", requireAdmin, async (req, res, next) => {
         (sum, row) => sum + row.stockItem.purchasePrice,
         0,
       );
-      await tx.purchase.update({
-        where: { id: purchaseId },
-        data: { totalAmount },
-      });
+      await setPurchaseTotal(tx, purchaseId, totalAmount);
     });
 
     res.json({
