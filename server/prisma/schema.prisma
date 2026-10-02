@@ -370,7 +370,7 @@ model SupplierPayment {
   @@index([purchaseId])
 }
 
-/// Recycle bin: a snapshot of everything a delete removed, kept for 3 days so
+/// Recycle bin: a snapshot of everything a delete removed, kept for 30 days so
 /// the delete can be undone. `payload` is JSON (rows by table).
 model RecycleBinEntry {
   id            String   @id @default(cuid())

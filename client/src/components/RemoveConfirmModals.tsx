@@ -14,7 +14,7 @@ function unitLabel(item: BillItem) {
 }
 
 /** Deleted bills, suppliers and stock stay in the Recycle bin this long. */
-export const RECYCLE_BIN_DAYS = 3;
+export const RECYCLE_BIN_DAYS = 30;
 
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;

@@ -4,7 +4,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Clock, Package, ReceiptText, Trash2, Truck, Undo2 } from "lucide-react";
 import clsx from "clsx";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
-import { ConfirmModal, DangerConfirmModal } from "../components/RemoveConfirmModals";
+import {
+  ConfirmModal,
+  DangerConfirmModal,
+  RECYCLE_BIN_DAYS,
+} from "../components/RemoveConfirmModals";
 import { api, type RecycleBinEntry } from "../lib/api";
 
 const KIND = {
@@ -53,7 +57,7 @@ function left(iso: string) {
 
 export function RecycleBinPage() {
   const [entries, setEntries] = useState<RecycleBinEntry[]>([]);
-  const [days, setDays] = useState(3);
+  const [days, setDays] = useState(RECYCLE_BIN_DAYS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<RecycleBinEntry | null>(null);

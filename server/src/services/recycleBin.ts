@@ -25,7 +25,7 @@ import { setPurchaseTotal } from "./purchasePayment";
 type Tx = Prisma.TransactionClient;
 type User = { id?: string | null; name?: string | null } | null | undefined;
 
-export const BIN_DAYS = 3;
+export const BIN_DAYS = 30;
 const BIN_MS = BIN_DAYS * 24 * 60 * 60 * 1000;
 
 export type BinKind = "BILL" | "SUPPLIER" | "STOCK";
