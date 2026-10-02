@@ -8,6 +8,7 @@ import { requireAdmin } from "../middleware/auth";
 import { setPurchaseCondition } from "../services/fixPurchaseCondition";
 import { retireStockImei } from "../services/stockSync";
 import { format } from "date-fns";
+import { applyPendingReturnCredits } from "../services/productReturns";
 import {
   paymentAtPurchaseError,
   paymentAtPurchaseSchema,
@@ -143,6 +144,12 @@ purchasesRouter.get("/:id", async (req, res, next) => {
             stockItem: {
               select: {
                 ...stockItemSelect,
+                productReturn: {
+                  select: { createdAt: true, note: true, invoiceNumber: true, billId: true },
+                },
+                replacementFor: {
+                  select: { invoiceNumber: true, billId: true, customerName: true },
+                },
                 billItems: {
                   orderBy: { bill: { billDate: "desc" } },
                   take: 1,
@@ -176,14 +183,30 @@ purchasesRouter.get("/:id", async (req, res, next) => {
         items: purchase.items.map((item) => {
           const saleLine = item.stockItem.billItems[0];
           const sale = saleLine?.bill;
-          const { billItems: _billItems, ...stockItem } = item.stockItem;
+          const {
+            billItems: _billItems,
+            productReturn,
+            replacementFor,
+            ...stockItem
+          } = item.stockItem;
           return {
             ...item,
             stockItem: {
               ...stockItem,
-              soldBillId: sale?.id ?? null,
-              soldInvoiceNumber: sale?.invoiceNumber ?? null,
-              soldCustomerName: sale?.customerName ?? null,
+              // Given to a customer as a replacement (no bill line of its own).
+              soldBillId: sale?.id ?? replacementFor?.billId ?? null,
+              soldInvoiceNumber: sale?.invoiceNumber ?? replacementFor?.invoiceNumber ?? null,
+              soldCustomerName: sale?.customerName ?? replacementFor?.customerName ?? null,
+              givenAsReplacement: Boolean(replacementFor),
+              // Sent back to the supplier (customer got a replacement / refund).
+              returned: productReturn
+                ? {
+                    createdAt: productReturn.createdAt.toISOString(),
+                    note: productReturn.note,
+                    invoiceNumber: productReturn.invoiceNumber,
+                    billId: productReturn.billId,
+                  }
+                : null,
               // Selling price only for admins (staff never receive it).
               soldPrice: isAdmin
                 ? saleLine != null
@@ -379,6 +402,8 @@ purchasesRouter.post("/", async (req, res, next) => {
       }
 
       await recordPaymentAtPurchase(tx, created, data.payment);
+      // Supplier credit from returned products clears what's left unpaid.
+      await applyPendingReturnCredits(tx, created.supplierId);
 
       return tx.purchase.findUniqueOrThrow({
         where: { id: created.id },

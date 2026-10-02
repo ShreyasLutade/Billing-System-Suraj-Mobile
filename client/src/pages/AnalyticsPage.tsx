@@ -899,7 +899,7 @@ export function AnalyticsPage() {
 
               {billsReveal.visibleItems.map((bill, index) => (
                 <Link
-                  key={bill.id}
+                  key={bill.entryId ?? bill.id}
                   to={`/bills/${bill.id}`}
                   state={fromState(location)}
                   className={`interactive-card-row border-b border-ink-100 px-4 py-3.5 last:border-b-0 sm:grid sm:items-center sm:gap-3 sm:px-5 ${billsRowGrid}`}
@@ -915,8 +915,22 @@ export function AnalyticsPage() {
                       {initials(bill.customerName)}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink-900">
-                        {bill.customerName}
+                      <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-900">
+                        <span className="truncate">{bill.customerName}</span>
+                        {bill.kind === "REPLACED" || bill.kind === "RETURNED" ? (
+                          <span
+                            className={clsx(
+                              "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                              bill.kind === "RETURNED"
+                                ? "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
+                                : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
+                            )}
+                          >
+                            {bill.kind === "RETURNED"
+                              ? `Returned · ${bill.refundMethod === "online" ? "Online" : "Cash"}`
+                              : "Replaced"}
+                          </span>
+                        ) : null}
                       </p>
                       <p className="truncate text-xs text-ink-500">
                         {bill.invoiceNumber}
@@ -929,7 +943,13 @@ export function AnalyticsPage() {
 
                   {showSoldDate ? (
                     <div className="mt-2 text-[13.5px] text-ink-700 sm:mt-0">
-                      <span className="text-ink-500 sm:hidden">Sold · </span>
+                      <span className="text-ink-500 sm:hidden">
+                        {bill.kind === "RETURNED"
+                          ? "Returned · "
+                          : bill.kind === "REPLACED"
+                            ? "Replaced · "
+                            : "Sold · "}
+                      </span>
                       {format(new Date(bill.billDate), "dd MMM yyyy")}
                     </div>
                   ) : null}
@@ -940,15 +960,20 @@ export function AnalyticsPage() {
                         Cost
                       </p>
                       <p className="text-[14px] tabular-nums text-ink-700 sm:text-[15px]">
-                        {formatINR(bill.costPrice)}
+                        {bill.kind === "REPLACED" ? "—" : formatINR(bill.costPrice)}
                       </p>
                     </div>
                     <div className="text-left sm:text-right">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-300 sm:hidden">
                         Selling
                       </p>
-                      <p className="text-[14px] font-semibold tabular-nums text-ink-900 sm:text-[15px]">
-                        {formatINR(bill.sellingPrice)}
+                      <p
+                        className={clsx(
+                          "text-[14px] font-semibold tabular-nums sm:text-[15px]",
+                          bill.sellingPrice < 0 ? "text-[#E5484D]" : "text-ink-900",
+                        )}
+                      >
+                        {bill.kind === "REPLACED" ? "—" : formatINR(bill.sellingPrice)}
                       </p>
                       {(bill.exchangeValue || 0) > 0 ? (
                         <p className="text-[11px] font-medium text-[#B76E00]">
@@ -967,12 +992,14 @@ export function AnalyticsPage() {
                       </p>
                       <p
                         className={`font-display text-[14px] font-bold tabular-nums sm:text-[15px] ${
-                          bill.profit >= 0
-                            ? "text-[#0E9E76]"
-                            : "text-[#E5484D]"
+                          bill.kind === "REPLACED"
+                            ? "text-ink-400"
+                            : bill.profit >= 0
+                              ? "text-[#0E9E76]"
+                              : "text-[#E5484D]"
                         }`}
                       >
-                        {formatINR(bill.profit)}
+                        {bill.kind === "REPLACED" ? "—" : formatINR(bill.profit)}
                       </p>
                     </div>
                   </div>

@@ -7,7 +7,7 @@ import {
   ChevronDown,
   Download,
   Filter,
-  Plus,
+  RefreshCcw,
   Search,
   Share2,
 } from "lucide-react";
@@ -22,6 +22,7 @@ import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { useSessionState } from "../hooks/useSessionState";
 import { fromState } from "../lib/navMemory";
+import { useAuth } from "../auth/AuthContext";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import {
   matchesBillSearch,
@@ -197,6 +198,7 @@ function soldProductLabel(bill: Bill): string | null {
 export function BillsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useAuth();
   const [tab, setTab] = usePersistedTab(
     "tab",
     "bills.tab",
@@ -340,10 +342,16 @@ export function BillsPage() {
         title="Bills"
         description="Every bill with its payment split. Search by name, phone, product or IMEI — filters stack with the period."
         action={
-          <Link to="/" state={fromState(location)} className="btn-primary">
-            <Plus className="h-4 w-4" />
-            New bill
-          </Link>
+          isAdmin ? (
+            <Link
+              to="/bills/replace"
+              state={fromState(location)}
+              className="btn-secondary"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Replace / return
+            </Link>
+          ) : undefined
         }
       />
 

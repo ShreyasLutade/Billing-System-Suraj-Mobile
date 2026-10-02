@@ -14,7 +14,7 @@ import { COLORS, FONT, drawShopLogo, money, registerFonts, shop } from "./pdf";
 
 type Entry = {
   date: Date;
-  kind: "purchase" | "payment";
+  kind: "purchase" | "payment" | "return";
   particulars: string;
   detail: string;
   qty: number | null;
@@ -24,6 +24,8 @@ type Entry = {
   purchaseId?: string;
   /** Payment made at purchase: the purchase it belongs under. */
   paidFor?: string;
+  /** Purchase rows: "Paid at purchase · …" when paid while entering it. */
+  paidNote?: string;
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -44,13 +46,14 @@ const PAD = 5;
 const GREEN = "#0B7A5B";
 const RED = "#BE123C";
 const SHADE = "#FAF7F0";
+const AMBER = "#B45309";
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function rupees(amount: number) {
-  return `Rs. ${money(amount)}`;
+  return amount < -0.005 ? `-Rs. ${money(-amount)}` : `Rs. ${money(amount)}`;
 }
 
 function day(date: Date) {
@@ -94,6 +97,14 @@ export async function buildSupplierStatement(supplierId: string) {
         orderBy: [{ purchaseDate: "asc" }, { createdAt: "asc" }],
       },
       payments: { orderBy: { paidAt: "asc" } },
+      productReturns: {
+        include: {
+          stockItem: {
+            select: { mobileName: true, storage: true, imei: true, serialNumber: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!supplier) return null;
@@ -134,10 +145,47 @@ export async function buildSupplierStatement(supplierId: string) {
     });
   }
 
+  // Products sent back to the supplier: their purchase price is deducted.
+  let creditApplied = 0;
+  let totalReturned = 0;
+  for (const r of supplier.productReturns) {
+    creditApplied += r.creditApplied;
+    totalReturned += r.amount;
+    const unit = r.stockItem;
+    const name = [unit.mobileName, unit.storage].filter(Boolean).join(" ");
+    const id = unit.imei
+      ? `IMEI ${unit.imei.split("~")[0]}`
+      : unit.serialNumber
+        ? `SN ${unit.serialNumber}`
+        : "";
+    const bill = r.invoiceNumber
+      ? `Bill ${r.invoiceNumber}${r.customerName ? ` (${r.customerName})` : ""}`
+      : "";
+    entries.push({
+      date: r.createdAt,
+      kind: "return",
+      // Customer got another unit (Replaced) or a refund (Returned); the
+      // unit came back to this supplier either way.
+      particulars:
+        r.kind === "REPLACE"
+          ? "Replaced · unit sent back"
+          : r.kind === "RETURN"
+            ? "Returned · unit sent back"
+            : "Returned / Replaced",
+      detail: [[name, id].filter(Boolean).join(" · "), bill, r.note ? `Note: ${r.note}` : ""]
+        .filter(Boolean)
+        .join("\n"),
+      qty: 1,
+      credit: 0,
+      debit: r.amount,
+    });
+  }
+
   // Payments made with the per-purchase "Mark paid" only exist on the
   // purchases themselves. Show that part against the purchase it cleared,
   // dated when it was paid.
-  let unrecorded = round2(paidOnPurchases - recorded);
+  // (Return credit is also applied to purchases, so leave that part out.)
+  let unrecorded = round2(paidOnPurchases - creditApplied - recorded);
   if (unrecorded > 0.005) {
     // Earliest-paid purchases first: those are the ones paid before payments
     // were recorded (later ones were cleared by recorded payments).
@@ -170,11 +218,22 @@ export async function buildSupplierStatement(supplierId: string) {
       a.date.getTime() - b.date.getTime() ||
       (a.kind === b.kind ? 0 : a.kind === "purchase" ? -1 : 1),
   );
-  // A payment made at purchase goes right under its own purchase.
+  // A payment made at purchase sits on its purchase's own row: Purchased (Cr)
+  // and Paid (Dr) side by side, with a "Paid at purchase" note.
   const tied = entries.filter((e) => e.paidFor);
   const ordered = entries.flatMap((e) => {
     if (e.paidFor) return [];
-    return e.purchaseId ? [e, ...tied.filter((t) => t.paidFor === e.purchaseId)] : [e];
+    const paid = e.purchaseId ? tied.filter((t) => t.paidFor === e.purchaseId) : [];
+    if (!paid.length) return [e];
+    const amount = round2(paid.reduce((s, t) => s + t.debit, 0));
+    const how = paid.map((t) => t.detail.toLowerCase()).filter(Boolean).join(", ");
+    return [
+      {
+        ...e,
+        debit: round2(e.debit + amount),
+        paidNote: `Paid at purchase${how ? ` · ${how}` : ""}`,
+      },
+    ];
   });
   entries.splice(0, entries.length, ...ordered);
 
@@ -186,6 +245,7 @@ export async function buildSupplierStatement(supplierId: string) {
     entries,
     totalCredit,
     totalDebit,
+    totalReturned: round2(totalReturned),
   });
   const safeName = supplier.name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "supplier";
   return {
@@ -239,6 +299,7 @@ function drawSupplierAndSummary(
     entries: Entry[];
     totalCredit: number;
     totalDebit: number;
+    totalReturned: number;
   },
 ) {
   const first = data.entries[0]?.date;
@@ -261,11 +322,17 @@ function drawSupplierAndSummary(
   const balance = round2(data.totalCredit - data.totalDebit);
   const boxes = [
     { label: "Total purchased", value: data.totalCredit, fill: "#F4F4F5", color: COLORS.ink },
-    { label: "Total paid", value: data.totalDebit, fill: "#E7F8F1", color: GREEN },
+    {
+      label: "Total paid",
+      value: round2(data.totalDebit - data.totalReturned),
+      fill: "#E7F8F1",
+      color: GREEN,
+    },
+    { label: "Returned", value: data.totalReturned, fill: "#FFF7E6", color: AMBER },
     balance > 0.005
       ? { label: "Balance due", value: balance, fill: "#FFF1F2", color: RED }
       : balance < -0.005
-        ? { label: "Paid in advance", value: -balance, fill: COLORS.goldSoft, color: COLORS.gold }
+        ? { label: "Balance due", value: balance, fill: COLORS.goldSoft, color: AMBER }
         : { label: "Settled", value: 0, fill: "#E7F8F1", color: GREEN },
   ];
   const gap = 8;
@@ -304,6 +371,10 @@ function rowHeight(doc: PDFKit.PDFDocument, entry: Entry) {
     doc.font(FONT.regular).fontSize(7.5);
     h += 2 + doc.heightOfString(entry.detail, { width });
   }
+  if (entry.paidNote) {
+    doc.font(FONT.medium).fontSize(7.5);
+    h += 2 + doc.heightOfString(entry.paidNote, { width });
+  }
   return Math.max(h, 10) + 12;
 }
 
@@ -315,7 +386,8 @@ function drawRow(
   shaded: boolean,
 ) {
   const h = rowHeight(doc, entry);
-  if (shaded) doc.rect(M, y, W, h).fill(SHADE);
+  if (entry.kind === "return") doc.rect(M, y, W, h).fill("#FFF8EB");
+  else if (shaded) doc.rect(M, y, W, h).fill(SHADE);
   const top = y + 6;
   let x = M;
   const cell = (index: number, text: string, font: string, size: number, color: string) => {
@@ -334,10 +406,13 @@ function drawRow(
   doc
     .font(FONT.semibold)
     .fontSize(8.5)
-    .fillColor(entry.kind === "payment" ? GREEN : COLORS.ink);
+    .fillColor(entry.kind === "payment" ? GREEN : entry.kind === "return" ? AMBER : COLORS.ink);
   doc.text(entry.particulars, x + PAD, top, { width: pw });
   if (entry.detail) {
     doc.font(FONT.regular).fontSize(7.5).fillColor(COLORS.muted).text(entry.detail, x + PAD, doc.y + 2, { width: pw });
+  }
+  if (entry.paidNote) {
+    doc.font(FONT.medium).fontSize(7.5).fillColor(GREEN).text(entry.paidNote, x + PAD, doc.y + 2, { width: pw });
   }
   x += COLS[1].width;
 
@@ -345,14 +420,14 @@ function drawRow(
   x += COLS[2].width;
   cell(3, entry.credit ? money(entry.credit) : "", FONT.medium, 8.5, COLORS.ink);
   x += COLS[3].width;
-  cell(4, entry.debit ? money(entry.debit) : "", FONT.medium, 8.5, GREEN);
+  cell(4, entry.debit ? money(entry.debit) : "", FONT.medium, 8.5, entry.kind === "return" ? AMBER : GREEN);
   x += COLS[4].width;
   cell(
     5,
-    balance < -0.005 ? `${money(-balance)} Cr` : money(balance),
+    balance < -0.005 ? `-${money(-balance)}` : money(balance),
     FONT.bold,
     8.5,
-    balance > 0.005 ? COLORS.ink : balance < -0.005 ? COLORS.gold : GREEN,
+    balance > 0.005 ? COLORS.ink : balance < -0.005 ? AMBER : GREEN,
   );
 
   doc.moveTo(M, y + h).lineTo(M + W, y + h).strokeColor("#E7E2D6").lineWidth(0.5).stroke();
@@ -376,8 +451,8 @@ function drawTotals(doc: PDFKit.PDFDocument, y: number, credit: number, debit: n
   put(4, money(debit), GREEN);
   put(
     5,
-    balance < -0.005 ? `${money(-balance)} Cr` : money(balance),
-    balance > 0.005 ? RED : balance < -0.005 ? COLORS.gold : GREEN,
+    balance < -0.005 ? `-${money(-balance)}` : money(balance),
+    balance > 0.005 ? RED : balance < -0.005 ? AMBER : GREEN,
   );
   return y + h;
 }
@@ -394,7 +469,7 @@ function drawFooters(doc: PDFKit.PDFDocument) {
       .fontSize(7.5)
       .fillColor(COLORS.muted)
       .text(
-        "Cr = stock received (adds to what we owe).  Dr = payment made to the supplier.",
+        "Cr = stock received · Dr = paid or product sent back · Minus balance = supplier credit",
         M,
         y,
         { width: W - 120, lineBreak: false },
@@ -413,6 +488,7 @@ function renderStatement(data: {
   entries: Entry[];
   totalCredit: number;
   totalDebit: number;
+  totalReturned: number;
 }): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({

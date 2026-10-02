@@ -4,9 +4,14 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
+import { buildSupplierMobilesPdf } from "../services/supplierStockPdf";
 import type { SupplierMobileExportCondition } from "../services/supplierStockExport";
 import { intakeKindFromNote } from "../services/stockSync";
 import { buildSupplierStatement } from "../services/supplierStatement";
+import {
+  applyPendingReturnCredits,
+  settlePendingReturnCredits,
+} from "../services/productReturns";
 import { binSupplier } from "../services/recycleBin";
 import { format } from "date-fns";
 
@@ -24,7 +29,7 @@ function round2(value: number) {
 }
 
 async function supplierLedgerStats(supplierId: string) {
-  const [purchases, stockAvailable, stockSold, stockPurchased] =
+  const [purchases, stockAvailable, stockSold, stockPurchased, returns] =
     await Promise.all([
       prisma.purchase.findMany({
         where: { supplierId },
@@ -44,6 +49,10 @@ async function supplierLedgerStats(supplierId: string) {
       prisma.stockItem.count({
         where: { supplierId },
       }),
+      prisma.productReturn.findMany({
+        where: { supplierId },
+        select: { amount: true, creditApplied: true },
+      }),
     ]);
 
   let totalPurchased = 0;
@@ -56,13 +65,24 @@ async function supplierLedgerStats(supplierId: string) {
       : Math.min(purchase.paidAmount || 0, amount);
   }
 
+  // Returned units are credited to purchases like payments (creditApplied);
+  // keep "paid" to real money and show returns on their own.
+  const totalReturned = round2(returns.reduce((s, r) => s + r.amount, 0));
+  const creditApplied = round2(returns.reduce((s, r) => s + r.creditApplied, 0));
+  const creditUnapplied = round2(Math.max(totalReturned - creditApplied, 0));
+  const owedOnPurchases = round2(Math.max(totalPurchased - totalPaid, 0));
+
   totalPurchased = round2(totalPurchased);
-  totalPaid = round2(totalPaid);
   return {
     purchaseCount: purchases.length,
     totalPurchased,
-    totalPaid,
-    outstanding: round2(Math.max(totalPurchased - totalPaid, 0)),
+    totalPaid: round2(Math.max(totalPaid - creditApplied, 0)),
+    totalReturned,
+    /** Return credit not yet used against a purchase (supplier owes us). */
+    supplierCredit: round2(Math.max(creditUnapplied - owedOnPurchases, 0)),
+    // Negative when the supplier owes us (return credit bigger than what we
+    // owe); it is used up automatically against the next stock we add.
+    outstanding: round2(owedOnPurchases - creditUnapplied),
     stockAvailable,
     stockSold,
     stockPurchased,
@@ -91,6 +111,7 @@ const updateSupplierSchema = z.object({
 
 suppliersRouter.get("/", async (_req, res, next) => {
   try {
+    await settlePendingReturnCredits();
     const suppliers = await prisma.supplier.findMany({
       orderBy: { name: "asc" },
     });
@@ -130,6 +151,7 @@ suppliersRouter.get("/mobiles", async (req, res, next) => {
             },
           },
         },
+        productReturn: { select: { createdAt: true } },
         billItems: {
           select: { bill: { select: { id: true, invoiceNumber: true } } },
           orderBy: { bill: { billDate: "desc" } },
@@ -159,6 +181,7 @@ suppliersRouter.get("/mobiles", async (req, res, next) => {
         purchaseDate: (purchase?.purchaseDate || item.createdAt).toISOString(),
         supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
         sale: bill ? { billId: bill.id, invoiceNumber: bill.invoiceNumber } : null,
+        returned: Boolean(item.productReturn),
         // Opens /suppliers/:supplierId/purchases/:id with this unit highlighted.
         purchase: purchase
           ? { id: purchase.id, supplierId: purchase.supplierId }
@@ -233,7 +256,7 @@ suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
   }
 });
 
-/** Admin Excel export of mobiles for one supplier id. */
+/** Admin PDF of a supplier's new / old mobiles (Export new / Export old). */
 suppliersRouter.get(
   "/:id/mobiles-export",
   requireAdmin,
@@ -246,22 +269,15 @@ suppliersRouter.get(
           .json({ error: "Pass ?condition=NEW or ?condition=USED" });
         return;
       }
-      const exportFile = await buildSupplierMobilesWorkbook(
-        prisma,
-        req.params.id,
-        condition,
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      );
+      const exportFile = await buildSupplierMobilesPdf(req.params.id, condition);
+      res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
         `attachment; filename="${exportFile.filename}"`,
       );
       res.setHeader("X-Unit-Count", String(exportFile.unitCount));
       res.setHeader("X-Sold-Count", String(exportFile.soldCount));
-      res.send(exportFile.buffer);
+      res.send(exportFile.pdf);
     } catch (error) {
       if (error instanceof Error && error.message === "SUPPLIER_NOT_FOUND") {
         res.status(404).json({ error: "Supplier not found" });
@@ -299,6 +315,7 @@ suppliersRouter.post("/", async (req, res, next) => {
 
 suppliersRouter.get("/:id", async (req, res, next) => {
   try {
+    await settlePendingReturnCredits(req.params.id);
     const supplier = await prisma.supplier.findUnique({
       where: { id: req.params.id },
       include: {
@@ -415,7 +432,7 @@ suppliersRouter.patch("/:id", async (req, res, next) => {
 /**
  * Admin only: remove a supplier with its purchases, payments and unsold
  * phones. Refused while any of its phones is on a bill, same rule as
- * deleting a single stock unit. Goes to the recycle bin.
+ * deleting a single stock unit.
  */
 suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
@@ -474,9 +491,20 @@ suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
+const paySupplierSchema = z.object({
+  /** Omit to clear everything outstanding; otherwise a part payment. */
+  amount: z.number().positive().finite().optional(),
+});
+
+/**
+ * Admin only: pay a supplier against their outstanding. The amount is applied
+ * to unpaid purchases oldest first (same fields as a per-purchase mark-paid),
+ * and can never be more than what is outstanding.
+ */
 /** Admin only: supplier statement PDF (purchases as credit, payments as debit). */
 suppliersRouter.get("/:id/statement", requireAdmin, async (req, res, next) => {
   try {
+    await settlePendingReturnCredits(req.params.id);
     const statement = await buildSupplierStatement(req.params.id);
     if (!statement) {
       res.status(404).json({ error: "Supplier not found" });
@@ -493,16 +521,6 @@ suppliersRouter.get("/:id/statement", requireAdmin, async (req, res, next) => {
   }
 });
 
-const paySupplierSchema = z.object({
-  /** Omit to clear everything outstanding; otherwise a part payment. */
-  amount: z.number().positive().finite().optional(),
-});
-
-/**
- * Admin only: pay a supplier against their outstanding. The amount is applied
- * to unpaid purchases oldest first (same fields as a per-purchase mark-paid),
- * and can never be more than what is outstanding.
- */
 suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
   try {
     const parsed = paySupplierSchema.safeParse(req.body ?? {});
@@ -526,6 +544,7 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
         select: { id: true },
       });
       if (!supplier) return { status: 404, error: "Supplier not found" } as const;
+      await applyPendingReturnCredits(tx, supplier.id);
 
       const unpaid = await tx.purchase.findMany({
         where: { supplierId: supplier.id, paidAt: null },

@@ -85,7 +85,7 @@ export function SupplierDetailPage() {
     void load();
   }, [id]);
 
-  async function exportMobilesExcel(condition: "NEW" | "USED") {
+  async function exportMobilesPdf(condition: "NEW" | "USED") {
     if (!id) return;
     setExporting(condition);
     setError(null);
@@ -93,7 +93,7 @@ export function SupplierDetailPage() {
       await api.downloadSupplierMobilesExport(id, condition);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to export mobiles Excel",
+        err instanceof Error ? err.message : "Could not download the mobiles PDF",
       );
     } finally {
       setExporting(null);
@@ -165,7 +165,7 @@ export function SupplierDetailPage() {
                 type="button"
                 className="btn-secondary flex-1 !gap-1.5 !px-2 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
                 disabled={exporting !== null}
-                onClick={() => void exportMobilesExcel("NEW")}
+                onClick={() => void exportMobilesPdf("NEW")}
               >
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                 {exporting === "NEW" ? "Exporting…" : "Export new"}
@@ -174,7 +174,7 @@ export function SupplierDetailPage() {
                 type="button"
                 className="btn-secondary flex-1 !gap-1.5 !px-2 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
                 disabled={exporting !== null}
-                onClick={() => void exportMobilesExcel("USED")}
+                onClick={() => void exportMobilesPdf("USED")}
               >
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                 {exporting === "USED" ? "Exporting…" : "Export old"}

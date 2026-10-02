@@ -250,6 +250,9 @@ model StockItem {
   billItems     BillItem[]
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   purchaseItem  PurchaseItem?
+  productReturn ProductReturn? @relation("ReturnedUnit")
+  /// Set when this unit was given to a customer as a replacement.
+  replacementFor ProductReturn? @relation("ReplacementUnit")
 
   @@index([kind])
   @@index([condition])
@@ -274,6 +277,7 @@ model Supplier {
   purchases  Purchase[]
   payments   SupplierPayment[]
   stockItems StockItem[]
+  productReturns ProductReturn[]
 
   @@index([name])
   @@index([isExchange])
@@ -320,6 +324,42 @@ model PurchaseItem {
 
 /// Recycle bin: a snapshot of everything a delete removed, kept for 30 days so
 /// the delete can be undone. `payload` is JSON (rows by table).
+/// A sold unit sent back to its supplier: the customer got another unit from
+/// stock (REPLACE) or a refund (RETURN). Its purchase price is credited to
+/// the supplier: applied to unpaid purchases like a payment (creditApplied);
+/// any part that could not be applied stays as supplier credit.
+model ProductReturn {
+  id              String    @id @default(cuid())
+  stockItemId     String    @unique
+  supplierId      String?
+  /// Bill the unit was sold on (snapshot, the bill may change later)
+  billId          String?
+  billItemId      String?
+  invoiceNumber   String?
+  customerName    String?
+  /// Purchase price credited to the supplier
+  amount          Float     @default(0)
+  creditApplied   Float     @default(0)
+  /// REPLACE (customer got another unit from stock) | RETURN (refund)
+  kind            String?
+  /// RETURN: money given back to the customer, and how (cash | online).
+  refundAmount    Float     @default(0)
+  refundMethod    String?
+  /// REPLACE: the unit from stock given to the customer (marked SOLD).
+  replacementStockItemId String? @unique
+  note            String?
+  createdByUserId String?
+  createdByName   String?
+  createdAt       DateTime  @default(now())
+  stockItem       StockItem @relation("ReturnedUnit", fields: [stockItemId], references: [id], onDelete: Cascade)
+  replacementStock StockItem? @relation("ReplacementUnit", fields: [replacementStockItemId], references: [id], onDelete: SetNull)
+  supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([billId])
+  @@index([createdAt])
+}
+
 model RecycleBinEntry {
   id            String   @id @default(cuid())
   /// BILL | SUPPLIER | STOCK

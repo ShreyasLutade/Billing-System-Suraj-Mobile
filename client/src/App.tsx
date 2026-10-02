@@ -9,6 +9,7 @@ import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
 import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
 import { BackupPage } from "./pages/BackupPage";
 import { RecycleBinPage } from "./pages/RecycleBinPage";
+import { ReplaceProductPage } from "./pages/ReplaceProductPage";
 import { AddAccessoriesPage } from "./pages/AddAccessoriesPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
@@ -69,6 +70,7 @@ export default function App() {
                   />
                   <Route path="backup" element={<BackupPage />} />
                   <Route path="recycle-bin" element={<RecycleBinPage />} />
+                  <Route path="bills/replace" element={<ReplaceProductPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

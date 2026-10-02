@@ -6,6 +6,7 @@ import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
 import { binStockItem } from "../services/recycleBin";
+import { applyPendingReturnCredits } from "../services/productReturns";
 import {
   paymentAtPurchaseError,
   paymentAtPurchaseSchema,
@@ -382,6 +383,8 @@ stockRouter.post("/accessories", async (req, res, next) => {
         items.push(item);
       }
       await recordPaymentAtPurchase(tx, purchase, payment);
+      // Supplier credit from returned products clears what's left unpaid.
+      await applyPendingReturnCredits(tx, purchase.supplierId);
       return items;
     });
 

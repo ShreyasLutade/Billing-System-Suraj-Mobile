@@ -269,7 +269,9 @@ export function PurchaseDetailPage() {
               {purchase.items.map((row, index) => {
                 const item = row.stockItem;
                 const sold = item.status === "SOLD";
-                const billId = item.soldBillId;
+                // Sold, then sent back to the supplier (replaced / returned): amber, not red.
+                const returned = Boolean(item.returned);
+                const billId = item.soldBillId ?? item.returned?.billId ?? null;
                 const highlighted = item.id === highlightStockId;
                 const openBill = () => {
                   if (sold && billId) {
@@ -299,10 +301,15 @@ export function PurchaseDetailPage() {
                       "relative isolate overflow-hidden border-b border-[#EEF1F5] text-[13px] dark:border-[rgb(var(--color-line))]",
                       !sold && (index % 2 === 0 ? "bg-white" : "bg-[#FAFBFC]"),
                       sold &&
+                        !returned &&
                         "bg-rose-50/70 dark:!bg-rose-950/45 dark:hover:!bg-rose-950/60",
                       sold &&
+                        !returned &&
                         billId &&
                         "cursor-pointer hover:bg-rose-50 dark:hover:!bg-rose-950/60",
+                      returned &&
+                        "bg-amber-50/80 dark:!bg-amber-500/10 dark:hover:!bg-amber-500/15",
+                      returned && billId && "cursor-pointer hover:bg-amber-50",
                       highlighted &&
                         "shadow-[inset_4px_0_0_rgb(var(--color-tide-500)),inset_0_0_0_2px_rgb(var(--color-tide-500)/0.55)]",
                       highlighted && !sold && "!bg-tide-100",
@@ -383,7 +390,13 @@ export function PurchaseDetailPage() {
                           {billId ? (
                             <button
                               type="button"
-                              className="block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold text-rose-600 underline decoration-rose-400/80 underline-offset-2 hover:text-rose-700"
+                              className={clsx(
+                                "block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold underline underline-offset-2",
+                                returned
+                                  ? "text-amber-700 decoration-amber-400/80 hover:text-amber-800 dark:text-amber-300"
+                                  : "text-rose-600 decoration-rose-400/80 hover:text-rose-700",
+                              )}
+                              title={returned && item.returned?.note ? item.returned.note : undefined}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 navigate(`/bills/${billId}`, {
@@ -391,14 +404,19 @@ export function PurchaseDetailPage() {
                                 });
                               }}
                             >
-                              Sold
-                              {item.soldInvoiceNumber
-                                ? ` · ${item.soldInvoiceNumber}`
+                              {returned ? "Returned / Replaced" : item.givenAsReplacement ? "Sold as replacement" : "Sold"}
+                              {item.soldInvoiceNumber ?? item.returned?.invoiceNumber
+                                ? ` · ${item.soldInvoiceNumber ?? item.returned?.invoiceNumber}`
                                 : ""}
                             </button>
                           ) : (
-                            <span className="block truncate whitespace-nowrap text-xs font-semibold text-rose-600">
-                              Sold
+                            <span
+                              className={clsx(
+                                "block truncate whitespace-nowrap text-xs font-semibold",
+                                returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
+                              )}
+                            >
+                              {returned ? "Returned / Replaced" : item.givenAsReplacement ? "Sold as replacement" : "Sold"}
                             </span>
                           )}
                           {isAdmin &&
@@ -455,10 +473,15 @@ export function PurchaseDetailPage() {
                         className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
                       >
                         <span
-                          className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm dark:border-rose-400/40 dark:!bg-rose-500/15 dark:!text-rose-300/80 sm:text-xs"
+                          className={clsx(
+                            "select-none whitespace-nowrap rounded border bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase shadow-sm sm:text-xs",
+                            returned
+                              ? "border-amber-500/50 tracking-[0.2em] text-amber-600/80 dark:border-amber-400/40 dark:!bg-amber-500/15 dark:!text-amber-300/80"
+                              : "border-rose-500/45 tracking-[0.35em] text-rose-500/75 dark:border-rose-400/40 dark:!bg-rose-500/15 dark:!text-rose-300/80",
+                          )}
                           style={{ transform: "rotate(-12deg)" }}
                         >
-                          Sold
+                          {returned ? "Returned" : "Sold"}
                         </span>
                       </div>
                     ) : null}

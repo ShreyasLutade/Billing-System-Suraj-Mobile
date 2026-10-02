@@ -3,6 +3,7 @@ import type {
   Bill,
   BillItem,
   DuePayment,
+  ProductReturn,
   Purchase,
   PurchaseItem,
   StockItem,
@@ -40,6 +41,8 @@ type StockSnap = {
   links: PurchaseItem[];
   /** Bill lines (on other bills) that pointed at these units; a delete clears them. */
   billLinks: Array<{ id: string; stockItemId: string }>;
+  /** Replace / return records of these units (removed with them). */
+  returns?: ProductReturn[];
 };
 
 export type BillDeleteMode = "delete" | "return" | "restock";
@@ -79,6 +82,8 @@ type SupplierPayload = {
   purchases: Purchase[];
   payments: SupplierPayment[];
   stock: StockSnap;
+  /** Supplier's replace / return records for units not in `stock`. */
+  returns?: ProductReturn[];
 };
 
 async function snapshotStock(
@@ -87,10 +92,11 @@ async function snapshotStock(
   exceptBillId?: string,
 ): Promise<StockSnap> {
   const unique = [...new Set(ids.filter(Boolean))];
-  if (!unique.length) return { stock: [], links: [], billLinks: [] };
-  const [stock, links, billLinks] = await Promise.all([
+  if (!unique.length) return { stock: [], links: [], returns: [], billLinks: [] };
+  const [stock, links, returns, billLinks] = await Promise.all([
     tx.stockItem.findMany({ where: { id: { in: unique } } }),
     tx.purchaseItem.findMany({ where: { stockItemId: { in: unique } } }),
+    tx.productReturn.findMany({ where: { stockItemId: { in: unique } } }),
     tx.billItem.findMany({
       where: {
         stockItemId: { in: unique },
@@ -102,6 +108,7 @@ async function snapshotStock(
   return {
     stock,
     links,
+    returns,
     billLinks: billLinks.map((b) => ({ id: b.id, stockItemId: b.stockItemId! })),
   };
 }
@@ -203,12 +210,13 @@ export async function binBill(
 export async function binSupplier(tx: Tx, supplierId: string, stockIds: string[], user: User) {
   const supplier = await tx.supplier.findUnique({ where: { id: supplierId } });
   if (!supplier) return;
-  const [purchases, payments, stock] = await Promise.all([
+  const [purchases, payments, stock, returns] = await Promise.all([
     tx.purchase.findMany({ where: { supplierId } }),
     tx.supplierPayment.findMany({ where: { supplierId } }),
     snapshotStock(tx, stockIds),
+    tx.productReturn.findMany({ where: { supplierId } }),
   ]);
-  const payload: SupplierPayload = { supplier, purchases, payments, stock };
+  const payload: SupplierPayload = { supplier, purchases, payments, stock, returns };
   await addEntry(
     tx,
     "SUPPLIER",
@@ -304,7 +312,28 @@ async function restoreStock(tx: Tx, snap: StockSnap) {
     await tx.stockItem.create({ data: unit });
   }
   await relink(tx, snap.links);
+  await restoreReturns(tx, snap.returns ?? []);
   await restoreBillLinks(tx, snap);
+}
+
+/** Replace / return records come back with their unit (if it exists). */
+async function restoreReturns(tx: Tx, returns: ProductReturn[]) {
+  for (const r of returns) {
+    const unit = await tx.stockItem.findUnique({ where: { id: r.stockItemId }, select: { id: true } });
+    const taken = await tx.productReturn.findUnique({ where: { stockItemId: r.stockItemId } });
+    if (!unit || taken) continue;
+    const supplierOk = await supplierExists(tx, r.supplierId);
+    const swapOk =
+      !r.replacementStockItemId ||
+      Boolean(await tx.stockItem.findUnique({ where: { id: r.replacementStockItemId }, select: { id: true } }));
+    await tx.productReturn.create({
+      data: {
+        ...r,
+        supplierId: supplierOk ? r.supplierId : null,
+        replacementStockItemId: swapOk ? r.replacementStockItemId : null,
+      },
+    });
+  }
 }
 
 /** Undo "Return": second-hand units go back to how they were before (sold). */
@@ -413,6 +442,7 @@ async function restoreSupplier(tx: Tx, p: SupplierPayload) {
   for (const purchase of p.purchases) await tx.purchase.create({ data: purchase });
   for (const pay of p.payments) await tx.supplierPayment.create({ data: pay });
   await restoreStock(tx, p.stock);
+  await restoreReturns(tx, p.returns ?? []);
   return `/suppliers/${p.supplier.id}`;
 }
 
