@@ -529,60 +529,12 @@ body {
   }
 
   .ledger-table tfoot td {
-    @apply border-t border-[#CBD3DE] bg-[#F1F4F8] px-3 py-2 text-sm font-bold text-ink-900 dark:border-[rgb(var(--color-line))] dark:bg-surface-muted;
+    @apply border-t-2 border-ink-900 bg-[#F1F4F8] px-3 py-2 text-sm font-bold text-ink-900 dark:border-ink-700 dark:bg-surface-muted;
   }
 
   .ledger-note {
     @apply border-t border-ink-100 px-4 py-2.5 text-[12.5px] text-ink-300;
   }
-
-  /*
-   * Long ledgers (Stock): the table scrolls in its own area, about one screen
-   * tall, so the header row stays pinned at the top and the total at the
-   * bottom. Phones leave room for the top bar and the bottom nav.
-   */
-  .ledger-scroll-sticky {
-    overflow: auto;
-    max-height: max(
-      16rem,
-      calc(100dvh - 12rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))
-    );
-  }
-
-  @media (min-width: 640px) {
-    .ledger-scroll-sticky {
-      max-height: max(16rem, calc(100dvh - 10rem - env(safe-area-inset-top)));
-    }
-  }
-
-  /*
-   * Pinned cells (sticky header/total) need each cell to draw
-   * its own borders: with the default shared ("collapsed") borders the lines
-   * stay behind when a cell is pinned. So these tables use separate borders,
-   * and each line below is drawn exactly once.
-   */
-  .ledger-scroll-sticky > .ledger-table {
-    border-collapse: separate;
-    border-spacing: 0;
-  }
-
-  /* The total row draws the line above it; avoid a second line under the last row. */
-  .ledger-scroll-sticky > .ledger-table:has(tfoot) tbody tr:last-child td {
-    border-bottom-width: 0;
-  }
-
-  .ledger-scroll-sticky thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-  }
-
-  .ledger-scroll-sticky tfoot td {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-  }
-
 }
 
 ::-webkit-scrollbar {

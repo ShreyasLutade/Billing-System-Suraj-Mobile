@@ -769,8 +769,7 @@ export function StockPage() {
           ) : null}
 
           <div className="ledger-card">
-            {/* Own scroll area: the header row stays at the top and the total at the bottom. */}
-            <div className="ledger-scroll ledger-scroll-sticky">
+            <div className="ledger-scroll">
               <table className="ledger-table">
                 <thead>
                   <tr>
@@ -839,15 +838,14 @@ export function StockPage() {
                   </tr>
                 </tfoot>
               </table>
-              {/* Inside the scroll area, so more rows load as the table scrolls. */}
-              <LoadMoreSentinel
-                sentinelRef={stockReveal.sentinelRef}
-                hasMore={stockReveal.hasMore}
-                loadingMore={stockReveal.loadingMore}
-                totalCount={stockReveal.totalCount}
-                showEnd={false}
-              />
             </div>
+            <LoadMoreSentinel
+              sentinelRef={stockReveal.sentinelRef}
+              hasMore={stockReveal.hasMore}
+              loadingMore={stockReveal.loadingMore}
+              totalCount={stockReveal.totalCount}
+              showEnd={false}
+            />
             <p className="ledger-note">
               Tap a row for unit-level detail (IMEI, purchase date, supplier).
               Manage suppliers under{" "}
