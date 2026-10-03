@@ -14,6 +14,7 @@ import {
 import {
   ArrowDownUp,
   Banknote,
+  BarChart3,
   CalendarDays,
   ChartColumn,
   Check,
@@ -364,9 +365,8 @@ export function AnalyticsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Insights"
+        icon={BarChart3}
         title="Analytics"
-        description="Where your money came from and what's still owed — cash, online, card, finance, and dues."
       />
       <div className="mb-5 sm:mb-6">
         <PeriodFilter

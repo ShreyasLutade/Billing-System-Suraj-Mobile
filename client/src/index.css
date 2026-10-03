@@ -329,13 +329,75 @@ body {
     @apply border-[#F3C7C9] bg-[#FFF6F6] text-[#E5484D] hover:border-[#E5484D] hover:bg-[#E5484D] hover:text-white dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-600 dark:hover:text-white;
   }
 
-  /* Shared list toolbar (Dues / Bills / Stock) */
+  /* Shared list toolbar (Dues / Bills / Stock / Suppliers): tabs and search
+     sit straight on the page, no card around them. */
   .tb-toolbar {
-    @apply mb-3.5 rounded-[18px] border border-[#E7EAF0] bg-white p-3 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.06)] dark:border-[rgb(var(--color-line))] dark:bg-surface dark:shadow-soft sm:flex sm:flex-wrap sm:items-center sm:gap-2.5;
+    @apply mb-3 sm:flex sm:flex-wrap sm:items-center sm:gap-2.5;
   }
 
+  .tb-toolbar .tb-tabs {
+    @apply mb-2 sm:mb-0;
+  }
+
+  /* White search box so it stands out on the page background. */
+  .tb-toolbar .tb-search {
+    @apply bg-white dark:bg-surface;
+  }
+
+  /*
+   * Frosted-glass floating button (Stock +): see-through brand yellow that
+   * blurs the page behind it, a light rim, and a soft shine on the top half.
+   */
+  .fab-glass {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    color: #1f1600;
+    background: linear-gradient(140deg, rgba(255, 225, 0, 0.72), rgba(255, 168, 0, 0.66));
+    border: 0;
+    -webkit-backdrop-filter: blur(14px) saturate(1.7);
+    backdrop-filter: blur(14px) saturate(1.7);
+    /* Layered shadows so it lifts off the page: contact, depth, warm glow. */
+    box-shadow:
+      0 1px 2px rgba(16, 25, 40, 0.18),
+      0 4px 8px -2px rgba(16, 25, 40, 0.18),
+      0 14px 24px -6px rgba(16, 25, 40, 0.28),
+      0 18px 40px -8px rgba(255, 160, 0, 0.6),
+      inset 0 -8px 14px rgba(255, 140, 0, 0.22);
+  }
+
+  .fab-glass::before {
+    content: "";
+    position: absolute;
+    inset: 2px 7px auto;
+    z-index: -1;
+    height: 48%;
+    border-radius: 9999px;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+    pointer-events: none;
+  }
+
+  .dark .fab-glass {
+    /* Dark pages hide dark shadows; lean on a stronger shadow and glow. */
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.5),
+      0 14px 28px -6px rgba(0, 0, 0, 0.65),
+      0 18px 44px -8px rgba(255, 160, 0, 0.5),
+      inset 0 -8px 14px rgba(255, 140, 0, 0.22);
+  }
+
+  /* Buttons next to a page title: compact, so the header row stays short. */
+  .page-header-action {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  .page-header-action :is(.btn-primary, .btn-secondary, .btn-danger) {
+    @apply gap-1.5 rounded-xl px-3.5 py-2 text-[13px];
+  }
+
+
   .tb-tabs {
-    @apply mb-3 grid h-12 w-full grid-cols-2 gap-1 rounded-[13px] bg-[#EEF0F3] p-1 dark:bg-surface-muted sm:mb-0 sm:flex sm:w-auto sm:min-w-[17.5rem] sm:max-w-[20rem] sm:shrink-0;
+    @apply mb-2 grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-[#EDF0F4] bg-[#F7F8FA] p-1 dark:border-transparent dark:bg-surface-muted sm:mb-0 sm:flex sm:w-auto sm:min-w-[17.5rem] sm:max-w-[20rem] sm:shrink-0;
   }
 
   /* Stock (and other 3-tab toolbars) — keep one even row on phones */
@@ -380,7 +442,7 @@ body {
   }
 
   .tb-search {
-    @apply flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[13px] border-[1.5px] border-[#E7EAF0] bg-[#F6F8FC] px-[13px] transition focus-within:border-tide-500 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,168,0,0.2)] dark:border-[rgb(var(--color-line))] dark:bg-surface-muted dark:focus-within:border-tide-400 dark:focus-within:bg-surface-muted dark:focus-within:shadow-[0_0_0_3px_rgba(255,168,0,0.2)];
+    @apply flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#E7EAF0] bg-[#F6F8FC] px-3 transition focus-within:border-tide-500 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,168,0,0.2)] dark:border-[rgb(var(--color-line))] dark:bg-surface-muted dark:focus-within:border-tide-400 dark:focus-within:bg-surface-muted dark:focus-within:shadow-[0_0_0_3px_rgba(255,168,0,0.2)];
   }
 
   .tb-search input {
@@ -392,7 +454,7 @@ body {
   }
 
   .tb-filter-btn {
-    @apply relative grid h-12 w-12 shrink-0 place-items-center self-stretch rounded-[13px] border-[1.5px] border-[#E7EAF0] bg-white text-[#3A4658] transition hover:border-[#C9D0DB] hover:bg-[#F7F8FA] hover:text-[#0E1626] dark:border-[rgb(var(--color-line))] dark:bg-surface-elevated dark:text-ink-700 dark:hover:border-ink-300 dark:hover:bg-surface-muted dark:hover:text-ink-900;
+    @apply relative grid h-10 w-10 shrink-0 place-items-center self-stretch rounded-xl border border-[#E7EAF0] bg-white text-[#3A4658] transition hover:border-[#C9D0DB] hover:bg-[#F7F8FA] hover:text-[#0E1626] dark:border-[rgb(var(--color-line))] dark:bg-surface-elevated dark:text-ink-700 dark:hover:border-ink-300 dark:hover:bg-surface-muted dark:hover:text-ink-900;
   }
 
   .tb-filter-btn-open {
@@ -467,11 +529,97 @@ body {
   }
 
   .ledger-table tfoot td {
-    @apply border-t-2 border-ink-900 bg-[#F1F4F8] px-3 py-2 text-sm font-bold text-ink-900 dark:border-ink-700 dark:bg-surface-muted;
+    @apply border-t border-[#CBD3DE] bg-[#F1F4F8] px-3 py-2 text-sm font-bold text-ink-900 dark:border-[rgb(var(--color-line))] dark:bg-surface-muted;
   }
 
   .ledger-note {
     @apply border-t border-ink-100 px-4 py-2.5 text-[12.5px] text-ink-300;
+  }
+
+  /*
+   * Long ledgers (Stock): the table scrolls in its own area, about one screen
+   * tall, so the header row stays pinned at the top and the total at the
+   * bottom. Phones leave room for the top bar and the bottom nav.
+   */
+  .ledger-scroll-sticky {
+    overflow: auto;
+    max-height: max(
+      16rem,
+      calc(100dvh - 12rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))
+    );
+  }
+
+  @media (min-width: 640px) {
+    .ledger-scroll-sticky {
+      max-height: max(16rem, calc(100dvh - 10rem - env(safe-area-inset-top)));
+    }
+  }
+
+  /*
+   * Pinned cells (sticky header/total/first column) need each cell to draw
+   * its own borders: with the default shared ("collapsed") borders the lines
+   * stay behind when a cell is pinned. So these tables use separate borders,
+   * and each line below is drawn exactly once.
+   */
+  :is(.ledger-scroll-sticky, .ledger-sticky-first) > .ledger-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  /* The total row draws the line above it; avoid a second line under the last row. */
+  :is(.ledger-scroll-sticky, .ledger-sticky-first) > .ledger-table:has(tfoot) tbody tr:last-child td {
+    border-bottom-width: 0;
+  }
+
+  .ledger-scroll-sticky thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .ledger-scroll-sticky tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+
+  /*
+   * .ledger-sticky-first (on the scroll wrapper): the first column stays
+   * pinned on the left while the table scrolls sideways. Its cells take the
+   * row's background so other columns slide under it; one line marks the
+   * edge (the second column drops its own left line so it isn't doubled).
+   * Used by Stock (Model) and Suppliers (Supplier).
+   */
+  .ledger-sticky-first :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    border-right: 1px solid #dce2ea;
+  }
+
+  .ledger-sticky-first :is(th, td):nth-child(2) {
+    border-left-width: 0;
+  }
+
+  .ledger-sticky-first tbody td:first-child {
+    z-index: 1;
+    background-color: inherit;
+  }
+
+  .ledger-sticky-first :is(thead th, tfoot td):first-child {
+    z-index: 3;
+  }
+
+  .dark .ledger-sticky-first :is(th, td):first-child {
+    border-right-color: rgb(var(--color-line));
+  }
+
+  /* Solid hover colour, so the pinned cell never shows columns through it. */
+  .ledger-sticky-first tbody tr.ledger-row-click:hover {
+    background-color: color-mix(in srgb, rgb(var(--color-tide-100)) 70%, #fff);
+  }
+
+  .dark .ledger-sticky-first tbody tr.ledger-row-click:hover {
+    background-color: color-mix(in srgb, rgb(var(--color-tide-100)) 40%, rgb(var(--color-surface)));
   }
 }
 
@@ -2011,4 +2159,79 @@ a.bg-ink-900:hover,
 html.dark .login-page {
   --login-online: #ffc93d;
   --login-online-soft: #40300a;
+}
+
+/* ------------------------------------------------------------------ */
+/* Glass buttons (app-wide). Comes last so it wins over the brand      */
+/* gradient rules above, which use !important.                         */
+/* ------------------------------------------------------------------ */
+
+/* Yellow actions: see-through brand yellow, soft shine, light rim, lift. */
+.btn-primary,
+button.bg-ink-900,
+a.bg-ink-900,
+.login-btn {
+  background:
+    radial-gradient(120% 100% at 30% 0%, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(140deg, rgba(255, 225, 0, 0.84), rgba(255, 168, 0, 0.8)) !important;
+  border-color: transparent !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.6);
+  backdrop-filter: blur(12px) saturate(1.6);
+  box-shadow:
+    0 1px 2px rgba(16, 25, 40, 0.14),
+    0 10px 20px -10px rgba(255, 160, 0, 0.75),
+    inset 0 -6px 12px rgba(255, 140, 0, 0.18) !important;
+}
+
+html.dark .btn-primary,
+html.dark button.bg-ink-900,
+html.dark a.bg-ink-900,
+html.dark .login-btn {
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 10px 22px -10px rgba(255, 160, 0, 0.55),
+    inset 0 -6px 12px rgba(255, 140, 0, 0.18) !important;
+}
+
+/* White buttons: frosted white with a crisp top highlight. */
+.btn-secondary,
+.btn-secondary:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.62));
+  border-color: rgba(16, 25, 40, 0.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    0 1px 2px rgba(16, 25, 40, 0.06),
+    0 6px 14px -8px rgba(16, 25, 40, 0.2);
+}
+
+.btn-secondary:hover {
+  border-color: rgba(16, 25, 40, 0.18);
+}
+
+.dark .btn-secondary,
+.dark .btn-secondary:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+
+/* Red (delete) buttons: see-through red, shine, red glow. */
+.btn-danger,
+.btn-danger:hover {
+  background:
+    radial-gradient(120% 100% at 30% 0%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(140deg, rgba(244, 63, 94, 0.9), rgba(225, 29, 72, 0.88));
+  border-color: transparent;
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  backdrop-filter: blur(12px) saturate(1.5);
+  box-shadow:
+    0 1px 2px rgba(16, 25, 40, 0.14),
+    0 10px 20px -10px rgba(225, 29, 72, 0.7),
+    inset 0 -6px 12px rgba(159, 18, 57, 0.2);
+}
+
+.btn-danger:not(:disabled):hover {
+  filter: brightness(1.05);
 }

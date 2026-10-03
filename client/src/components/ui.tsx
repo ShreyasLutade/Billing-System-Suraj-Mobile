@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export function BackLink({
   to,
@@ -80,35 +80,31 @@ export function BackButton({
   );
 }
 
+/**
+ * Compact page title: icon tile + title on one row, optional action on the
+ * right (buttons inside are shrunk via .page-header-action), so content
+ * starts high on a phone.
+ */
 export function PageHeader({
-  eyebrow,
+  icon: Icon,
   title,
-  description,
   action,
 }: {
-  eyebrow?: string;
+  icon?: ComponentType<{ className?: string }>;
   title: string;
-  description?: string;
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        {eyebrow ? (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
-            {eyebrow}
-          </p>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <h1 className="flex min-w-0 items-center gap-2.5 font-display text-[22px] font-bold tracking-tight text-ink-900 sm:text-2xl">
+        {Icon ? (
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-tide-100 text-tide-600 dark:bg-tide-100/30 dark:text-tide-400">
+            <Icon className="h-[18px] w-[18px]" />
+          </span>
         ) : null}
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
-          {title}
-        </h1>
-        {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-500 sm:text-base">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {action}
+        <span className="truncate">{title}</span>
+      </h1>
+      {action ? <div className="page-header-action">{action}</div> : null}
     </div>
   );
 }

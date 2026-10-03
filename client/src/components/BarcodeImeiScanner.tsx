@@ -359,7 +359,7 @@ export function ScanFieldShell({
 }
 
 export const scanFieldInputClass =
-  "min-w-0 flex-1 bg-transparent px-3.5 py-2.5 font-mono text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] disabled:cursor-not-allowed disabled:opacity-55 sm:text-sm";
+  "min-w-0 flex-1 bg-transparent px-3.5 py-2.5 text-base text-ink-900 outline-none placeholder:text-[#9AA6B6] disabled:cursor-not-allowed disabled:opacity-55 sm:text-sm";
 
 export function ImeiScanFieldButton({
   onScan,

@@ -8,6 +8,7 @@ import {
   Filter,
   Search,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -324,9 +325,8 @@ export function DuesPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Collections"
+        icon={Wallet}
         title="Dues"
-        description="Pending payments from customers and financiers."
         action={
           <BackLink to={from ?? "/"}>
             {from ? backLabel(from) : "Home"}

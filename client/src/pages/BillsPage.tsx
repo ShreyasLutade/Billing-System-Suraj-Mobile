@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Download,
   Filter,
+  ReceiptText,
   RefreshCcw,
   Search,
   Share2,
@@ -338,15 +339,14 @@ export function BillsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="History"
+        icon={ReceiptText}
         title="Bills"
-        description="Every bill with its payment split. Search by name, phone, product or IMEI — filters stack with the period."
         action={
           isAdmin ? (
             <Link
               to="/bills/replace"
               state={fromState(location)}
-              className="btn-secondary"
+              className="btn-primary"
             >
               <RefreshCcw className="h-4 w-4" />
               Replace / return

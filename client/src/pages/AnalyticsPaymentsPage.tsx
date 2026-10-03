@@ -343,7 +343,7 @@ export function AnalyticsPaymentsPage() {
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-2.5">
-            <div className="tb-search min-h-11">
+            <div className="tb-search">
               <Search className="h-[17px] w-[17px] shrink-0 text-ink-400" />
               <input
                 value={query}

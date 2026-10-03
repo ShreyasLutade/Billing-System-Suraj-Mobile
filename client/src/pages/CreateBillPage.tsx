@@ -6,12 +6,14 @@ import clsx from "clsx";
 import {
   Check,
   Download,
+  FilePlus2,
   Info,
   ListOrdered,
   Loader2,
   Plus,
   RefreshCw,
   Share2,
+  SquarePen,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -2157,13 +2159,8 @@ export function CreateBillPage() {
   return (
     <div>
       <PageHeader
-        eyebrow={isEdit ? "Edit" : "Create"}
+        icon={isEdit ? SquarePen : FilePlus2}
         title={isEdit ? `Edit ${originalBill?.invoiceNumber || "bill"}` : "New bill"}
-        description={
-          isEdit
-            ? "Update customer, products, or payment details. You’ll review a change summary before saving."
-            : "Enter products manually. Split payment across cash, online, card, and finance — remaining amount becomes due."
-        }
         action={
           isEdit && editId ? (
             <BackLink to={`/bills/${editId}`} state={location.state}>

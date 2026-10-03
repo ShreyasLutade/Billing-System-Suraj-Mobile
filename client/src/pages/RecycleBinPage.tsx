@@ -132,9 +132,8 @@ export function RecycleBinPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Admin"
+        icon={Trash2}
         title="Recycle bin"
-        description={`Deleted bills, suppliers and stock stay here for ${days} days, then they are removed for good.`}
         action={
           <button
             type="button"

@@ -350,7 +350,7 @@ export function AppShell() {
             exit={{ opacity: 0, scale: 0.72, y: 16 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6"
+            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6 [body.has-fab_&]:bottom-[10.5rem] md:[body.has-fab_&]:bottom-6"
             aria-label="Scroll to top"
             title="Scroll to top"
           >

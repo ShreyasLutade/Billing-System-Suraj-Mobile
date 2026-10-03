@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { DatabaseBackup, Download, Loader2, Mail, Upload } from "lucide-react";
+import {
+  ArchiveRestore,
+  DatabaseBackup,
+  Download,
+  Loader2,
+  Mail,
+  Upload,
+} from "lucide-react";
 import { BackLink, PageHeader } from "../components/ui";
 import { ApiError, api } from "../lib/api";
 
@@ -172,9 +179,8 @@ export function BackupPage() {
         Back
       </BackLink>
       <PageHeader
-        eyebrow="Admin"
+        icon={ArchiveRestore}
         title="Backup & restore"
-        description="Download a zip (Excel + .db) to keep locally, email the same files, or upload a .db / backup zip to restore."
       />
 
       {loading ? (
