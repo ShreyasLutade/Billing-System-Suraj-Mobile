@@ -556,18 +556,18 @@ body {
   }
 
   /*
-   * Pinned cells (sticky header/total/first column) need each cell to draw
+   * Pinned cells (sticky header/total) need each cell to draw
    * its own borders: with the default shared ("collapsed") borders the lines
    * stay behind when a cell is pinned. So these tables use separate borders,
    * and each line below is drawn exactly once.
    */
-  :is(.ledger-scroll-sticky, .ledger-sticky-first) > .ledger-table {
+  .ledger-scroll-sticky > .ledger-table {
     border-collapse: separate;
     border-spacing: 0;
   }
 
   /* The total row draws the line above it; avoid a second line under the last row. */
-  :is(.ledger-scroll-sticky, .ledger-sticky-first) > .ledger-table:has(tfoot) tbody tr:last-child td {
+  .ledger-scroll-sticky > .ledger-table:has(tfoot) tbody tr:last-child td {
     border-bottom-width: 0;
   }
 
@@ -583,44 +583,6 @@ body {
     z-index: 2;
   }
 
-  /*
-   * .ledger-sticky-first (on the scroll wrapper): the first column stays
-   * pinned on the left while the table scrolls sideways. Its cells take the
-   * row's background so other columns slide under it; one line marks the
-   * edge (the second column drops its own left line so it isn't doubled).
-   * Used by Stock (Model) and Suppliers (Supplier).
-   */
-  .ledger-sticky-first :is(th, td):first-child {
-    position: sticky;
-    left: 0;
-    border-right: 1px solid #dce2ea;
-  }
-
-  .ledger-sticky-first :is(th, td):nth-child(2) {
-    border-left-width: 0;
-  }
-
-  .ledger-sticky-first tbody td:first-child {
-    z-index: 1;
-    background-color: inherit;
-  }
-
-  .ledger-sticky-first :is(thead th, tfoot td):first-child {
-    z-index: 3;
-  }
-
-  .dark .ledger-sticky-first :is(th, td):first-child {
-    border-right-color: rgb(var(--color-line));
-  }
-
-  /* Solid hover colour, so the pinned cell never shows columns through it. */
-  .ledger-sticky-first tbody tr.ledger-row-click:hover {
-    background-color: color-mix(in srgb, rgb(var(--color-tide-100)) 70%, #fff);
-  }
-
-  .dark .ledger-sticky-first tbody tr.ledger-row-click:hover {
-    background-color: color-mix(in srgb, rgb(var(--color-tide-100)) 40%, rgb(var(--color-surface)));
-  }
 }
 
 ::-webkit-scrollbar {

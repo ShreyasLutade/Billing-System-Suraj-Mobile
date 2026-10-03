@@ -567,7 +567,7 @@ export function SuppliersPage() {
           </div>
 
           <div className="ledger-card">
-            <div className="ledger-scroll ledger-sticky-first">
+            <div className="ledger-scroll">
               <table className="ledger-table">
                 <thead>
                   <tr>
@@ -597,8 +597,7 @@ export function SuppliersPage() {
                       }
                     >
                       <td className="font-semibold whitespace-normal text-ink-900">
-                        {/* Narrow on phones so the pinned column leaves room for the numbers. */}
-                        <span className="inline-flex max-w-[9.5rem] flex-wrap items-center gap-1.5 sm:max-w-none">
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
                           {s.name}
                           {s.hasExchangeIntake ? (
                             <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
@@ -658,9 +657,7 @@ export function SuppliersPage() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    {/* Separate cells: the pinned first cell must be only the Supplier column. */}
-                    <td>Total</td>
-                    <td />
+                    <td colSpan={2}>Total</td>
                     <td className="text-right tabular-nums">{totals.stock}</td>
                     <td className="text-right tabular-nums">{totals.qty}</td>
                     {isAdmin ? (

@@ -770,7 +770,7 @@ export function StockPage() {
 
           <div className="ledger-card">
             {/* Own scroll area: the header row stays at the top and the total at the bottom. */}
-            <div className="ledger-scroll ledger-scroll-sticky ledger-sticky-first">
+            <div className="ledger-scroll ledger-scroll-sticky">
               <table className="ledger-table">
                 <thead>
                   <tr>
@@ -826,9 +826,7 @@ export function StockPage() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    {/* Separate cells: the pinned first cell must be only the Model column. */}
-                    <td>Total</td>
-                    <td />
+                    <td colSpan={2}>Total</td>
                     <td className="text-center tabular-nums">{totalQty}</td>
                     {isAdmin ? (
                       <>
