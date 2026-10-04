@@ -1,0 +1,1675 @@
+/* Repair job sheet (RepairJobPage). Layout follows the job-sheet design;
+   colours come from the app theme (--app-*, --accent, --grad) so light and
+   dark mode both work. */
+
+.rj {
+  --rj-ink: var(--app-ink);
+  --rj-ink2: var(--app-muted);
+  --rj-ink3: color-mix(in srgb, var(--app-muted) 70%, var(--app-card));
+  --rj-line: var(--app-line);
+  --rj-soft: var(--app-field);
+  --rj-card: var(--app-card);
+  --rj-brand: var(--accent);
+  --rj-brand-rgb: var(--accent-rgb);
+  --rj-ok: #16a34a;
+  --rj-ok-bg: color-mix(in srgb, #16a34a 15%, var(--app-card));
+  --rj-bad: #dc2626;
+  --rj-bad-bg: color-mix(in srgb, #dc2626 13%, var(--app-card));
+  --rj-warn: #b45309;
+  --rj-warn-bg: color-mix(in srgb, #f59e0b 18%, var(--app-card));
+  --rj-info: var(--accent);
+  --rj-info-bg: color-mix(in srgb, var(--accent) 14%, var(--app-card));
+  --rj-r: 18px;
+  position: relative;
+  max-width: 520px;
+  margin: 0 auto;
+  color: var(--rj-ink);
+  font-size: 15px;
+}
+
+.rj svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.rj-empty {
+  padding: 40px 0;
+  color: var(--app-muted);
+  text-align: center;
+}
+
+.rj-spin {
+  animation: rjSpin 0.8s linear infinite;
+}
+
+@keyframes rjSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Top bar ── */
+.rj-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.rj-top-id {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.rj-top-id small {
+  display: block;
+  color: var(--rj-ink3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.rj-icon-btn {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--rj-line);
+  border-radius: 12px;
+  background: var(--rj-card);
+  color: var(--rj-ink);
+}
+
+.rj-icon-btn:disabled {
+  opacity: 0.6;
+}
+
+.rj-icon-btn.is-danger {
+  border-color: color-mix(in srgb, var(--rj-bad) 25%, var(--rj-line));
+  background: var(--rj-bad-bg);
+  color: var(--rj-bad);
+}
+
+.rj-icon-btn.is-danger:hover {
+  border-color: var(--rj-bad);
+  background: color-mix(in srgb, var(--rj-bad) 20%, var(--rj-card));
+}
+
+/* ── Cards ── */
+.rj-card {
+  border: 1px solid var(--rj-line);
+  border-radius: var(--rj-r);
+  background: var(--rj-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.rj-hero {
+  padding: 16px;
+}
+
+.rj-hero-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rj .rj-device {
+  margin: 0;
+  font: 800 22px/1.2 "Sora", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.rj-meta {
+  margin: 2px 0 0;
+  color: var(--rj-ink2);
+  font-size: 13px;
+}
+
+.rj-pill {
+  padding: 5px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rj-pill.is-neutral {
+  background: var(--rj-soft);
+  color: var(--rj-ink2);
+}
+
+.rj-pill.is-warn {
+  background: var(--rj-warn-bg);
+  color: var(--rj-warn);
+}
+
+.rj-pill.is-info {
+  background: var(--rj-info-bg);
+  color: var(--rj-info);
+}
+
+.rj-pill.is-ok {
+  background: var(--rj-ok-bg);
+  color: var(--rj-ok);
+}
+
+.rj-pill.is-bad {
+  background: var(--rj-bad-bg);
+  color: var(--rj-bad);
+}
+
+.rj-problem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rj-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--rj-line);
+  border-radius: 10px;
+  background: var(--rj-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rj-tag svg {
+  width: 14px;
+  height: 14px;
+  color: var(--rj-brand);
+}
+
+.rj-cust {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--rj-line);
+}
+
+.rj-avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--grad);
+  color: #fff;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.rj-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.rj-who b {
+  display: block;
+  text-transform: capitalize;
+}
+
+.rj-who span {
+  color: var(--rj-ink2);
+  font-size: 13px;
+}
+
+.rj-round {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.rj-round.is-call {
+  background: var(--rj-info-bg);
+  color: var(--rj-info);
+}
+
+/* ── Tracker ── */
+.rj-tracker {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 12px 0 0;
+  padding: 18px 4px 14px;
+  list-style: none;
+}
+
+.rj-track-line {
+  position: absolute;
+  top: 36px;
+  right: 12.5%;
+  left: 12.5%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--rj-line);
+}
+
+.rj-track-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--rj-ok);
+  transition: width 0.5s ease;
+}
+
+.rj-track-fill.is-fail {
+  background: linear-gradient(90deg, var(--rj-ok), var(--rj-bad));
+}
+
+.rj-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.rj-dot {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 2px solid var(--rj-line);
+  border-radius: 50%;
+  background: var(--rj-card);
+  color: var(--rj-ink3);
+  transition: all 0.3s;
+}
+
+.rj-node.is-done .rj-dot {
+  border-color: var(--rj-ok);
+  background: var(--rj-ok);
+  color: #fff;
+}
+
+.rj-node.is-fail .rj-dot {
+  border-color: var(--rj-bad);
+  background: var(--rj-bad);
+  color: #fff;
+}
+
+.rj-node.is-current .rj-dot {
+  border-color: var(--rj-brand);
+  color: var(--rj-brand);
+  box-shadow: 0 0 0 6px rgba(var(--rj-brand-rgb), 0.12);
+  animation: rjPulse 2s infinite;
+}
+
+@keyframes rjPulse {
+  50% {
+    box-shadow: 0 0 0 10px rgba(var(--rj-brand-rgb), 0.06);
+  }
+}
+
+.rj-node b {
+  font-size: 13px;
+}
+
+.rj-node small {
+  color: var(--rj-ink3);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.rj-node.is-current b {
+  color: var(--rj-brand);
+}
+
+.rj-node.is-fail b {
+  color: var(--rj-bad);
+}
+
+/* ── The one thing to do now ── */
+.rj-next {
+  margin-top: 12px;
+  padding: 16px;
+  border: 2px solid var(--rj-brand);
+  box-shadow: 0 8px 24px rgba(var(--rj-brand-rgb), 0.12);
+}
+
+.rj-next.is-green {
+  border-color: var(--rj-ok);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.1);
+}
+
+.rj-eyebrow {
+  margin: 0;
+  color: var(--rj-brand);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rj .rj-next h2 {
+  margin: 4px 0 14px;
+  font: 800 20px/1.25 "Sora", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.rj-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--rj-bad-bg);
+  color: var(--rj-bad);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.rj-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rj-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  border: 2px solid var(--rj-line);
+  border-radius: 14px;
+  background: var(--rj-soft);
+  color: var(--rj-ink);
+  transition: all 0.15s;
+}
+
+.rj-choice-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--rj-line);
+  border-radius: 50%;
+  background: var(--rj-card);
+}
+
+.rj-choice b {
+  font-size: 15px;
+}
+
+.rj-choice small {
+  color: var(--rj-ink2);
+  font-size: 12px;
+}
+
+.rj-choice.is-fixed.is-on {
+  border-color: var(--rj-ok);
+  background: var(--rj-ok-bg);
+}
+
+.rj-choice.is-fixed.is-on .rj-choice-icon {
+  border-color: var(--rj-ok);
+  background: var(--rj-ok);
+  color: #fff;
+}
+
+.rj-choice.is-notfixed.is-on {
+  border-color: var(--rj-bad);
+  background: var(--rj-bad-bg);
+}
+
+.rj-choice.is-notfixed.is-on .rj-choice-icon {
+  border-color: var(--rj-bad);
+  background: var(--rj-bad);
+  color: #fff;
+}
+
+.rj-choice:active {
+  transform: scale(0.97);
+}
+
+.rj-sub {
+  margin-top: 18px;
+}
+
+.rj-label {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  color: var(--rj-ink2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rj-label em {
+  color: var(--rj-ink3);
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rj-money {
+  display: flex;
+  width: 100%;
+  max-width: 220px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 14px;
+  border: 2px solid var(--rj-line);
+  border-radius: 14px;
+  background: var(--rj-card);
+}
+
+.rj-money:focus-within {
+  border-color: var(--rj-brand);
+}
+
+.rj-money span {
+  color: var(--rj-ink3);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.rj-money input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--rj-ink);
+  font-size: 24px !important;
+  font-weight: 800;
+}
+
+.rj-hint {
+  min-height: 16px;
+  margin: 6px 0 0;
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+}
+
+.rj-hint.is-up {
+  color: var(--rj-warn);
+}
+
+.rj-hint.is-down {
+  color: var(--rj-ok);
+}
+
+.rj-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rj-chip {
+  padding: 9px 13px;
+  border: 1.5px solid var(--rj-line);
+  border-radius: 99px;
+  background: var(--rj-card);
+  color: var(--rj-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.rj-chip.is-on {
+  border-color: transparent;
+  background: var(--grad);
+  color: #fff;
+}
+
+.rj-chip.is-sm {
+  padding: 7px 11px;
+  font-size: 12.5px;
+}
+
+.rj-textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--rj-line);
+  border-radius: 12px;
+  outline: 0;
+  background: var(--rj-card);
+  color: var(--rj-ink);
+  font-size: 14px;
+  resize: none;
+}
+
+/* Directly under its label (no chips above it). */
+.rj-textarea.is-first {
+  margin-top: 0;
+}
+
+.rj-textarea:focus {
+  border-color: var(--rj-brand);
+}
+
+.rj-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--rj-ok-bg);
+  color: var(--rj-ok);
+}
+
+.rj-banner.is-info {
+  margin-bottom: 12px;
+  background: var(--rj-info-bg);
+  color: var(--rj-info);
+}
+
+.rj-banner.is-bad {
+  background: var(--rj-bad-bg);
+  color: var(--rj-bad);
+}
+
+.rj-banner-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--rj-card);
+}
+
+.rj-banner b {
+  display: block;
+  color: var(--rj-ink);
+  font-size: 14px;
+}
+
+.rj-banner span {
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+}
+
+.rj-actions2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rj-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px;
+  border: 1.5px solid var(--rj-line);
+  border-radius: 14px;
+  background: var(--rj-card);
+  color: var(--rj-ink);
+  font-size: 14.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* Only call — no chat. */
+.rj-btn.is-call {
+  width: 100%;
+  border-color: transparent;
+  background: var(--grad);
+  color: #fff;
+}
+
+.rj-btn:active {
+  transform: scale(0.98);
+}
+
+.rj-btn:disabled {
+  opacity: 0.6;
+}
+
+.rj-notified {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: var(--rj-ok);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rj-notified svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Who is collecting: tick for "same as customer", else name + number. */
+.rj-same {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--rj-line);
+  border-radius: 14px;
+  background: var(--rj-card);
+  color: var(--rj-ink);
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.rj-same.is-on {
+  border-color: var(--rj-ok);
+  background: var(--rj-ok-bg);
+}
+
+.rj-same-box {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border: 2px solid var(--rj-line);
+  border-radius: 7px;
+  background: var(--rj-card);
+  color: #fff;
+}
+
+.rj-same.is-on .rj-same-box {
+  border-color: var(--rj-ok);
+  background: var(--rj-ok);
+}
+
+.rj .rj-same-box svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 3;
+}
+
+.rj-same-text {
+  min-width: 0;
+}
+
+.rj-same-text b {
+  display: block;
+  font-size: 14px;
+}
+
+.rj-same-text span {
+  display: block;
+  overflow: hidden;
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rj-pickup {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (min-width: 560px) {
+  .rj-pickup {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rj-field {
+  display: grid;
+  gap: 6px;
+}
+
+.rj-field > span {
+  color: var(--rj-ink2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rj-input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  color: var(--rj-ink);
+  font-size: 15px;
+}
+
+/* Amount on the left, Cash / UPI on the right — one line. */
+.rj-due {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rj-line);
+  border-radius: 14px;
+  background: var(--rj-soft);
+}
+
+.rj-due > span,
+.rj-due-amount span {
+  display: block;
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rj-due > b,
+.rj-due-amount b {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.rj-due-amount {
+  min-width: 0;
+}
+
+.rj-pay {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.rj-pay button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 2px solid var(--rj-line);
+  border-radius: 12px;
+  background: var(--rj-card);
+  color: var(--rj-ink);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rj .rj-pay button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rj-pay button.is-on {
+  border-color: var(--rj-brand);
+  background: var(--rj-info-bg);
+  color: var(--rj-info);
+}
+
+.rj-text-btn {
+  display: block;
+  margin: 14px auto 0;
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rj-text-btn:disabled {
+  opacity: 0.5;
+}
+
+.rj-done {
+  padding: 6px 0 4px;
+  text-align: center;
+}
+
+.rj-done-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 10px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--rj-ok);
+  color: #fff;
+}
+
+.rj .rj-done-icon svg {
+  width: 32px;
+  height: 32px;
+  stroke-width: 3;
+}
+
+.rj .rj-done h2 {
+  margin: 0 0 4px;
+}
+
+.rj-done p {
+  margin: 0;
+  color: var(--rj-ink2);
+  font-size: 13.5px;
+}
+
+.rj-cap {
+  text-transform: capitalize;
+}
+
+.rj-receipt {
+  margin: 16px 0;
+  border-top: 1px dashed var(--rj-line);
+}
+
+.rj-receipt div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--rj-line);
+  font-size: 14px;
+}
+
+.rj-receipt div span {
+  color: var(--rj-ink2);
+}
+
+.rj-receipt div b {
+  text-align: right;
+}
+
+/* ── Job details ── */
+.rj-sec-title {
+  margin: 22px 4px 8px;
+  color: var(--rj-ink3);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rj-acc {
+  margin-bottom: 10px;
+  overflow: hidden;
+  border: 1px solid var(--rj-line);
+  border-radius: var(--rj-r);
+  background: var(--rj-card);
+}
+
+.rj-acc summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.rj-acc summary::-webkit-details-marker {
+  display: none;
+}
+
+.rj-acc-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--rj-soft);
+  color: var(--rj-ink2);
+}
+
+.rj-acc-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.rj-acc-title b {
+  display: block;
+  font-size: 14.5px;
+}
+
+.rj-acc-title span {
+  display: block;
+  overflow: hidden;
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rj-acc-chev {
+  color: var(--rj-ink3);
+  transition: transform 0.2s;
+}
+
+.rj-acc[open] .rj-acc-chev {
+  transform: rotate(180deg);
+}
+
+.rj-rows {
+  padding: 0 16px 8px;
+}
+
+.rj-rows div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rj-line);
+  font-size: 14px;
+}
+
+.rj-rows div span {
+  flex: none;
+  color: var(--rj-ink2);
+}
+
+.rj-rows div b {
+  text-align: right;
+}
+
+.rj-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.rj-ph {
+  position: relative;
+  display: grid;
+  aspect-ratio: 3 / 4;
+  margin: 0;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--rj-soft);
+}
+
+.rj-ph .rj-ph-img,
+.rj-ph .rj-ph-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rj-ph figcaption {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rj-ph.is-empty {
+  gap: 4px;
+  border: 2px dashed var(--rj-line);
+  color: var(--rj-ink3);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+  align-content: center;
+}
+
+.rj-ph.is-empty input {
+  display: none;
+}
+
+.rj-log {
+  margin: 0;
+  padding: 4px 16px 14px;
+  list-style: none;
+}
+
+.rj-log li {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.rj-log li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: var(--rj-line);
+}
+
+.rj-log i {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--rj-ok);
+}
+
+.rj-log b {
+  display: block;
+  font-size: 13.5px;
+}
+
+.rj-log span {
+  color: var(--rj-ink3);
+  font-size: 12px;
+}
+
+/* ── Fixed bottom button. left / width / bottom are set by the page so it
+   lines up with the page column and sits right above the phone's bottom nav. ── */
+/* Laptop: plain block under the step card. */
+.rj-cta-bar {
+  margin-top: 14px;
+}
+
+/* Phones: pinned over the page column, right above the bottom nav. */
+.rj-cta-bar.is-fixed {
+  position: fixed;
+  z-index: 30;
+  margin: 0;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--rj-line);
+  border-radius: 18px 18px 0 0;
+  background: color-mix(in srgb, var(--app-card) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.rj-cta-help {
+  min-height: 15px;
+  margin: 0 0 6px;
+  color: var(--rj-ink2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.rj-cta {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--grad);
+  box-shadow: 0 8px 20px rgba(var(--rj-brand-rgb), 0.3);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  transition: all 0.2s;
+}
+
+.rj-cta.is-green {
+  background: linear-gradient(135deg, #22c55e, #15803d);
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.3);
+}
+
+.rj-cta.is-red {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25);
+}
+
+.rj-cta.is-ghost {
+  border: 1.5px solid var(--rj-line);
+  background: var(--rj-card);
+  box-shadow: none;
+  color: var(--rj-ink);
+}
+
+.rj-cta:disabled {
+  background: var(--rj-soft);
+  box-shadow: none;
+  color: var(--rj-ink3);
+  cursor: not-allowed;
+}
+
+.rj-cta:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+/* ── Undo toast (bottom / left set by the page: just above the button) ── */
+.rj-toast {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  width: calc(100% - 28px);
+  max-width: 492px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--app-ink);
+  color: var(--app-card);
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 20px);
+  transition: all 0.25s;
+}
+
+.rj-toast.is-show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.rj-toast span {
+  flex: 1;
+}
+
+.rj-toast button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.rj-toast button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Laptop: two columns. Job + current step on the left, details on the
+   right (expanded, and staying in view while the left side scrolls). ── */
+@media (min-width: 901px) {
+  .rj {
+    max-width: 1080px;
+  }
+
+  .rj-top {
+    padding-bottom: 18px;
+  }
+
+  .rj-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+    align-items: start;
+    gap: 22px;
+  }
+
+  .rj-side {
+    position: sticky;
+    top: 0;
+  }
+
+  .rj-side .rj-sec-title {
+    margin-top: 0;
+  }
+
+  .rj-hero {
+    padding: 20px 22px;
+  }
+
+  .rj .rj-device {
+    font-size: 26px;
+  }
+
+  .rj-tracker {
+    padding: 22px 8px 18px;
+  }
+
+  .rj-track-line {
+    top: 40px;
+  }
+
+  .rj-next {
+    padding: 22px;
+  }
+
+  .rj .rj-next h2 {
+    font-size: 22px;
+  }
+
+  .rj-choice {
+    padding: 20px 10px;
+  }
+
+  .rj-cta {
+    padding: 15px;
+  }
+
+  .rj-toast {
+    max-width: 460px;
+  }
+}
+
+/* ── Empty required field after tapping the bottom button: scrolled to,
+   focused, red border + a short shake, and a note underneath. ── */
+.rj-choices.is-attention {
+  border-radius: 16px;
+  outline: 2px solid var(--rj-bad);
+  outline-offset: 4px;
+  animation: rjShake 0.4s ease;
+}
+
+.rj-money.is-attention,
+.rj-due.is-attention {
+  border-color: var(--rj-bad);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rj-bad) 15%, transparent);
+  animation: rjShake 0.4s ease;
+}
+
+/* Beats the app's global input border (which uses !important). */
+.babu-main .rj .rj-field input.rj-input.is-attention {
+  border-color: var(--rj-bad) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rj-bad) 15%, transparent) !important;
+  animation: rjShake 0.4s ease;
+}
+
+.rj-missing {
+  margin: 6px 0 0;
+  color: var(--rj-bad);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+@keyframes rjShake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rj .is-attention {
+    animation: none !important;
+  }
+}
+
+/* ── Admin cost price ── */
+/* Final charge and cost price side by side on the repair step. */
+.rj-money-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.rj-money-pair .rj-money {
+  max-width: none;
+}
+
+/* Same label height and box size in both columns, so they line up. */
+.rj-money-pair .rj-label {
+  white-space: nowrap;
+}
+
+.rj-money-pair .rj-money input {
+  min-width: 0;
+  font-size: 22px !important;
+}
+
+.rj-cost {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px dashed var(--rj-line);
+  border-radius: 14px;
+  background: var(--rj-soft);
+}
+
+.rj-cost-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rj-cost-row .rj-money {
+  flex: 1;
+  max-width: 220px;
+}
+
+.rj-cost-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--grad);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.rj .rj-cost-save svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rj-cost-save:disabled {
+  opacity: 0.45;
+}
+
+/* Delivered without a cost: red until the admin fills it in. */
+.rj-cost.is-pending {
+  border: 2px solid var(--rj-bad);
+  background: var(--rj-bad-bg);
+}
+
+.rj-cost.is-pending .rj-label {
+  color: var(--rj-bad);
+}
+
+.rj-money.is-attention-static {
+  border-color: var(--rj-bad);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rj-bad) 15%, transparent);
+}
+
+.rj-hint.is-bad {
+  color: var(--rj-bad);
+  font-weight: 600;
+}
+
+/* ── Issue card (below the customer card) ── */
+.rj-issue {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-color: color-mix(in srgb, var(--rj-bad) 25%, var(--rj-line));
+  background: color-mix(in srgb, var(--rj-bad) 7%, var(--app-card));
+}
+
+.rj-issue .rj-acc-icon {
+  background: color-mix(in srgb, var(--rj-bad) 14%, var(--app-card));
+  color: var(--rj-bad);
+}
+
+.rj-issue-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rj .rj-issue-head h2 {
+  margin: 0;
+  font: 800 15px "Sora", sans-serif;
+}
+
+.rj-issue-text {
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rj-issue-note {
+  margin: 4px 0 0;
+  color: var(--rj-ink2);
+  font-size: 13px;
+}
+
+.rj-issue-due {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--rj-info-bg);
+  color: var(--rj-info);
+  font-size: 13.5px;
+}
+
+.rj .rj-issue-due svg {
+  width: 18px;
+  height: 18px;
+}
+
+.rj-issue-due span {
+  color: var(--rj-ink2);
+  font-weight: 600;
+}
+
+.rj-issue-due b {
+  margin-left: auto;
+  font-size: 14.5px;
+}
+
+/* Phone name and status on one line; long names get "…". */
+.rj-hero-row {
+  align-items: center;
+}
+
+.rj-hero-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.rj .rj-hero-title .rj-device {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Checking fee: "No charge" button with a small amount box beside it. */
+.rj-fee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rj-money.is-fee {
+  flex: 1;
+  max-width: 160px;
+  padding: 0 12px;
+}
+
+.rj-money.is-fee span {
+  font-size: 17px;
+}
+
+.rj-money.is-fee input {
+  padding: 7px 0;
+  font-size: 17px !important;
+}
+
+/* Cost already entered: one small read-only line. */
+.rj-cost-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px;
+  margin: 12px 0 0;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: var(--rj-soft);
+  color: var(--rj-ink2);
+  font-size: 12.5px;
+}
+
+.rj-cost-info b {
+  color: var(--rj-ink);
+  font-size: 13px;
+}
+
+.rj-cost-info b.is-profit {
+  color: var(--rj-ok);
+}
+
+.rj-cost-info b.is-loss {
+  color: var(--rj-bad);
+}
+
+.rj-cost-sep {
+  margin: 0 2px;
+  color: var(--rj-ink3);
+}
+
+/* Hand-over: estimate / cost line above the amount, and the editable amount. */
+.rj-cost-info.is-top {
+  margin: 0 0 8px;
+}
+
+.rj-due-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border: 1.5px solid var(--rj-line);
+  border-radius: 10px;
+  background: var(--rj-card);
+}
+
+.rj-due-input:focus-within {
+  border-color: var(--rj-brand);
+}
+
+.rj-due-input i {
+  color: var(--rj-ink3);
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.rj-due-input input {
+  width: 100%;
+  min-width: 0;
+  max-width: 110px;
+  padding: 2px 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--rj-ink);
+  font-size: 20px !important;
+  font-weight: 800;
+}
+
+/* Amount due row: label and "₹ 500" each on one line, buttons compact. */
+.rj-due-amount > span:first-child {
+  white-space: nowrap;
+}
+
+.rj-due-amount .rj-due-input {
+  display: flex;
+  width: 104px;
+}
+
+.rj-due-amount .rj-due-input input {
+  max-width: none;
+}
+
+.rj-due .rj-pay button {
+  padding: 8px 11px;
+}
+
+/* Finished job: coloured status bar in place of the bottom button. */
+.rj-done-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 15px;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 15.5px;
+  font-weight: 800;
+}
+
+.rj-done-bar.is-ok {
+  background: linear-gradient(135deg, #22c55e, #15803d);
+}
+
+.rj-done-bar.is-bad {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+
+/* Not repaired: the big circle on the finished screen is red. */
+.rj-done-icon.is-bad {
+  background: var(--rj-bad);
+}
+
+/* Finished job: just a thin coloured strip on top of the footer. */
+.rj-cta-bar.is-strip {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+}
+
+.rj-cta-bar.is-strip .rj-done-bar {
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rj .rj-cta-bar.is-strip .rj-done-bar svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Laptop (not pinned): a slim rounded strip under the card. */
+.rj-cta-bar.is-strip:not(.is-fixed) .rj-done-bar {
+  margin-top: 12px;
+  border-radius: 10px;
+}
+
+/* Single-line reason box. */
+.rj-textarea.is-line {
+  display: block;
+  padding: 10px 12px;
+}
+
+/* Slimmer bottom button and panel. */
+.rj-cta-bar.is-fixed {
+  box-sizing: border-box;
+  padding: 7px 12px 8px;
+  border-radius: 0;
+}
+
+.rj-cta-bar.is-fixed:not(.is-strip) .rj-cta {
+  border-radius: 12px;
+}
+
+.rj-cta-help {
+  min-height: 0;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+}
+
+.rj-cta {
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(var(--rj-brand-rgb), 0.22);
+}
+
+.rj-cta.is-green {
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.22);
+}
+
+.rj-cta.is-red {
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+.rj .rj-cta svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Phones: the bottom bar is rendered on <body> inside this wrapper, which
+   only carries the .rj colours — no size or position of its own. */
+.rj.rj-portal {
+  position: static;
+  max-width: none;
+  margin: 0;
+}

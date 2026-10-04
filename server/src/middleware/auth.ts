@@ -8,6 +8,8 @@ export type AuthUser = {
   phone: string;
   name: string;
   role: Role;
+  /** Repair-only account for this repair shop; null = full access. */
+  repairShop: string | null;
 };
 
 declare global {
@@ -28,6 +30,7 @@ export function signToken(user: AuthUser) {
       phone: user.phone,
       name: user.name,
       role: user.role,
+      repairShop: user.repairShop,
     },
     JWT_SECRET,
     { expiresIn: "7d" },
@@ -45,6 +48,7 @@ export function verifyToken(token: string): AuthUser | null {
       phone: String(payload.phone),
       name: String(payload.name || ""),
       role,
+      repairShop: typeof payload.repairShop === "string" ? payload.repairShop : null,
     };
   } catch {
     return null;
@@ -85,6 +89,18 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
   if (req.user.role !== "ADMIN") {
     res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
+}
+
+/**
+ * Mobile-shop APIs (bills, stock, suppliers, reports…). Repair-only accounts
+ * belong to a separate repair shop and never see this data.
+ */
+export function requireFullAccess(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.repairShop) {
+    res.status(403).json({ error: "This account can only use the repair desk" });
     return;
   }
   next();

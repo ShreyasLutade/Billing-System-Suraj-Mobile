@@ -570,18 +570,23 @@ export type AuthUser = {
   phone: string;
   name: string;
   role: "ADMIN" | "STAFF";
+  /** Repair-only account for this repair shop (no mobile-shop access). */
+  repairShop?: string | null;
 };
 
 
 export type RepairPlatform = "IOS" | "ANDROID";
 export type RepairCondition = "LIKE_NEW" | "GOOD" | "FAIR" | "DAMAGED" | "DEAD";
-export type RepairStatus = "RECEIVED" | "REPAIRED" | "DELIVERED";
+export type RepairStatus = "RECEIVED" | "IN_REPAIR" | "REPAIRED" | "DELIVERED";
 export type RepairOutcome = "FIXED" | "NOT_FIXED";
+export type RepairPaymentMethod = "CASH" | "UPI" | "CARD";
 
 /** A repair-desk intake. Photos are fetched separately (see api.repairPhotoUrl). */
 export type RepairJob = {
   id: string;
   jobNumber: string;
+  /** Repair shop: NX (Babu Mobile NX) | LK (Luckey). */
+  shop: string;
   customerName: string;
   customerPhone: string;
   customerAddress: string | null;
@@ -596,10 +601,32 @@ export type RepairJob = {
   conditionNotes: string | null;
   problemDescription: string;
   estimatedCost: number | null;
+  /** Shop's cost for the repair — admins only (null for staff). */
+  costPrice: number | null;
+  /** Admin: fixed and delivered but the cost price isn't entered yet. */
+  costPending: boolean;
+  /** IMEI or serial, scanned or typed at intake. */
+  imei: string | null;
+  /** When the shop promised it back (ISO). */
+  expectedDeliveryAt: string | null;
+  /** Screen lock for testing; shown to staff only. */
+  lockCode: string | null;
+  /** What came in with the phone, e.g. "SIM card, Back cover". */
+  accessories: string | null;
   finalCharge: number | null;
   status: RepairStatus;
   outcome: RepairOutcome | null;
   repairNotes: string | null;
+  /** Chips: work done when fixed, reasons when not fixed ("A, B"). */
+  workDone: string | null;
+  paymentMethod: RepairPaymentMethod | null;
+  /** Someone other than the customer who collected the phone (null = the customer). */
+  pickupName: string | null;
+  pickupPhone: string | null;
+  /** Last time the shop called the customer. */
+  notifiedAt: string | null;
+  /** When the technician started (moved to In repair). */
+  startedAt: string | null;
   repairedAt: string | null;
   deliveredAt: string | null;
   hasFrontPhoto: boolean;
@@ -631,6 +658,7 @@ export type RepairAnalytics = {
     deviceName: string;
     outcome: RepairOutcome | null;
     finalCharge: number | null;
+    costPrice: number | null;
     deliveredAt: string | null;
   }>;
 };

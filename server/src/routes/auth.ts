@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { createHash, randomInt, timingSafeEqual } from "crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import type { RepairShop } from "../lib/repairShops";
 import {
   requireAuth,
   signToken,
@@ -32,12 +33,14 @@ function publicUser(user: {
   phone: string;
   name: string;
   role: string;
+  repairShop: string | null;
 }): AuthUser {
   return {
     id: user.id,
     phone: user.phone,
     name: user.name,
     role: user.role as Role,
+    repairShop: user.repairShop,
   };
 }
 
@@ -262,6 +265,8 @@ const SEED_USERS: Array<{
   password: string;
   name: string;
   role: Role;
+  /** Repair-only account for this repair shop (lib/repairShops). */
+  repairShop?: RepairShop;
 }> = [
   {
     phone: "7038006342",
@@ -287,6 +292,14 @@ const SEED_USERS: Array<{
     name: "Staff-2",
     role: "STAFF",
   },
+  {
+    // Luckey's repair shop: admin of that shop only, no mobile-shop access.
+    phone: "9303914031",
+    password: "Shop@123",
+    name: "Luckey",
+    role: "ADMIN",
+    repairShop: "LK",
+  },
 ];
 
 export async function seedUsers() {
@@ -301,6 +314,7 @@ export async function seedUsers() {
           phone: seed.phone,
           name: seed.name,
           role: seed.role,
+          repairShop: seed.repairShop ?? null,
           passwordHash: await bcrypt.hash(seed.password, 10),
         },
       });
@@ -309,10 +323,12 @@ export async function seedUsers() {
 
     // Never overwrite passwords for existing users — forgot-password / admin
     // resets must survive Railway redeploys and restarts.
-    if (existing.name !== seed.name) {
+    // Name and shop follow the seed list (passwords never do).
+    const repairShop = seed.repairShop ?? null;
+    if (existing.name !== seed.name || existing.repairShop !== repairShop) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: { name: seed.name },
+        data: { name: seed.name, repairShop },
       });
     }
   }

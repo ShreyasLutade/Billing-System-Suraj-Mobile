@@ -2,8 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { GuestOnly, RequireAdmin, RequireAuth } from "./auth/guards";
 import { AppShell } from "./components/AppShell";
-// Repair shop is in development — counter chooser and repair routes disabled.
-// import { SectionGate } from "./components/SectionGate";
+import { SectionGate } from "./components/SectionGate";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
@@ -22,10 +21,10 @@ import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
 import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
 import { ReplaceProductPage } from "./pages/ReplaceProductPage";
-// import { RepairAnalyticsPage } from "./pages/RepairAnalyticsPage";
-// import { RepairHistoryPage } from "./pages/RepairHistoryPage";
-// import { RepairHomePage } from "./pages/RepairHomePage";
-// import { RepairJobPage } from "./pages/RepairJobPage";
+import { RepairAnalyticsPage } from "./pages/RepairAnalyticsPage";
+import { RepairHistoryPage } from "./pages/RepairHistoryPage";
+import { RepairHomePage } from "./pages/RepairHomePage";
+import { RepairJobPage } from "./pages/RepairJobPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 
 export default function App() {
@@ -39,18 +38,17 @@ export default function App() {
             </Route>
 
             <Route element={<RequireAuth />}>
-              {/* Repair shop is in development: restore <SectionGate> and the repair routes.
               <Route element={<SectionGate />}>
-                Repair desk: same layout as the shop, its own links and data.
+                {/* Repair desk: same layout as the shop, its own links and data. */}
                 <Route path="repair" element={<AppShell section="repair" />}>
-                  <Route index element={<RepairHomePage />} />
+                  <Route index element={<RepairHomePage key="new-repair" />} />
                   <Route path="history" element={<RepairHistoryPage />} />
                   <Route element={<RequireAdmin />}>
                     <Route path="analytics" element={<RepairAnalyticsPage />} />
                   </Route>
+                  <Route path=":id/edit" element={<RepairHomePage key="edit-repair" />} />
                   <Route path=":id" element={<RepairJobPage />} />
                 </Route>
-              */}
 
                 <Route element={<AppShell />}>
                   <Route index element={<CreateBillPage key="new-bill" />} />
@@ -93,7 +91,7 @@ export default function App() {
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
-              {/* </Route> SectionGate */}
+              </Route>
             </Route>
           </Routes>
         </BrowserRouter>

@@ -1,0 +1,944 @@
+/* New repair intake (RepairHomePage). Same look as the job sheet:
+   colours from the app theme (--app-*, --accent, --grad), works in dark mode. */
+
+.ri {
+  --ri-ink: var(--app-ink);
+  --ri-ink2: var(--app-muted);
+  --ri-ink3: color-mix(in srgb, var(--app-muted) 70%, var(--app-card));
+  --ri-line: var(--app-line);
+  --ri-soft: var(--app-field);
+  --ri-card: var(--app-card);
+  --ri-brand: var(--accent);
+  --ri-brand-rgb: var(--accent-rgb);
+  --ri-ok: #16a34a;
+  --ri-ok-bg: color-mix(in srgb, #16a34a 14%, var(--app-card));
+  --ri-bad: #dc2626;
+  --ri-info-bg: color-mix(in srgb, var(--accent) 12%, var(--app-card));
+  position: relative;
+  max-width: 520px;
+  margin: 0 auto;
+  color: var(--ri-ink);
+  font-size: 15px;
+}
+
+.ri svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.ri-spin {
+  animation: riSpin 0.8s linear infinite;
+}
+
+@keyframes riSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Header + progress ── */
+.ri-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.ri-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.ri .ri-title h1 {
+  margin: 0;
+  font: 800 21px/1.2 "Sora", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.ri-title small {
+  color: var(--ri-ink2);
+  font-size: 12.5px;
+}
+
+.ri-icon-btn {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--ri-line);
+  border-radius: 12px;
+  background: var(--ri-card);
+  color: var(--ri-ink);
+}
+
+.ri-icon-btn:disabled {
+  opacity: 0.45;
+}
+
+.ri-progress {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 14px;
+}
+
+.ri-progress i {
+  height: 5px;
+  flex: 1;
+  border-radius: 5px;
+  background: var(--ri-line);
+  transition: background 0.3s;
+}
+
+.ri-progress i.is-on {
+  background: var(--ri-ok);
+}
+
+/* ── Cards ── */
+.ri-card {
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid var(--ri-line);
+  border-radius: 18px;
+  background: var(--ri-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.2s;
+}
+
+.ri-card.is-done {
+  border-color: color-mix(in srgb, var(--ri-ok) 35%, var(--ri-line));
+}
+
+.ri-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ri-num {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 1.5px solid var(--ri-line);
+  border-radius: 50%;
+  background: var(--ri-soft);
+  color: var(--ri-ink2);
+  font-size: 13px;
+  font-weight: 800;
+  transition: all 0.2s;
+}
+
+.ri .ri-num svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ri-card.is-done .ri-num {
+  border-color: var(--ri-ok);
+  background: var(--ri-ok);
+  color: #fff;
+}
+
+.ri-head b {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.ri-head em {
+  color: var(--ri-ink3);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* ── Inputs: one bordered box per field ── */
+.ri-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 2px solid var(--ri-line);
+  border-radius: 14px;
+  background: var(--ri-card);
+  transition: border-color 0.15s;
+}
+
+.ri-field:focus-within {
+  border-color: var(--ri-brand);
+}
+
+.ri-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ri-ink);
+  font-size: 15.5px;
+  font-weight: 600;
+}
+
+.ri-field input::placeholder {
+  color: var(--ri-ink3);
+  font-weight: 500;
+}
+
+.ri-field.is-big input {
+  font-size: 19px;
+  letter-spacing: 0.04em;
+}
+
+.ri-field.is-sm input {
+  padding: 10px 0;
+  font-size: 14.5px;
+}
+
+.ri-pre {
+  padding-right: 8px;
+  border-right: 1.5px solid var(--ri-line);
+  color: var(--ri-ink2);
+  font-weight: 700;
+}
+
+.ri-lead {
+  color: var(--ri-ink3);
+}
+
+.ri .ri-lead {
+  width: 18px;
+  height: 18px;
+}
+
+.ri-rupee {
+  color: var(--ri-ink3);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.ri-ok {
+  color: var(--ri-ok);
+}
+
+.ri-lbl {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px 0 7px;
+  color: var(--ri-ink2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ri-lbl em {
+  color: var(--ri-ink3);
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ri-grid2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 12px;
+}
+
+@media (min-width: 560px) {
+  .ri-grid2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ri-textarea {
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 14px;
+  border: 2px solid var(--ri-line);
+  border-radius: 14px;
+  outline: 0;
+  background: var(--ri-card);
+  color: var(--ri-ink);
+  font-size: 14.5px;
+  resize: none;
+}
+
+.ri-textarea:focus {
+  border-color: var(--ri-brand);
+}
+
+.ri-scan {
+  border-width: 2px;
+}
+
+.ri-model {
+  border-radius: 16px;
+}
+
+/* ── Customer lookup ── */
+.ri-found {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ri-ok-bg);
+  color: var(--ri-ink2);
+  font-size: 13px;
+  animation: riIn 0.25s ease;
+}
+
+.ri-found b {
+  display: block;
+  color: var(--ri-ink);
+  font-size: 14px;
+  text-transform: capitalize;
+}
+
+.ri-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ri-ok);
+  color: #fff;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ri-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: var(--ri-ink2);
+  font-size: 12.5px;
+  animation: riIn 0.25s ease;
+}
+
+.ri .ri-new svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ri-brand);
+}
+
+@keyframes riIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ── Chips ── */
+.ri-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-radius: 14px;
+}
+
+.ri-chips.is-tight {
+  align-items: center;
+  margin-top: 8px;
+}
+
+.ri-chip {
+  padding: 8px 13px;
+  border: 1.5px solid var(--ri-line);
+  border-radius: 99px;
+  background: var(--ri-card);
+  color: var(--ri-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.ri-chip.is-on {
+  border-color: transparent;
+  background: var(--grad);
+  color: #fff;
+}
+
+.ri-chip:active {
+  transform: scale(0.96);
+}
+
+.ri-date-note {
+  color: var(--ri-brand);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ri-os {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ri-os > span {
+  color: var(--ri-ink2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ri-os .ri-chip {
+  padding: 5px 12px;
+  font-size: 12.5px;
+}
+
+/* ── Photos ── */
+.ri-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ri-shot {
+  position: relative;
+  display: flex;
+  aspect-ratio: 4 / 5;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow: hidden;
+  border: 2px dashed color-mix(in srgb, var(--ri-brand) 35%, var(--ri-line));
+  border-radius: 14px;
+  background: var(--ri-info-bg);
+  color: var(--ri-brand);
+  font-size: 14px;
+}
+
+.ri-shot small {
+  color: var(--ri-ink2);
+  font-size: 12px;
+}
+
+.ri-cam {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--grad);
+  color: #fff;
+}
+
+.ri-shot.has-photo {
+  border-style: solid;
+  border-color: transparent;
+}
+
+.ri-shot img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ri-shot-tag {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.65);
+  color: #fff;
+  font-size: 11px;
+}
+
+.ri-shot-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.ri-shot-actions button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.65);
+  color: #fff;
+}
+
+.ri .ri-shot-actions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ri-more {
+  margin-top: 6px;
+}
+
+.ri-more summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 2px 4px;
+  color: var(--ri-ink2);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ri-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.ri-more summary span {
+  color: var(--ri-ink3);
+  font-weight: 500;
+}
+
+.ri-chev {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.ri-more[open] .ri-chev {
+  transform: rotate(180deg);
+}
+
+.ri-more .ri-field.is-sm {
+  margin-top: 8px;
+}
+
+/* ── Save button: fixed above the phone nav (left/width/bottom from the page) ── */
+.ri-cta-bar.is-fixed {
+  position: fixed;
+  z-index: 30;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--ri-line);
+  border-radius: 18px 18px 0 0;
+  background: color-mix(in srgb, var(--app-card) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.ri-cta-help {
+  min-height: 15px;
+  margin: 0 0 6px;
+  color: var(--ri-ink2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ri-error {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ri-bad) 12%, var(--app-card));
+  color: var(--ri-bad);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ri-cta {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--grad);
+  box-shadow: 0 8px 20px rgba(var(--ri-brand-rgb), 0.3);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.ri-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ri-cta:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.ri-cta.is-create {
+  background: linear-gradient(100deg, #22c55e, #159447);
+  box-shadow: 0 5px 14px rgba(22, 163, 74, 0.28);
+}
+
+.ri-cta.is-create:not(:disabled):hover {
+  background: linear-gradient(100deg, #1db954, #12813e);
+}
+
+/* ── Laptop summary ── */
+.ri-summary {
+  padding: 18px;
+}
+
+.ri-sum-title {
+  margin: 0 0 10px;
+  color: var(--ri-ink3);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ri-summary dl {
+  margin: 0 0 14px;
+}
+
+.ri-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ri-line);
+  font-size: 13.5px;
+}
+
+.ri-summary dt {
+  flex: none;
+  color: var(--ri-ink2);
+}
+
+.ri-summary dd {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+/* ── Missing field after tapping save ── */
+.ri .is-attention {
+  border-color: var(--ri-bad) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ri-bad) 15%, transparent);
+  animation: riShake 0.4s ease;
+}
+
+.ri-chips.is-attention,
+.ri-model.is-attention {
+  outline: 2px solid var(--ri-bad);
+  outline-offset: 4px;
+  box-shadow: none;
+}
+
+.ri-missing {
+  margin: 6px 0 0;
+  color: var(--ri-bad);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+@keyframes riShake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ri .is-attention {
+    animation: none;
+  }
+}
+
+/* ── Created sheet ── */
+.ri-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(11, 18, 32, 0.5);
+  animation: riFade 0.2s ease;
+}
+
+@keyframes riFade {
+  from {
+    opacity: 0;
+  }
+}
+
+.ri-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  padding: 24px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-radius: 24px 24px 0 0;
+  background: var(--app-card);
+  color: var(--app-ink);
+  text-align: center;
+  animation: riUp 0.3s ease;
+}
+
+@keyframes riUp {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.ri-done-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 12px;
+  place-items: center;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+}
+
+.ri-sheet .ri-done-icon svg {
+  width: 32px;
+  height: 32px;
+  stroke-width: 3;
+}
+
+.ri-sheet h2 {
+  margin: 0;
+  font: 800 22px "Sora", sans-serif;
+}
+
+.ri-jid {
+  display: inline-block;
+  margin: 8px 0 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--app-card));
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.ri-sheet p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13.5px;
+}
+
+.ri-sheet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 18px 0 6px;
+}
+
+.ri-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px;
+  border: 1.5px solid var(--app-line);
+  border-radius: 14px;
+  background: var(--app-card);
+  color: var(--app-ink);
+  font-size: 14.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ri-btn.is-primary {
+  border-color: transparent;
+  background: var(--grad);
+  color: #fff;
+}
+
+.ri-sheet svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ri-link {
+  margin-top: 8px;
+  padding: 8px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ── Laptop: two columns. Customer / phone / problem on the left;
+   photos, extras and a summary with the save button on the right. ── */
+@media (min-width: 901px) {
+  .ri {
+    max-width: 1080px;
+  }
+
+  .ri-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .ri-side {
+    position: sticky;
+    top: 0;
+  }
+
+  .ri-card {
+    padding: 20px 22px;
+  }
+
+  .ri-overlay {
+    align-items: center;
+  }
+
+  .ri-sheet {
+    padding: 28px 24px;
+    border-radius: 24px;
+  }
+}
+
+/* Cross on laptop only; phones close by tapping outside. */
+.ri-sheet-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--app-muted);
+}
+
+.ri-sheet-close:hover {
+  background: var(--app-field);
+  color: var(--app-ink);
+}
+
+@media (min-width: 901px) {
+  .ri-sheet-close {
+    display: grid;
+  }
+}
+
+/* Quick delivery dates: always one row of four equal buttons. */
+.ri-dates {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ri-dates .ri-chip {
+  padding: 8px 2px;
+  font-size: 12.5px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Problem chips: tighter so the list takes fewer lines, still easy to tap. */
+.ri-chips.is-compact {
+  gap: 6px;
+}
+
+.ri-chips.is-compact .ri-chip {
+  padding: 7px 11px;
+  font-size: 13px;
+}
+
+.ri-chips.is-compact + .ri-textarea {
+  margin-top: 8px;
+}
+
+/* ── Edit screen ── */
+.ri-cta-pair {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+}
+
+.ri-cta.is-ghost {
+  border: 1.5px solid var(--ri-line);
+  background: var(--ri-card);
+  box-shadow: none;
+  color: var(--ri-ink);
+  text-decoration: none;
+}
+
+/* Saved photo (loaded from the server) fills the slot like a new one. */
+.ri-shot .ri-shot-saved,
+.ri-shot .ri-shot-saved img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ri-load-error {
+  padding: 40px 0;
+  color: var(--app-muted);
+  text-align: center;
+}
+
+/* Slimmer bottom button and panel (matches the job sheet). */
+.ri-cta-bar.is-fixed {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 12px 8px;
+  border-radius: 0;
+}
+
+.ri-cta-bar.is-fixed > div {
+  display: flex;
+  width: 100%;
+}
+
+.ri-cta-bar.is-fixed .ri-cta {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.ri-cta-help {
+  min-height: 0;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+}
+
+.ri-cta {
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(var(--ri-brand-rgb), 0.22);
+}
+
+.ri .ri-cta svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Phones: the save bar lives on <body> inside this colour-only wrapper. */
+.ri.ri-portal {
+  position: static;
+  max-width: none;
+  margin: 0;
+}
+
+/* Created sheet: one full-width "View job sheet" button. */
+.ri-sheet-view {
+  width: 100%;
+  margin-top: 18px;
+}

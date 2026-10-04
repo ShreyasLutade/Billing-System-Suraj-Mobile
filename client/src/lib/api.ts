@@ -15,6 +15,7 @@ import type {
   RepairAnalytics,
   RepairJob,
   RepairOutcome,
+  RepairPaymentMethod,
   RepairStatus,
   StockHistory,
   StockImeiTrace,
@@ -27,7 +28,7 @@ import type {
 /** Something deleted that can still be undone (kept a few days). */
 export type RecycleBinEntry = {
   id: string;
-  kind: "BILL" | "SUPPLIER" | "STOCK";
+  kind: "BILL" | "SUPPLIER" | "STOCK" | "REPAIR";
   label: string;
   detail: string | null;
   deletedAt: string;
@@ -43,6 +44,12 @@ export type PaymentAtPurchase =
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "suraj_billing_token";
+export const BACKEND_ISSUE_EVENT = "babu:backend-issue";
+
+export type BackendIssue = {
+  status: number;
+  message: string;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -51,6 +58,30 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    if ((status === 0 || status >= 500) && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent<BackendIssue>(BACKEND_ISSUE_EVENT, {
+          detail: { status, message },
+        }),
+      );
+    }
+  }
+}
+
+export async function fetchBackend(input: RequestInfo | URL, init?: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    if (
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError")
+    ) {
+      throw err;
+    }
+    throw new ApiError(
+      "Cannot reach the server. Make sure the API is running on port 4000.",
+      0,
+    );
   }
 }
 
@@ -76,6 +107,7 @@ export function readSessionFromToken(token: string): AuthUser | null {
       phone?: string;
       name?: string;
       role?: string;
+      repairShop?: string | null;
       exp?: number;
     };
     if (!payload.sub || !payload.phone || !payload.exp) return null;
@@ -86,6 +118,7 @@ export function readSessionFromToken(token: string): AuthUser | null {
       phone: String(payload.phone),
       name: String(payload.name || ""),
       role: payload.role,
+      repairShop: typeof payload.repairShop === "string" ? payload.repairShop : null,
     };
   } catch {
     return null;
@@ -455,7 +488,7 @@ export const api = {
   ) => {
     const token = getAuthToken();
     const params = new URLSearchParams({ condition });
-    const response = await fetch(
+    const response = await fetchBackend(
       `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/mobiles-export?${params}`,
       {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -495,7 +528,7 @@ export const api = {
   ) => {
     const token = getAuthToken();
     const params = new URLSearchParams({ name, condition });
-    const response = await fetch(
+    const response = await fetchBackend(
       `${API_BASE}/suppliers/export-mobiles?${params}`,
       {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -555,7 +588,7 @@ export const api = {
   /** Download the supplier statement PDF (purchases Cr / payments Dr). */
   downloadSupplierStatement: async (supplierId: string) => {
     const token = getAuthToken();
-    const response = await fetch(
+    const response = await fetchBackend(
       `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/statement`,
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );
@@ -693,7 +726,7 @@ export const api = {
     const token = getAuthToken();
     let response: Response;
     try {
-      response = await fetch(`${API_BASE}/reports/download-backup-zip`, {
+      response = await fetchBackend(`${API_BASE}/reports/download-backup-zip`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
     } catch {
@@ -746,8 +779,11 @@ export const api = {
     const query = params.toString();
     return request<{ data: RepairJob[] }>(`/repairs${query ? `?${query}` : ""}`);
   },
-  repairAnalytics: (period: RepairAnalytics["period"]) =>
-    request<{ data: RepairAnalytics }>(`/repairs/analytics?period=${period}`),
+  /** shop: one repair shop, or omit for every shop this user may see. */
+  repairAnalytics: (period: RepairAnalytics["period"], shop?: string) =>
+    request<{ data: RepairAnalytics }>(
+      `/repairs/analytics?period=${period}${shop ? `&shop=${encodeURIComponent(shop)}` : ""}`,
+    ),
   updateRepairStatus: (
     id: string,
     payload: {
@@ -755,6 +791,15 @@ export const api = {
       outcome?: RepairOutcome;
       finalCharge?: number | null;
       repairNotes?: string;
+      /** Chips joined: work done (fixed) or reasons (not fixed). */
+      workDone?: string;
+      /** Required when delivering with a charge. */
+      paymentMethod?: RepairPaymentMethod;
+      /** Admins only: the shop's cost for the repair. */
+      costPrice?: number | null;
+      /** Only when someone other than the customer collects (send both). */
+      pickupName?: string;
+      pickupPhone?: string;
     },
   ) =>
     request<{ data: RepairJob }>(`/repairs/${id}/status`, {
@@ -770,12 +815,55 @@ export const api = {
     return `${API_BASE}/repairs/${id}/slip?${params.toString()}`;
   },
   getRepairJob: (id: string) => request<{ data: RepairJob }>(`/repairs/${id}`),
+  deleteRepairJob: (id: string) =>
+    request<{ ok: true }>(`/repairs/${id}`, { method: "DELETE" }),
+  /** Edit a job's intake details (customer, phone, problem, delivery date…). */
+  updateRepairJob: (id: string, payload: Record<string, string>) =>
+    request<{ data: RepairJob }>(`/repairs/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  /** Admin: set the shop's cost for a job at any stage. */
+  setRepairCost: (id: string, costPrice: number | null) =>
+    request<{ data: RepairJob }>(`/repairs/${id}/cost`, {
+      method: "PATCH",
+      body: JSON.stringify({ costPrice }),
+    }),
+  /** Records that the shop called the customer (shown in the job's activity). */
+  markRepairNotified: (id: string) =>
+    request<{ data: RepairJob }>(`/repairs/${id}/notified`, { method: "POST" }),
+  /** Adds or replaces a photo after intake (compress it first). */
+  uploadRepairPhoto: async (id: string, side: "front" | "back", photo: Blob, type: string) => {
+    const token = getAuthToken();
+    const form = new FormData();
+    form.append("photo", photo, `.${type === "image/webp" ? "webp" : "jpg"}`);
+    let response: Response;
+    try {
+      response = await fetchBackend(`${API_BASE}/repairs/${id}/photo/${side}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+    } catch {
+      throw new ApiError("Cannot reach the server. Check your connection.", 0);
+    }
+    if (!response.ok) {
+      let message = "Could not save the photo";
+      try {
+        message = (await response.json()).error || message;
+      } catch {
+        /* keep default */
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.json() as Promise<{ data: RepairJob }>;
+  },
   /** Multipart: text fields plus optional frontPhoto / backPhoto (already compressed). */
   createRepairJob: async (form: FormData) => {
     const token = getAuthToken();
     let response: Response;
     try {
-      response = await fetch(`${API_BASE}/repairs`, {
+      response = await fetchBackend(`${API_BASE}/repairs`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
@@ -803,7 +891,7 @@ export const api = {
   /** Photos need the auth header, so load them as blobs and hand back an object URL. */
   loadRepairPhoto: async (id: string, side: "front" | "back") => {
     const token = getAuthToken();
-    const response = await fetch(`${API_BASE}/repairs/${id}/photo/${side}`, {
+    const response = await fetchBackend(`${API_BASE}/repairs/${id}/photo/${side}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) throw new ApiError("Photo not available", response.status);
@@ -817,7 +905,7 @@ export const api = {
 
     let response: Response;
     try {
-      response = await fetch(`${API_BASE}/reports/restore-db`, {
+      response = await fetchBackend(`${API_BASE}/reports/restore-db`, {
         method: "POST",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

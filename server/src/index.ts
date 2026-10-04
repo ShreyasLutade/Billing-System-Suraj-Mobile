@@ -19,11 +19,12 @@ import { productReturnsRouter } from "./routes/productReturns";
 import { purchasesRouter } from "./routes/purchases";
 import { phoneModelsRouter } from "./routes/phoneModels";
 import { repairsRouter } from "./routes/repairs";
-import { requireAuth, requireAdmin } from "./middleware/auth";
+import { requireAuth, requireAdmin, requireFullAccess } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 import { startRecycleBinPurge } from "./services/recycleBin";
 import { recycleBinRouter } from "./routes/recycleBin";
 import { prisma } from "./lib/prisma";
+import { migrateRepairJobNumbers } from "./lib/repairShops";
 import { backfillSuppliersFromStock } from "./services/suppliers";
 import { ensurePhoneModelsSeeded } from "./services/phoneModels";
 import { ensurePasswordResetOtpTable } from "./services/passwordResetOtp";
@@ -81,19 +82,19 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/reports/cron", reportsCronRouter);
 
 app.use("/api/auth", authRouter);
-app.use("/api/bills", requireAuth, billsRouter);
-app.use("/api/analytics", requireAuth, requireAdmin, analyticsRouter);
-app.use("/api/finance-companies", requireAuth, financeCompaniesRouter);
-app.use("/api/mobile-catalog", requireAuth, mobileCatalogRouter);
-app.use("/api/stock", requireAuth, stockRouter);
-app.use("/api/suppliers", requireAuth, suppliersRouter);
-app.use("/api/returns", requireAuth, productReturnsRouter);
-app.use("/api/purchases", requireAuth, purchasesRouter);
+app.use("/api/bills", requireAuth, requireFullAccess, billsRouter);
+app.use("/api/analytics", requireAuth, requireFullAccess, requireAdmin, analyticsRouter);
+app.use("/api/finance-companies", requireAuth, requireFullAccess, financeCompaniesRouter);
+app.use("/api/mobile-catalog", requireAuth, requireFullAccess, mobileCatalogRouter);
+app.use("/api/stock", requireAuth, requireFullAccess, stockRouter);
+app.use("/api/suppliers", requireAuth, requireFullAccess, suppliersRouter);
+app.use("/api/returns", requireAuth, requireFullAccess, productReturnsRouter);
+app.use("/api/purchases", requireAuth, requireFullAccess, purchasesRouter);
 app.use("/api/phone-models", requireAuth, phoneModelsRouter);
-app.use("/api/dues", requireAuth, duesRouter);
+app.use("/api/dues", requireAuth, requireFullAccess, duesRouter);
 app.use("/api/repairs", requireAuth, repairsRouter);
-app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
-app.use("/api/recycle-bin", requireAuth, requireAdmin, recycleBinRouter);
+app.use("/api/reports", requireAuth, requireFullAccess, requireAdmin, reportsRouter);
+app.use("/api/recycle-bin", requireAuth, requireFullAccess, requireAdmin, recycleBinRouter);
 
 if (!serveClient) {
   app.get("/", (_req, res) => {
@@ -148,6 +149,11 @@ if (serveClient) {
 async function start() {
   await seedFinanceCompanies();
   await seedUsers();
+  // Main repair desk numbers become BMR-NX-…; must run before any new job is saved.
+  const renamedJobs = await migrateRepairJobNumbers(prisma);
+  if (renamedJobs > 0) {
+    console.log(`[repairs] Renamed ${renamedJobs} job number(s) to the BMR-NX- series`);
+  }
   try {
     await ensurePasswordResetOtpTable();
   } catch (error) {

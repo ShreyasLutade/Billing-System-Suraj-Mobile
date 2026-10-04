@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Link,
   NavLink,
@@ -8,6 +9,7 @@ import {
 } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeftRight,
   ArrowUp,
   BarChart3,
   ChevronLeft,
@@ -28,6 +30,8 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
+import { openSectionChooser } from "./SectionGate";
+import { BackendIssueNotice } from "./BackendIssueNotice";
 import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
 import { api } from "../lib/api";
@@ -50,7 +54,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
   const isRepair = section === "repair";
   const homePath = isRepair ? "/repair" : "/";
   const homeLabel = isRepair ? "New repair" : "New Bill";
-  const { isAdmin, user, logout } = useAuth();
+  const { isAdmin, repairOnly, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const mainRef = useRef<HTMLElement | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -155,7 +159,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
   const links: NavItem[] = isRepair
     ? [
         { to: "/repair", label: "New Repair", icon: Wrench, end: true },
-        { to: "/repair/history", label: "History", icon: History },
+        { to: "/repair/history", label: "Tracker", icon: History },
         ...(isAdmin
           ? [{ to: "/repair/analytics", label: "Analytics", icon: BarChart3 }]
           : []),
@@ -168,12 +172,6 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
         { to: "/suppliers", label: "Suppliers", icon: Truck },
         ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
       ];
-
-  // Repair shop is in development — "switch counter" menu item hidden.
-  // /** Account-menu item that jumps to the other counter. */
-  // const switchTo = isRepair
-  //   ? { to: "/", label: "Mobile shop", icon: ReceiptText }
-  //   : { to: "/repair", label: "Repair shop", icon: Wrench };
 
   function onMainNavClick() {
     // Header / bottom nav = fresh list. Detail → back keeps search via session.
@@ -229,16 +227,20 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
           <div className="babu-user-menu" ref={userMenuRef}>
             {userMenuOpen ? (
               <div className="babu-user-menu-pop" role="menu" aria-label="Account">
-                {/* Repair shop is in development.
-                <Link
-                  to={switchTo.to}
-                  role="menuitem"
-                  className="babu-user-menu-item"
-                  onClick={() => setUserMenuOpen(false)}
-                >
-                  <switchTo.icon /> {switchTo.label}
-                </Link>
-                */}
+                {/* Repair-only accounts have no other counter to switch to. */}
+                {repairOnly ? null : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="babu-user-menu-item is-switch"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      openSectionChooser();
+                    }}
+                  >
+                    <ArrowLeftRight /> Switch shop
+                  </button>
+                )}
                 <button
                   type="button"
                   role="menuitem"
@@ -251,7 +253,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
-                {isAdmin ? (
+                {isAdmin && !repairOnly ? (
                   <Link
                     to="/backup"
                     role="menuitem"
@@ -264,7 +266,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     <Package /> Restore data
                   </Link>
                 ) : null}
-                {isAdmin ? (
+                {isAdmin && !repairOnly ? (
                   <Link
                     to="/recycle-bin"
                     role="menuitem"
@@ -327,7 +329,9 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
         </button>
       </header>
 
-      <AnimatePresence>
+      {/* On <body> like the repair pages' bottom bars, so the drawer stays above them. */}
+      {createPortal(
+        <AnimatePresence>
         {mobileMenuOpen ? (
           <motion.div
             className="babu-drawer-backdrop"
@@ -375,20 +379,23 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     <small>{user?.phone || "7581817575"}</small>
                   </div>
                 </div>
-                {/* Repair shop is in development.
-                <Link
-                  to={switchTo.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="babu-utility-button"
-                >
-                  <switchTo.icon /> {switchTo.label}
-                </Link>
-                */}
+                {repairOnly ? null : (
+                  <button
+                    type="button"
+                    className="babu-utility-button is-switch"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      openSectionChooser();
+                    }}
+                  >
+                    <ArrowLeftRight /> Switch shop
+                  </button>
+                )}
                 <button type="button" className="babu-utility-button" onClick={toggleTheme}>
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
-                {isAdmin ? (
+                {isAdmin && !repairOnly ? (
                   <Link
                     to="/backup"
                     onClick={() => {
@@ -400,7 +407,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     <Package /> Restore data
                   </Link>
                 ) : null}
-                {isAdmin ? (
+                {isAdmin && !repairOnly ? (
                   <Link
                     to="/recycle-bin"
                     onClick={() => {
@@ -426,10 +433,13 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
             </motion.aside>
           </motion.div>
         ) : null}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+      )}
 
       <main ref={mainRef} className="babu-main">
         {!isOnline ? <div className="babu-offline-banner">Offline</div> : null}
+        <BackendIssueNotice />
         {/* CSS animation (not a transform left in place) so popups inside pages
             aren't trapped below the header and bottom nav. */}
         <div className="babu-page-enter">

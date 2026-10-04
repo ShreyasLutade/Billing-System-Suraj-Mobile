@@ -6,6 +6,7 @@ import type {
   ProductReturn,
   Purchase,
   PurchaseItem,
+  RepairJob as RepairJobRow,
   StockItem,
   Supplier,
   SupplierPayment,
@@ -28,7 +29,7 @@ type User = { id?: string | null; name?: string | null } | null | undefined;
 export const BIN_DAYS = 30;
 const BIN_MS = BIN_DAYS * 24 * 60 * 60 * 1000;
 
-export type BinKind = "BILL" | "SUPPLIER" | "STOCK";
+export type BinKind = "BILL" | "SUPPLIER" | "STOCK" | "REPAIR";
 
 /** An undo that can't be done; the message is shown to the user. */
 export class RestoreError extends Error {}
@@ -78,6 +79,11 @@ type StockPayload = {
   /** Set when the unit was the last in its purchase (purchase deleted too). */
   purchase: Purchase | null;
   purchasePayments: SupplierPayment[];
+};
+
+type RepairPayload = Omit<RepairJobRow, "frontPhoto" | "backPhoto"> & {
+  frontPhoto: string | null;
+  backPhoto: string | null;
 };
 
 async function snapshotStock(
@@ -135,6 +141,25 @@ async function addEntry(
       deletedByName: user?.name || null,
     },
   });
+}
+
+/** Snapshot a repair job before deleting it, including its uploaded photos. */
+export async function binRepairJob(tx: Tx, repairJobId: string, user: User) {
+  const job = await tx.repairJob.findUnique({ where: { id: repairJobId } });
+  if (!job) return;
+  const payload: RepairPayload = {
+    ...job,
+    frontPhoto: job.frontPhoto ? Buffer.from(job.frontPhoto).toString("base64") : null,
+    backPhoto: job.backPhoto ? Buffer.from(job.backPhoto).toString("base64") : null,
+  };
+  await addEntry(
+    tx,
+    "REPAIR",
+    `Repair ${job.jobNumber} · ${job.customerName}`,
+    [job.deviceName, job.customerPhone, job.status.replaceAll("_", " ").toLowerCase()].join(" · "),
+    payload,
+    user,
+  );
 }
 
 /** Call inside the delete transaction, before anything is removed. */
@@ -413,6 +438,18 @@ async function restoreStockEntry(tx: Tx, p: StockPayload) {
   return unit?.supplierId ? `/suppliers/${unit.supplierId}` : "/stock";
 }
 
+async function restoreRepairJob(tx: Tx, p: RepairPayload) {
+  const { frontPhoto, backPhoto, ...job } = p;
+  await tx.repairJob.create({
+    data: {
+      ...job,
+      frontPhoto: frontPhoto ? Buffer.from(frontPhoto, "base64") : null,
+      backPhoto: backPhoto ? Buffer.from(backPhoto, "base64") : null,
+    },
+  });
+  return `/repair/${job.id}`;
+}
+
 /** Undo a delete. Returns the page to open afterwards. */
 export async function restoreEntry(id: string) {
   try {
@@ -423,7 +460,9 @@ export async function restoreEntry(id: string) {
       }
       const payload = JSON.parse(entry.payload);
       const path =
-        entry.kind === "BILL"
+        entry.kind === "REPAIR"
+          ? await restoreRepairJob(tx, payload as RepairPayload)
+          : entry.kind === "BILL"
           ? await restoreBill(tx, payload as BillPayload)
           : entry.kind === "SUPPLIER"
             ? await restoreSupplier(tx, payload as SupplierPayload)

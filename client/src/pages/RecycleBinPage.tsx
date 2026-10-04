@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Package, ReceiptText, Trash2, Truck, Undo2 } from "lucide-react";
+import { Clock, Package, ReceiptText, Trash2, Truck, Undo2, Wrench } from "lucide-react";
 import clsx from "clsx";
 import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import {
@@ -32,6 +32,12 @@ const KIND = {
     tone: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
     restoreText:
       "The item goes back in stock on its original purchase, and the purchase total is updated.",
+  },
+  REPAIR: {
+    label: "Repair job",
+    icon: Wrench,
+    tone: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+    restoreText: "The repair job and its photos are restored to the tracker.",
   },
 } as const;
 
@@ -134,7 +140,7 @@ export function RecycleBinPage() {
       <PageHeader
         eyebrow="Admin"
         title="Recycle bin"
-        description={`Deleted bills, suppliers and stock stay here for ${days} days, then they are removed for good.`}
+        description={`Deleted bills, suppliers, stock and repair jobs stay here for ${days} days, then they are removed for good.`}
         action={
           <button
             type="button"

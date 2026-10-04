@@ -14,6 +14,9 @@ model User {
   name         String
   /// ADMIN | STAFF
   role         String
+  /// Repair-only account for this repair shop (see lib/repairShops). Null = full
+  /// Babu Mobile NX access (mobile shop + its repair desk).
+  repairShop   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -400,8 +403,10 @@ model RecycleBinEntry {
 /// Repair desk intake — kept separate from shop bills and stock.
 model RepairJob {
   id                 String    @id @default(cuid())
-  /// BMR-0001, BMR-0002, …
+  /// BMR-NX-0001… (main shop) or BMR-0001… (Luckey's shop)
   jobNumber          String    @unique
+  /// Repair shop this job belongs to: NX | LK (lib/repairShops).
+  shop               String    @default("NX")
   customerName       String
   customerPhone      String
   customerAddress    String?
@@ -419,14 +424,35 @@ model RepairJob {
   problemDescription String    @default("")
   /// Quoted at intake (optional).
   estimatedCost      Float?
+  /// IMEI or serial number (scanned or typed at intake).
+  imei               String?
+  /// When the shop promised the phone back.
+  expectedDeliveryAt DateTime?
+  /// Screen lock / passcode, for testing. Never printed on the slip.
+  lockCode           String?
+  /// What came in with the phone, e.g. "SIM card, Back cover".
+  accessories        String?
   /// Charged when the job is finished.
   finalCharge        Float?
-  /// RECEIVED → REPAIRED → DELIVERED
+  /// What the repair cost the shop (parts etc.). Admin only.
+  costPrice          Float?
+  /// RECEIVED → IN_REPAIR → REPAIRED → DELIVERED
   status             String    @default("RECEIVED")
   /// FIXED | NOT_FIXED — set when the work is done.
   outcome            String?
   /// What was done (parts changed, etc.).
   repairNotes        String?
+  /// Tapped chips: work done when FIXED, reasons when NOT_FIXED ("A, B").
+  workDone           String?
+  /// How the customer paid at delivery: CASH | UPI | CARD.
+  paymentMethod      String?
+  /// Who collected the phone when it wasn't the customer (null = the customer).
+  pickupName         String?
+  pickupPhone        String?
+  /// Last time the shop called the customer about this job.
+  notifiedAt         DateTime?
+  /// When the technician started working on it (IN_REPAIR).
+  startedAt          DateTime?
   repairedAt         DateTime?
   deliveredAt        DateTime?
   /// Browser-compressed WebP/JPEG (≈80–200 KB each).
@@ -442,4 +468,5 @@ model RepairJob {
   @@index([createdAt])
   @@index([customerPhone])
   @@index([status])
+  @@index([shop])
 }

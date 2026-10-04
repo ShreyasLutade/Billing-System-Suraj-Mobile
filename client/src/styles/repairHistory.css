@@ -1,0 +1,769 @@
+/* Repair history (RepairHistoryPage). App theme colours; one colour per stage. */
+
+.rh {
+  --rh-ink: var(--app-ink);
+  --rh-ink2: var(--app-muted);
+  --rh-ink3: color-mix(in srgb, var(--app-muted) 70%, var(--app-card));
+  --rh-line: var(--app-line);
+  --rh-soft: var(--app-field);
+  --rh-card: var(--app-card);
+  --rh-slate: #64748b;
+  --rh-amber: #d97706;
+  --rh-blue: var(--accent);
+  --rh-green: #16a34a;
+  --rh-red: #dc2626;
+  max-width: 520px;
+  margin: 0 auto;
+  color: var(--rh-ink);
+  font-size: 15px;
+}
+
+.rh svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* ── Header ── */
+.rh-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.rh .rh-title h1 {
+  margin: 0;
+  font: 800 22px "Sora", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.rh-title > span {
+  color: var(--rh-ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rh-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: var(--grad);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  align-self: center;
+}
+
+.rh .rh-new svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rh-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border: 1.5px solid var(--rh-line);
+  border-radius: 14px;
+  background: var(--rh-card);
+}
+
+.rh-search:focus-within {
+  border-color: var(--accent);
+}
+
+.rh-search svg {
+  color: var(--rh-ink3);
+}
+
+.rh-search input {
+  width: 100%;
+  padding: 11px 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--rh-ink);
+  font-size: 15px;
+}
+
+.rh-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rh-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.rh-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1.5px solid var(--rh-line);
+  border-radius: 99px;
+  background: var(--rh-card);
+  color: var(--rh-ink2);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rh-tab b {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--rh-soft);
+  color: var(--rh-ink2);
+  font-size: 11px;
+  text-align: center;
+}
+
+.rh-tab.is-on {
+  border-color: transparent;
+  background: var(--grad);
+  color: #fff;
+}
+
+.rh-tab.is-on b {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.rh-tab.is-alert:not(.is-on) b {
+  background: color-mix(in srgb, var(--rh-amber) 18%, var(--rh-card));
+  color: var(--rh-amber);
+}
+
+/* ── Summary strip ── */
+.rh-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.rh-stats.is-two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.rh-stat {
+  padding: 10px 12px;
+  border: 1px solid var(--rh-line);
+  border-radius: 14px;
+  background: var(--rh-card);
+}
+
+.rh-stat small {
+  display: block;
+  color: var(--rh-ink3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rh-stat b {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.rh-stat b.is-amber {
+  color: var(--rh-amber);
+}
+
+.rh-stat b.is-green {
+  color: var(--rh-green);
+}
+
+/* ── Day groups ── */
+.rh-group {
+  display: flex;
+  justify-content: space-between;
+  margin: 18px 4px 8px;
+  color: var(--rh-ink3);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rh-group span {
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rh-list {
+  display: grid;
+  gap: 10px;
+}
+
+/* ── Job card: coloured left edge for the stage ── */
+.rh-job {
+  --c: var(--rh-slate);
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--rh-line);
+  border-radius: 18px;
+  background: var(--rh-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.12s;
+}
+
+.rh-job:active {
+  transform: scale(0.985);
+}
+
+.rh-job::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: var(--c);
+}
+
+.rh-job.is-slate {
+  --c: var(--rh-slate);
+}
+
+.rh-job.is-amber {
+  --c: var(--rh-amber);
+}
+
+.rh-job.is-blue {
+  --c: var(--rh-blue);
+}
+
+.rh-job.is-green {
+  --c: var(--rh-green);
+}
+
+.rh-job.is-red {
+  --c: var(--rh-red);
+}
+
+.rh-main {
+  display: flex;
+  gap: 12px;
+  padding: 14px 14px 12px 18px;
+}
+
+.rh-thumb {
+  display: grid;
+  width: 64px;
+  height: 76px;
+  flex: none;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--rh-line);
+  border-radius: 12px;
+  background: var(--rh-soft);
+  color: var(--rh-ink3);
+  object-fit: cover;
+}
+
+.rh-thumb span {
+  display: none;
+}
+
+.rh-thumb svg {
+  width: 24px;
+  height: 24px;
+}
+
+.rh-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rh-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rh-jid {
+  color: var(--rh-ink3);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.rh-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--c) 14%, var(--rh-card));
+  color: var(--c);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rh-pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.rh-model {
+  margin: 4px 0 0;
+  overflow: hidden;
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rh-spec {
+  margin: 1px 0 0;
+  color: var(--rh-ink3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rh-problem {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--rh-soft);
+  color: var(--rh-ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rh .rh-problem svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rh-problem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rh-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 18px;
+  border-top: 1px dashed var(--rh-line);
+}
+
+.rh-who {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.rh-av {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--grad);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.rh-who b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.rh-who span {
+  color: var(--rh-ink3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rh-amt {
+  text-align: right;
+}
+
+.rh-amt b {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.rh-amt small {
+  color: var(--rh-ink3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rh-amt.is-est b {
+  color: var(--rh-ink2);
+}
+
+/* ── "Needs action" strip under the card ── */
+.rh-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 18px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.rh .rh-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rh-action > span:not(.rh-action-btn) {
+  flex: 1;
+}
+
+.rh-action.is-amber {
+  background: color-mix(in srgb, var(--rh-amber) 15%, var(--rh-card));
+  color: #92400e;
+}
+
+.rh-action.is-blue {
+  background: color-mix(in srgb, var(--accent) 12%, var(--rh-card));
+  color: var(--accent);
+}
+
+.rh-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 11px;
+  border: 1px solid currentColor;
+  border-radius: 99px;
+  background: var(--rh-card);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.rh .rh-action-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.dark .rh-action.is-amber {
+  color: #fbbf24;
+}
+
+.rh-empty {
+  padding: 50px 20px;
+  color: var(--rh-ink3);
+  font-weight: 600;
+  text-align: center;
+}
+
+.rh-load-error {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 18px 0;
+  padding: 24px 18px;
+  border: 1px solid color-mix(in srgb, #dc2626 28%, var(--rh-line));
+  border-radius: 18px;
+  background: color-mix(in srgb, #dc2626 5%, var(--rh-card));
+  color: var(--rh-ink);
+  text-align: center;
+}
+
+.rh-load-error strong {
+  color: #b42318;
+  font-size: 15px;
+}
+
+.rh-load-error span {
+  color: var(--rh-ink2);
+  font-size: 13px;
+}
+
+.rh-load-error button {
+  margin-top: 4px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dark .rh-load-error strong {
+  color: #fca5a5;
+}
+
+/* ── Laptop: wider page, cards in two columns ── */
+@media (min-width: 901px) {
+  .rh {
+    max-width: 1080px;
+  }
+
+  .rh-search {
+    max-width: 520px;
+  }
+
+  .rh-stats {
+    max-width: 640px;
+  }
+
+  .rh-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Compact card: small photo + three tight lines ── */
+.rh-list {
+  gap: 8px;
+}
+
+.rh-group {
+  margin: 14px 4px 6px;
+}
+
+.rh-job {
+  border-radius: 14px;
+}
+
+.rh-job::before {
+  width: 3px;
+}
+
+.rh-main {
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px 9px 13px;
+}
+
+.rh-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+}
+
+.rh .rh-thumb svg {
+  width: 20px;
+  height: 20px;
+}
+
+.rh-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rh-line .rh-model {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.rh-pill {
+  padding: 2px 8px;
+  font-size: 10.5px;
+}
+
+.rh-problem {
+  display: flex;
+  margin: 2px 0 3px;
+  padding: 0;
+  background: none;
+  color: var(--rh-ink2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rh .rh-problem svg {
+  width: 12px;
+  height: 12px;
+  color: var(--rh-ink3);
+}
+
+.rh-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--rh-ink3);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.rh-meta .rh-jid {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.rh-meta b {
+  overflow: hidden;
+  color: var(--rh-ink2);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+}
+
+.rh-amt {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.rh-amt b {
+  display: inline;
+  font-size: 14px;
+}
+
+.rh-amt small {
+  font-size: 10.5px;
+}
+
+.rh-action {
+  gap: 6px;
+  padding: 5px 12px 5px 13px;
+  font-size: 11.5px;
+}
+
+.rh .rh-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rh-action-btn {
+  padding: 2px 9px;
+  font-size: 11px;
+}
+
+.rh-stats {
+  margin: 12px 0 2px;
+}
+
+.rh-stat {
+  padding: 8px 11px;
+}
+
+.rh-stat b {
+  font-size: 15px;
+}
+
+/* Summary boxes are buttons coloured by stage; the active one is outlined. */
+.rh-stat {
+  --c: var(--rh-slate);
+  text-align: left;
+  border-left: 3px solid var(--c);
+}
+
+.rh-stat.is-slate {
+  --c: var(--rh-slate);
+}
+
+.rh-stat.is-amber {
+  --c: var(--rh-amber);
+}
+
+.rh-stat.is-blue {
+  --c: var(--rh-blue);
+}
+
+.rh-stat b {
+  color: var(--c);
+}
+
+.rh-stat.is-on {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 10%, var(--rh-card));
+}
+
+/* Admins with full access: pick a repair shop (segmented control). */
+.rh-shops {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--rh-soft);
+}
+
+.rh-shop {
+  padding: 6px 12px;
+  border-radius: 9px;
+  color: var(--rh-ink2);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rh-shop.is-on {
+  background: var(--rh-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  color: var(--rh-ink);
+}
+
+/* Tag on jobs from the other repair shop. */
+.rh-shop-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #7c3aed 14%, var(--rh-card));
+  color: #7c3aed;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+/* Delivered without a cost price (admins only): the whole card turns yellow. */
+.rh-job.is-cost-pending {
+  border-color: #f5c84c;
+  background: color-mix(in srgb, #f59e0b 12%, var(--rh-card));
+}
+
+.rh-job.is-cost-pending .rh-foot,
+.rh-job.is-cost-pending .rh-action {
+  border-color: color-mix(in srgb, #f59e0b 30%, transparent);
+}
+
+.dark .rh-job.is-cost-pending {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--rh-line));
+}

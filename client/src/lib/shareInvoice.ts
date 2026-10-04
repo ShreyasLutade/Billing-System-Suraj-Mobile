@@ -1,13 +1,13 @@
-import { api } from "./api";
+import { ApiError, api, fetchBackend } from "./api";
 
 /** Opens the native share sheet with the invoice PDF (WhatsApp, etc.). */
 export async function shareInvoicePdf(
   billId: string,
   invoiceNumber: string,
 ): Promise<void> {
-  const response = await fetch(api.pdfUrl(billId));
+  const response = await fetchBackend(api.pdfUrl(billId));
   if (!response.ok) {
-    throw new Error("Could not load invoice PDF");
+    throw new ApiError("Could not load invoice PDF", response.status);
   }
 
   const blob = await response.blob();

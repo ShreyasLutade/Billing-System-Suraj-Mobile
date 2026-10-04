@@ -311,11 +311,11 @@ function addSummarySheet(
       ["—", "—"],
       [
         "Restore note",
-        "Import every data sheet below to rebuild SQLite. Keep row ids. Dates are ISO-8601 UTC. Yes/No → boolean. Restore order: Users → FinanceCompanies → Customers → Suppliers → MobileCatalog → PhoneModels → StockItems → Purchases → PurchaseItems → SupplierPayments → Bills → BillItems → DuePayments → InvoiceSequence → ReportSendLog. Outstanding/Finance Dues sheets are views only (not tables).",
+        "Import every data sheet below to rebuild SQLite. Keep row ids. Dates are ISO-8601 UTC. Yes/No → boolean. Restore order: Users → FinanceCompanies → Customers → Suppliers → MobileCatalog → PhoneModels → StockItems → Purchases → PurchaseItems → SupplierPayments → Bills → BillItems → DuePayments → ProductReturns → InvoiceSequence → ReportSendLog → RepairJobs → RecycleBinEntries. RecycleBinEntries: for each id, join the payload parts in order (payloadPart 1…payloadParts). Outstanding/Finance Dues sheets are views only (not tables).",
       ],
       [
         "Not included",
-        "PasswordResetOtp (temporary OTPs only — not needed to restore shop data).",
+        "PasswordResetOtp (temporary OTPs only — not needed to restore shop data). Repair job photos (images) — these are in the attached .db file.",
       ],
     );
   }
@@ -535,6 +535,7 @@ async function addPurchasesSheet(wb: ExcelJS.Workbook) {
     { header: "totalAmount", key: "totalAmount", width: 12 },
     { header: "condition", key: "condition", width: 10 },
     { header: "paidAt", key: "paidAt", width: 24 },
+    { header: "paidAmount", key: "paidAmount", width: 12 },
     { header: "createdByUserId", key: "createdByUserId", width: 28 },
     { header: "createdByName", key: "createdByName", width: 16 },
     { header: "createdAt", key: "createdAt", width: 24 },
@@ -560,6 +561,7 @@ async function addPurchasesSheet(wb: ExcelJS.Workbook) {
       totalAmount: money(row.totalAmount),
       condition: row.condition,
       paidAt: iso(row.paidAt),
+      paidAmount: money(row.paidAmount),
       createdByUserId: row.createdByUserId || "",
       createdByName: row.createdByName || "",
       createdAt: iso(row.createdAt),
@@ -589,6 +591,7 @@ async function addSupplierPaymentsSheet(wb: ExcelJS.Workbook) {
     { header: "method", key: "method", width: 10 },
     { header: "paidAt", key: "paidAt", width: 24 },
     { header: "note", key: "note", width: 28 },
+    { header: "purchaseId", key: "purchaseId", width: 28 },
     { header: "createdAt", key: "createdAt", width: 24 },
   ];
   styleHeader(sheet);
@@ -600,6 +603,7 @@ async function addSupplierPaymentsSheet(wb: ExcelJS.Workbook) {
       method: row.method,
       paidAt: iso(row.paidAt),
       note: row.note || "",
+      purchaseId: row.purchaseId || "",
       createdAt: iso(row.createdAt),
     });
   }
@@ -698,6 +702,7 @@ async function addUsersSheet(wb: ExcelJS.Workbook) {
     { header: "passwordHash", key: "passwordHash", width: 60 },
     { header: "name", key: "name", width: 22 },
     { header: "role", key: "role", width: 10 },
+    { header: "repairShop", key: "repairShop", width: 12 },
     { header: "createdAt", key: "createdAt", width: 24 },
     { header: "updatedAt", key: "updatedAt", width: 24 },
   ];
@@ -709,6 +714,7 @@ async function addUsersSheet(wb: ExcelJS.Workbook) {
       passwordHash: row.passwordHash,
       name: row.name,
       role: row.role,
+      repairShop: row.repairShop || "",
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),
     });
@@ -752,6 +758,220 @@ async function addReportSendLogSheet(wb: ExcelJS.Workbook) {
       sentAt: iso(row.sentAt),
       messageId: row.messageId || "",
       toEmail: row.toEmail || "",
+    });
+  }
+  return rows.length;
+}
+
+async function addProductReturnsSheet(wb: ExcelJS.Workbook) {
+  const rows = await prisma.productReturn.findMany({
+    orderBy: { createdAt: "asc" },
+  });
+  const sheet = wb.addWorksheet("ProductReturns");
+  sheet.columns = [
+    { header: "id", key: "id", width: 28 },
+    { header: "stockItemId", key: "stockItemId", width: 28 },
+    { header: "supplierId", key: "supplierId", width: 28 },
+    { header: "billId", key: "billId", width: 28 },
+    { header: "billItemId", key: "billItemId", width: 28 },
+    { header: "invoiceNumber", key: "invoiceNumber", width: 16 },
+    { header: "customerName", key: "customerName", width: 22 },
+    { header: "amount", key: "amount", width: 12 },
+    { header: "creditApplied", key: "creditApplied", width: 12 },
+    { header: "kind", key: "kind", width: 10 },
+    { header: "refundAmount", key: "refundAmount", width: 12 },
+    { header: "refundMethod", key: "refundMethod", width: 12 },
+    { header: "replacementStockItemId", key: "replacementStockItemId", width: 28 },
+    { header: "note", key: "note", width: 28 },
+    { header: "createdByUserId", key: "createdByUserId", width: 28 },
+    { header: "createdByName", key: "createdByName", width: 16 },
+    { header: "createdAt", key: "createdAt", width: 24 },
+  ];
+  styleHeader(sheet);
+  for (const row of rows) {
+    sheet.addRow({
+      id: row.id,
+      stockItemId: row.stockItemId,
+      supplierId: row.supplierId || "",
+      billId: row.billId || "",
+      billItemId: row.billItemId || "",
+      invoiceNumber: row.invoiceNumber || "",
+      customerName: row.customerName || "",
+      amount: money(row.amount),
+      creditApplied: money(row.creditApplied),
+      kind: row.kind || "",
+      refundAmount: money(row.refundAmount),
+      refundMethod: row.refundMethod || "",
+      replacementStockItemId: row.replacementStockItemId || "",
+      note: row.note || "",
+      createdByUserId: row.createdByUserId || "",
+      createdByName: row.createdByName || "",
+      createdAt: iso(row.createdAt),
+    });
+  }
+  return rows.length;
+}
+
+/** Excel caps a cell at 32,767 characters; longer text is split into parts. */
+const CELL_CHUNK = 32000;
+
+async function addRecycleBinSheet(wb: ExcelJS.Workbook) {
+  const rows = await prisma.recycleBinEntry.findMany({
+    orderBy: { deletedAt: "asc" },
+  });
+  const sheet = wb.addWorksheet("RecycleBinEntries");
+  sheet.columns = [
+    { header: "id", key: "id", width: 28 },
+    { header: "kind", key: "kind", width: 10 },
+    { header: "label", key: "label", width: 24 },
+    { header: "detail", key: "detail", width: 28 },
+    { header: "deletedAt", key: "deletedAt", width: 24 },
+    { header: "deletedById", key: "deletedById", width: 28 },
+    { header: "deletedByName", key: "deletedByName", width: 16 },
+    { header: "payloadPart", key: "payloadPart", width: 12 },
+    { header: "payloadParts", key: "payloadParts", width: 12 },
+    { header: "payload", key: "payload", width: 60 },
+  ];
+  styleHeader(sheet);
+  for (const row of rows) {
+    // One sheet row per payload part; join the parts in order to get the JSON back.
+    const parts = Math.max(1, Math.ceil(row.payload.length / CELL_CHUNK));
+    for (let part = 0; part < parts; part += 1) {
+      sheet.addRow({
+        id: row.id,
+        kind: row.kind,
+        label: row.label,
+        detail: row.detail || "",
+        deletedAt: iso(row.deletedAt),
+        deletedById: row.deletedById || "",
+        deletedByName: row.deletedByName || "",
+        payloadPart: part + 1,
+        payloadParts: parts,
+        payload: row.payload.slice(part * CELL_CHUNK, (part + 1) * CELL_CHUNK),
+      });
+    }
+  }
+  return rows.length;
+}
+
+async function addRepairJobsSheet(wb: ExcelJS.Workbook) {
+  // Photos are binary and too large for Excel cells; they live in the .db backup.
+  const rows = await prisma.repairJob.findMany({
+    select: {
+      id: true,
+      jobNumber: true,
+      shop: true,
+      customerName: true,
+      customerPhone: true,
+      customerAddress: true,
+      deviceName: true,
+      platform: true,
+      color: true,
+      ram: true,
+      storage: true,
+      condition: true,
+      conditionNotes: true,
+      problemDescription: true,
+      estimatedCost: true,
+      imei: true,
+      expectedDeliveryAt: true,
+      lockCode: true,
+      accessories: true,
+      finalCharge: true,
+      costPrice: true,
+      status: true,
+      outcome: true,
+      repairNotes: true,
+      workDone: true,
+      paymentMethod: true,
+      pickupName: true,
+      pickupPhone: true,
+      notifiedAt: true,
+      startedAt: true,
+      repairedAt: true,
+      deliveredAt: true,
+      frontPhotoType: true,
+      backPhotoType: true,
+      createdByUserId: true,
+      createdByName: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const sheet = wb.addWorksheet("RepairJobs");
+  sheet.columns = [
+    { header: "id", key: "id", width: 28 },
+    { header: "jobNumber", key: "jobNumber", width: 16 },
+    { header: "shop", key: "shop", width: 8 },
+    { header: "customerName", key: "customerName", width: 22 },
+    { header: "customerPhone", key: "customerPhone", width: 14 },
+    { header: "customerAddress", key: "customerAddress", width: 28 },
+    { header: "deviceName", key: "deviceName", width: 22 },
+    { header: "platform", key: "platform", width: 10 },
+    { header: "color", key: "color", width: 12 },
+    { header: "ram", key: "ram", width: 10 },
+    { header: "storage", key: "storage", width: 12 },
+    { header: "condition", key: "condition", width: 10 },
+    { header: "conditionNotes", key: "conditionNotes", width: 24 },
+    { header: "problemDescription", key: "problemDescription", width: 32 },
+    { header: "estimatedCost", key: "estimatedCost", width: 12 },
+    { header: "imei", key: "imei", width: 18 },
+    { header: "expectedDeliveryAt", key: "expectedDeliveryAt", width: 24 },
+    { header: "lockCode", key: "lockCode", width: 14 },
+    { header: "accessories", key: "accessories", width: 24 },
+    { header: "finalCharge", key: "finalCharge", width: 12 },
+    { header: "costPrice", key: "costPrice", width: 12 },
+    { header: "status", key: "status", width: 12 },
+    { header: "outcome", key: "outcome", width: 12 },
+    { header: "repairNotes", key: "repairNotes", width: 28 },
+    { header: "workDone", key: "workDone", width: 28 },
+    { header: "paymentMethod", key: "paymentMethod", width: 12 },
+    { header: "pickupName", key: "pickupName", width: 18 },
+    { header: "pickupPhone", key: "pickupPhone", width: 14 },
+    { header: "notifiedAt", key: "notifiedAt", width: 24 },
+    { header: "startedAt", key: "startedAt", width: 24 },
+    { header: "repairedAt", key: "repairedAt", width: 24 },
+    { header: "deliveredAt", key: "deliveredAt", width: 24 },
+    { header: "frontPhotoType", key: "frontPhotoType", width: 14 },
+    { header: "backPhotoType", key: "backPhotoType", width: 14 },
+    { header: "createdByUserId", key: "createdByUserId", width: 28 },
+    { header: "createdByName", key: "createdByName", width: 16 },
+    { header: "createdAt", key: "createdAt", width: 24 },
+    { header: "updatedAt", key: "updatedAt", width: 24 },
+  ];
+  styleHeader(sheet);
+  for (const row of rows) {
+    sheet.addRow({
+      ...row,
+      customerAddress: row.customerAddress || "",
+      color: row.color || "",
+      ram: row.ram || "",
+      storage: row.storage || "",
+      conditionNotes: row.conditionNotes || "",
+      estimatedCost: row.estimatedCost ?? "",
+      imei: row.imei || "",
+      expectedDeliveryAt: iso(row.expectedDeliveryAt),
+      lockCode: row.lockCode || "",
+      accessories: row.accessories || "",
+      finalCharge: row.finalCharge ?? "",
+      costPrice: row.costPrice ?? "",
+      outcome: row.outcome || "",
+      repairNotes: row.repairNotes || "",
+      workDone: row.workDone || "",
+      paymentMethod: row.paymentMethod || "",
+      pickupName: row.pickupName || "",
+      pickupPhone: row.pickupPhone || "",
+      notifiedAt: iso(row.notifiedAt),
+      startedAt: iso(row.startedAt),
+      repairedAt: iso(row.repairedAt),
+      deliveredAt: iso(row.deliveredAt),
+      frontPhotoType: row.frontPhotoType || "",
+      backPhotoType: row.backPhotoType || "",
+      createdByUserId: row.createdByUserId || "",
+      createdByName: row.createdByName || "",
+      createdAt: iso(row.createdAt),
+      updatedAt: iso(row.updatedAt),
     });
   }
   return rows.length;
@@ -856,12 +1076,15 @@ export async function buildReportWorkbook(scope: ReportScope, now = new Date()) 
     counts.Purchases = purchases.purchaseCount;
     counts.PurchaseItems = purchases.purchaseItemCount;
     counts.SupplierPayments = await addSupplierPaymentsSheet(wb);
+    counts.ProductReturns = await addProductReturnsSheet(wb);
     counts.FinanceCompanies = await addFinanceCompaniesSheet(wb);
     counts.MobileCatalog = await addMobileCatalogSheet(wb);
     counts.PhoneModels = await addPhoneModelsSheet(wb);
     counts.Users = await addUsersSheet(wb);
     counts.InvoiceSequence = await addInvoiceSequenceSheet(wb);
     counts.ReportSendLog = await addReportSendLogSheet(wb);
+    counts.RepairJobs = await addRepairJobsSheet(wb);
+    counts.RecycleBinEntries = await addRecycleBinSheet(wb);
     counts["Outstanding Dues (view)"] = await addOutstandingDuesSheet(wb);
     counts["Finance Dues (view)"] = await addFinanceDuesSheet(wb);
 

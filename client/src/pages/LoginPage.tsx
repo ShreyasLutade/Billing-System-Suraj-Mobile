@@ -4,11 +4,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { BrandName } from "../components/BrandName";
-// Repair shop is in development — counter chooser disabled, login opens the mobile shop directly.
-// import {
-//   cancelSectionChoice,
-//   requestSectionChoice,
-// } from "../components/SectionGate";
+import {
+  cancelSectionChoice,
+  requestSectionChoice,
+} from "../components/SectionGate";
 import { api } from "../lib/api";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -117,13 +116,12 @@ export function LoginPage() {
     setSubmitting(true);
     // Set before login: once signed in, the guest guard redirects straight away,
     // and the section chooser reads this flag on the next page.
-    // Repair shop is in development:
-    // requestSectionChoice();
+    requestSectionChoice();
     try {
       await login(phone.trim(), password);
       navigate(from, { replace: true });
     } catch (err) {
-      // cancelSectionChoice();
+      cancelSectionChoice();
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setSubmitting(false);
@@ -196,8 +194,7 @@ export function LoginPage() {
     view === "login"
       ? (
           <>
-            {/* Repair shop is in development: was "Mobiles, accessories, repairs — all billed here." */}
-            Mobiles and accessories — all billed here.
+            Mobiles, accessories, repairs — all billed here.
             <br />
             Sign in to open the counter.
           </>

@@ -20,27 +20,32 @@ export type RepairSlipJob = {
   customerAddress: string | null;
   deviceName: string;
   platform: string;
-  color: string | null;
   ram: string | null;
   storage: string | null;
   condition: string;
   conditionNotes: string | null;
   problemDescription: string;
   estimatedCost: number | null;
+  imei: string | null;
+  expectedDeliveryAt: Date | null;
+  accessories: string | null;
   finalCharge: number | null;
   status: string;
   outcome: string | null;
   repairNotes: string | null;
+  workDone: string | null;
+  paymentMethod: string | null;
+  pickupName: string | null;
+  pickupPhone: string | null;
   repairedAt: Date | null;
   deliveredAt: Date | null;
   createdAt: Date;
 };
 
-/** A5 portrait — half an A4 sheet, a common size for counter slips. */
-const PAGE = { width: 419.53, height: 595.28 };
-const M = 24;
+const PAGE = { width: 595.28, height: 841.89 };
+const M = 32;
 const W = PAGE.width - M * 2;
-
+const PAYMENT_LABEL: Record<string, string> = { CASH: "Cash", UPI: "UPI / Online", CARD: "Card" };
 const CONDITION_LABEL: Record<string, string> = {
   LIKE_NEW: "Like new",
   GOOD: "Good",
@@ -48,32 +53,36 @@ const CONDITION_LABEL: Record<string, string> = {
   DAMAGED: "Damaged",
   DEAD: "Dead",
 };
-
 const STATUS_LABEL: Record<string, string> = {
   RECEIVED: "Received",
+  IN_REPAIR: "In repair",
   REPAIRED: "Repaired",
   DELIVERED: "Delivered",
 };
 
-function rupees(amount: number) {
-  return `Rs. ${money(amount)}`;
-}
+const when = (date: Date) => format(date, "d MMM yyyy, h:mm a");
+const dateLabel = (date: Date) =>
+  date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+const rupees = (amount: number) => `Rs. ${money(amount)}`;
 
-function when(date: Date) {
-  return format(date, "d MMM yyyy, h:mm a");
-}
+function drawHeader(doc: PDFKit.PDFDocument, job: RepairSlipJob) {
+  const top = doc.linearGradient(0, 0, PAGE.width, 0);
+  top.stop(0, COLORS.logoStart).stop(1, COLORS.accent);
+  doc.rect(0, 0, PAGE.width, 8).fill(top);
 
-function drawHeader(doc: PDFKit.PDFDocument) {
-  const logo = 42;
-  drawBabuLogo(doc, M, 20, logo);
-  const x = M + logo + 10;
-
-  // Same wordmark as the invoice: chubby dark name, NX on the baseline.
-  const size = 18;
-  const nameY = 17;
+  drawBabuLogo(doc, M, 25, 54);
+  const x = M + 68;
+  const nameY = 27;
+  const size = 20;
   const nameW = drawWordmarkText(doc, shop.name.toUpperCase(), x, nameY, size);
   if (shop.nameSuffix) {
-    const small = 7.5;
+    const small = 8;
     doc.font(FONT.display).fontSize(size);
     const baseline = nameY + ascenderOf(doc, size);
     doc.font(FONT.bold).fontSize(small).fillColor(COLORS.accent);
@@ -82,139 +91,184 @@ function drawHeader(doc: PDFKit.PDFDocument) {
     });
   }
 
-  doc
-    .font(FONT.regular)
-    .fontSize(7.2)
-    .fillColor(COLORS.ink)
-    .text(shop.address, x, 44, { width: W - logo - 10, lineBreak: false });
-  doc
-    .font(FONT.bold)
-    .fontSize(7.2)
-    .text(
-      [`Ph: ${shop.phone}`, shop.instagram].filter(Boolean).join("   ·   "),
-      x,
-      54,
-      { lineBreak: false },
-    );
+  doc.font(FONT.regular).fontSize(8.5).fillColor(COLORS.muted);
+  doc.text(shop.address, x, 57, { width: 255, lineBreak: false, ellipsis: true });
+  doc.text(
+    [`Ph: ${shop.phone}`, shop.instagram].filter(Boolean).join("   ·   "),
+    x,
+    70,
+    { width: 255, lineBreak: false, ellipsis: true },
+  );
 
-  doc.moveTo(M, 72).lineTo(PAGE.width - M, 72).strokeColor(COLORS.slate).lineWidth(0.9).stroke();
-  return 80;
-}
-
-function drawTitleBar(doc: PDFKit.PDFDocument, job: RepairSlipJob, y: number) {
-  const h = 30;
-  doc.roundedRect(M, y, W, h, 6).fill(COLORS.accentSoft);
-  doc
-    .fillColor(COLORS.slate)
-    .font(FONT.bold)
-    .fontSize(11)
-    .text("REPAIR SLIP", M + 12, y + 9, { lineBreak: false, characterSpacing: 1.5 });
-  doc
-    .fillColor(COLORS.accent)
-    .font(FONT.bold)
-    .fontSize(13)
-    .text(job.jobNumber, M, y + 8, { width: W - 12, align: "right", lineBreak: false });
-
-  y += h + 6;
-  doc.font(FONT.regular).fontSize(7.8).fillColor(COLORS.muted);
-  doc.text(`Received: ${when(job.createdAt)}`, M, y, { lineBreak: false });
-  const status =
-    STATUS_LABEL[job.status] +
-    (job.outcome ? ` · ${job.outcome === "FIXED" ? "Fixed" : "Not fixed"}` : "");
-  doc
-    .font(FONT.bold)
-    .fillColor(COLORS.ink)
-    .text(`Status: ${status}`, M, y, { width: W, align: "right", lineBreak: false });
-  return y + 16;
-}
-
-/** Heading plus a bordered two-column box of label/value rows. */
-function drawSection(
-  doc: PDFKit.PDFDocument,
-  title: string,
-  rows: Array<[string, string]>,
-  y: number,
-) {
-  doc.font(FONT.bold).fontSize(8).fillColor(COLORS.slate).text(title.toUpperCase(), M, y, {
+  const ticketX = 365;
+  doc.font(FONT.bold).fontSize(8).fillColor(COLORS.muted);
+  doc.text("REPAIR JOB SHEET", ticketX, 31, {
+    width: PAGE.width - M - ticketX,
+    align: "right",
+    characterSpacing: 1.2,
     lineBreak: false,
-    characterSpacing: 1,
   });
-  y += 12;
-  const labelW = 92;
-  const rowH = 17;
-  const top = y;
-  rows.forEach(([label, value], index) => {
-    const ry = top + index * rowH;
-    if (index > 0) {
-      doc.moveTo(M, ry).lineTo(M + W, ry).strokeColor("#DCE6F2").lineWidth(0.6).stroke();
-    }
-    doc.font(FONT.regular).fontSize(8).fillColor(COLORS.muted).text(label, M + 10, ry + 5, {
-      width: labelW - 14,
-      lineBreak: false,
-      ellipsis: true,
-    });
-    doc.font(FONT.semibold).fontSize(8.4).fillColor(COLORS.ink).text(value || "—", M + labelW, ry + 4.5, {
-      width: W - labelW - 10,
-      lineBreak: false,
-      ellipsis: true,
-    });
+  doc.font(FONT.bold).fontSize(19).fillColor(COLORS.accent);
+  doc.text(job.jobNumber, ticketX, 45, {
+    width: PAGE.width - M - ticketX,
+    align: "right",
+    lineBreak: false,
   });
-  const h = rows.length * rowH;
-  doc.roundedRect(M, top, W, h, 6).strokeColor(COLORS.slate).lineWidth(0.8).stroke();
-  return top + h + 12;
+  doc.font(FONT.regular).fontSize(8.5).fillColor(COLORS.muted);
+  doc.text(`Received: ${when(job.createdAt)}`, ticketX, 70, {
+    width: PAGE.width - M - ticketX,
+    align: "right",
+    lineBreak: false,
+  });
+  doc.moveTo(M, 94).lineTo(PAGE.width - M, 94).strokeColor("#DCE6F0").lineWidth(0.8).stroke();
+  return 110;
 }
 
-/** Heading plus a bordered box of wrapped text, capped so the slip stays one page. */
-function drawTextBox(
+function statusLabel(job: RepairSlipJob) {
+  const label = STATUS_LABEL[job.status] ?? job.status;
+  return job.outcome ? `${label} · ${job.outcome === "FIXED" ? "Fixed" : "Not fixed"}` : label;
+}
+
+function drawHero(doc: PDFKit.PDFDocument, job: RepairSlipJob, y: number) {
+  doc.roundedRect(M, y, W, 62, 14).fill("#EFFAFF");
+  doc.roundedRect(M, y, W, 62, 14).lineWidth(0.8).strokeColor("#CFE8F5").stroke();
+  doc.font(FONT.bold).fontSize(11).fillColor(COLORS.logoStart);
+  doc.text("MOBILE REPAIR SERVICE", M + 18, y + 16, { characterSpacing: 1, lineBreak: false });
+  doc.font(FONT.regular).fontSize(9).fillColor(COLORS.muted);
+  doc.text("Thank you for trusting us with your device.", M + 18, y + 34, { lineBreak: false });
+
+  const status = statusLabel(job);
+  doc.font(FONT.bold).fontSize(8.5);
+  const pillW = Math.min(150, Math.max(80, doc.widthOfString(status) + 26));
+  const pillX = PAGE.width - M - pillW - 14;
+  doc.roundedRect(pillX, y + 17, pillW, 28, 14).fill("#E8F7ED");
+  doc.circle(pillX + 12, y + 31, 3).fill("#159447");
+  doc.font(FONT.bold).fontSize(8.5).fillColor("#159447");
+  doc.text(status, pillX + 21, y + 26, { width: pillW - 28, lineBreak: false, ellipsis: true });
+  return y + 80;
+}
+
+function drawSectionTitle(doc: PDFKit.PDFDocument, title: string, y: number) {
+  doc.roundedRect(M, y + 1, 4, 14, 2).fill(COLORS.accent);
+  doc.font(FONT.bold).fontSize(9).fillColor(COLORS.logoStart);
+  doc.text(title.toUpperCase(), M + 12, y, { characterSpacing: 1.2, lineBreak: false });
+  return y + 21;
+}
+
+function drawFieldsCard(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  width: number,
+  fields: Array<[string, string]>,
+  rowHeight = 20,
+) {
+  const height = 14 + fields.length * rowHeight;
+  doc.roundedRect(x, y, width, height, 10).fill(COLORS.white);
+  doc.roundedRect(x, y, width, height, 10).lineWidth(0.8).strokeColor("#DCE6F0").stroke();
+  fields.forEach(([label, value], index) => {
+    const rowY = y + 8 + index * rowHeight;
+    if (index > 0) {
+      doc.moveTo(x + 10, rowY - 3).lineTo(x + width - 10, rowY - 3)
+        .strokeColor("#EDF1F5").lineWidth(0.5).stroke();
+    }
+    doc.font(FONT.regular).fontSize(8).fillColor(COLORS.muted);
+    doc.text(label, x + 12, rowY, { width: width * 0.38, lineBreak: false, ellipsis: true });
+    doc.font(FONT.bold).fontSize(8.5).fillColor(COLORS.ink);
+    doc.text(value || "—", x + width * 0.4, rowY - 0.5, {
+      width: width * 0.6 - 12,
+      align: "right",
+      lineBreak: false,
+      ellipsis: true,
+    });
+  });
+  return height;
+}
+
+function drawTextCard(
   doc: PDFKit.PDFDocument,
   title: string,
   text: string,
+  x: number,
   y: number,
-  maxH: number,
+  width: number,
+  height: number,
 ) {
-  doc.font(FONT.bold).fontSize(8).fillColor(COLORS.slate).text(title.toUpperCase(), M, y, {
-    lineBreak: false,
-    characterSpacing: 1,
-  });
-  y += 12;
-  doc.font(FONT.regular).fontSize(8.6);
-  const textH = Math.min(doc.heightOfString(text, { width: W - 20 }), maxH);
-  const h = textH + 14;
-  doc.roundedRect(M, y, W, h, 6).strokeColor(COLORS.slate).lineWidth(0.8).stroke();
-  doc.fillColor(COLORS.ink).text(text, M + 10, y + 7, {
-    width: W - 20,
-    height: textH,
+  doc.roundedRect(x, y, width, height, 11).fill("#FFF8EF");
+  doc.roundedRect(x, y, width, height, 11).lineWidth(0.8).strokeColor("#FFE0BB").stroke();
+  doc.font(FONT.bold).fontSize(11).fillColor(COLORS.ink);
+  doc.text(text || "—", x + 15, y + 13, {
+    width: width - 62,
+    height: height - 26,
     ellipsis: true,
   });
-  return y + h + 12;
+  doc.font(FONT.regular).fontSize(8).fillColor("#9A6A37");
+  doc.text(title, x + 15, y + height - 17, { lineBreak: false });
+  const iconX = x + width - 34;
+  doc.roundedRect(iconX, y + 15, 17, 27, 3).lineWidth(1.4).strokeColor(COLORS.accent).stroke();
+  doc.moveTo(iconX + 5, y + 19).lineTo(iconX + 12, y + 19)
+    .lineWidth(0.8).strokeColor(COLORS.accent).stroke();
+  doc.circle(iconX + 8.5, y + 37, 1).fill(COLORS.accent);
 }
 
-function drawFooter(doc: PDFKit.PDFDocument) {
-  const lineY = PAGE.height - 48;
-  doc
-    .font(FONT.regular)
-    .fontSize(7.6)
-    .fillColor(COLORS.muted)
-    .text("Please bring this slip when you collect your phone.", M, lineY - 26, {
-      width: W,
-      align: "center",
-      lineBreak: false,
-    });
+function drawCharges(doc: PDFKit.PDFDocument, job: RepairSlipJob, y: number) {
+  const height = job.finalCharge != null || job.outcome ? 66 : 58;
+  doc.roundedRect(M, y, W, height, 12).fill(COLORS.logoStart);
+  doc.font(FONT.bold).fontSize(8).fillColor("#BFD4F3");
+  doc.text("ESTIMATED REPAIR COST", M + 16, y + 12, { characterSpacing: 0.8, lineBreak: false });
+  doc.font(FONT.bold).fontSize(20).fillColor(COLORS.white);
+  doc.text(job.estimatedCost != null ? rupees(job.estimatedCost) : "To be confirmed", M + 16, y + 26, {
+    lineBreak: false,
+  });
 
-  const sigW = 130;
-  doc.moveTo(M, lineY).lineTo(M + sigW, lineY).strokeColor(COLORS.slate).lineWidth(0.7).stroke();
-  doc
-    .moveTo(PAGE.width - M - sigW, lineY)
-    .lineTo(PAGE.width - M, lineY)
-    .stroke();
-  doc.font(FONT.regular).fontSize(7.4).fillColor(COLORS.muted);
-  doc.text("Customer's signature", M, lineY + 4, { width: sigW, align: "center", lineBreak: false });
+  const detail = job.finalCharge != null
+    ? `Final: ${rupees(job.finalCharge)}`
+    : job.outcome
+      ? (job.outcome === "FIXED" ? "Repaired" : "Could not be fixed")
+      : "Final amount may vary after inspection.";
+  doc.font(FONT.regular).fontSize(8.5).fillColor("#E1ECFA");
+  doc.text(detail, M + W * 0.58, y + (height - 10) / 2, {
+    width: W * 0.38,
+    align: "right",
+    lineBreak: false,
+    ellipsis: true,
+  });
+  return height;
+}
+
+function drawFooter(doc: PDFKit.PDFDocument, y: number) {
+  const footerTop = Math.max(y + 17, 746);
+  doc.moveTo(M, footerTop).lineTo(PAGE.width - M, footerTop).strokeColor("#DCE6F0").lineWidth(0.8).stroke();
+  doc.font(FONT.bold).fontSize(8.5).fillColor(COLORS.ink);
+  doc.text("CUSTOMER NOTE", M, footerTop + 13, { characterSpacing: 0.6, lineBreak: false });
+  doc.font(FONT.regular).fontSize(7.5).fillColor(COLORS.muted);
   doc.text(
-    `For ${[shop.name, shop.nameSuffix].filter(Boolean).join(" ")}`,
-    PAGE.width - M - sigW,
-    lineY + 4,
-    { width: sigW, align: "center", lineBreak: false },
+    "Please keep this job sheet for collection. Delivery time is an estimate and may change depending on parts availability and repair complexity.",
+    M,
+    footerTop + 27,
+    { width: W * 0.64, height: 36, lineGap: 2, ellipsis: true },
   );
+  const signX = PAGE.width - M - 160;
+  doc.moveTo(signX, footerTop + 46).lineTo(PAGE.width - M, footerTop + 46)
+    .strokeColor("#9AA8B8").lineWidth(0.8).stroke();
+  doc.font(FONT.regular).fontSize(7.5).fillColor(COLORS.muted);
+  doc.text("Customer Signature", signX, footerTop + 51, {
+    width: 160,
+    align: "right",
+    lineBreak: false,
+  });
+
+  doc.rect(0, PAGE.height - 24, PAGE.width, 24).fill("#F4F8FC");
+  doc.font(FONT.bold).fontSize(7).fillColor(COLORS.muted);
+  doc.text(`${shop.name.toUpperCase()}${shop.nameSuffix ? ` ${shop.nameSuffix.toUpperCase()}` : ""}  ·  BALAGHAT`, M, PAGE.height - 15, {
+    lineBreak: false,
+  });
+  doc.font(FONT.regular).fontSize(7).fillColor(COLORS.muted);
+  doc.text("Thank you for choosing us.", M, PAGE.height - 15, {
+    width: W,
+    align: "right",
+    lineBreak: false,
+  });
 }
 
 export function buildRepairSlipPdf(job: RepairSlipJob): Promise<Buffer> {
@@ -223,9 +277,9 @@ export function buildRepairSlipPdf(job: RepairSlipJob): Promise<Buffer> {
       size: [PAGE.width, PAGE.height],
       margin: 0,
       info: {
-        Title: `Repair slip ${job.jobNumber}`,
+        Title: `Repair job sheet ${job.jobNumber}`,
         Author: shop.name,
-        Subject: "Repair slip",
+        Subject: "Repair job sheet",
       },
     });
     const chunks: Buffer[] = [];
@@ -234,60 +288,80 @@ export function buildRepairSlipPdf(job: RepairSlipJob): Promise<Buffer> {
     doc.on("error", reject);
 
     registerFonts(doc);
-    let y = drawHeader(doc);
-    y = drawTitleBar(doc, job, y);
+    let y = drawHero(doc, job, drawHeader(doc, job));
 
-    y = drawSection(
-      doc,
-      "Customer",
-      [
+    y = drawSectionTitle(doc, "Customer", y);
+    const half = (W - 10) / 2;
+    const delivery = job.expectedDeliveryAt ? dateLabel(job.expectedDeliveryAt) : "To be confirmed";
+    const customerHeight = Math.max(
+      drawFieldsCard(doc, M, y, half, [
         ["Name", job.customerName],
         ["Mobile", job.customerPhone],
-        ["Location", job.customerAddress || ""],
-      ],
-      y,
+        ["Location", job.customerAddress || "—"],
+      ]),
+      drawFieldsCard(doc, M + half + 10, y, half, [
+        ["Estimated delivery", delivery],
+        ["Service type", "Mobile repair"],
+        ["Current status", statusLabel(job)],
+      ]),
     );
+    y += customerHeight + 16;
 
-    const phoneRows: Array<[string, string]> = [
+    y = drawSectionTitle(doc, "Device details", y);
+    const deviceFields: Array<[string, string]> = [
       ["Model", job.deviceName],
       ["System", job.platform === "IOS" ? "iOS" : "Android"],
-      ["Colour", job.color || ""],
+      ...(job.imei ? [["IMEI / Serial", job.imei] as [string, string]] : []),
+      ...(job.accessories ? [["Received with", job.accessories] as [string, string]] : []),
+      ...(job.ram || job.storage
+        ? [["RAM / Storage", [job.ram, job.storage].filter(Boolean).join(" / ")] as [string, string]]
+        : []),
+      ...(job.condition
+        ? [[
+            "Condition",
+            [CONDITION_LABEL[job.condition] || job.condition, job.conditionNotes].filter(Boolean).join(" — "),
+          ] as [string, string]]
+        : []),
     ];
-    // Older jobs recorded RAM / storage.
-    if (job.ram || job.storage) {
-      phoneRows.push(["RAM / Storage", [job.ram, job.storage].filter(Boolean).join(" / ")]);
-    }
-    // Older jobs recorded a condition; new intake no longer asks for it.
-    if (job.condition) {
-      phoneRows.push([
-        "Condition",
-        [CONDITION_LABEL[job.condition] || job.condition, job.conditionNotes]
-          .filter(Boolean)
-          .join(" — "),
-      ]);
-    }
-    y = drawSection(doc, "Phone", phoneRows, y);
+    const leftFields = deviceFields.filter((_, index) => index % 2 === 0);
+    const rightFields = deviceFields.filter((_, index) => index % 2 === 1);
+    const deviceHeight = Math.max(
+      drawFieldsCard(doc, M, y, half, leftFields),
+      drawFieldsCard(doc, M + half + 10, y, half, rightFields),
+    );
+    y += deviceHeight + 16;
 
-    y = drawTextBox(doc, "Problem", job.problemDescription || "—", y, 44);
+    y = drawSectionTitle(doc, "Reported problem", y);
+    drawTextCard(doc, "Issue reported by customer at intake", job.problemDescription, M, y, W, 58);
+    y += 74;
 
-    const charges: Array<[string, string]> = [
-      [
-        "Estimate",
-        job.estimatedCost != null ? rupees(job.estimatedCost) : "To be confirmed",
-      ],
-    ];
-    if (job.outcome) {
-      charges.push(["Result", job.outcome === "FIXED" ? "Fixed" : "Could not be fixed"]);
+    y = drawSectionTitle(doc, "Service & charges", y);
+    y += drawCharges(doc, job, y) + 16;
+
+    y = drawSectionTitle(doc, "Repair timeline", y);
+    const timelineHeight = Math.max(
+      drawFieldsCard(doc, M, y, half, [["Received", when(job.createdAt)]]),
+      drawFieldsCard(doc, M + half + 10, y, half, [["Expected ready", delivery]]),
+    );
+    y += timelineHeight;
+
+    if (job.outcome || job.workDone || job.repairNotes || job.paymentMethod || job.pickupName) {
+      y += 12;
+      const details = [
+        job.outcome ? (job.outcome === "FIXED" ? "Repaired" : "Could not be fixed") : null,
+        job.workDone,
+        job.repairNotes,
+        job.paymentMethod ? `Paid by ${PAYMENT_LABEL[job.paymentMethod] ?? job.paymentMethod}` : null,
+        job.pickupName ? `Collected by ${job.pickupName}${job.pickupPhone ? ` (${job.pickupPhone})` : ""}` : null,
+      ].filter(Boolean).join(" · ");
+      if (details) {
+        doc.font(FONT.regular).fontSize(7.5).fillColor(COLORS.muted);
+        doc.text(details, M, y, { width: W, height: 28, ellipsis: true });
+        y += 28;
+      }
     }
-    if (job.finalCharge != null) charges.push(["Final charge", rupees(job.finalCharge)]);
-    if (job.deliveredAt) charges.push(["Delivered", when(job.deliveredAt)]);
-    y = drawSection(doc, job.outcome ? "Charges & result" : "Charges", charges, y);
 
-    if (job.repairNotes) {
-      drawTextBox(doc, "Work done", job.repairNotes, y, 30);
-    }
-
-    drawFooter(doc);
+    drawFooter(doc, y);
     doc.end();
   });
 }
