@@ -847,25 +847,6 @@ body,
     color: #ffffff;
   }
 
-  /* Repair desk has only a few tabs: icon beside the label, slimmer bar. */
-  .babu-mobile-nav.is-repair {
-    padding: 5px 8px calc(5px + env(safe-area-inset-bottom));
-    gap: 6px;
-  }
-
-  .babu-mobile-nav.is-repair .babu-mobile-link {
-    flex-direction: row;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 4px;
-    border-radius: 10px;
-    font-size: 12px;
-  }
-
-  .babu-mobile-nav.is-repair .babu-mobile-link svg {
-    width: 16px;
-    height: 16px;
-  }
 }
 
 /* Shared screen surfaces use the Babu Mobile app language. */
