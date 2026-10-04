@@ -1673,3 +1673,350 @@
   max-width: none;
   margin: 0;
 }
+
+/* Phone: compact sizes — smaller inputs, cards, buttons and footer bar. */
+@media (max-width: 900px) {
+  .rj {
+    --rj-r: 14px;
+    font-size: 14px;
+  }
+
+  .rj svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .rj-top {
+    padding-bottom: 8px;
+  }
+
+  .rj-top-id {
+    font-size: 14px;
+  }
+
+  .rj-icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .rj-hero {
+    padding: 12px;
+  }
+
+  .rj .rj-device,
+  .rj .rj-hero-title .rj-device {
+    font-size: 18px;
+  }
+
+  .rj-meta {
+    font-size: 12px;
+  }
+
+  .rj-pill {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .rj-tag {
+    padding: 4px 8px;
+    font-size: 11.5px;
+  }
+
+  .rj-avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .rj-round {
+    width: 36px;
+    height: 36px;
+  }
+
+  .rj-who span {
+    font-size: 12px;
+  }
+
+  /* Status tracker: the line runs through the middle of the smaller dots. */
+  .rj-tracker {
+    padding: 12px 2px 10px;
+  }
+
+  .rj-track-line {
+    top: 26px;
+  }
+
+  .rj-dot {
+    width: 32px;
+    height: 32px;
+  }
+
+  .rj-node b {
+    font-size: 12px;
+  }
+
+  .rj-node small {
+    font-size: 10.5px;
+  }
+
+  .rj-next {
+    margin-top: 10px;
+    padding: 12px;
+  }
+
+  .rj .rj-next h2 {
+    margin: 3px 0 10px;
+    font-size: 17px;
+  }
+
+  .rj-choice {
+    padding: 11px 6px;
+  }
+
+  .rj-choice-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .rj-choice b {
+    font-size: 14px;
+  }
+
+  .rj-choice small {
+    font-size: 11px;
+  }
+
+  .rj-label,
+  .rj-field > span {
+    font-size: 11px;
+  }
+
+  .rj-money {
+    padding: 0 11px;
+  }
+
+  .rj-money span {
+    font-size: 18px;
+  }
+
+  .rj-money input,
+  .rj-money-pair .rj-money input {
+    padding: 5px 0;
+    font-size: 18px !important;
+  }
+
+  .rj-money.is-fee span {
+    font-size: 15px;
+  }
+
+  .rj-money.is-fee input {
+    padding: 5px 0;
+    font-size: 15px !important;
+  }
+
+  .rj-hint {
+    font-size: 11.5px;
+  }
+
+  .rj-chip {
+    padding: 6px 10px;
+    font-size: 12.5px;
+  }
+
+  .rj-chip.is-sm {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+
+  .rj-textarea,
+  .rj-textarea.is-line {
+    padding: 8px 11px;
+    font-size: 13.5px;
+  }
+
+  .rj-input {
+    padding: 8px 11px;
+    font-size: 14px;
+  }
+
+  .rj-banner {
+    padding: 10px;
+  }
+
+  .rj-banner-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .rj-banner b {
+    font-size: 13.5px;
+  }
+
+  .rj-banner span {
+    font-size: 12px;
+  }
+
+  .rj-btn {
+    padding: 10px;
+    font-size: 13.5px;
+  }
+
+  .rj-same {
+    padding: 9px 11px;
+  }
+
+  .rj-same-box {
+    width: 20px;
+    height: 20px;
+  }
+
+  .rj .rj-same-box svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .rj-same-text b {
+    font-size: 13.5px;
+  }
+
+  .rj-same-text span {
+    font-size: 11.5px;
+  }
+
+  .rj-due {
+    padding: 10px 12px;
+  }
+
+  .rj-due-amount b {
+    font-size: 19px;
+  }
+
+  .rj-due-input i {
+    font-size: 16px;
+  }
+
+  .rj-due-input input {
+    font-size: 18px !important;
+  }
+
+  .rj-pay button,
+  .rj-due .rj-pay button {
+    padding: 7px 10px;
+    font-size: 12.5px;
+  }
+
+  .rj .rj-pay button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .rj-cost {
+    padding: 10px;
+  }
+
+  .rj-cost-save {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .rj-cost-info {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .rj-issue {
+    padding: 11px 12px;
+  }
+
+  .rj-issue-text {
+    font-size: 14px;
+  }
+
+  .rj-issue-due {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .rj-issue-due b {
+    font-size: 13.5px;
+  }
+
+  .rj-acc summary {
+    padding: 11px 12px;
+  }
+
+  .rj-acc-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rj-acc-title b {
+    font-size: 13.5px;
+  }
+
+  .rj-acc-title span {
+    font-size: 11.5px;
+  }
+
+  .rj-rows {
+    padding: 0 12px 6px;
+  }
+
+  .rj-rows div {
+    padding: 8px 0;
+    font-size: 13.5px;
+  }
+
+  .rj-photos {
+    padding: 0 12px 12px;
+  }
+
+  .rj-log {
+    padding: 4px 12px 12px;
+  }
+
+  .rj-log b {
+    font-size: 13px;
+  }
+
+  .rj-done-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .rj .rj-done-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .rj-receipt div {
+    padding: 7px 0;
+    font-size: 13.5px;
+  }
+
+  .rj-cta-bar.is-fixed {
+    padding: 6px 10px 7px;
+  }
+
+  .rj-cta,
+  .rj-cta-bar.is-fixed:not(.is-strip) .rj-cta {
+    padding: 9px 12px;
+    border-radius: 11px;
+    font-size: 14px;
+  }
+
+  .rj .rj-cta svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .rj-cta-bar.is-strip .rj-done-bar {
+    padding: 6px 12px;
+    font-size: 12.5px;
+  }
+
+  .rj-toast {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+}

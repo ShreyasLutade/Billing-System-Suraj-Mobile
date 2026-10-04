@@ -448,7 +448,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
       </main>
 
       <nav
-        className="babu-mobile-nav"
+        className={clsx("babu-mobile-nav", isRepair && "is-repair")}
         aria-label="Mobile navigation"
         style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }}
       >

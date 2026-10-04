@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { CircleAlert, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { BACKEND_ISSUE_EVENT, type BackendIssue } from "../lib/api";
 
 export function BackendIssueNotice() {
+  const { pathname } = useLocation();
   const [issue, setIssue] = useState<BackendIssue | null>(null);
 
   useEffect(() => {
@@ -13,7 +15,7 @@ export function BackendIssueNotice() {
     return () => window.removeEventListener(BACKEND_ISSUE_EVENT, onBackendIssue);
   }, []);
 
-  if (!issue) return null;
+  if (!issue || pathname === "/repair/history") return null;
 
   return (
     <section className="backend-issue-notice" role="alert" aria-live="assertive">

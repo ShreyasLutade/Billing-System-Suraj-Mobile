@@ -767,3 +767,38 @@
 .dark .rh-job.is-cost-pending {
   border-color: color-mix(in srgb, #f59e0b 55%, var(--rh-line));
 }
+
+/* Phone: compact header, search and tabs. */
+@media (max-width: 900px) {
+  .rh .rh-title h1 {
+    font-size: 19px;
+  }
+
+  .rh-title > span {
+    font-size: 12px;
+  }
+
+  .rh-search {
+    margin-top: 10px;
+    padding: 0 11px;
+    border-radius: 11px;
+  }
+
+  .rh-search input {
+    padding: 8px 0;
+    font-size: 14px;
+  }
+
+  .rh-tab {
+    padding: 6px 10px;
+    font-size: 12.5px;
+  }
+
+  .rh-stat {
+    padding: 7px 10px;
+  }
+
+  .rh-stat b {
+    font-size: 14px;
+  }
+}

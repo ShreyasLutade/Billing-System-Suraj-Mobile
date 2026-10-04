@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Camera, ImageUp, Loader2, SwitchCamera, X } from "lucide-react";
 
 /**
  * Full-screen live camera for repair photos. Opens the back camera, shows a
- * live preview and captures a still. Falls back to the phone's own camera app
+ * live preview filling the screen and captures exactly what the preview shows.
+ * Rendered on <body> so it sits above the page's fixed bars. Falls back to the phone's own camera app
  * (file input with `capture`) where live camera access isn't available —
  * browsers only allow it on https (or localhost).
  */
@@ -45,13 +47,15 @@ export function CameraCapture({
     setReady(false);
     setError(null);
     stop();
+    // Ask for frames shaped like the screen (portrait on a phone held upright).
+    const portrait = window.innerHeight >= window.innerWidth;
     navigator.mediaDevices
       .getUserMedia({
         audio: false,
         video: {
           facingMode: { ideal: facing },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: portrait ? 1080 : 1920 },
+          height: { ideal: portrait ? 1920 : 1080 },
         },
       })
       .then(async (stream) => {
@@ -105,10 +109,21 @@ export function CameraCapture({
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
     setBusy(true);
+    // The preview fills the screen (object-fit: cover), so crop the frame to
+    // the part that was on screen: the photo matches what the user saw.
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const cw = video.clientWidth || vw;
+    const ch = video.clientHeight || vh;
+    const scale = Math.max(cw / vw, ch / vh);
+    const sw = Math.min(vw, Math.round(cw / scale));
+    const sh = Math.min(vh, Math.round(ch / scale));
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.width = sw;
+    canvas.height = sh;
+    canvas
+      .getContext("2d")
+      ?.drawImage(video, Math.round((vw - sw) / 2), Math.round((vh - sh) / 2), sw, sh, 0, 0, sw, sh);
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.92),
     );
@@ -120,7 +135,7 @@ export function CameraCapture({
     input?.click();
   }
 
-  return (
+  return createPortal(
     <div className="cam" role="dialog" aria-modal="true" aria-label={title}>
       {/* Fallbacks: phone camera app, and gallery. */}
       <input
@@ -214,6 +229,7 @@ export function CameraCapture({
           <span>Flip</span>
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
