@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import {
   BarChart3,
   Check,
+  ChevronRight,
   Filter,
   Search,
   UserRound,
@@ -15,7 +16,6 @@ import {
   DUE_PERIOD_OPTIONS,
   type DuePeriodValue,
 } from "../components/PeriodFilter";
-import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
 import { BackLink, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
@@ -37,7 +37,6 @@ import {
   type BillSearchScope,
 } from "../lib/billSearch";
 import type {
-  DueItem,
   DuesSummary,
   FinanceDueItem,
   FinanceDuesSummary,
@@ -168,7 +167,6 @@ export function DuesPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDue, setSelectedDue] = useState<DueItem | null>(null);
   const [query, setQuery] = useSessionState("dues.query", "");
   const [searchScope, setSearchScope] = useSessionState<BillSearchScope>(
     "dues.searchScope",
@@ -540,12 +538,12 @@ export function DuesPage() {
                       : "border-ink-100/80 bg-white/90 shadow-ink-900/5",
                   )}
                   onClick={() =>
-                    navigate(`/bills/${due.id}`, { state: fromState(location) })
+                    navigate(`/dues/${due.id}`, { state: fromState(location) })
                   }
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      navigate(`/bills/${due.id}`, {
+                      navigate(`/dues/${due.id}`, {
                         state: fromState(location),
                       });
                     }
@@ -589,19 +587,10 @@ export function DuesPage() {
                           {dueWhen?.label || "No due date"}
                         </p>
                       </div>
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedDue(due);
-                          }}
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                          Paid
-                        </button>
-                      ) : null}
+                      <ChevronRight
+                        className="h-5 w-5 shrink-0 text-ink-300"
+                        aria-hidden
+                      />
                     </div>
                   </div>
                 </article>
@@ -809,14 +798,6 @@ export function DuesPage() {
             </div>
           )}
         </>
-      ) : null}
-
-      {selectedDue && isAdmin ? (
-        <SettleDueModal
-          bill={selectedDue}
-          onClose={() => setSelectedDue(null)}
-          onSettled={() => loadDues(period)}
-        />
       ) : null}
 
       <AnimatePresence>

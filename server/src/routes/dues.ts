@@ -13,6 +13,7 @@ import {
   periodLabel,
   toDateFilter,
 } from "../lib/period";
+import { buildDueStatement, getCustomerDue } from "../services/customerDue";
 
 export const duesRouter = Router();
 
@@ -182,6 +183,39 @@ duesRouter.get("/finance", async (_req, res, next) => {
         dues: mapped,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** One customer due: purchase, payments, promised date and delay. */
+duesRouter.get("/:id", async (req, res, next) => {
+  try {
+    const due = await getCustomerDue(req.params.id);
+    if (!due) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    res.json({ data: due });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Customer due statement PDF (purchase, every payment, delay). */
+duesRouter.get("/:id/statement", async (req, res, next) => {
+  try {
+    const statement = await buildDueStatement(req.params.id);
+    if (!statement) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${statement.filename}"`,
+    );
+    res.send(statement.pdf);
   } catch (error) {
     next(error);
   }
@@ -442,15 +476,6 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
 
     const remaining = Number((currentDue - paidAmount).toFixed(2));
 
-    if (!isFull) {
-      if (!parsed.data.nextDueDate) {
-        res.status(400).json({
-          error: "Select next due date for the remaining amount",
-        });
-        return;
-      }
-    }
-
     const paidAt = new Date();
     const updated = await prisma.bill.update({
       where: { id: bill.id },
@@ -460,9 +485,12 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
         dueSettledMethod: method,
         dueSettledAt: paidAt,
         isPartialPaid: isFull ? false : true,
-        dueDate: isFull
-          ? bill.dueDate
-          : parseDateInput(parsed.data.nextDueDate as string),
+        // A part payment keeps the promised date unless a new one is given,
+        // so the delay is still counted from what the customer promised.
+        dueDate:
+          !isFull && parsed.data.nextDueDate
+            ? parseDateInput(parsed.data.nextDueDate)
+            : bill.dueDate,
         cashAmount:
           method === "cash"
             ? Number((bill.cashAmount + paidAmount).toFixed(2))

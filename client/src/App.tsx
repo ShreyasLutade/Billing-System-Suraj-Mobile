@@ -16,6 +16,7 @@ import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
 import { CreateBillPage } from "./pages/CreateBillPage";
 import { DuesPage } from "./pages/DuesPage";
+import { DueDetailPage } from "./pages/DueDetailPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
@@ -42,6 +43,7 @@ export default function App() {
                 />
                 <Route path="bills/:id" element={<BillDetailPage />} />
                 <Route path="dues" element={<DuesPage />} />
+                <Route path="dues/:id" element={<DueDetailPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="stock/add" element={<AddStockPage />} />
                 <Route

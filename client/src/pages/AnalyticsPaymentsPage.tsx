@@ -199,11 +199,12 @@ export function AnalyticsPaymentsPage() {
           .toLowerCase()
           .includes(needle);
       });
+    // A due received is dated when the money came in, not by its bill.
+    const when = (row: SourceRow) =>
+      new Date(row.paidAt || row.billDate).getTime();
     filtered.sort((a, b) => {
       if (sort === "amount") return b.amount - a.amount;
-      return (
-        new Date(b.row.billDate).getTime() - new Date(a.row.billDate).getTime()
-      );
+      return when(b.row) - when(a.row);
     });
     return filtered;
   }, [data?.paymentSources, mode, query, sort]);
@@ -401,10 +402,12 @@ export function AnalyticsPaymentsPage() {
             />
           ) : (
             <div className="flex flex-col gap-2.5">
-              {listReveal.visibleItems.map(({ row, amount }, index) => (
+              {listReveal.visibleItems.map(({ row, amount }, index) => {
+                const dueReceived = row.kind === "DUE_RECEIVED";
+                return (
                 <Link
-                  key={row.id}
-                  to={`/bills/${row.id}`}
+                  key={row.entryId ?? row.id}
+                  to={dueReceived ? `/dues/${row.id}` : `/bills/${row.id}`}
                   state={fromState({
                     pathname: location.pathname,
                     search: location.search,
@@ -432,8 +435,17 @@ export function AnalyticsPaymentsPage() {
                     <p className="mt-0.5 truncate text-xs text-ink-400">
                       {row.invoiceNumber}
                       <span className="mx-1.5 opacity-50">·</span>
-                      {format(new Date(row.billDate), "dd MMM")}
+                      {format(new Date(row.paidAt || row.billDate), "dd MMM")}
                     </p>
+                    {dueReceived ? (
+                      <p
+                        className="mt-1 text-[11.5px] font-semibold"
+                        style={{ color: dark ? MIX.due.inkDark : MIX.due.ink }}
+                      >
+                        ● Due received · bill of{" "}
+                        {format(new Date(row.billDate), "dd MMM")}
+                      </p>
+                    ) : null}
                     {mode === "finance" && row.financeLabel ? (
                       <p className="mt-1 text-[11.5px] font-semibold text-[#7C3AED]">
                         ● via {row.financeLabel}
@@ -459,7 +471,8 @@ export function AnalyticsPaymentsPage() {
                     ) : null}
                   </div>
                 </Link>
-              ))}
+                );
+              })}
               <LoadMoreSentinel
                 sentinelRef={listReveal.sentinelRef}
                 hasMore={listReveal.hasMore}

@@ -76,7 +76,40 @@ type BillRow = {
   isExchange?: boolean;
   exchangeValue?: number | null;
   items: BillItemRow[];
+  /** Dues paid later. Settling a due also adds it to the bill's cash /
+   *  online / card, so these are taken back out to get what was paid at sale. */
+  duePayments?: Array<{ amount: number; method: string }>;
 };
+
+type PayMethod = "cash" | "online" | "card";
+
+/** A due paid in the period: money received that day, for an older (or same-day) bill. */
+type DueCollection = {
+  id: string;
+  billId: string;
+  invoiceNumber: string;
+  customerName: string;
+  billDate: Date;
+  billTotal: number;
+  paidAt: Date;
+  method: PayMethod;
+  amount: number;
+};
+
+/** Cash / online / card paid when the bill was made (without later due payments). */
+function paidAtSale(bill: BillRow) {
+  const later = { cash: 0, online: 0, card: 0 };
+  for (const payment of bill.duePayments ?? []) {
+    if (payment.method === "cash" || payment.method === "online" || payment.method === "card") {
+      later[payment.method] += Number(payment.amount || 0);
+    }
+  }
+  return {
+    cash: round2(Math.max(Number(bill.cashAmount || 0) - later.cash, 0)),
+    online: round2(Math.max(Number(bill.onlineAmount || 0) - later.online, 0)),
+    card: round2(Math.max(Number(bill.cardAmount || 0) - later.card, 0)),
+  };
+}
 
 function isStockMobile(item: BillItemRow) {
   return Boolean(item.stockItemId || item.stockItem);
@@ -110,7 +143,7 @@ function splitBillItems(items: BillItemRow[]) {
   };
 }
 
-function summarizeBills(bills: BillRow[]) {
+function summarizeBills(bills: BillRow[], collections: DueCollection[] = []) {
   const summary = bills.reduce(
     (acc, bill) => {
       const finance =
@@ -118,11 +151,12 @@ function summarizeBills(bills: BillRow[]) {
       const payable = bill.payableAmount || bill.grandTotal;
       const companyDiscount = Number(bill.companyDiscount || 0);
       const split = splitBillItems(bill.items);
+      const atSale = paidAtSale(bill);
       acc.sales += split.mobileSales;
       acc.payable += payable;
-      acc.cash += bill.cashAmount;
-      acc.online += bill.onlineAmount;
-      acc.card += bill.cardAmount;
+      acc.cash += atSale.cash;
+      acc.online += atSale.online;
+      acc.card += atSale.card;
       acc.finance += finance;
       acc.due += bill.dueAmount;
       acc.cost += split.cost;
@@ -149,6 +183,11 @@ function summarizeBills(bills: BillRow[]) {
       bills: 0,
     },
   );
+
+  // Dues received in the period count on the day they were paid.
+  for (const collection of collections) {
+    summary[collection.method] += collection.amount;
+  }
 
   const mixTotal =
     summary.cash +
@@ -248,25 +287,94 @@ function financeLabel(bill: BillRow) {
     .join(" + ");
 }
 
-function mapPaymentSources(bills: BillRow[]) {
-  return bills.map((bill) => {
+/**
+ * Rows behind the Cash / Online / Card / Finance / Due cards: one per bill
+ * (what was paid at sale) plus one per due received in the period
+ * (`kind: "DUE_RECEIVED"`, dated when it was paid).
+ */
+function mapPaymentSources(bills: BillRow[], collections: DueCollection[] = []) {
+  const sales = bills.map((bill) => {
     const finance =
       Number(bill.financeAmount || 0) + Number(bill.financeAmount2 || 0);
+    const atSale = paidAtSale(bill);
     return {
       id: bill.id,
+      entryId: bill.id,
+      kind: "SALE" as const,
       invoiceNumber: bill.invoiceNumber,
       customerName: bill.customerName,
       billDate: bill.billDate.toISOString(),
+      paidAt: null as string | null,
       billTotal: round2(bill.payableAmount || bill.grandTotal),
-      cashAmount: round2(bill.cashAmount || 0),
-      onlineAmount: round2(bill.onlineAmount || 0),
-      cardAmount: round2(bill.cardAmount || 0),
+      cashAmount: atSale.cash,
+      onlineAmount: atSale.online,
+      cardAmount: atSale.card,
       financeAmount: round2(finance),
       financeLabel: financeLabel(bill) || null,
       dueAmount: round2(bill.dueAmount || 0),
       dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
     };
   });
+  const received = collections.map((c) => ({
+    id: c.billId,
+    entryId: c.id,
+    kind: "DUE_RECEIVED" as const,
+    invoiceNumber: c.invoiceNumber,
+    customerName: c.customerName,
+    billDate: c.billDate.toISOString(),
+    paidAt: c.paidAt.toISOString(),
+    billTotal: c.billTotal,
+    cashAmount: c.method === "cash" ? c.amount : 0,
+    onlineAmount: c.method === "online" ? c.amount : 0,
+    cardAmount: c.method === "card" ? c.amount : 0,
+    financeAmount: 0,
+    financeLabel: null,
+    dueAmount: 0,
+    dueDate: null,
+  }));
+  return [...sales, ...received];
+}
+
+/** Dues paid in the period by cash / online / card (shop bills only). */
+async function loadDueCollections(
+  paidAtFilter: ReturnType<typeof toDateFilter>,
+): Promise<DueCollection[]> {
+  const rows = await prisma.duePayment.findMany({
+    where: {
+      method: { in: ["cash", "online", "card"] },
+      amount: { gt: 0 },
+      bill: { withGst: false },
+      ...(paidAtFilter ? { paidAt: paidAtFilter } : {}),
+    },
+    orderBy: { paidAt: "desc" },
+    select: {
+      id: true,
+      amount: true,
+      method: true,
+      paidAt: true,
+      bill: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          customerName: true,
+          billDate: true,
+          payableAmount: true,
+          grandTotal: true,
+        },
+      },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    billId: row.bill.id,
+    invoiceNumber: row.bill.invoiceNumber,
+    customerName: row.bill.customerName,
+    billDate: row.bill.billDate,
+    billTotal: round2(row.bill.payableAmount || row.bill.grandTotal),
+    paidAt: row.paidAt,
+    method: row.method as PayMethod,
+    amount: round2(row.amount),
+  }));
 }
 
 async function loadPeriodBills(
@@ -307,6 +415,7 @@ async function loadPeriodBills(
           stockItem: { select: { purchasePrice: true } },
         },
       },
+      duePayments: { select: { amount: true, method: true } },
     },
   });
 }
@@ -405,11 +514,12 @@ async function loadReturns(dateFilter: ReturnType<typeof toDateFilter>) {
 async function analyzePeriod(
   billDateFilter: ReturnType<typeof toDateFilter>,
 ) {
-  const [bills, returns] = await Promise.all([
+  const [bills, returns, collections] = await Promise.all([
     loadPeriodBills(billDateFilter),
     loadReturns(billDateFilter),
+    loadDueCollections(billDateFilter),
   ]);
-  const summary = summarizeBills(bills);
+  const summary = summarizeBills(bills, collections);
   // Returns / replacements are listed with the bills (newest first).
   const periodBills = [...mapPeriodBills(bills), ...returns.billRows].sort(
     (a, b) => b.billDate.localeCompare(a.billDate),
@@ -421,7 +531,7 @@ async function analyzePeriod(
       profit: round2(summary.profit + returns.profitAdjust),
     },
     periodBills,
-    paymentSources: mapPaymentSources(bills),
+    paymentSources: mapPaymentSources(bills, collections),
   };
 }
 

@@ -198,7 +198,13 @@ export type AnalyticsSummary = {
     profit: number;
   }>;
   paymentSources?: Array<{
+    /** Bill id. */
     id: string;
+    /** Unique row key (a due payment's id for DUE_RECEIVED rows). */
+    entryId?: string;
+    /** SALE: paid when billed. DUE_RECEIVED: a due paid on `paidAt`. */
+    kind?: "SALE" | "DUE_RECEIVED";
+    paidAt?: string | null;
     invoiceNumber: string;
     customerName: string;
     billDate: string;
@@ -489,6 +495,37 @@ export type DueItem = {
   isPartialPaid?: boolean;
   productLabels?: string[];
   imeiNumbers?: string[];
+};
+
+/** One customer due with its payment history (GET /dues/:id). */
+export type CustomerDueDetail = {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string | null;
+  billDate: string;
+  billTotal: number;
+  products: Array<{ label: string; ids: string[] }>;
+  originalDue: number;
+  paidTotal: number;
+  pending: number;
+  settled: boolean;
+  dueDate: string | null;
+  settledAt: string | null;
+  /** Days after the promised date (today if pending, clear date if settled). */
+  delayDays: number | null;
+  payments: Array<{
+    id: string;
+    paidAt: string;
+    amount: number;
+    method: string;
+    methodLabel: string;
+    kind: string;
+    note: string | null;
+    balanceAfter: number;
+    delayDays: number | null;
+  }>;
 };
 
 export type DuesSummary = {

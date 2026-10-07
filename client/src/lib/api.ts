@@ -5,6 +5,7 @@ import type {
   AuthUser,
   Bill,
   CreateBillPayload,
+  CustomerDueDetail,
   DuesSummary,
   FinanceDuesSummary,
   FinanceCompany,
@@ -627,6 +628,38 @@ export const api = {
     request<{ data: DuesSummary }>(
       `/dues?period=${encodeURIComponent(period)}`,
     ),
+  getCustomerDue: (id: string) =>
+    request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}`),
+  /** Download one customer's due statement PDF (purchase + payments + delay). */
+  downloadDueStatement: async (id: string) => {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/dues/${encodeURIComponent(id)}/statement`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download statement";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "due-statement.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
   listFinanceDues: () =>
     request<{ data: FinanceDuesSummary }>("/dues/finance"),
   markFinanceReceived: (id: string, slots: Array<1 | 2>) =>
