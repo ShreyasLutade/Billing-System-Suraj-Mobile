@@ -304,7 +304,7 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
+      <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
         <div
           className={clsx(
             "mx-auto grid max-w-lg gap-1",

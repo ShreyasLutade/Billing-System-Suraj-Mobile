@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
+import { useFixedBottomBar } from "../hooks/useFixedBottomBar";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, round2 } from "../lib/api";
 import { backLabel, fromState, readFromState } from "../lib/navMemory";
@@ -79,6 +81,18 @@ export function DueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [paying, setPaying] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const showPayBar = Boolean(isAdmin && data && !data.settled);
+  // Mark paid stays stuck at the bottom (above the phone nav), measured.
+  const bar = useFixedBottomBar(rootRef, barRef, showPayBar);
+
+  // Lift the scroll-to-top button above the bar (same as the Add stock button).
+  useEffect(() => {
+    if (!showPayBar) return;
+    document.body.classList.add("has-fab");
+    return () => document.body.classList.remove("has-fab");
+  }, [showPayBar]);
 
   async function load() {
     if (!id) return;
@@ -130,7 +144,7 @@ export function DueDetailPage() {
   const late = data.delayDays !== null && data.delayDays > 0;
 
   return (
-    <div className="mx-auto max-w-2xl pb-4">
+    <div ref={rootRef} className="mx-auto max-w-2xl pb-4">
       {back}
 
       {/* Customer + statement */}
@@ -360,11 +374,37 @@ export function DueDetailPage() {
         </table>
       </section>
 
-      {isAdmin && !data.settled ? (
-        <button type="button" className="btn-primary w-full" onClick={() => setPaying(true)}>
-          <Wallet className="h-4 w-4" />
-          Mark paid
-        </button>
+      {showPayBar ? (
+        <>
+          {/* Room so the last rows aren't hidden behind the fixed bar. */}
+          <div aria-hidden style={{ height: bar.height + 8 }} />
+          {/* On <body> so "fixed" means the screen, not a page wrapper. */}
+          {createPortal(
+            <div
+              ref={barRef}
+              className={clsx(
+                "fixed z-30",
+                bar.mobile &&
+                  "border-t border-ink-100/80 bg-white/95 px-3 py-2 backdrop-blur dark:bg-surface-elevated/95",
+              )}
+              style={
+                bar.mobile
+                  ? { left: 0, right: 0, bottom: bar.bottom }
+                  : { left: bar.left, width: bar.width, bottom: 16 }
+              }
+            >
+              <button
+                type="button"
+                className="btn-primary w-full shadow-lift"
+                onClick={() => setPaying(true)}
+              >
+                <Wallet className="h-4 w-4" />
+                Mark paid
+              </button>
+            </div>,
+            document.body,
+          )}
+        </>
       ) : null}
 
       <AnimatePresence>
