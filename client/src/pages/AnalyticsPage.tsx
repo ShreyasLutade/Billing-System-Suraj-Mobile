@@ -23,6 +23,7 @@ import {
   CreditCard,
   Headphones,
   MonitorSmartphone,
+  PackageOpen,
   ShoppingBag,
 } from "lucide-react";
 import clsx from "clsx";
@@ -206,6 +207,31 @@ export function AnalyticsPage() {
   );
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
+  /** Exchange accessories still owed — all time, not tied to the period filter. */
+  const [pendingItems, setPendingItems] = useState<{
+    billCount: number;
+    itemCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .pendingAccessories()
+      .then((response) => {
+        if (active) {
+          setPendingItems({
+            billCount: response.data.billCount,
+            itemCount: response.data.itemCount,
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setPendingItems(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const periodRangeLabel = periodDateRangeLabel(period, customFrom, customTo);
 
@@ -647,6 +673,45 @@ export function AnalyticsPage() {
                 </Link>
               );
             })}
+          </section>
+
+          <section className="mb-6" aria-label="Pending items">
+            <Link
+              to="/analytics/pending-items"
+              state={fromState(location)}
+              className={clsx(
+                "interactive-card group flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-soft",
+                (pendingItems?.itemCount ?? 0) > 0
+                  ? "border-amber-200 bg-amber-50/80 dark:border-amber-500/30 dark:bg-amber-500/10"
+                  : "border-ink-100/80 bg-white/90",
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                  <PackageOpen className="h-4 w-4" strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+                    Pending items
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                      {pendingItems ? pendingItems.itemCount : "—"}
+                    </span>
+                    <span className="text-xs text-ink-500">
+                      {pendingItems
+                        ? pendingItems.itemCount > 0
+                          ? `· box, charger, bill… from ${pendingItems.billCount} customer${pendingItems.billCount === 1 ? "" : "s"}`
+                          : "· nothing owed by customers"
+                        : ""}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-ink-500 transition group-hover:text-tide-600">
+                View →
+              </span>
+            </Link>
           </section>
 
           <section className="mb-6" aria-label="Exchange mobiles">

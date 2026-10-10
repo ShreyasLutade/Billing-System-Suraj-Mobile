@@ -7,6 +7,7 @@ import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
 import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
+import { AnalyticsPendingItemsPage } from "./pages/AnalyticsPendingItemsPage";
 import { BackupPage } from "./pages/BackupPage";
 import { RecycleBinPage } from "./pages/RecycleBinPage";
 import { ReplaceProductPage } from "./pages/ReplaceProductPage";
@@ -69,6 +70,10 @@ export default function App() {
                   <Route
                     path="analytics/purchases"
                     element={<AnalyticsPurchasesPage />}
+                  />
+                  <Route
+                    path="analytics/pending-items"
+                    element={<AnalyticsPendingItemsPage />}
                   />
                   <Route path="backup" element={<BackupPage />} />
                   <Route path="recycle-bin" element={<RecycleBinPage />} />

@@ -16,6 +16,8 @@ export type BillItem = {
   imei2?: string | null;
   serialNumber?: string | null;
   warrantyMonths?: number | null;
+  /** "BOX,CHARGER" — handed to the buyer with this phone. */
+  includedAccessories?: string | null;
 };
 
 export type DuePayment = {
@@ -40,6 +42,40 @@ export type BillExchangeItem = {
   stockStatus?: string | null;
   soldBillId?: string | null;
   soldInvoiceNumber?: string | null;
+  accessories?: ExchangeAccessory[];
+};
+
+export type ExchangeAccessoryKey = "BOX" | "CHARGER" | "CABLE" | "BILL";
+
+export type ExchangeAccessory = {
+  key: ExchangeAccessoryKey;
+  status: "GIVEN" | "PENDING";
+  receivedAt?: string | null;
+};
+
+export type PendingAccessoryBill = {
+  billId: string;
+  invoiceNumber: string;
+  billDate: string;
+  customerName: string;
+  customerPhone: string;
+  pendingCount: number;
+  phones: Array<{
+    itemIndex: number;
+    model: string;
+    platform: "IOS" | "ANDROID";
+    color: string;
+    storage: string;
+    ram?: string | null;
+    imei1: string;
+    pending: ExchangeAccessoryKey[];
+  }>;
+};
+
+export type PendingAccessoriesSummary = {
+  billCount: number;
+  itemCount: number;
+  bills: PendingAccessoryBill[];
 };
 
 export type BillPurchaseHistoryItem = {
@@ -655,4 +691,13 @@ export type ReturnLookup = {
     customerPhone: string;
   };
   alreadyReturned: { createdAt: string; note: string | null } | null;
+};
+
+/** Accessories that came in with a second-hand phone on its exchange bill. */
+export type ExchangeIntake = {
+  billId: string;
+  invoiceNumber: string;
+  billDate: string;
+  customerName: string;
+  accessories: ExchangeAccessory[];
 };

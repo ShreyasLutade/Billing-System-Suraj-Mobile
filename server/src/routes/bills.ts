@@ -24,9 +24,12 @@ import {
   syncStockForBillItems,
 } from "../services/stockSync";
 import {
+  EXCHANGE_ACCESSORY_KEYS,
   exchangeItemsFromInput,
   parseExchangeItemsJson,
   serializeExchangeItemsJson,
+  parseIncludedAccessories,
+  serializeIncludedAccessories,
   totalExchangeValue,
 } from "../lib/exchangeItems";
 import { requireAdmin } from "../middleware/auth";
@@ -278,6 +281,107 @@ billsRouter.get("/", async (req, res, next) => {
       from: customFrom ? customFrom.toISOString() : null,
       to: customTo ? customTo.toISOString() : null,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Exchange accessories (box, charger…) customers still have to hand over. Oldest first. */
+billsRouter.get("/pending-accessories", async (_req, res, next) => {
+  try {
+    const bills = await prisma.bill.findMany({
+      where: {
+        isExchange: true,
+        exchangeItemsJson: { contains: '"PENDING"' },
+      },
+      orderBy: { billDate: "asc" },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        billDate: true,
+        customerName: true,
+        customerPhone: true,
+        exchangeItemsJson: true,
+      },
+    });
+
+    const rows = bills
+      .map((bill) => {
+        const phones = parseExchangeItemsJson(bill.exchangeItemsJson)
+          .map((item, itemIndex) => ({
+            itemIndex,
+            model: item.model,
+            platform: item.platform,
+            color: item.color,
+            storage: item.storage,
+            ram: item.ram ?? null,
+            imei1: item.imei1,
+            pending: (item.accessories ?? [])
+              .filter((acc) => acc.status === "PENDING")
+              .map((acc) => acc.key),
+          }))
+          .filter((phone) => phone.pending.length > 0);
+        return {
+          billId: bill.id,
+          invoiceNumber: bill.invoiceNumber,
+          billDate: bill.billDate.toISOString(),
+          customerName: bill.customerName,
+          customerPhone: bill.customerPhone,
+          pendingCount: phones.reduce((sum, p) => sum + p.pending.length, 0),
+          phones,
+        };
+      })
+      .filter((row) => row.phones.length > 0);
+
+    res.json({
+      data: {
+        billCount: rows.length,
+        itemCount: rows.reduce((sum, row) => sum + row.pendingCount, 0),
+        bills: rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** What came in with a second-hand phone when it was taken on exchange (latest intake wins). */
+billsRouter.get("/exchange-intake", async (req, res, next) => {
+  try {
+    const imei = String(req.query.imei || "").trim();
+    if (imei.length < 8) {
+      res.json({ data: null });
+      return;
+    }
+    const bills = await prisma.bill.findMany({
+      where: { isExchange: true, exchangeItemsJson: { contains: imei } },
+      orderBy: { billDate: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        billDate: true,
+        customerName: true,
+        exchangeItemsJson: true,
+      },
+    });
+    for (const bill of bills) {
+      const item = parseExchangeItemsJson(bill.exchangeItemsJson).find(
+        (row) => row.imei1 === imei,
+      );
+      if (!item) continue;
+      res.json({
+        data: {
+          billId: bill.id,
+          invoiceNumber: bill.invoiceNumber,
+          billDate: bill.billDate.toISOString(),
+          customerName: bill.customerName,
+          accessories: item.accessories ?? [],
+        },
+      });
+      return;
+    }
+    res.json({ data: null });
   } catch (error) {
     next(error);
   }
@@ -895,6 +999,9 @@ billsRouter.post("/", async (req, res, next) => {
               imei2: item.imei2,
               serialNumber: item.serialNumber,
               warrantyMonths: item.warrantyMonths,
+              includedAccessories: serializeIncludedAccessories(
+                parseIncludedAccessories(item.includedAccessories),
+              ),
             })),
           },
         },
@@ -1184,6 +1291,9 @@ billsRouter.put("/:id", async (req, res, next) => {
               imei2: item.imei2,
               serialNumber: item.serialNumber,
               warrantyMonths: item.warrantyMonths,
+              includedAccessories: serializeIncludedAccessories(
+                parseIncludedAccessories(item.includedAccessories),
+              ),
             })),
           },
         },
@@ -1334,6 +1444,53 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
       `attachment; filename="${bill.invoiceNumber}.pdf"`,
     );
     res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Flip one exchange accessory between GIVEN and PENDING (e.g. customer brought the box). */
+billsRouter.patch("/:id/exchange-accessories", async (req, res, next) => {
+  try {
+    const itemIndex = Number(req.body?.itemIndex);
+    const key = req.body?.key;
+    const status = req.body?.status;
+    if (
+      !Number.isInteger(itemIndex) ||
+      itemIndex < 0 ||
+      !(EXCHANGE_ACCESSORY_KEYS as readonly string[]).includes(key) ||
+      (status !== "GIVEN" && status !== "PENDING")
+    ) {
+      res.status(400).json({ error: "Invalid accessory update" });
+      return;
+    }
+
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, exchangeItemsJson: true },
+    });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+
+    const items = parseExchangeItemsJson(bill.exchangeItemsJson);
+    const item = items[itemIndex];
+    const accessory = item?.accessories?.find((acc) => acc.key === key);
+    if (!item || !accessory) {
+      res.status(404).json({ error: "Accessory not found on this bill" });
+      return;
+    }
+
+    accessory.status = status;
+    accessory.receivedAt = status === "GIVEN" ? new Date().toISOString() : null;
+
+    await prisma.bill.update({
+      where: { id: bill.id },
+      data: { exchangeItemsJson: serializeExchangeItemsJson(items) },
+    });
+
+    res.json({ data: { itemIndex, accessories: item.accessories } });
   } catch (error) {
     next(error);
   }

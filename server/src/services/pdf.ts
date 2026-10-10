@@ -6,6 +6,7 @@ import type { Bill, BillItem } from "@prisma/client";
 import { format } from "date-fns";
 import {
   exchangeItemsFromInput,
+  includedAccessoriesLabel,
   parseExchangeItemsJson,
   type BillExchangeItem,
 } from "../lib/exchangeItems";
@@ -548,6 +549,18 @@ function drawItemNameCell(
         width: width - 6,
         lineBreak: false,
       });
+    ty += 9;
+  }
+  const included = includedAccessoriesLabel(item.includedAccessories);
+  if (included) {
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.medium)
+      .fontSize(6.5)
+      .text(`Included: ${included}`, x + 3, ty, {
+        width: width - 6,
+        lineBreak: false,
+      });
   }
 }
 
@@ -645,6 +658,9 @@ function drawItemsTable(
     if (condition) nameLines.push(condition);
     if (item.imei1) nameLines.push(`IMEI: ${item.imei1}`);
     if (item.serialNumber) nameLines.push(`S/N: ${item.serialNumber}`);
+    if (includedAccessoriesLabel(item.includedAccessories)) {
+      nameLines.push("Included");
+    }
     const rowH = Math.max(28, nameLines.length * 10 + 4);
 
     strokeBox(doc, MARGIN, y, CONTENT_WIDTH, rowH);

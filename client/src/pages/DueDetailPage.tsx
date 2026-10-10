@@ -384,6 +384,8 @@ export function DueDetailPage() {
               ref={barRef}
               className={clsx(
                 "fixed z-30",
+                // Hidden (not unmounted) under the pay sheet so its size stays measured.
+                paying && "invisible",
                 bar.mobile &&
                   "border-t border-ink-100/80 bg-white/95 px-3 py-2 backdrop-blur dark:bg-surface-elevated/95",
               )}

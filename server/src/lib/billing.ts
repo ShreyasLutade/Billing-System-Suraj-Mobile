@@ -35,6 +35,8 @@ export const billItemSchema = z
     imei2: z.string().trim().optional().nullable(),
     serialNumber: z.string().trim().optional().nullable(),
     warrantyMonths: z.number().int().positive().optional().nullable(),
+    /** "BOX,CHARGER" — accessories handed to the buyer with this phone. */
+    includedAccessories: z.string().trim().optional().nullable(),
   })
   .superRefine((item, ctx) => {
     if (!item.platform || item.platform === "ACCESSORY") return;
@@ -120,6 +122,16 @@ export const createBillSchema = z
           imei1: z.string().trim().min(8),
           value: z.number().nonnegative(),
           notes: z.string().trim().optional().nullable(),
+          accessories: z
+            .array(
+              z.object({
+                key: z.enum(["BOX", "CHARGER", "CABLE", "BILL"]),
+                status: z.enum(["GIVEN", "PENDING"]),
+                receivedAt: z.string().optional().nullable(),
+              }),
+            )
+            .optional()
+            .default([]),
         }),
       )
       .optional()

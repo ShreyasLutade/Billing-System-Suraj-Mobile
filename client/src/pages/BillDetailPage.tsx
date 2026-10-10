@@ -41,7 +41,15 @@ import type {
   BillProductReturn,
   BillPurchaseHistoryItem,
   DuePayment,
+  ExchangeAccessory,
+  ExchangeAccessoryKey,
 } from "../types";
+import {
+  accessoryIcon,
+  accessoryLabel,
+  joinAccessoryLabels,
+  parseIncludedAccessories,
+} from "../lib/exchangeAccessories";
 import { useAuth } from "../auth/AuthContext";
 import {
   backLabel,
@@ -130,6 +138,29 @@ export function BillDetailPage() {
       setLoading(false);
     }
   }, [id]);
+
+  async function setAccessoryStatus(
+    itemIndex: number,
+    key: ExchangeAccessoryKey,
+    status: ExchangeAccessory["status"],
+  ) {
+    if (!bill) return;
+    const { data } = await api.setExchangeAccessoryStatus(bill.id, {
+      itemIndex,
+      key,
+      status,
+    });
+    setBill((current) =>
+      current
+        ? {
+            ...current,
+            exchangeItems: current.exchangeItems?.map((item, i) =>
+              i === itemIndex ? { ...item, accessories: data.accessories } : item,
+            ),
+          }
+        : current,
+    );
+  }
 
   useEffect(() => {
     void loadBill();
@@ -411,6 +442,11 @@ export function BillDetailPage() {
                   item.warrantyMonths
                     ? `Warranty ${item.warrantyMonths} mo`
                     : null,
+                  item.includedAccessories
+                    ? `Included: ${joinAccessoryLabels(
+                        parseIncludedAccessories(item.includedAccessories),
+                      )}`
+                    : null,
                 ].filter(Boolean);
                 // Every replace / return on this line, oldest first (a
                 // replacement can itself be replaced or returned later).
@@ -593,6 +629,14 @@ export function BillDetailPage() {
                         <Kv label="Notes" value={item.notes} full />
                       ) : null}
                     </div>
+                    {"accessories" in item && item.accessories?.length ? (
+                      <ExchangeAccessoryStatus
+                        accessories={item.accessories}
+                        onSetStatus={(key, status) =>
+                          setAccessoryStatus(index, key, status)
+                        }
+                      />
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1247,6 +1291,83 @@ function PurchaseHistoryCard({
         />
         <Kv label="Cost price" value={formatINR(row.costPrice)} highlight />
       </div>
+    </div>
+  );
+}
+
+function ExchangeAccessoryStatus({
+  accessories,
+  onSetStatus,
+}: {
+  accessories: ExchangeAccessory[];
+  onSetStatus: (
+    key: ExchangeAccessoryKey,
+    status: ExchangeAccessory["status"],
+  ) => Promise<void>;
+}) {
+  const [busyKey, setBusyKey] = useState<ExchangeAccessoryKey | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(key: ExchangeAccessoryKey, status: ExchangeAccessory["status"]) {
+    setBusyKey(key);
+    setError(null);
+    try {
+      await onSetStatus(key, status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-ink-100 pt-3">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7A8699]">
+        Came with the phone
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {accessories.map((acc) => {
+          const Icon = accessoryIcon(acc.key);
+          const pending = acc.status === "PENDING";
+          const busy = busyKey === acc.key;
+          return (
+            <div
+              key={acc.key}
+              className={clsx(
+                "inline-flex items-center overflow-hidden rounded-full border text-[12.5px] font-semibold",
+                pending
+                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-200"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+              )}
+              title={
+                acc.receivedAt
+                  ? `Received ${format(new Date(acc.receivedAt), "dd MMM yyyy")}`
+                  : undefined
+              }
+            >
+              <span className="inline-flex items-center gap-1.5 py-1.5 pl-2.5 pr-2">
+                <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+                {accessoryLabel(acc.key)}
+                <span className="font-medium opacity-75">
+                  · {pending ? "Pending" : "Given"}
+                </span>
+              </span>
+              {pending ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(acc.key, "GIVEN")}
+                  className="inline-flex items-center gap-1 self-stretch border-l border-amber-200 bg-white/70 px-2.5 text-[11.5px] text-ink-700 transition hover:bg-emerald-500 hover:text-white disabled:opacity-50 dark:border-amber-500/35 dark:bg-transparent dark:text-ink-800"
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                  {busy ? "Saving…" : "Received"}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      {error ? <p className="mt-2 text-xs text-rose-600">{error}</p> : null}
     </div>
   );
 }

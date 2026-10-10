@@ -7,6 +7,10 @@ import type {
   CreateBillPayload,
   CustomerDueDetail,
   DuesSummary,
+  ExchangeAccessory,
+  ExchangeAccessoryKey,
+  ExchangeIntake,
+  PendingAccessoriesSummary,
   FinanceDuesSummary,
   FinanceCompany,
   MobileCatalog,
@@ -260,6 +264,25 @@ export const api = {
       `/analytics/summary?${params.toString()}`,
     );
   },
+  exchangeIntake: (imei: string, signal?: AbortSignal) =>
+    request<{ data: ExchangeIntake | null }>(
+      `/bills/exchange-intake?imei=${encodeURIComponent(imei)}`,
+      { signal },
+    ),
+  pendingAccessories: () =>
+    request<{ data: PendingAccessoriesSummary }>("/bills/pending-accessories"),
+  setExchangeAccessoryStatus: (
+    billId: string,
+    payload: {
+      itemIndex: number;
+      key: ExchangeAccessoryKey;
+      status: ExchangeAccessory["status"];
+    },
+  ) =>
+    request<{ data: { itemIndex: number; accessories: ExchangeAccessory[] } }>(
+      `/bills/${billId}/exchange-accessories`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    ),
   analyticsExchanges: (
     period: string = "all",
     options?: { from?: string; to?: string },

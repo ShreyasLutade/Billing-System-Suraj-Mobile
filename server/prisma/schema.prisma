@@ -150,6 +150,8 @@ model BillItem {
   imei2          String?
   serialNumber   String?
   warrantyMonths Int?
+  /// Comma-separated BOX,CHARGER,CABLE,BILL handed to the customer with this phone
+  includedAccessories String?
   bill           Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
   mobileCatalog  MobileCatalog? @relation(fields: [mobileCatalogId], references: [id])
   stockItem      StockItem? @relation(fields: [stockItemId], references: [id])
