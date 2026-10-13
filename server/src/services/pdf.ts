@@ -670,14 +670,12 @@ function drawItemsTable(
   const upperBoxH = withGst ? 58 : 50;
   const payCustomerAmountValue = computePayCustomerAmount(bill, withGst);
   const hasDiscount = !withGst && Number(bill.companyDiscount || 0) > 0;
-  // Non-GST: payment modes + total payable side-by-side in one band
+  // Non-GST: optional discount / pay-customer rows + Total Payable bar
   const paymentBoxH = withGst
     ? 0
-    : payCustomerAmountValue > 0 && hasDiscount
-      ? 126
-      : payCustomerAmountValue > 0 || hasDiscount
-        ? 102
-        : 78;
+    : PLAIN_TOTAL_BAR_H +
+      (hasDiscount ? PLAIN_ROW_H : 0) +
+      (payCustomerAmountValue > 0 ? PLAIN_ROW_H : 0);
   const totalBarH = withGst ? 26 : 0;
   const declH = 48;
   const totalsBlockH =
@@ -932,6 +930,21 @@ function drawExchangeBox(
   return y + h + 6;
 }
 
+const PLAIN_ROW_H = 22;
+const PLAIN_TOTAL_BAR_H = 26;
+
+/** Text-box top that puts the current font's capital letters in the middle of a band. */
+function middleTextY(
+  doc: PDFKit.PDFDocument,
+  fontSize: number,
+  top: number,
+  height: number,
+) {
+  const font = (doc as unknown as { _font: { capHeight?: number } })._font;
+  const capHeight = ((font.capHeight || 700) / 1000) * fontSize;
+  return top + height / 2 + capHeight / 2 - ascenderOf(doc, fontSize);
+}
+
 function drawPlainTotalsSection(
   doc: PDFKit.PDFDocument,
   bill: BillWithItems,
@@ -941,14 +954,6 @@ function drawPlainTotalsSection(
   const discountAmount = Number(bill.companyDiscount || 0);
   const payCustomerAmount = computePayCustomerAmount(bill, false);
   const wordsH = 50;
-  const bandH =
-    payCustomerAmount > 0 && discountAmount > 0
-      ? 126
-      : payCustomerAmount > 0 || discountAmount > 0
-        ? 102
-        : 78;
-  const payW = Math.round(CONTENT_WIDTH * 0.68);
-  const totalW = CONTENT_WIDTH - payW;
 
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, wordsH);
   doc
@@ -970,170 +975,48 @@ function drawPlainTotalsSection(
 
   y += wordsH;
 
-  // Left: selected payment modes only · Right: total payable
-  strokeBox(doc, MARGIN, y, payW, bandH);
-  strokeBox(doc, MARGIN + payW, y, totalW, bandH);
-  doc
-    .moveTo(MARGIN + payW, y)
-    .lineTo(MARGIN + payW, y + bandH)
-    .strokeColor(COLORS.slate)
-    .lineWidth(0.9)
-    .stroke();
-
-  doc.rect(MARGIN, y, payW, 18).fill(COLORS.accentSoft);
-  strokeBox(doc, MARGIN, y, payW, 18);
-  doc
-    .fillColor(COLORS.ink)
-    .font(FONT.bold)
-    .fontSize(8)
-    .text("Payment details", MARGIN + 8, y + 5, { lineBreak: false });
-
-  const financeAmount2 = bill.financeAmount2 || 0;
-  const finance1 =
-    financeAmount2 > 0
-      ? Math.max(bill.financeAmount - financeAmount2, 0)
-      : bill.financeAmount;
-
-  const rows: Array<[string, string]> = [];
-  if (bill.cashAmount > 0) rows.push(["Cash", money(bill.cashAmount)]);
-  if (bill.onlineAmount > 0) rows.push(["Online", money(bill.onlineAmount)]);
-  if (bill.cardAmount > 0) rows.push(["Card", money(bill.cardAmount)]);
-  if (finance1 > 0) {
-    rows.push([
-      bill.financeCompanyName
-        ? `Finance (${bill.financeCompanyName})`
-        : "Finance",
-      money(finance1),
-    ]);
-  }
-  if (financeAmount2 > 0) {
-    rows.push([
-      bill.financeCompanyName2
-        ? `Finance (${bill.financeCompanyName2})`
-        : "Finance 2",
-      money(financeAmount2),
-    ]);
-  }
-  if (bill.dueAmount > 0) {
-    rows.push([
-      bill.dueDate
-        ? `Due (by ${format(bill.dueDate, "dd MMM yyyy")})`
-        : "Due",
-      money(bill.dueAmount),
-    ]);
-  }
-
-  if (!rows.length) {
+  // Same shape as the GST bill: plain rows, then one full-width total bar.
+  // Payment split (cash / online / finance …) is deliberately not printed.
+  const plainRow = (label: string, value: string) => {
+    strokeBox(doc, MARGIN, y, CONTENT_WIDTH, PLAIN_ROW_H);
     doc
-      .fillColor(COLORS.muted)
+      .fillColor(COLORS.ink)
       .font(FONT.regular)
       .fontSize(8)
-      .text("No payment modes selected", MARGIN + 8, y + 40, {
-        width: payW - 16,
-        align: "center",
+      .text(label, MARGIN + 10, middleTextY(doc, 8, y, PLAIN_ROW_H), {
+        lineBreak: false,
       });
-  } else {
-    const colW = payW / rows.length;
-    rows.forEach((row, i) => {
-      const cx = MARGIN + i * colW;
-      doc
-        .fillColor(COLORS.muted)
-        .font(FONT.regular)
-        .fontSize(7)
-        .text(row[0], cx + 4, y + 28, {
-          width: colW - 8,
-          align: "center",
-        });
-      doc
-        .fillColor(COLORS.ink)
-        .font(FONT.bold)
-        .fontSize(9)
-        .text(row[1], cx + 4, y + 48, {
-          width: colW - 8,
-          align: "center",
-          lineBreak: false,
-        });
+    doc.font(FONT.bold).text(value, MARGIN + 10, middleTextY(doc, 8, y, PLAIN_ROW_H), {
+      width: CONTENT_WIDTH - 20,
+      align: "right",
+      lineBreak: false,
     });
-  }
+    y += PLAIN_ROW_H;
+  };
 
-  const totalX = MARGIN + payW;
-  doc.rect(totalX, y, totalW, bandH).fill(COLORS.accentSoft);
-  strokeBox(doc, totalX, y, totalW, bandH);
+  if (discountAmount > 0) plainRow("Discount amount", inr(discountAmount));
 
-  let ty = y + (payCustomerAmount > 0 || discountAmount > 0 ? 10 : 22);
-  if (discountAmount > 0) {
-    doc
-      .fillColor(COLORS.ink)
-      .font(FONT.bold)
-      .fontSize(7)
-      .text("Discount amount", totalX + 8, ty, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-    doc
-      .fontSize(10)
-      .text(inr(discountAmount), totalX + 8, ty + 14, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-    ty += 36;
-  }
+  doc.rect(MARGIN, y, CONTENT_WIDTH, PLAIN_TOTAL_BAR_H).fill(COLORS.accentSoft);
+  strokeBox(doc, MARGIN, y, CONTENT_WIDTH, PLAIN_TOTAL_BAR_H);
+  doc
+    .fillColor(COLORS.accent)
+    .font(FONT.bold)
+    .fontSize(10)
+    .text("Total Payable", MARGIN + 10, middleTextY(doc, 10, y, PLAIN_TOTAL_BAR_H), {
+      lineBreak: false,
+    });
+  doc.text(inr(payable), MARGIN + 10, middleTextY(doc, 10, y, PLAIN_TOTAL_BAR_H), {
+    width: CONTENT_WIDTH - 20,
+    align: "right",
+    lineBreak: false,
+  });
+  y += PLAIN_TOTAL_BAR_H;
 
   if (payCustomerAmount > 0) {
-    doc
-      .fillColor(COLORS.accent)
-      .font(FONT.bold)
-      .fontSize(7)
-      .text("Total Payable", totalX + 8, ty, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-    doc
-      .fontSize(11)
-      .text(inr(payable), totalX + 8, ty + 14, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-    doc
-      .fillColor(COLORS.ink)
-      .font(FONT.bold)
-      .fontSize(7)
-      .text("Payable to customer", totalX + 8, ty + 36, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-    doc
-      .fontSize(11)
-      .text(inr(payCustomerAmount), totalX + 8, ty + 50, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-  } else {
-    doc
-      .fillColor(COLORS.accent)
-      .font(FONT.bold)
-      .fontSize(8)
-      .text("Total Payable", totalX + 8, ty, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
-    doc
-      .fontSize(11)
-      .text(inr(payable), totalX + 8, ty + 16, {
-        width: totalW - 16,
-        align: "center",
-        lineBreak: false,
-      });
+    plainRow("Payable to customer", inr(payCustomerAmount));
   }
 
-  const declY = y + bandH + 8;
+  const declY = y + 8;
   const declH = 48;
   strokeBox(doc, MARGIN, declY, CONTENT_WIDTH, declH);
   doc
