@@ -682,13 +682,10 @@ function drawItemsTable(
   const exchangeBoxH = exchangeBoxHeight(bill, withGst);
   const upperBoxH = withGst ? 58 : 50;
   const payCustomerAmountValue = computePayCustomerAmount(bill, withGst);
-  const hasDiscount = !withGst && Number(bill.companyDiscount || 0) > 0;
-  // Non-GST: optional discount / pay-customer rows + Total Payable bar
+  // Non-GST: Total Payable bar + optional pay-customer row
   const paymentBoxH = withGst
     ? 0
-    : PLAIN_TOTAL_BAR_H +
-      (hasDiscount ? PLAIN_ROW_H : 0) +
-      (payCustomerAmountValue > 0 ? PLAIN_ROW_H : 0);
+    : PLAIN_TOTAL_BAR_H + (payCustomerAmountValue > 0 ? PLAIN_ROW_H : 0);
   const totalBarH = withGst ? 26 : 0;
   const declH = 48;
   const totalsBlockH =
@@ -967,7 +964,6 @@ function drawPlainTotalsSection(
   y: number,
 ) {
   const payable = bill.payableAmount ?? bill.grandTotal;
-  const discountAmount = Number(bill.companyDiscount || 0);
   const payCustomerAmount = computePayCustomerAmount(bill, false);
   const wordsH = 50;
 
@@ -1010,7 +1006,7 @@ function drawPlainTotalsSection(
     y += PLAIN_ROW_H;
   };
 
-  if (discountAmount > 0) plainRow("Discount amount", inr(discountAmount));
+  // Company cashback is between the shop and the brand — not printed for the customer.
 
   doc.rect(MARGIN, y, CONTENT_WIDTH, PLAIN_TOTAL_BAR_H).fill(COLORS.accentSoft);
   strokeBox(doc, MARGIN, y, CONTENT_WIDTH, PLAIN_TOTAL_BAR_H);
