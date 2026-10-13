@@ -230,7 +230,7 @@ export function DueDetailPage() {
               )}
             </p>
           </div>
-          <div className="shrink-0 text-right">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pt-0.5">
             <p className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-800">
               <CalendarClock className="h-3.5 w-3.5 text-ink-400" />
               {data.settled && data.settledAt
@@ -240,8 +240,7 @@ export function DueDetailPage() {
                   : "No date given"}
             </p>
             {data.delayDays !== null ? (
-              <p className="mt-1">
-                <span
+              <span
                   className={clsx(
                     "inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold",
                     late
@@ -257,14 +256,13 @@ export function DueDetailPage() {
                         ? "Due today"
                         : `${-data.delayDays} day${data.delayDays === -1 ? "" : "s"} left`}
                 </span>
-              </p>
             ) : null}
           </div>
         </div>
 
         <div className="mt-2.5">
           <div
-            className="h-1.5 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10"
+            className="h-1.5 rounded-full bg-ink-900/[0.07] dark:bg-white/10"
             role="progressbar"
             aria-label="Paid so far"
             aria-valuemin={0}
@@ -272,7 +270,7 @@ export function DueDetailPage() {
             aria-valuenow={Math.round(paidShare * 100)}
           >
             <div
-              className="h-full rounded-full bg-emerald-500"
+              className="paid-bar-glow h-full rounded-full bg-emerald-500"
               style={{ width: `${paidShare * 100}%` }}
             />
           </div>

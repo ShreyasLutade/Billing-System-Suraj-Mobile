@@ -2149,3 +2149,39 @@ html.dark .login-btn {
 .btn-danger:not(:disabled):hover {
   filter: brightness(1.05);
 }
+
+/* Paid progress bar: soft light sweeping left → right */
+.paid-bar-glow {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
+}
+.paid-bar-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.75),
+    transparent
+  );
+  transform: translateX(-120%);
+  animation: paidBarShine 2.2s ease-in-out infinite;
+}
+@keyframes paidBarShine {
+  0% {
+    transform: translateX(-120%);
+  }
+  70%,
+  100% {
+    transform: translateX(260%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .paid-bar-glow::after {
+    animation: none;
+    display: none;
+  }
+}
