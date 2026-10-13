@@ -7,6 +7,7 @@ import {
   Check,
   Download,
   History,
+  Lock,
   PackageCheck,
   RefreshCcw,
   Pencil,
@@ -935,11 +936,19 @@ export function BillDetailPage() {
 
           {!bill.withGst && hasDue ? (
             <div className="relative overflow-hidden rounded-2xl border border-[#F5E0BC] bg-gradient-to-br from-[#FEF3E2] to-white p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#B76E00]">
-                {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
-                  ? "Partial paid"
-                  : "Pending due"}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#B76E00]">
+                  {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
+                    ? "Partial paid"
+                    : "Pending due"}
+                </p>
+                {isAdmin && bill.duePrivate ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-700">
+                    <Lock className="h-3 w-3" strokeWidth={2.6} />
+                    Private
+                  </span>
+                ) : null}
+              </div>
               <p className="mt-2 font-display text-[22px] font-bold text-[#B76E00]">
                 {formatINR(bill.dueAmount)}
               </p>
@@ -953,6 +962,17 @@ export function BillDetailPage() {
                 <DuePaymentHistory
                   payments={bill.duePayments!}
                   borderClass="border-[#F5E0BC]"
+                />
+              ) : null}
+              {isAdmin ? (
+                <DuePrivateToggle
+                  billId={bill.id}
+                  value={Boolean(bill.duePrivate)}
+                  onChange={(duePrivate) =>
+                    setBill((current) =>
+                      current ? { ...current, duePrivate } : current,
+                    )
+                  }
                 />
               ) : null}
               {isAdmin ? (
@@ -1291,6 +1311,51 @@ function PurchaseHistoryCard({
         />
         <Kv label="Cost price" value={formatINR(row.costPrice)} highlight />
       </div>
+    </div>
+  );
+}
+
+/** Admin: keep this due off the staff dues page. */
+function DuePrivateToggle({
+  billId,
+  value,
+  onChange,
+}: {
+  billId: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function toggle(next: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      const { data } = await api.setDuePrivate(billId, next);
+      onChange(data.duePrivate);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-[#F5E0BC] bg-white/70 px-3 py-2.5">
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 accent-[#0E1626]"
+          checked={value}
+          disabled={saving}
+          onChange={(event) => void toggle(event.target.checked)}
+        />
+        <span className="text-[13px] font-medium text-[#0E1626]">
+          {saving ? "Saving…" : "Keep due private"}
+        </span>
+      </label>
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
     </div>
   );
 }

@@ -138,6 +138,8 @@ export const createBillSchema = z
       .default([]),
     exchangeCashReturn: z.number().nonnegative().default(0),
     dueDate: z.string().optional().nullable(),
+    /** Admin only; omitted = keep the current value on edit. */
+    duePrivate: z.boolean().optional(),
     companyDiscount: z.number().nonnegative().default(0),
   })
   .superRefine((data, ctx) => {

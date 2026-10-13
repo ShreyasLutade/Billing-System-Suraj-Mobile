@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { BillPdfViewer } from "../components/BillPdfViewer";
 import {
   CalendarClock,
   Check,
   Download,
+  Lock,
   Phone,
   ReceiptText,
   Wallet,
@@ -81,6 +83,7 @@ export function DueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [viewingBill, setViewingBill] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   const showPayBar = Boolean(isAdmin && data && !data.settled);
@@ -161,6 +164,12 @@ export function DueDetailPage() {
             >
               {data.invoiceNumber}
             </Link>
+            {isAdmin && data.duePrivate ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-700 dark:bg-white/10 dark:text-ink-800">
+                <Lock className="h-3 w-3" strokeWidth={2.6} />
+                Private
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -304,7 +313,16 @@ export function DueDetailPage() {
               <td className="py-2.5 pl-2.5 pr-1">
                 <StatementDate value={data.billDate} />
               </td>
-              <td className="px-1 py-2.5 font-semibold text-ink-900">Purchase</td>
+              <td className="px-1 py-2.5 align-top">
+                <span className="block font-semibold text-ink-900">Purchase</span>
+                <button
+                  type="button"
+                  className="mt-1 text-[12px] font-bold text-tide-600 underline decoration-tide-500 decoration-[1.5px] underline-offset-2 transition hover:text-tide-500 dark:text-tide-400"
+                  onClick={() => setViewingBill(true)}
+                >
+                  View bill
+                </button>
+              </td>
               <td className="break-words px-1 py-2.5 text-right font-semibold text-ember-500">
                 {formatINR(data.originalDue)}
               </td>
@@ -418,6 +436,16 @@ export function DueDetailPage() {
               setPaying(false);
               await load();
             }}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewingBill ? (
+          <BillPdfViewer
+            billId={data.id}
+            invoiceNumber={data.invoiceNumber}
+            onClose={() => setViewingBill(false)}
           />
         ) : null}
       </AnimatePresence>

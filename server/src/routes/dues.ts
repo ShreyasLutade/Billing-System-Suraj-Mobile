@@ -37,10 +37,14 @@ duesRouter.get("/", async (req, res, next) => {
     const period = isDuePeriod(req.query.period) ? req.query.period : "all";
     const dateFilter = toDateFilter(getPeriodRange(period));
 
+    const isAdmin = req.user?.role === "ADMIN";
+    // Staff never see private dues (admins get them with duePrivate set).
+
     const where: Prisma.BillWhereInput = {
       withGst: false,
       dueAmount: { gt: 0 },
       dueSettled: false,
+      ...(isAdmin ? {} : { duePrivate: false }),
       ...(dateFilter
         ? {
             OR: [
@@ -65,6 +69,7 @@ duesRouter.get("/", async (req, res, next) => {
         grandTotal: true,
         payableAmount: true,
         isPartialPaid: true,
+        duePrivate: true,
         items: {
           select: {
             productName: true,
@@ -192,7 +197,7 @@ duesRouter.get("/finance", async (_req, res, next) => {
 duesRouter.get("/:id", async (req, res, next) => {
   try {
     const due = await getCustomerDue(req.params.id);
-    if (!due) {
+    if (!due || (due.duePrivate && req.user?.role !== "ADMIN")) {
       res.status(404).json({ error: "Bill not found" });
       return;
     }
@@ -205,6 +210,14 @@ duesRouter.get("/:id", async (req, res, next) => {
 /** Customer due statement PDF (purchase, every payment, delay). */
 duesRouter.get("/:id/statement", async (req, res, next) => {
   try {
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { duePrivate: true },
+    });
+    if (bill?.duePrivate && req.user?.role !== "ADMIN") {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
     const statement = await buildDueStatement(req.params.id);
     if (!statement) {
       res.status(404).json({ error: "Bill not found" });

@@ -94,6 +94,8 @@ model Bill {
   dueAmount          Float            @default(0)
   dueDate           DateTime?
   dueSettled        Boolean          @default(false)
+  /// Admin-only due: hidden from staff on the dues page
+  duePrivate        Boolean          @default(false)
   dueSettledMethod  String?
   dueSettledAt      DateTime?
   isPartialPaid     Boolean          @default(false)

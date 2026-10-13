@@ -269,6 +269,11 @@ export const api = {
       `/bills/exchange-intake?imei=${encodeURIComponent(imei)}`,
       { signal },
     ),
+  setDuePrivate: (billId: string, duePrivate: boolean) =>
+    request<{ data: { duePrivate: boolean } }>(
+      `/bills/${billId}/due-private`,
+      { method: "PATCH", body: JSON.stringify({ duePrivate }) },
+    ),
   pendingAccessories: () =>
     request<{ data: PendingAccessoriesSummary }>("/bills/pending-accessories"),
   setExchangeAccessoryStatus: (

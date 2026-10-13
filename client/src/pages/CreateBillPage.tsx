@@ -9,6 +9,7 @@ import {
   FilePlus2,
   Info,
   ListOrdered,
+  Lock,
   Loader2,
   Plus,
   RefreshCw,
@@ -415,6 +416,8 @@ export function CreateBillPage() {
   const [useCard, setUseCard] = useState(false);
   const [useFinance, setUseFinance] = useState(false);
   const [hasDue, setHasDue] = useState(false);
+  /** Admin only: hide this due from staff on the dues page. */
+  const [duePrivate, setDuePrivate] = useState(false);
   const [dueFollowsRemaining, setDueFollowsRemaining] = useState(true);
   const [cashAmount, setCashAmount] = useState(0);
   const [onlineAmount, setOnlineAmount] = useState(0);
@@ -529,6 +532,7 @@ export function CreateBillPage() {
     setUseCard(false);
     setUseFinance(false);
     setHasDue(false);
+    setDuePrivate(false);
     setDueFollowsRemaining(true);
     setCashAmount(0);
     setOnlineAmount(0);
@@ -612,6 +616,7 @@ export function CreateBillPage() {
     setUseCard((bill.cardAmount || 0) > 0);
     setUseFinance(bill.financeAmount > 0);
     setHasDue(bill.dueAmount > 0);
+    setDuePrivate(Boolean(bill.duePrivate));
     setDueFollowsRemaining(
       bill.dueAmount > 0 &&
         (bill.financeAmount || 0) + (bill.financeAmount2 || 0) <= 0,
@@ -1580,7 +1585,7 @@ export function CreateBillPage() {
         customerPhone,
         customerAddress: customerAddress || null,
         notes: notes || null,
-        billDate: useCustomBillDate ? customBillDate.trim() : null,
+        billDate: isAdmin && useCustomBillDate ? customBillDate.trim() : null,
         withGst: true,
         useCash: false,
         useOnline: false,
@@ -1699,7 +1704,7 @@ export function CreateBillPage() {
       customerPhone,
       customerAddress: customerAddress || null,
       notes: notes || null,
-      billDate: useCustomBillDate ? customBillDate.trim() : null,
+      billDate: isAdmin && useCustomBillDate ? customBillDate.trim() : null,
       withGst: false,
       useCash,
       useOnline,
@@ -1751,6 +1756,10 @@ export function CreateBillPage() {
         ? exchangeItems[0]?.notes.trim() || null
         : null,
       dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
+      // Staff never send it, so the server keeps whatever an admin set.
+      ...(isAdmin
+        ? { duePrivate: hasDue && totals.dueAmount > 0 && duePrivate }
+        : {}),
       companyDiscount: totals.companyDiscountAmount,
       items: items.map((item) => ({
         productName: item.productName,
@@ -1793,7 +1802,7 @@ export function CreateBillPage() {
       return;
     }
 
-    if (useCustomBillDate && !customBillDate.trim()) {
+    if (isAdmin && useCustomBillDate && !customBillDate.trim()) {
       setError("Select a custom bill date");
       document.getElementById("customBillDate")?.focus();
       return;
@@ -2313,6 +2322,7 @@ export function CreateBillPage() {
                     </p>
                   </div>
                 </div>
+                {isAdmin ? (
                 <div className="flex shrink-0 items-center gap-2">
                   <label
                     htmlFor="useCustomBillDate"
@@ -2332,10 +2342,11 @@ export function CreateBillPage() {
                     }}
                   />
                 </div>
+                ) : null}
               </div>
 
               <div className="space-y-4">
-                {useCustomBillDate ? (
+                {isAdmin && useCustomBillDate ? (
                   <div>
                     <label className="label required" htmlFor="customBillDate">
                       Bill date
@@ -3304,6 +3315,29 @@ export function CreateBillPage() {
                             />
                           </div>
                         </div>
+                        {isAdmin ? (
+                          <label
+                            htmlFor="duePrivate"
+                            className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg border border-ink-100 bg-white/70 px-3 py-2 dark:bg-transparent"
+                          >
+                            <input
+                              id="duePrivate"
+                              type="checkbox"
+                              className="h-4 w-4 shrink-0 accent-ink-900 dark:accent-tide-400"
+                              checked={duePrivate}
+                              onChange={(e) => setDuePrivate(e.target.checked)}
+                            />
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-800">
+                                <Lock className="h-3.5 w-3.5" strokeWidth={2.2} />
+                                Keep due private
+                              </span>
+                              <span className="mt-0.5 block text-[11px] text-ink-500">
+                                Staff won’t see this due on the dues page.
+                              </span>
+                            </span>
+                          </label>
+                        ) : null}
                       </PaymentToggle>
                     ) : null}
                     <PaymentToggle

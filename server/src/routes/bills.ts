@@ -913,9 +913,11 @@ billsRouter.post("/", async (req, res, next) => {
         customerAddress: input.customerAddress,
       });
 
-      const billDate = input.billDate
-        ? parseDateInput(input.billDate)
-        : new Date();
+      // Custom (back-dated) bill dates are admin only.
+      const billDate =
+        input.billDate && req.user?.role === "ADMIN"
+          ? parseDateInput(input.billDate)
+          : new Date();
 
       const bill = await tx.bill.create({
         data: {
@@ -978,6 +980,10 @@ billsRouter.post("/", async (req, res, next) => {
             totals.dueAmount > 0 && input.dueDate
               ? parseDateInput(input.dueDate)
               : null,
+          duePrivate:
+            req.user?.role === "ADMIN" &&
+            totals.dueAmount > 0 &&
+            Boolean(input.duePrivate),
           createdByUserId: req.user?.id || null,
           createdByName: req.user?.name || null,
           createdByRole: req.user?.role || null,
@@ -1184,8 +1190,9 @@ billsRouter.put("/:id", async (req, res, next) => {
         customerAddress: input.customerAddress,
       });
 
-      const billDate = input.billDate
-        ? parseDateInput(input.billDate)
+      const canSetDate = Boolean(input.billDate) && req.user?.role === "ADMIN";
+      const billDate = canSetDate
+        ? parseDateInput(input.billDate!)
         : existing.billDate;
 
       const bill = await tx.bill.update({
@@ -1196,7 +1203,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           customerAddress: input.customerAddress || null,
           notes: input.notes || null,
           withGst: Boolean(input.withGst),
-          ...(input.billDate ? { billDate } : {}),
+          ...(canSetDate ? { billDate } : {}),
           subtotal: totals.subtotal,
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
@@ -1263,6 +1270,12 @@ billsRouter.put("/:id", async (req, res, next) => {
               ? parseDateInput(input.dueDate)
               : null,
           dueSettled: totals.dueAmount <= 0,
+          // Only admins can change it; staff edits keep what an admin chose.
+          duePrivate:
+            totals.dueAmount > 0 &&
+            (req.user?.role === "ADMIN" && input.duePrivate !== undefined
+              ? input.duePrivate
+              : existing.duePrivate),
           dueSettledMethod:
             totals.dueAmount <= 0 ? existing.dueSettledMethod : null,
           dueSettledAt: totals.dueAmount <= 0 ? existing.dueSettledAt : null,
@@ -1444,6 +1457,36 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
       `attachment; filename="${bill.invoiceNumber}.pdf"`,
     );
     res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin: hide / show this bill's due for staff on the dues page. */
+billsRouter.patch("/:id/due-private", requireAdmin, async (req, res, next) => {
+  try {
+    if (typeof req.body?.duePrivate !== "boolean") {
+      res.status(400).json({ error: "duePrivate must be true or false" });
+      return;
+    }
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, dueAmount: true, dueSettled: true },
+    });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    if (req.body.duePrivate && (bill.dueAmount <= 0 || bill.dueSettled)) {
+      res.status(400).json({ error: "This bill has no pending due" });
+      return;
+    }
+    const updated = await prisma.bill.update({
+      where: { id: bill.id },
+      data: { duePrivate: req.body.duePrivate },
+      select: { duePrivate: true },
+    });
+    res.json({ data: updated });
   } catch (error) {
     next(error);
   }

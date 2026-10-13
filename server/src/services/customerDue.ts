@@ -84,6 +84,7 @@ export async function getCustomerDue(billId: string) {
 
   return {
     id: bill.id,
+    duePrivate: bill.duePrivate,
     invoiceNumber: bill.invoiceNumber,
     customerName: bill.customerName,
     customerPhone: bill.customerPhone,

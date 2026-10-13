@@ -7,6 +7,7 @@ import {
   Check,
   ChevronRight,
   Filter,
+  Lock,
   Search,
   UserRound,
   Wallet,
@@ -180,9 +181,14 @@ export function DuesPage() {
     string | null
   >("dues.financeCompanyFilter", null);
   const filterWrapRef = useRef<HTMLDivElement>(null);
+  /** Admin only: list just the dues kept private from staff. */
+  const [privateOnly, setPrivateOnly] = useSessionState("dues.privateOnly", false);
+  const showPrivateOnly = isAdmin && tab === "customer" && privateOnly;
 
   const filtersActive =
-    (tab === "customer" && period !== "all") || searchScope !== "all";
+    (tab === "customer" && period !== "all") ||
+    searchScope !== "all" ||
+    showPrivateOnly;
 
   async function loadDues(activePeriod: DuePeriodValue) {
     setLoading(true);
@@ -248,8 +254,10 @@ export function DuesPage() {
     tab === "customer" && searchScope === "finance" ? "all" : searchScope;
 
   const filteredDues =
-    data?.dues.filter((due) =>
-      matchesDueSearch(due, searchQuery, { scope: activeScope }),
+    data?.dues.filter(
+      (due) =>
+        (!showPrivateOnly || due.duePrivate) &&
+        matchesDueSearch(due, searchQuery, { scope: activeScope }),
     ) || [];
 
   const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
@@ -285,7 +293,7 @@ export function DuesPage() {
 
   const customerReveal = useInfiniteReveal(
     filteredDues,
-    `customer|${period}|${searchQuery}|${searchScope}|${filteredDues.length}`,
+    `customer|${period}|${searchQuery}|${searchScope}|${showPrivateOnly}|${filteredDues.length}`,
   );
   const financeReveal = useInfiniteReveal(
     filteredFinanceDues,
@@ -296,6 +304,7 @@ export function DuesPage() {
     setPeriod("all");
     setSearchScope("all");
     setFinanceCompanyFilter(null);
+    setPrivateOnly(false);
   };
 
   async function markFinanceReceived(
@@ -465,6 +474,21 @@ export function DuesPage() {
                   </div>
                 ) : null}
 
+                {isAdmin && tab === "customer" ? (
+                  <label className="mb-3.5 flex cursor-pointer items-center gap-2.5 rounded-xl border border-ink-100 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-ink-900 dark:accent-tide-400"
+                      checked={privateOnly}
+                      onChange={(event) => setPrivateOnly(event.target.checked)}
+                    />
+                    <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink-800">
+                      <Lock className="h-3.5 w-3.5 text-ink-500" strokeWidth={2.2} />
+                      Show only private dues
+                    </span>
+                  </label>
+                ) : null}
+
                 <div className="mt-0.5 flex items-center justify-between border-t border-ink-100 pt-3">
                   <button
                     type="button"
@@ -558,6 +582,12 @@ export function DuesPage() {
                         {due.isPartialPaid ? (
                           <span className="rounded-full bg-ember-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
                             Partial
+                          </span>
+                        ) : null}
+                        {isAdmin && due.duePrivate ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-700 dark:bg-white/10 dark:text-ink-800">
+                            <Lock className="h-2.5 w-2.5" strokeWidth={2.6} />
+                            Private
                           </span>
                         ) : null}
                       </div>

@@ -144,6 +144,8 @@ export type Bill = {
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;
+  /** Admin-only due, hidden from staff on the dues page. */
+  duePrivate?: boolean;
   dueSettledMethod?: string | null;
   dueSettledAt?: string | null;
   isPartialPaid?: boolean;
@@ -531,11 +533,13 @@ export type DueItem = {
   isPartialPaid?: boolean;
   productLabels?: string[];
   imeiNumbers?: string[];
+  duePrivate?: boolean;
 };
 
 /** One customer due with its payment history (GET /dues/:id). */
 export type CustomerDueDetail = {
   id: string;
+  duePrivate?: boolean;
   invoiceNumber: string;
   customerName: string;
   customerPhone: string;
@@ -632,6 +636,7 @@ export type CreateBillPayload = {
   exchangeItems?: BillExchangeItem[];
   exchangeCashReturn?: number;
   dueDate?: string | null;
+  duePrivate?: boolean;
   companyDiscount?: number;
 };
 
