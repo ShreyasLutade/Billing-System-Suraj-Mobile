@@ -145,18 +145,20 @@ export function DueDetailPage() {
   }
 
   const late = data.delayDays !== null && data.delayDays > 0;
+  const paidShare =
+    data.originalDue > 0 ? Math.min(data.paidTotal / data.originalDue, 1) : 1;
 
   return (
     <div ref={rootRef} className="mx-auto max-w-2xl pb-4">
       {back}
 
-      {/* Customer + statement */}
-      <div className="mb-3 flex items-start justify-between gap-3">
+      {/* Customer + actions */}
+      <div className="mb-2.5 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="truncate font-display text-2xl font-semibold text-ink-900">
+          <h1 className="truncate font-display text-xl font-semibold leading-tight text-ink-900">
             {data.customerName}
           </h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-ink-500">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-ink-500">
             <Link
               to={`/bills/${data.id}`}
               state={fromState(location)}
@@ -165,17 +167,17 @@ export function DueDetailPage() {
               {data.invoiceNumber}
             </Link>
             {isAdmin && data.duePrivate ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-700 dark:bg-white/10 dark:text-ink-800">
-                <Lock className="h-3 w-3" strokeWidth={2.6} />
+              <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-ink-700 dark:bg-white/10 dark:text-ink-800">
+                <Lock className="h-2.5 w-2.5" strokeWidth={2.6} />
                 Private
               </span>
             ) : null}
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 gap-1.5">
           <a
             href={`tel:${data.customerPhone}`}
-            className="grid h-[38px] w-[38px] place-items-center rounded-[11px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-400"
+            className="grid h-9 w-9 place-items-center rounded-[10px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-400"
             aria-label={`Call ${data.customerName}`}
             title={`Call ${data.customerPhone}`}
           >
@@ -183,11 +185,11 @@ export function DueDetailPage() {
           </a>
           <button
             type="button"
-            className="btn-secondary !gap-1.5 !px-3 !py-2 text-xs sm:text-sm"
+            className="btn-secondary !h-9 !gap-1.5 !rounded-[10px] !px-2.5 !py-0 text-xs"
             disabled={downloading}
             onClick={() => void downloadStatement()}
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-3.5 w-3.5" />
             {downloading ? "Preparing…" : "Statement"}
           </button>
         </div>
@@ -199,90 +201,95 @@ export function DueDetailPage() {
         </div>
       ) : null}
 
-      {/* Pending / settled */}
+      {/* Pending amount, promise date, paid progress */}
       <section
         className={clsx(
-          "mb-3 rounded-2xl px-4 py-4 ring-1",
+          "mb-3 rounded-2xl px-3.5 py-3 ring-1",
           data.settled
             ? "bg-gradient-to-r from-emerald-500/10 to-transparent ring-emerald-500/20"
             : "bg-gradient-to-r from-ember-500/10 to-transparent ring-ember-500/15",
         )}
       >
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-500">
               {data.settled ? "Settled" : "Pending due"}
             </p>
             <p
               className={clsx(
-                "mt-1 font-display text-3xl font-semibold tabular-nums",
+                "font-display text-xl font-semibold leading-tight tabular-nums",
                 data.settled ? "text-emerald-600 dark:text-emerald-400" : "text-ember-500",
               )}
             >
               {data.settled ? (
-                <span className="inline-flex items-center gap-2">
-                  <Check className="h-7 w-7" /> Paid
+                <span className="inline-flex items-center gap-1.5">
+                  <Check className="h-5 w-5" /> Paid
                 </span>
               ) : (
                 formatINR(data.pending)
               )}
             </p>
           </div>
-          {/* Promised date + how late */}
-          <div className="text-right">
-            <p className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
-              <CalendarClock className="h-3.5 w-3.5" /> Promised by
-            </p>
-            <p className="text-sm font-semibold text-ink-900">
-              {data.dueDate ? formatDate(data.dueDate) : "No date given"}
+          <div className="shrink-0 text-right">
+            <p className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-800">
+              <CalendarClock className="h-3.5 w-3.5 text-ink-400" />
+              {data.settled && data.settledAt
+                ? `Cleared ${formatDate(data.settledAt)}`
+                : data.dueDate
+                  ? formatDate(data.dueDate)
+                  : "No date given"}
             </p>
             {data.delayDays !== null ? (
-              <p
-                className={clsx(
-                  "mt-0.5 text-xs font-semibold",
-                  late ? "text-rose-600 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400",
-                )}
-              >
-                {late
-                  ? `${delayLabel(data.delayDays)}${data.settled ? "" : " so far"}`
-                  : data.settled
-                    ? "Cleared on time"
-                    : data.delayDays === 0
-                      ? "Due today"
-                      : `${-data.delayDays} day${data.delayDays === -1 ? "" : "s"} left`}
+              <p className="mt-1">
+                <span
+                  className={clsx(
+                    "inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    late
+                      ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                  )}
+                >
+                  {late
+                    ? `${delayLabel(data.delayDays)}${data.settled ? "" : " so far"}`
+                    : data.settled
+                      ? "On time"
+                      : data.delayDays === 0
+                        ? "Due today"
+                        : `${-data.delayDays} day${data.delayDays === -1 ? "" : "s"} left`}
+                </span>
               </p>
-            ) : null}
-            {data.settled && data.settledAt ? (
-              <p className="mt-0.5 text-[11px] text-ink-500">Cleared {formatDate(data.settledAt)}</p>
             ) : null}
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {[
-            { label: "Due amount", value: formatINR(data.originalDue), tone: "text-ink-900" },
-            {
-              label: "Paid",
-              value: formatINR(data.paidTotal),
-              tone: "text-emerald-600 dark:text-emerald-400",
-            },
-            {
-              label: "Pending",
-              value: formatINR(data.pending),
-              tone: data.pending > 0 ? "text-ember-500" : "text-emerald-600 dark:text-emerald-400",
-            },
-          ].map((stat) => (
+
+        <div className="mt-2.5">
+          <div
+            className="h-1.5 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10"
+            role="progressbar"
+            aria-label="Paid so far"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(paidShare * 100)}
+          >
             <div
-              key={stat.label}
-              className="rounded-xl border border-ink-100/80 bg-white/80 px-2.5 py-2 dark:bg-surface-elevated"
-            >
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-ink-400">
-                {stat.label}
-              </p>
-              <p className={clsx("mt-0.5 text-sm font-semibold tabular-nums", stat.tone)}>
-                {stat.value}
-              </p>
-            </div>
-          ))}
+              className="h-full rounded-full bg-emerald-500"
+              style={{ width: `${paidShare * 100}%` }}
+            />
+          </div>
+          <p className="mt-1.5 flex items-center justify-between gap-2 text-[12px] text-ink-500">
+            <span>
+              Due{" "}
+              <span className="font-semibold tabular-nums text-ink-900">
+                {formatINR(data.originalDue)}
+              </span>
+            </span>
+            <span>
+              Paid{" "}
+              <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {formatINR(data.paidTotal)}
+              </span>
+            </span>
+          </p>
         </div>
       </section>
 
