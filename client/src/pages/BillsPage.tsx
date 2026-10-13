@@ -338,12 +338,12 @@ export function BillsPage() {
       <PageHeader
         eyebrow="History"
         title="Bills"
-        action={
+        titleAction={
           isAdmin ? (
             <Link
               to="/bills/replace"
               state={fromState(location)}
-              className="btn-primary self-center"
+              className="btn-primary"
             >
               <RefreshCcw className="h-4 w-4" />
               Replace product
