@@ -83,13 +83,11 @@ export function BackButton({
 export function PageHeader({
   eyebrow,
   title,
-  description,
   action,
   titleAction,
 }: {
   eyebrow?: string;
   title: string;
-  description?: string;
   action?: ReactNode;
   /** Shown on the same line as the title (right side), on every screen size. */
   titleAction?: ReactNode;
@@ -100,7 +98,7 @@ export function PageHeader({
     </h1>
   );
   return (
-    <div className="babu-page-header mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+    <div className="babu-page-header mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
       <div className={titleAction ? "w-full min-w-0 flex-1" : undefined}>
         {eyebrow ? (
           <p className="babu-eyebrow mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
@@ -115,11 +113,6 @@ export function PageHeader({
         ) : (
           heading
         )}
-        {description ? (
-          <p className="babu-page-description mt-2 max-w-2xl text-sm leading-relaxed text-ink-500 sm:text-base">
-            {description}
-          </p>
-        ) : null}
       </div>
       {action}
     </div>

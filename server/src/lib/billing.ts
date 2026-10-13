@@ -37,6 +37,8 @@ export const billItemSchema = z
     warrantyMonths: z.number().int().positive().optional().nullable(),
     /** Free text ("1 year", "6 months", "No warranty"); replaces warrantyMonths. */
     warranty: z.string().trim().max(80).optional().nullable(),
+    /** "BOX,CHARGER" — accessories handed to the buyer with this phone. */
+    includedAccessories: z.string().trim().optional().nullable(),
   })
   .superRefine((item, ctx) => {
     if (!item.platform || item.platform === "ACCESSORY") return;
@@ -122,6 +124,16 @@ export const createBillSchema = z
           imei1: z.string().trim().min(8),
           value: z.number().nonnegative(),
           notes: z.string().trim().optional().nullable(),
+          accessories: z
+            .array(
+              z.object({
+                key: z.enum(["BOX", "CHARGER", "CABLE", "BILL"]),
+                status: z.enum(["GIVEN", "PENDING"]),
+                receivedAt: z.string().optional().nullable(),
+              }),
+            )
+            .optional()
+            .default([]),
         }),
       )
       .optional()

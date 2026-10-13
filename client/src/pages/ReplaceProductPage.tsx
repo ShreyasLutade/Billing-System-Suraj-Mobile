@@ -187,7 +187,6 @@ export function ReplaceProductPage() {
       <PageHeader
         eyebrow="Bills"
         title="Replace / return product"
-        description="Scan or type the IMEI / serial number of the product the customer brought back."
       />
 
       <div className="glass-panel space-y-3 p-4 sm:p-5">

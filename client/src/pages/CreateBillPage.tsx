@@ -54,10 +54,15 @@ import type {
   Bill,
   BillItem,
   CreateBillPayload,
+  ExchangeIntake,
   FinanceCompany,
   MobileCatalog,
   StockItem,
 } from "../types";
+import {
+  GivenWithPhonePicker,
+  ReceivedWithPhoneNote,
+} from "../components/UsedPhoneAccessories";
 
 type DraftItem = BillItem & {
   key: string;
@@ -106,6 +111,16 @@ function isAccessoryStock(stock: {
   platform?: string | null;
 }) {
   return stock.kind === "ACCESSORY" || stock.platform === "ACCESSORY";
+}
+
+/** Second-hand phone line — gets the received / given-with-phone accessories UI. */
+function isUsedPhoneLine(item: DraftItem) {
+  return (
+    item.catalogMode === "mobile" &&
+    item.condition === "USED" &&
+    item.platform !== "ACCESSORY" &&
+    Boolean(item.productName)
+  );
 }
 
 function isAccessoryDraft(item: { platform?: string | null }) {
@@ -339,6 +354,11 @@ export function CreateBillPage() {
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
   const [isExchange, setIsExchange] = useState(false);
   const [exchangeItems, setExchangeItems] = useState<ExchangeDraft[]>([]);
+  /** IMEI → what came in with that second-hand phone (null = not an exchange intake). */
+  const [intakeByImei, setIntakeByImei] = useState<
+    Record<string, ExchangeIntake | null>
+  >({});
+  const intakeRequestedRef = useRef(new Set<string>());
   const [exchangePayConfirmed, setExchangePayConfirmed] = useState(false);
   const [useFixedReturn, setUseFixedReturn] = useState(false);
   const [fixedReturnAmount, setFixedReturnAmount] = useState(0);
@@ -362,6 +382,7 @@ export function CreateBillPage() {
         imei1: item.imei1,
         value: item.value,
         notes: item.notes || "",
+        accessories: item.accessories ?? [],
       }));
     }
     if (bill.isExchange && bill.exchangeModel) {
@@ -376,6 +397,7 @@ export function CreateBillPage() {
           imei1: bill.exchangeImei1 || "",
           value: bill.exchangeValue ?? "",
           notes: bill.exchangeNotes || "",
+          accessories: [],
         },
       ];
     }
@@ -565,6 +587,7 @@ export function CreateBillPage() {
             serialNumber: item.serialNumber || "",
             // Older bills only have months; edit them as text.
             warranty: warrantyText(item),
+            includedAccessories: item.includedAccessories || null,
           }))
         : [blankItem()],
     );
@@ -1202,10 +1225,43 @@ export function CreateBillPage() {
     }
   }
 
+  useEffect(() => {
+    const imeis = items
+      .filter(isUsedPhoneLine)
+      .map((item) => (item.imei1 || "").trim())
+      .filter(
+        (imei) => imei.length >= 8 && !intakeRequestedRef.current.has(imei),
+      );
+    for (const imei of new Set(imeis)) {
+      intakeRequestedRef.current.add(imei);
+      api
+        .exchangeIntake(imei)
+        .then(({ data }) =>
+          setIntakeByImei((current) => ({ ...current, [imei]: data })),
+        )
+        .catch(() => {
+          // Allow a retry on the next change.
+          intakeRequestedRef.current.delete(imei);
+        });
+    }
+  }, [items]);
+
   function updateItem(key: string, patch: Partial<DraftItem>) {
     setFieldHint(null);
     setItems((prev) =>
-      prev.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        const next = { ...item, ...patch };
+        // Ticked "given with phone" belongs to the old phone, not a newly picked one.
+        if (
+          !("includedAccessories" in patch) &&
+          (next.stockItemId !== item.stockItemId ||
+            next.mobileCatalogId !== item.mobileCatalogId)
+        ) {
+          next.includedAccessories = null;
+        }
+        return next;
+      }),
     );
   }
 
@@ -1285,6 +1341,7 @@ export function CreateBillPage() {
       imei1: stock.imei || "",
       serialNumber: stock.serialNumber || "",
       quantity: 1,
+      includedAccessories: null,
     });
   }
 
@@ -1669,6 +1726,7 @@ export function CreateBillPage() {
             imei1: item.imei1.trim(),
             value: item.value === "" ? 0 : Number(item.value) || 0,
             notes: item.notes.trim() || null,
+            accessories: item.accessories,
           }))
         : [],
       exchangeModel: isExchange ? exchangeItems[0]?.model.trim() || null : null,
@@ -1717,6 +1775,9 @@ export function CreateBillPage() {
         imei2: null,
         serialNumber: item.serialNumber || null,
         warranty: item.warranty?.trim() || null,
+        includedAccessories: isUsedPhoneLine(item)
+          ? item.includedAccessories || null
+          : null,
       })),
     };
   }
@@ -2161,11 +2222,6 @@ export function CreateBillPage() {
       <PageHeader
         eyebrow={isEdit ? "Edit" : "Create"}
         title={isEdit ? `Edit ${originalBill?.invoiceNumber || "bill"}` : "New bill"}
-        description={
-          isEdit
-            ? "Update customer, products, or payment details. You’ll review a change summary before saving."
-            : "Enter products manually. Split payment across cash, online, card, and finance — remaining amount becomes due."
-        }
         action={
           isEdit && editId ? (
             <BackLink to={`/bills/${editId}`} state={location.state}>
@@ -2524,6 +2580,14 @@ export function CreateBillPage() {
                       ) : null}
                     </>
                   )}
+                  {isUsedPhoneLine(item) &&
+                  intakeByImei[(item.imei1 || "").trim()] ? (
+                    <div className="min-w-0 sm:col-span-2 lg:col-span-5">
+                      <ReceivedWithPhoneNote
+                        intake={intakeByImei[(item.imei1 || "").trim()]!}
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="label required" htmlFor={`rate-${item.key}`}>Rate (₹)</label>
                     <input
@@ -2712,6 +2776,19 @@ export function CreateBillPage() {
                     />
                   </div>
                 </div>
+                {isUsedPhoneLine(item) ? (
+                  <div className="mt-4">
+                    <GivenWithPhonePicker
+                      value={item.includedAccessories}
+                      onChange={(includedAccessories) =>
+                        updateItem(item.key, { includedAccessories })
+                      }
+                      receivedKeys={intakeByImei[(item.imei1 || "").trim()]?.accessories
+                        .filter((acc) => acc.status === "GIVEN")
+                        .map((acc) => acc.key)}
+                    />
+                  </div>
+                ) : null}
                 <p className="mt-4 border-t border-ink-100/80 pt-3 text-right text-sm font-semibold text-ink-800">
                   Line total · {formatINR(lineAmount(item))}
                 </p>

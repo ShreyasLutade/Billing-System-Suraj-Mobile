@@ -349,7 +349,6 @@ export function SuppliersPage() {
     <div>
       <PageHeader
         title="Suppliers"
-        description="Supplier ledger — purchases, payments, and outstanding."
         titleAction={
           isAdmin ? (
             <button

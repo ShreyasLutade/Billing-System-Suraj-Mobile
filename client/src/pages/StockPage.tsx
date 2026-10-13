@@ -7,6 +7,7 @@ import {
   Cable,
   Check,
   ChevronDown,
+  Download,
   Plus,
   RefreshCw,
   Search,
@@ -18,6 +19,8 @@ import type { AddStockLocationState } from "./AddStockPage";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
+import { AddStockFab } from "../components/AddStockFab";
+import { StockStatementDialog } from "../components/StockStatementDialog";
 import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
@@ -234,6 +237,7 @@ export function StockPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const itemFromUrl = searchParams.get("item");
   const [items, setItems] = useState<StockItem[]>([]);
+  const [showStatement, setShowStatement] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useSessionState("stock.query", "");
@@ -515,12 +519,27 @@ export function StockPage() {
 
   return (
     <div>
+      <AddStockFab
+        onAddMobile={openAddMobilePage}
+        onAddAccessories={openAddAccessoriesPage}
+      />
       <PageHeader
         eyebrow="Inventory"
         title="Stock"
-        description="Mobiles and accessories currently in the shop."
+        titleAction={
+          <button
+            type="button"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ink-100 bg-white/80 text-ink-700 shadow-sm backdrop-blur transition hover:border-tide-400 hover:text-tide-600 dark:bg-white/5"
+            onClick={() => setShowStatement(true)}
+            aria-label="Download stock statement"
+            title="Download stock statement"
+          >
+            <Download className="h-[18px] w-[18px]" />
+          </button>
+        }
         action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          // Phones use the floating + instead (AddStockFab).
+          <div className="hidden flex-wrap items-center justify-end gap-2 md:flex">
             <button
               type="button"
               className="btn-primary"
@@ -540,6 +559,12 @@ export function StockPage() {
           </div>
         }
       />
+
+      <AnimatePresence>
+        {showStatement ? (
+          <StockStatementDialog onClose={() => setShowStatement(false)} />
+        ) : null}
+      </AnimatePresence>
 
       <div className="tb-toolbar">
         <div className="tb-tabs tb-tabs-3" role="tablist" aria-label="Stock type">

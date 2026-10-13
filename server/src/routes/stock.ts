@@ -6,6 +6,10 @@ import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
 import { binStockItem } from "../services/recycleBin";
+import {
+  buildStockStatementPdf,
+  type StockStatementScope,
+} from "../services/stockStatementPdf";
 import { applyPendingReturnCredits } from "../services/productReturns";
 import {
   paymentAtPurchaseError,
@@ -198,6 +202,23 @@ stockRouter.get("/", async (req, res, next) => {
         : items;
 
     res.json({ data: sorted.map(mapStockItem) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Stock statement PDF: mobiles in shop (new / old / all), A→Z. Cost only for admins who ask. */
+stockRouter.get("/statement", async (req, res, next) => {
+  try {
+    const raw = String(req.query.scope || "ALL").toUpperCase();
+    const scope: StockStatementScope =
+      raw === "NEW" || raw === "USED" ? raw : "ALL";
+    const { pdf, filename } = await buildStockStatementPdf(scope, {
+      showCost: req.user?.role === "ADMIN" && req.query.price === "1",
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdf);
   } catch (error) {
     next(error);
   }

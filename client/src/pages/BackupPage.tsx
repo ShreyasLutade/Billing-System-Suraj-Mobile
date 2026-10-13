@@ -174,7 +174,6 @@ export function BackupPage() {
       <PageHeader
         eyebrow="Admin"
         title="Backup & restore"
-        description="Download a zip (Excel + .db) to keep locally, email the same files, or upload a .db / backup zip to restore."
       />
 
       {loading ? (

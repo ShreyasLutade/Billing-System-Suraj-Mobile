@@ -322,7 +322,6 @@ export function DuesPage() {
       <PageHeader
         eyebrow="Collections"
         title="Dues"
-        description="Pending payments from customers and financiers."
         action={
           <BackLink to={from ?? "/"}>
             {from ? backLabel(from) : "Home"}

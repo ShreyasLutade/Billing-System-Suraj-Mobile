@@ -338,7 +338,6 @@ export function BillsPage() {
       <PageHeader
         eyebrow="History"
         title="Bills"
-        description="Every bill with its payment split. Search by name, phone, product or IMEI — filters stack with the period."
         action={
           isAdmin ? (
             <Link

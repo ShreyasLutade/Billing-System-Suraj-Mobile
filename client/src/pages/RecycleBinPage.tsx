@@ -140,7 +140,6 @@ export function RecycleBinPage() {
       <PageHeader
         eyebrow="Admin"
         title="Recycle bin"
-        description={`Deleted bills, suppliers, stock and repair jobs stay here for ${days} days, then they are removed for good.`}
         action={
           <button
             type="button"

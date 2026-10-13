@@ -6,6 +6,10 @@ import type {
   Bill,
   CreateBillPayload,
   DuesSummary,
+  ExchangeAccessory,
+  ExchangeAccessoryKey,
+  ExchangeIntake,
+  PendingAccessoriesSummary,
   FinanceDuesSummary,
   FinanceCompany,
   MobileCatalog,
@@ -296,6 +300,25 @@ export const api = {
       `/analytics/summary?${params.toString()}`,
     );
   },
+  exchangeIntake: (imei: string, signal?: AbortSignal) =>
+    request<{ data: ExchangeIntake | null }>(
+      `/bills/exchange-intake?imei=${encodeURIComponent(imei)}`,
+      { signal },
+    ),
+  pendingAccessories: () =>
+    request<{ data: PendingAccessoriesSummary }>("/bills/pending-accessories"),
+  setExchangeAccessoryStatus: (
+    billId: string,
+    payload: {
+      itemIndex: number;
+      key: ExchangeAccessoryKey;
+      status: ExchangeAccessory["status"];
+    },
+  ) =>
+    request<{ data: { itemIndex: number; accessories: ExchangeAccessory[] } }>(
+      `/bills/${billId}/exchange-accessories`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    ),
   analyticsExchanges: (
     period: string = "all",
     options?: { from?: string; to?: string },
@@ -521,6 +544,38 @@ export const api = {
       unitCount: Number(response.headers.get("X-Unit-Count") || 0),
       soldCount: Number(response.headers.get("X-Sold-Count") || 0),
     };
+  },
+  /** Mobiles in shop as a PDF, A→Z (cost column only for admins, when asked). */
+  downloadStockStatement: async (
+    scope: "NEW" | "USED" | "ALL",
+    includePrice = false,
+  ) => {
+    const token = getAuthToken();
+    const response = await fetchBackend(
+      `${API_BASE}/stock/statement?scope=${scope}${includePrice ? "&price=1" : ""}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download stock statement";
+      try {
+        const body = await response.json();
+        message = body.error || message;
+      } catch {
+        // ignore
+      }
+      throw new ApiError(message, response.status);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = match?.[1] || "stock-statement.pdf";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   },
   downloadSupplierMobilesExportByName: async (
     name: string,

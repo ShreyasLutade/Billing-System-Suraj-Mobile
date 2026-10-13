@@ -92,7 +92,6 @@ export function RepairAnalyticsPage() {
       <PageHeader
         eyebrow="Insights"
         title="Repair sales"
-        description="Money from repairs is counted when the phone is delivered back to the customer."
       />
 
       {multiShop ? (

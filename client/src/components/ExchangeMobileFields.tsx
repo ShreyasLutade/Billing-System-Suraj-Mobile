@@ -8,7 +8,8 @@ import {
 } from "./BarcodeImeiScanner";
 import { formatINR } from "../lib/api";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
-import type { PhoneModel } from "../types";
+import type { ExchangeAccessory, PhoneModel } from "../types";
+import { ExchangeAccessoriesPicker } from "./ExchangeAccessoriesPicker";
 
 export type ExchangeDraft = {
   key: string;
@@ -20,6 +21,7 @@ export type ExchangeDraft = {
   imei1: string;
   value: number | "";
   notes: string;
+  accessories: ExchangeAccessory[];
 };
 
 export function blankExchangeItem(): ExchangeDraft {
@@ -33,6 +35,7 @@ export function blankExchangeItem(): ExchangeDraft {
     imei1: "",
     value: "",
     notes: "",
+    accessories: [],
   };
 }
 
@@ -250,6 +253,11 @@ export function ExchangeMobileFields({
         </div>
       </div>
 
+      <ExchangeAccessoriesPicker
+        value={item.accessories}
+        onChange={(accessories) => onChange({ accessories })}
+      />
+
       <div>
         <label className="label" htmlFor={`${idPrefix}-notes`}>
           Notes
@@ -259,7 +267,7 @@ export function ExchangeMobileFields({
           className="field min-h-[70px] resize-y"
           value={item.notes}
           onChange={(e) => onChange({ notes: e.target.value })}
-          placeholder="Optional — screen condition, box, accessories, etc."
+          placeholder="Optional — screen condition, scratches, battery health, etc."
         />
       </div>
     </div>
