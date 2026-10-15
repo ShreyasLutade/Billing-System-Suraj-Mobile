@@ -494,6 +494,14 @@ suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
 const paySupplierSchema = z.object({
   /** Omit to clear everything outstanding; otherwise a part payment. */
   amount: z.number().positive().finite().optional(),
+  paidAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => {
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    }, "Enter a valid payment date")
+    .optional(),
 });
 
 /**
@@ -578,7 +586,9 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
 
       let leftToApply = requestedPaise ?? outstandingPaise;
       let purchasesCleared = 0;
-      const now = new Date();
+      const paidAt = parsed.data.paidAt
+        ? new Date(`${parsed.data.paidAt}T12:00:00.000Z`)
+        : new Date();
       const againstDates: string[] = [];
       for (const p of open) {
         if (leftToApply <= 0) break;
@@ -591,7 +601,7 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
         await tx.purchase.update({
           where: { id: p.id },
           data: fullyPaid
-            ? { paidAt: now, paidAmount: p.totalAmount }
+            ? { paidAt, paidAmount: p.totalAmount }
             : { paidAmount: newPaidPaise / 100 },
         });
       }
@@ -603,7 +613,7 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
           supplierId: supplier.id,
           amount: paidPaise / 100,
           method: "na",
-          paidAt: now,
+          paidAt,
           note: `Against purchase${againstDates.length === 1 ? "" : "s"} of ${[...new Set(againstDates)].join(", ")}`,
         },
       });

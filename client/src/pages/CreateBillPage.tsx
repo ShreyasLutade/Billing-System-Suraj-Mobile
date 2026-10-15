@@ -10,6 +10,7 @@ import {
   ListOrdered,
   Loader2,
   Plus,
+  Printer,
   RefreshCw,
   Share2,
   Trash2,
@@ -2166,52 +2167,66 @@ export function CreateBillPage() {
         {shareError ? (
           <p className="mt-3 text-sm text-ember-500">{shareError}</p>
         ) : null}
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-          <button
-            className="btn-primary"
-            type="button"
-            disabled={sharing}
-            onClick={() => void shareOnWhatsApp()}
-          >
-            <Share2 className="h-4 w-4" />
-            {sharing ? "Preparing…" : "Share"}
-          </button>
-          <a
-            className="btn-secondary"
-            href={api.pdfUrl(savedBillId)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Download className="h-4 w-4" />
-            Download PDF
-          </a>
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() =>
-              navigate(`/bills/${savedBillId}`, {
-                state: from ? { from } : { from: billsHomePath(withGst) },
-              })
-            }
-          >
-            View bill
-          </button>
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() => navigate(from ?? billsHomePath(withGst))}
-          >
-            View all bills
-          </button>
-          {!isEdit ? (
+        <div className="mt-8 space-y-3">
+          <div className="flex flex-nowrap justify-center gap-2">
+            <button
+              className="btn-primary min-w-0 flex-1 !px-2 sm:flex-none sm:!px-4"
+              type="button"
+              disabled={sharing}
+              onClick={() => void shareOnWhatsApp()}
+            >
+              <Share2 className="h-4 w-4 shrink-0" />
+              <span className="truncate">{sharing ? "Preparing…" : "Share"}</span>
+            </button>
+            <a
+              className="btn-secondary min-w-0 flex-1 !px-2 sm:flex-none sm:!px-4"
+              href={api.pdfUrl(savedBillId)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Download className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">PDF</span>
+              <span className="hidden sm:inline">Download PDF</span>
+            </a>
+            <a
+              className="btn-secondary min-w-0 flex-1 !px-2 sm:flex-none sm:!px-4"
+              href={api.printPdfUrl(savedBillId)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Printer className="h-4 w-4 shrink-0" />
+              Print
+            </a>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
             <button
               className="btn-secondary"
               type="button"
-              onClick={() => resetBlankForm()}
+              onClick={() =>
+                navigate(`/bills/${savedBillId}`, {
+                  state: from ? { from } : { from: billsHomePath(withGst) },
+                })
+              }
             >
-              Create another
+              View bill
             </button>
-          ) : null}
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => navigate(from ?? billsHomePath(withGst))}
+            >
+              View all bills
+            </button>
+            {!isEdit ? (
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => resetBlankForm()}
+              >
+                Create another
+              </button>
+            ) : null}
+          </div>
         </div>
       </motion.div>
     );

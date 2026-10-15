@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { format } from "date-fns";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import clsx from "clsx";
 import { useVisualViewportStyle } from "../hooks/useVisualViewport";
@@ -45,6 +46,7 @@ export function PaySupplierModal({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"full" | "custom">("full");
   const [customAmount, setCustomAmount] = useState("");
+  const [paidAt, setPaidAt] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export function PaySupplierModal({
     setSelectedId(null);
     setMode("full");
     setCustomAmount("");
+    setPaidAt(format(new Date(), "yyyy-MM-dd"));
     setError(null);
     setPaying(false);
   }, [open]);
@@ -98,6 +101,7 @@ export function PaySupplierModal({
   const remainingPaise = Math.max(outstandingPaise - payPaise, 0);
   const canPay =
     Boolean(selected) &&
+    Boolean(paidAt) &&
     !paying &&
     payPaise > 0 &&
     !overpay &&
@@ -131,6 +135,10 @@ export function PaySupplierModal({
         return;
       }
     }
+    if (!paidAt) {
+      setError("Choose the payment date");
+      return;
+    }
     if (payPaise <= 0) return;
 
     setPaying(true);
@@ -141,6 +149,7 @@ export function PaySupplierModal({
       const { data } = await api.paySupplier(
         selected.id,
         mode === "full" ? undefined : payPaise / 100,
+        paidAt,
       );
       onPaid(
         data.outstanding > 0
@@ -358,6 +367,23 @@ export function PaySupplierModal({
                       ) : null}
                     </label>
                   ) : null}
+
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold text-ink-500">
+                      Payment date
+                    </span>
+                    <input
+                      type="date"
+                      className="field w-full"
+                      value={paidAt}
+                      onChange={(event) => {
+                        setPaidAt(event.target.value);
+                        setError(null);
+                      }}
+                      disabled={paying}
+                      required
+                    />
+                  </label>
 
                   <div className="space-y-1.5 rounded-2xl border border-ink-100 px-4 py-3">
                     <div className="flex items-center justify-between">

@@ -1443,7 +1443,7 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${bill.invoiceNumber}.pdf"`,
+      `${req.query.print === "1" ? "inline" : "attachment"}; filename="${bill.invoiceNumber}.pdf"`,
     );
     res.send(pdf);
   } catch (error) {

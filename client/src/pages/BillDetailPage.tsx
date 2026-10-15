@@ -10,6 +10,7 @@ import {
   PackageCheck,
   Pencil,
   Phone,
+  Printer,
   RefreshCcw,
   Share2,
   Trash2,
@@ -325,20 +326,24 @@ export function BillDetailPage() {
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto">
-          <div className="flex w-full gap-1.5 sm:w-auto sm:flex-wrap sm:gap-2">
+          <div className="flex w-full flex-nowrap gap-1 sm:w-auto sm:flex-wrap sm:gap-2">
             {isAdmin || bill.withGst ? (
               <Link
                 to={`/bills/${bill.id}/edit`}
                 state={location.state}
-                className="bd-action flex-1 sm:flex-none"
+                className="bd-action flex-1 !px-1.5 sm:flex-none sm:!px-3.5"
+                aria-label="Edit bill"
+                title="Edit"
               >
                 <Pencil className="h-[15px] w-[15px] shrink-0" />
-                Edit
+                <span className="hidden sm:inline">Edit</span>
               </Link>
             ) : null}
             <button
               type="button"
-              className="bd-action flex-1 sm:flex-none"
+              className="bd-action flex-1 !px-1.5 sm:flex-none sm:!px-3.5"
+              aria-label="Share bill"
+              title="Share"
               disabled={sharing}
               onClick={() => {
                 setShareError(null);
@@ -360,26 +365,41 @@ export function BillDetailPage() {
               <span className="truncate">{sharing ? "…" : "Share"}</span>
             </button>
             <a
-              className="bd-action flex-1 sm:flex-none"
+              className="bd-action flex-1 !px-1.5 sm:flex-none sm:!px-3.5"
               href={api.pdfUrl(bill.id)}
               target="_blank"
               rel="noreferrer"
+              aria-label="Download PDF"
+              title="Download PDF"
             >
               <Download className="h-[15px] w-[15px] shrink-0" />
               <span className="sm:hidden">PDF</span>
               <span className="hidden sm:inline">Download PDF</span>
             </a>
+            <a
+              className="bd-action flex-1 !px-1.5 sm:flex-none sm:!px-3.5"
+              href={api.printPdfUrl(bill.id)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Print bill"
+              title="Print"
+            >
+              <Printer className="h-[15px] w-[15px] shrink-0" />
+              Print
+            </a>
             {isAdmin ? (
               <button
                 type="button"
-                className="bd-action bd-action-danger flex-1 sm:flex-none"
+                className="bd-action bd-action-danger flex-1 !px-1.5 sm:flex-none sm:!px-3.5"
+                aria-label="Delete bill"
+                title="Delete"
                 onClick={() => {
                   setDeleteError(null);
                   setShowDeleteConfirm(true);
                 }}
               >
                 <Trash2 className="h-[15px] w-[15px] shrink-0" />
-                Delete
+                <span className="hidden sm:inline">Delete</span>
               </button>
             ) : null}
           </div>

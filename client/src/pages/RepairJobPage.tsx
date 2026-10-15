@@ -1348,12 +1348,15 @@ export function RepairJobPage() {
         : toastEl}
 
       {zoomUrl ? (
-        <div className="rp-zoom" role="dialog" aria-modal="true" aria-label="Photo" onClick={() => setZoomUrl(null)}>
-          <button type="button" className="rp-zoom-close" aria-label="Close photo" onClick={() => setZoomUrl(null)}>
-            <X aria-hidden />
-          </button>
-          <img src={zoomUrl} alt="" onClick={(event) => event.stopPropagation()} />
-        </div>
+        createPortal(
+          <div className="rp-zoom" role="dialog" aria-modal="true" aria-label="Photo" onClick={() => setZoomUrl(null)}>
+            <button type="button" className="rp-zoom-close" aria-label="Close photo" onClick={() => setZoomUrl(null)}>
+              <X aria-hidden />
+            </button>
+            <img src={zoomUrl} alt="" onClick={(event) => event.stopPropagation()} />
+          </div>,
+          document.body,
+        )
       ) : null}
       <AnimatePresence>
         {confirmDelete ? (

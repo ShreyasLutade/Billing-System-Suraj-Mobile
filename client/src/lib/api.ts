@@ -693,14 +693,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  /** No amount = mark the whole purchase paid; with amount = part payment. */
   /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
-  paySupplier: (id: string, amount?: number) =>
+  paySupplier: (id: string, amount?: number, paidAt?: string) =>
     request<{
       data: { paid: number; purchasesCleared: number; outstanding: number };
     }>(`/suppliers/${id}/pay`, {
       method: "POST",
-      body: JSON.stringify(amount === undefined ? {} : { amount }),
+      body: JSON.stringify({
+        ...(amount === undefined ? {} : { amount }),
+        ...(paidAt ? { paidAt } : {}),
+      }),
     }),
   markPurchasePaid: (id: string, amount?: number) =>
     request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
@@ -750,6 +752,12 @@ export const api = {
     const token = getAuthToken();
     const base = `${API_BASE}/bills/${id}/pdf`;
     return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+  },
+  printPdfUrl: (id: string) => {
+    const token = getAuthToken();
+    const params = new URLSearchParams({ print: "1" });
+    if (token) params.set("token", token);
+    return `${API_BASE}/bills/${id}/pdf?${params.toString()}`;
   },
   backupStatus: () =>
     request<{
