@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { SquarePen, Trash2 } from "lucide-react";
+import { Plus, SquarePen, Trash2 } from "lucide-react";
 import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
+import { PurchaseEntryOverlay } from "../components/PurchaseEntryModal";
 import { api, formatINR, formatStockUnitId } from "../lib/api";
 import type { Purchase, PurchaseStockRef, StockItem } from "../types";
 import { fromState, readFromState, readOriginState } from "../lib/navMemory";
@@ -94,6 +95,8 @@ export function PurchaseDetailPage() {
   );
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [addingMobiles, setAddingMobiles] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!purchaseId) return;
@@ -182,12 +185,27 @@ export function PurchaseDetailPage() {
 
   return (
     <div>
-      <BackButton
-        className="mb-4"
-        onClick={() => navigate(backTo, { state: supplierState })}
-      >
-        Back to {purchase.supplier?.name || "supplier"}
-      </BackButton>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <BackButton
+          className="min-w-0"
+          onClick={() => navigate(backTo, { state: supplierState })}
+        >
+          <span className="truncate">
+            Back to {purchase.supplier?.name || "supplier"}
+          </span>
+        </BackButton>
+        <button
+          type="button"
+          className="btn-primary shrink-0 !px-3 !py-2 text-sm"
+          onClick={() => {
+            setNotice(null);
+            setAddingMobiles(true);
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Add mobiles
+        </button>
+      </div>
 
       <div className="mb-3">
         <h1 className="font-display text-2xl font-semibold text-ink-900">
@@ -208,6 +226,12 @@ export function PurchaseDetailPage() {
           ) : null}
         </p>
       </div>
+
+      {notice ? (
+        <div className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          {notice}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
@@ -518,6 +542,30 @@ export function PurchaseDetailPage() {
           />
         ) : null}
       </AnimatePresence>
+
+      <PurchaseEntryOverlay
+        open={addingMobiles}
+        condition={purchase.condition === "USED" ? "USED" : "NEW"}
+        fixedSupplier={purchase.supplier ?? null}
+        addToPurchaseId={purchase.id}
+        onClose={() => setAddingMobiles(false)}
+        onCreated={async (updated) => {
+          const added = updated.items.length - purchase.items.length;
+          setAddingMobiles(false);
+          setNotice(
+            `Added ${added} mobile${added === 1 ? "" : "s"} to this purchase`,
+          );
+          try {
+            const { data } = await api.getPurchase(purchase.id);
+            setPurchase(data);
+            setError(null);
+          } catch (err) {
+            setError(
+              err instanceof Error ? err.message : "Failed to refresh purchase",
+            );
+          }
+        }}
+      />
 
       {editingItem && isAdmin ? (
         <EditStockUnitModal

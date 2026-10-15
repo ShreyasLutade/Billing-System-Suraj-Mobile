@@ -55,8 +55,12 @@ type DraftUnit = {
   serialNumber: string;
 };
 
+type Condition = "NEW" | "USED";
+
 type DraftMobile = {
   id: string;
+  /** New or second hand — chosen per mobile. */
+  condition: Condition;
   platform: "IOS" | "ANDROID";
   mobileName: string;
   storage: string;
@@ -100,9 +104,13 @@ function expandDrafts(drafts: DraftMobile[]) {
   );
 }
 
-function blankDraft(prefill?: PurchasePrefill | null): DraftMobile {
+function blankDraft(
+  condition: Condition,
+  prefill?: PurchasePrefill | null,
+): DraftMobile {
   return {
     id: crypto.randomUUID(),
+    condition,
     platform: prefill?.platform || "IOS",
     mobileName: prefill?.mobileName || "",
     storage: prefill?.storage || "",
@@ -222,21 +230,26 @@ function collectClash(
 }
 
 export function PurchaseEntryModal({
-  condition,
+  condition: initialCondition,
   onClose,
   onCreated,
   fixedSupplier = null,
   prefill = null,
   layout = "modal",
+  addToPurchaseId = null,
 }: {
   condition: "NEW" | "USED";
   onClose: () => void;
   onCreated: (purchase: Purchase) => void;
-  fixedSupplier?: Supplier | null;
+  fixedSupplier?: Pick<Supplier, "id" | "name" | "phone"> | null;
   prefill?: PurchasePrefill | null;
   layout?: "modal" | "page";
+  /** Add the mobiles to this saved purchase instead of creating a new one. */
+  addToPurchaseId?: string | null;
 }) {
   const isPage = layout === "page";
+  const adding = Boolean(addToPurchaseId);
+  const saveLabel = adding ? "Add to purchase" : "Save purchase";
   const { isAdmin } = useAuth();
   /** Paying a supplier is admin only; staff purchases stay unpaid. */
   const [payment, setPayment] = useState<PaymentDraft>(blankPayment);
@@ -246,7 +259,10 @@ export function PurchaseEntryModal({
   const [supplierPhone, setSupplierPhone] = useState(fixedSupplier?.phone || "");
   const [useNewSupplier, setUseNewSupplier] = useState(false);
   const [queued, setQueued] = useState<DraftMobile[]>([]);
-  const [draft, setDraft] = useState<DraftMobile>(() => blankDraft(prefill));
+  // Each mobile starts on the page's type (New / Second hand).
+  const [draft, setDraft] = useState<DraftMobile>(() =>
+    blankDraft(initialCondition, prefill),
+  );
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -358,7 +374,7 @@ export function PurchaseEntryModal({
       { ...draft, units: draftUnits(draft) },
     ]);
     setExpandedId(null);
-    setDraft(blankDraft());
+    setDraft(blankDraft(initialCondition));
   }
 
   function removeCurrentMobile() {
@@ -437,7 +453,28 @@ export function PurchaseEntryModal({
     const units = expandDrafts(allDrafts);
     setSaving(true);
     setError(null);
+    const items = units.map((item) => ({
+      condition: item.condition,
+      platform: item.platform,
+      mobileName: item.mobileName,
+      storage: item.storage,
+      ram: item.platform === "ANDROID" ? item.ram : "",
+      color: item.color,
+      imei: item.imei,
+      serialNumber: item.serialNumber,
+      purchasePrice: Number(item.purchasePrice),
+    }));
+    const paymentBody = isAdmin ? paymentPayload(payment, purchaseTotal) : null;
     try {
+      if (addToPurchaseId) {
+        const { data } = await api.addPurchaseItems(addToPurchaseId, {
+          items,
+          payment: paymentBody,
+        });
+        invalidatePhoneModelCache();
+        onCreated(data);
+        return;
+      }
       const { data } = await api.createPurchase({
         supplierId: fixedSupplier?.id || (useNewSupplier ? null : supplierId),
         supplierName: fixedSupplier
@@ -450,18 +487,10 @@ export function PurchaseEntryModal({
           : useNewSupplier
             ? supplierPhone.replace(/\D/g, "")
             : null,
-        condition,
-        items: units.map((item) => ({
-          platform: item.platform,
-          mobileName: item.mobileName,
-          storage: item.storage,
-          ram: item.platform === "ANDROID" ? item.ram : "",
-          color: item.color,
-          imei: item.imei,
-          serialNumber: item.serialNumber,
-          purchasePrice: Number(item.purchasePrice),
-        })),
-        payment: isAdmin ? paymentPayload(payment, purchaseTotal) : null,
+        // The purchase's own type follows the first mobile; each unit keeps its own.
+        condition: allDrafts[0]?.condition ?? initialCondition,
+        items,
+        payment: paymentBody,
       });
       invalidatePhoneModelCache();
       onCreated(data);
@@ -483,6 +512,7 @@ export function PurchaseEntryModal({
           product: parts.product,
           imei: unitLabel(item),
           price: Number(item.purchasePrice) || 0,
+          condition: item.condition,
         };
       }),
     [allMobiles],
@@ -512,7 +542,7 @@ export function PurchaseEntryModal({
   const confirmDialog = confirmOpen ? (
     <SavePurchaseConfirmModal
       supplierName={summarySupplierName || ""}
-      condition={condition}
+      condition={initialCondition}
       items={confirmItems}
       total={purchaseTotal}
       paidNow={isAdmin ? paidNow(payment, purchaseTotal) : null}
@@ -540,14 +570,6 @@ export function PurchaseEntryModal({
         <div className="mb-[18px]">
           <h1 className="flex flex-wrap items-center gap-3 font-display text-[30px] font-bold tracking-[-0.02em] text-ink-900">
             Add mobile
-            <span
-              className={clsx(
-                "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-white",
-                condition === "USED" ? "bg-[#B76E00]" : "bg-tide-500",
-              )}
-            >
-              {condition === "USED" ? "Second hand" : "New"}
-            </span>
           </h1>
           <p className="mt-1 max-w-[60ch] text-sm text-ink-300">
             Record a purchase from a supplier. Add one or more phones — the
@@ -670,7 +692,10 @@ export function PurchaseEntryModal({
               return (
                 <section
                   key={item.id}
-                  className="rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft dark:border-ink-100 dark:bg-surface-elevated sm:p-5"
+                  className={clsx(
+                    "rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft dark:border-ink-100 dark:bg-surface-elevated sm:p-5",
+                    conditionEdge(item.condition),
+                  )}
                 >
                   <div
                     className={clsx(
@@ -695,7 +720,7 @@ export function PurchaseEntryModal({
                           />
                           Mobile {index + 1}
                         </span>
-                        <ConditionBadge condition={condition} />
+                        <ConditionBadge condition={item.condition} />
                       </span>
                       {!open ? (
                         <span className="mt-2 block rounded-[10px] border border-ink-100 bg-white px-3 py-2 dark:border-ink-100 dark:bg-surface-muted">
@@ -723,6 +748,16 @@ export function PurchaseEntryModal({
                     </button>
                   </div>
                   {open ? (
+                    <>
+                    <div className="mb-3">
+                      <ConditionToggle
+                        value={item.condition}
+                        disabled={saving}
+                        onChange={(next) =>
+                          updateQueued(item.id, { condition: next })
+                        }
+                      />
+                    </div>
                     <DraftFields
                       draft={item}
                       disabled={saving}
@@ -733,19 +768,29 @@ export function PurchaseEntryModal({
                       }
                       wide
                     />
+                    </>
                   ) : null}
                 </section>
               );
             })}
 
             {/* Current mobile */}
-            <section className="overflow-visible rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft dark:border-ink-100 dark:bg-surface-elevated sm:p-5">
+            <section
+              className={clsx(
+                "overflow-visible rounded-[16px] border border-ink-100 bg-[#FCFDFE] p-4 shadow-soft dark:border-ink-100 dark:bg-surface-elevated sm:p-5",
+                conditionEdge(draft.condition),
+              )}
+            >
               <div className="mb-3.5 flex items-center justify-between gap-3">
                 <span className="inline-flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-[#EEF2F8] px-2.5 py-1 text-xs font-semibold text-ink-500 dark:bg-surface-muted">
                     Mobile {queued.length + 1}
                   </span>
-                  <ConditionBadge condition={condition} />
+                  <ConditionToggle
+                    value={draft.condition}
+                    disabled={saving}
+                    onChange={(next) => updateDraft({ condition: next })}
+                  />
                 </span>
                 {queued.length > 0 ? (
                   <button
@@ -887,23 +932,9 @@ export function PurchaseEntryModal({
     <>
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-ink-100 bg-white px-5 py-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
-              {condition === "NEW" ? "New stock" : "Second-hand stock"}
-            </p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h2 className="font-display text-xl font-semibold text-ink-900">
-                Purchase entry
-              </h2>
-              <span
-                className={
-                  condition === "USED"
-                    ? "rounded-full bg-ember-500 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-soft"
-                    : "rounded-full bg-tide-600 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-soft"
-                }
-              >
-                {condition === "USED" ? "Second hand" : "New"}
-              </span>
-            </div>
+            <h2 className="font-display text-xl font-semibold text-ink-900">
+              {adding ? "Add mobiles" : "Purchase entry"}
+            </h2>
           </div>
           <button
             type="button"
@@ -1018,9 +1049,11 @@ export function PurchaseEntryModal({
                 return (
                   <div
                     key={item.id}
-                    className={`rounded-xl border border-ink-200 bg-white shadow-sm ${
-                      open ? "overflow-visible" : "overflow-hidden"
-                    }`}
+                    className={clsx(
+                      "rounded-xl border border-ink-200 bg-white shadow-sm",
+                      open ? "overflow-visible" : "overflow-hidden",
+                      conditionEdge(item.condition),
+                    )}
                   >
                     <button
                       type="button"
@@ -1039,7 +1072,7 @@ export function PurchaseEntryModal({
                           <span className="text-xs font-semibold text-ink-500">
                             Mobile {index + 1}
                           </span>
-                          <ConditionBadge condition={condition} />
+                          <ConditionBadge condition={item.condition} />
                         </span>
                         <span className="mt-0.5 block text-sm font-medium text-ink-900">
                           {summary.product}
@@ -1053,6 +1086,13 @@ export function PurchaseEntryModal({
                     </button>
                     {open ? (
                       <div className="space-y-2 border-t border-ink-200 bg-white px-3 py-3">
+                        <ConditionToggle
+                          value={item.condition}
+                          disabled={saving}
+                          onChange={(next) =>
+                            updateQueued(item.id, { condition: next })
+                          }
+                        />
                         <DraftFields
                           draft={item}
                           disabled={saving}
@@ -1082,12 +1122,21 @@ export function PurchaseEntryModal({
             </div>
           ) : null}
 
-          <div className="rounded-xl border border-ink-200 bg-white p-3">
+          <div
+            className={clsx(
+              "rounded-xl border border-ink-200 bg-white p-3",
+              conditionEdge(draft.condition),
+            )}
+          >
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
                 Mobile {queued.length + 1}
               </p>
-              <ConditionBadge condition={condition} />
+              <ConditionToggle
+                value={draft.condition}
+                disabled={saving}
+                onChange={(next) => updateDraft({ condition: next })}
+              />
             </div>
             <DraftFields
               draft={draft}
@@ -1114,7 +1163,9 @@ export function PurchaseEntryModal({
           {isAdmin ? (
             <div className="rounded-xl border border-ink-200 bg-white p-3">
               <div className="mb-3 flex items-baseline justify-between gap-3">
-                <span className="text-sm font-semibold text-ink-900">Total purchase</span>
+                <span className="text-sm font-semibold text-ink-900">
+                  {adding ? "Total added" : "Total purchase"}
+                </span>
                 <span className="font-display text-lg font-bold tabular-nums text-ink-900">
                   {formatINR(purchaseTotal)}
                 </span>
@@ -1159,8 +1210,8 @@ export function PurchaseEntryModal({
               {saving
                 ? "Saving…"
                 : queued.length
-                  ? `Save ${unitCount} mobiles`
-                  : "Save purchase"}
+                  ? `${adding ? "Add" : "Save"} ${unitCount} mobiles`
+                  : saveLabel}
             </button>
           </div>
         </div>
@@ -1192,6 +1243,59 @@ export function PurchaseEntryModal({
     {confirmDialog}
     </>
   );
+}
+
+/**
+ * New / Second hand switch beside a mobile's title. The selected side is
+ * filled with that type's colour (blue = new, amber = second hand).
+ */
+function ConditionToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: Condition;
+  disabled?: boolean;
+  onChange: (next: Condition) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="New or second hand"
+      className="inline-flex gap-0.5 rounded-full bg-[#EBEDF1] p-0.5 dark:bg-surface-muted"
+    >
+      {(["NEW", "USED"] as const).map((option) => {
+        const on = value === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            className={clsx(
+              "rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.06em] transition",
+              on
+                ? option === "USED"
+                  ? "bg-[#B76E00] text-white shadow-[0_0_0_1px_rgba(183,110,0,.35),0_0_12px_2px_rgba(183,110,0,.55)]"
+                  : "bg-tide-500 text-white shadow-[0_0_0_1px_rgb(var(--color-tide-500)/.35),0_0_12px_2px_rgb(var(--color-tide-500)/.55)]"
+                : "text-ink-400 hover:text-ink-700",
+            )}
+            onClick={() => onChange(option)}
+            disabled={disabled}
+          >
+            {option === "NEW" ? "New" : "Second hand"}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Coloured edge on a mobile's card so its type shows at a glance. */
+function conditionEdge(condition: Condition) {
+  return condition === "USED"
+    ? "border-l-4 !border-l-[#B76E00]"
+    : "border-l-4 !border-l-tide-500";
 }
 
 function ConditionBadge({ condition }: { condition: "NEW" | "USED" }) {

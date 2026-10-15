@@ -693,6 +693,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  /** Add more mobiles to a saved purchase (same supplier, date, condition). */
+  addPurchaseItems: (
+    id: string,
+    payload: {
+      condition?: "NEW" | "USED";
+      items: Array<{
+        platform: "IOS" | "ANDROID";
+        mobileName: string;
+        storage: string;
+        ram?: string;
+        color: string;
+        imei?: string;
+        serialNumber?: string;
+        purchasePrice: number;
+      }>;
+      payment?: PaymentAtPurchase | null;
+    },
+  ) =>
+    request<{ data: Purchase }>(`/purchases/${id}/items`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
   paySupplier: (id: string, amount?: number, paidAt?: string) =>
     request<{

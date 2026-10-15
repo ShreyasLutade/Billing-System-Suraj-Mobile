@@ -7,6 +7,8 @@ export type SavePurchaseItem = {
   product: string;
   imei: string;
   price: number;
+  /** This mobile's type when a purchase mixes new and second hand. */
+  condition?: "NEW" | "USED";
 };
 
 export function SavePurchaseConfirmModal({
@@ -31,8 +33,6 @@ export function SavePurchaseConfirmModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const used = condition === "USED";
-
   return (
     <AnimatePresence>
       <motion.div
@@ -88,7 +88,9 @@ export function SavePurchaseConfirmModal({
           </div>
 
           <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-5 py-3">
-            {items.map((item, index) => (
+            {items.map((item, index) => {
+              const used = (item.condition ?? condition) === "USED";
+              return (
               <li
                 key={`${item.imei}-${index}`}
                 className="flex items-center gap-2 rounded-xl border border-ink-100 bg-[#FCFDFE] px-3 py-2"
@@ -110,7 +112,8 @@ export function SavePurchaseConfirmModal({
                   {formatINR(item.price)}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ul>
 
           <div className="flex shrink-0 items-baseline justify-between gap-3 border-t-2 border-ink-900 px-5 py-3">

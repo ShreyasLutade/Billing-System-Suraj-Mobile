@@ -44,10 +44,10 @@ export function AddStockPage() {
     };
   }, [state?.supplierId, state?.supplierName]);
 
-  function goBackToStock() {
-    navigate(condition === "USED" ? "/stock?condition=USED" : "/stock", {
+  function goBackToStock(to: "NEW" | "USED" = condition) {
+    navigate(to === "USED" ? "/stock?condition=USED" : "/stock", {
       replace: true,
-      state: { condition },
+      state: { condition: to },
     });
   }
 
@@ -57,8 +57,11 @@ export function AddStockPage() {
       condition={condition}
       fixedSupplier={fixedSupplier}
       prefill={state?.prefill || null}
-      onClose={goBackToStock}
-      onCreated={goBackToStock}
+      onClose={() => goBackToStock()}
+      // Back to the tab of what was saved (the type can be switched in the form).
+      onCreated={(purchase) =>
+        goBackToStock(purchase.condition === "USED" ? "USED" : "NEW")
+      }
     />
   );
 }

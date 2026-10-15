@@ -323,9 +323,8 @@ export function DuesPage() {
         eyebrow="Collections"
         title="Dues"
         action={
-          <BackLink to={from ?? "/"}>
-            {from ? backLabel(from) : "Home"}
-          </BackLink>
+          // Opened from the nav bar: no back button; from another page: back to it.
+          from ? <BackLink to={from}>{backLabel(from)}</BackLink> : undefined
         }
       />
 

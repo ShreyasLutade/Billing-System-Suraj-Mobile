@@ -30,6 +30,8 @@ function cleanId(value: string | undefined | null) {
 
 const purchaseItemSchema = z
   .object({
+    /** This mobile's type; defaults to the purchase's. */
+    condition: z.enum(["NEW", "USED"]).optional(),
     platform: z.enum(["IOS", "ANDROID"]),
     mobileName: z.string().trim().min(2).max(100),
     storage: z.string().trim().min(1).max(30),
@@ -83,6 +85,76 @@ const createPurchaseSchema = z.object({
   /** Paid while entering the purchase (admin only). Omit = unpaid. */
   payment: paymentAtPurchaseSchema.optional().nullable(),
 });
+
+const addPurchaseItemsSchema = z.object({
+  /** New / second hand for the added mobiles; defaults to the purchase's. */
+  condition: z.enum(["NEW", "USED"]).optional(),
+  items: z.array(purchaseItemSchema).min(1, "Add at least one mobile"),
+  /** Paid now for the added mobiles (admin only). Omit = unpaid. */
+  payment: paymentAtPurchaseSchema.optional().nullable(),
+});
+
+type UnitIds = { imei: string | null; serialNumber: string | null };
+
+/**
+ * IMEIs/serials still in stock block a purchase. Sold ones can be bought
+ * back: returns the old rows whose IDs must be retired first.
+ */
+async function checkUnitIds(units: UnitIds[]) {
+  const imeis = units.map((u) => u.imei).filter((v): v is string => Boolean(v));
+  const serials = units
+    .map((u) => u.serialNumber)
+    .filter((v): v is string => Boolean(v));
+
+  if (new Set(imeis).size !== imeis.length) {
+    return { ok: false, status: 400, error: "Duplicate IMEI numbers in this purchase" } as const;
+  }
+  if (new Set(serials).size !== serials.length) {
+    return { ok: false, status: 400, error: "Duplicate serial numbers in this purchase" } as const;
+  }
+
+  const soldImeiOwners: Array<{ id: string; imei: string }> = [];
+  if (imeis.length) {
+    const existingImei = await prisma.stockItem.findMany({
+      where: { imei: { in: imeis } },
+      select: { id: true, imei: true, status: true },
+    });
+    const inStock = existingImei.filter((e) => e.status === "AVAILABLE");
+    if (inStock.length) {
+      return {
+        ok: false,
+        status: 409,
+        error: `IMEI already in stock: ${inStock.map((e) => e.imei).join(", ")}`,
+      } as const;
+    }
+    for (const e of existingImei) {
+      if (e.imei) soldImeiOwners.push({ id: e.id, imei: e.imei });
+    }
+  }
+  const soldSerialOwners: Array<{ id: string; serialNumber: string }> = [];
+  if (serials.length) {
+    const existingSerial = await prisma.stockItem.findMany({
+      where: { serialNumber: { in: serials } },
+      select: { id: true, serialNumber: true, status: true },
+    });
+    const inStockSerials = existingSerial.filter((e) => e.status === "AVAILABLE");
+    if (inStockSerials.length) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Serial already in stock: ${inStockSerials
+          .map((e) => e.serialNumber)
+          .join(", ")}`,
+      } as const;
+    }
+    for (const e of existingSerial) {
+      if (e.serialNumber) {
+        soldSerialOwners.push({ id: e.id, serialNumber: e.serialNumber });
+      }
+    }
+  }
+  return { ok: true, soldImeiOwners, soldSerialOwners } as const;
+}
 
 purchasesRouter.get("/", async (req, res, next) => {
   try {
@@ -246,65 +318,15 @@ purchasesRouter.post("/", async (req, res, next) => {
       imei: cleanId(item.imei) || null,
       serialNumber: cleanId(item.serialNumber) || null,
     }));
-    const imeis = units.map((u) => u.imei).filter((v): v is string => Boolean(v));
-    const serials = units
-      .map((u) => u.serialNumber)
-      .filter((v): v is string => Boolean(v));
-
-    if (new Set(imeis).size !== imeis.length) {
-      res.status(400).json({ error: "Duplicate IMEI numbers in this purchase" });
-      return;
-    }
-    if (new Set(serials).size !== serials.length) {
-      res
-        .status(400)
-        .json({ error: "Duplicate serial numbers in this purchase" });
-      return;
-    }
-
     // Only IMEIs/serials still in stock block a new purchase. A sold phone can be
     // bought back: its old row keeps its history under a retired IMEI (same
     // as a re-exchange in stockSync).
-    const soldImeiOwners: Array<{ id: string; imei: string }> = [];
-    if (imeis.length) {
-      const existingImei = await prisma.stockItem.findMany({
-        where: { imei: { in: imeis } },
-        select: { id: true, imei: true, status: true },
-      });
-      const inStock = existingImei.filter((e) => e.status === "AVAILABLE");
-      if (inStock.length) {
-        res.status(409).json({
-          error: `IMEI already in stock: ${inStock.map((e) => e.imei).join(", ")}`,
-        });
-        return;
-      }
-      for (const e of existingImei) {
-        if (e.imei) soldImeiOwners.push({ id: e.id, imei: e.imei });
-      }
+    const idCheck = await checkUnitIds(units);
+    if (!idCheck.ok) {
+      res.status(idCheck.status).json({ error: idCheck.error });
+      return;
     }
-    const soldSerialOwners: Array<{ id: string; serialNumber: string }> = [];
-    if (serials.length) {
-      const existingSerial = await prisma.stockItem.findMany({
-        where: { serialNumber: { in: serials } },
-        select: { id: true, serialNumber: true, status: true },
-      });
-      for (const e of existingSerial) {
-        if (e.status !== "AVAILABLE" && e.serialNumber) {
-          soldSerialOwners.push({ id: e.id, serialNumber: e.serialNumber });
-        }
-      }
-      const inStockSerials = existingSerial.filter(
-        (e) => e.status === "AVAILABLE",
-      );
-      if (inStockSerials.length) {
-        res.status(409).json({
-          error: `Serial already in stock: ${inStockSerials
-            .map((e) => e.serialNumber)
-            .join(", ")}`,
-        });
-        return;
-      }
-    }
+    const { soldImeiOwners, soldSerialOwners } = idCheck;
 
     let supplier =
       data.supplierId
@@ -371,7 +393,7 @@ purchasesRouter.post("/", async (req, res, next) => {
         const stock = await tx.stockItem.create({
           data: {
             kind: "MOBILE",
-            condition: data.condition,
+            condition: item.condition ?? data.condition,
             platform: item.platform,
             mobileName: item.mobileName.trim(),
             storage: normalizeCapacity(item.storage),
@@ -428,6 +450,170 @@ purchasesRouter.post("/", async (req, res, next) => {
     }
 
     res.status(201).json({ data: purchase });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Add more mobiles to an existing purchase (same supplier, date, condition).
+ * The purchase total grows; what was already paid stays paid, so the added
+ * amount is outstanding unless paid now.
+ */
+purchasesRouter.post("/:id/items", async (req, res, next) => {
+  try {
+    const parsed = addPurchaseItemsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+    const data = parsed.data;
+    if (
+      data.payment &&
+      data.payment.mode !== "UNPAID" &&
+      req.user?.role !== "ADMIN"
+    ) {
+      res.status(403).json({ error: "Only an admin can record a payment" });
+      return;
+    }
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: req.params.id },
+      include: { supplier: true },
+    });
+    if (!purchase) {
+      res.status(404).json({ error: "Purchase not found" });
+      return;
+    }
+
+    const units = data.items.map((item) => ({
+      imei: cleanId(item.imei) || null,
+      serialNumber: cleanId(item.serialNumber) || null,
+    }));
+    const idCheck = await checkUnitIds(units);
+    if (!idCheck.ok) {
+      res.status(idCheck.status).json({ error: idCheck.error });
+      return;
+    }
+
+    const addedAmount = round2(
+      data.items.reduce((sum, item) => sum + item.purchasePrice, 0),
+    );
+    const paymentError = paymentAtPurchaseError(data.payment, addedAmount);
+    if (paymentError) {
+      res.status(400).json({ error: paymentError });
+      return;
+    }
+
+    const condition =
+      data.condition ?? (purchase.condition === "USED" ? "USED" : "NEW");
+    const updated = await prisma.$transaction(async (tx) => {
+      for (const owner of idCheck.soldImeiOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { imei: retireStockImei(owner.imei, owner.id) },
+        });
+      }
+      for (const owner of idCheck.soldSerialOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { serialNumber: retireStockImei(owner.serialNumber, owner.id) },
+        });
+      }
+
+      for (let i = 0; i < data.items.length; i++) {
+        const item = data.items[i];
+        const ids = units[i];
+        const stock = await tx.stockItem.create({
+          data: {
+            kind: "MOBILE",
+            condition: item.condition ?? condition,
+            platform: item.platform,
+            mobileName: item.mobileName.trim(),
+            storage: normalizeCapacity(item.storage),
+            ram: item.platform === "ANDROID" ? normalizeCapacity(item.ram) : "",
+            color: item.color.trim(),
+            imei: ids.imei,
+            serialNumber: ids.serialNumber,
+            purchasePrice: item.purchasePrice,
+            suppliers: serializeSuppliers([purchase.supplier.name]),
+            supplierId: purchase.supplierId,
+            status: "AVAILABLE",
+            createdAt: purchase.purchaseDate,
+            createdByUserId: req.user?.id || null,
+            createdByName: req.user?.name || null,
+          },
+        });
+        await tx.purchaseItem.create({
+          data: { purchaseId: purchase.id, stockItemId: stock.id },
+        });
+      }
+
+      // Already paid stays paid; the added mobiles are due unless paid now.
+      const oldTotalPaise = Math.round((purchase.totalAmount || 0) * 100);
+      const alreadyPaidPaise = purchase.paidAt
+        ? oldTotalPaise
+        : Math.min(Math.round((purchase.paidAmount || 0) * 100), oldTotalPaise);
+      const addedPaise = Math.round(addedAmount * 100);
+      const payNowPaise =
+        !data.payment || data.payment.mode === "UNPAID"
+          ? 0
+          : data.payment.mode === "FULL"
+            ? addedPaise
+            : Math.min(Math.round((data.payment.amount ?? 0) * 100), addedPaise);
+      const newTotalPaise = oldTotalPaise + addedPaise;
+      const newPaidPaise = alreadyPaidPaise + payNowPaise;
+      const fullyPaid = newPaidPaise >= newTotalPaise;
+
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          totalAmount: newTotalPaise / 100,
+          paidAmount: newPaidPaise / 100,
+          paidAt: fullyPaid ? (purchase.paidAt ?? new Date()) : null,
+        },
+      });
+      if (payNowPaise > 0) {
+        await tx.supplierPayment.create({
+          data: {
+            supplierId: purchase.supplierId,
+            amount: payNowPaise / 100,
+            method: "na",
+            paidAt: new Date(),
+            note: `For mobiles added to purchase of ${purchase.purchaseDate
+              .toISOString()
+              .slice(0, 10)}`,
+          },
+        });
+      }
+      await applyPendingReturnCredits(tx, purchase.supplierId);
+
+      return tx.purchase.findUniqueOrThrow({
+        where: { id: purchase.id },
+        include: {
+          supplier: true,
+          items: { include: { stockItem: true } },
+        },
+      });
+    });
+
+    for (const item of data.items) {
+      try {
+        await upsertPhoneModel(prisma, {
+          platform: item.platform,
+          name: item.mobileName,
+          storage: item.storage,
+          ram: item.ram,
+        });
+      } catch (error) {
+        console.warn("[phone-models] Upsert after purchase failed:", error);
+      }
+    }
+
+    res.status(201).json({ data: updated });
   } catch (error) {
     next(error);
   }
