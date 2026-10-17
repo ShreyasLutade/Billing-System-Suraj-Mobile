@@ -37,7 +37,7 @@ import {
   isFinanceFullyReceived,
   type FinanceSlot,
 } from "../lib/financeSlots";
-import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
+import { isShareAbort, printInvoicePdf, shareInvoicePdf } from "../lib/shareInvoice";
 import type {
   Bill,
   BillProductReturn,
@@ -126,6 +126,7 @@ export function BillDetailPage() {
     FinanceSlot[] | undefined
   >(undefined);
   const [sharing, setSharing] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
   const loadBill = useCallback(async () => {
@@ -376,17 +377,29 @@ export function BillDetailPage() {
               <span className="sm:hidden">PDF</span>
               <span className="hidden sm:inline">Download PDF</span>
             </a>
-            <a
+            <button
+              type="button"
               className="bd-action flex-1 !px-1.5 sm:flex-none sm:!px-3.5"
-              href={api.printPdfUrl(bill.id)}
-              target="_blank"
-              rel="noreferrer"
               aria-label="Print bill"
               title="Print"
+              disabled={printing}
+              onClick={() => {
+                setShareError(null);
+                setPrinting(true);
+                void printInvoicePdf(bill.id, bill.invoiceNumber)
+                  .catch((err) => {
+                    if (!isShareAbort(err)) {
+                      setShareError(
+                        err instanceof Error ? err.message : "Could not print the bill",
+                      );
+                    }
+                  })
+                  .finally(() => setPrinting(false));
+              }}
             >
               <Printer className="h-[15px] w-[15px] shrink-0" />
-              Print
-            </a>
+              {printing ? "…" : "Print"}
+            </button>
             {isAdmin ? (
               <button
                 type="button"

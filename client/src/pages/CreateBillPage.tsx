@@ -49,7 +49,7 @@ import {
 } from "../lib/billDiff";
 import { ApiError, api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
 import { warrantyText } from "../lib/warranty";
-import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
+import { isShareAbort, printInvoicePdf, shareInvoicePdf } from "../lib/shareInvoice";
 import { billsHomePath, readFromState } from "../lib/navMemory";
 import type {
   Bill,
@@ -462,6 +462,7 @@ export function CreateBillPage() {
     dueDate: string | null;
   } | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
   function captureSuccessPayment(bill: Bill) {
@@ -2048,6 +2049,21 @@ export function CreateBillPage() {
       }
     }
 
+    async function printBill() {
+      setPrinting(true);
+      setShareError(null);
+      try {
+        await printInvoicePdf(savedBillId, invoiceLabel);
+      } catch (err) {
+        if (isShareAbort(err)) return;
+        setShareError(
+          err instanceof Error ? err.message : "Could not print the bill",
+        );
+      } finally {
+        setPrinting(false);
+      }
+    }
+
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
@@ -2188,15 +2204,15 @@ export function CreateBillPage() {
               <span className="sm:hidden">PDF</span>
               <span className="hidden sm:inline">Download PDF</span>
             </a>
-            <a
+            <button
               className="btn-secondary min-w-0 flex-1 !px-2 sm:flex-none sm:!px-4"
-              href={api.printPdfUrl(savedBillId)}
-              target="_blank"
-              rel="noreferrer"
+              type="button"
+              disabled={printing}
+              onClick={() => void printBill()}
             >
               <Printer className="h-4 w-4 shrink-0" />
-              Print
-            </a>
+              {printing ? "…" : "Print"}
+            </button>
           </div>
           <div className="flex flex-wrap justify-center gap-3">
             <button

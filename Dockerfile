@@ -28,7 +28,7 @@ ENV NODE_ENV=production
 ENV PORT=4000
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates ghostscript \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/server/package.json /app/server/package-lock.json ./server/

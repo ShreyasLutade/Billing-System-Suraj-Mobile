@@ -295,9 +295,8 @@ export function drawBabuLogo(
 
   // Deep navy (not the light app gradient) so the mark prints near-black
   // on black & white printers instead of washed-out grey.
-  const grad = doc.linearGradient(8, 4, 58, 60);
-  grad.stop(0, COLORS.logoStart).stop(1, COLORS.logoEnd);
-  doc.roundedRect(0, 0, 64, 64, 20).fill(grad);
+  // Solid fill, no gradient: printer apps (e.g. Canon PRINT) reject shadings.
+  doc.roundedRect(0, 0, 64, 64, 20).fill(COLORS.logoStart);
 
   // "BM" in white strokes over a soft shadow, a yellow dot in the M and
   // signal waves (same mark as the app icon).
@@ -376,14 +375,10 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   }
 
   const underlineY = nameBaseline + size * 0.26;
-  const underlineGrad = doc.linearGradient(textX, 0, textX + nameW, 0);
-  underlineGrad
-    .stop(0, COLORS.gradStart)
-    .stop(0.55, COLORS.gradEnd)
-    // Fades into the white page (a transparent stop would need a soft mask,
-    // which printer previews can't render).
-    .stop(1, COLORS.white);
-  doc.roundedRect(textX, underlineY, nameW, 2.6, 1.3).fill(underlineGrad);
+  // Two solid colours instead of a gradient: printer apps (e.g. Canon PRINT)
+  // reject PDFs with shadings or transparency.
+  doc.roundedRect(textX, underlineY, nameW, 2.6, 1.3).fill(COLORS.gradEnd);
+  doc.roundedRect(textX, underlineY, nameW * 0.55, 2.6, 1.3).fill(COLORS.gradStart);
 
   doc
     .fillColor(COLORS.ink)

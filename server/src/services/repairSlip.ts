@@ -72,9 +72,9 @@ const dateLabel = (date: Date) =>
 const rupees = (amount: number) => `Rs. ${money(amount)}`;
 
 function drawHeader(doc: PDFKit.PDFDocument, job: RepairSlipJob) {
-  const top = doc.linearGradient(0, 0, PAGE.width, 0);
-  top.stop(0, COLORS.logoStart).stop(1, COLORS.accent);
-  doc.rect(0, 0, PAGE.width, 8).fill(top);
+  // Two solid bands, no gradient: printer apps reject shadings.
+  doc.rect(0, 0, PAGE.width, 8).fill(COLORS.accent);
+  doc.rect(0, 0, PAGE.width / 2, 8).fill(COLORS.logoStart);
 
   drawBabuLogo(doc, M, 25, 54);
   const x = M + 68;

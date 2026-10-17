@@ -12,6 +12,7 @@ import {
   toDateFilter,
 } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
+import { printSafePdf } from "../services/printSafePdf";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { upsertCustomerProfile } from "../services/customers";
 import {
@@ -1439,11 +1440,14 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
       return;
     }
 
-    const pdf = await buildInvoicePdf(bill);
+    // The print copy is image-only so printer apps (e.g. Canon PRINT) can open it.
+    const forPrint = req.query.print === "1";
+    const vector = await buildInvoicePdf(bill);
+    const pdf = forPrint ? await printSafePdf(vector) : vector;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `${req.query.print === "1" ? "inline" : "attachment"}; filename="${bill.invoiceNumber}.pdf"`,
+      `${forPrint ? "inline" : "attachment"}; filename="${bill.invoiceNumber}.pdf"`,
     );
     res.send(pdf);
   } catch (error) {
