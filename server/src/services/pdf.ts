@@ -301,6 +301,8 @@ export function drawBabuLogo(
 
   // "BM" in white strokes over a soft shadow, a yellow dot in the M and
   // signal waves (same mark as the app icon).
+  // Solid colours only, no opacity: printer apps' built-in PDF viewers (e.g.
+  // Canon print preview) show a blank page for transparency.
   const letters =
     "M13.5 20.5V47.5M13.5 20.5H21a6.5 6.5 0 0 1 0 13H13.5M13.5 33.5H22.5a7 7 0 0 1 0 14H13.5M35 47.5V20.5L43.5 35L52 20.5V47.5";
   doc.save();
@@ -310,15 +312,13 @@ export function drawBabuLogo(
     .lineWidth(5.4)
     .lineCap("round")
     .lineJoin("round")
-    .strokeOpacity(0.25)
-    .stroke("#0F2A55");
+    .stroke("#0D2450");
   doc.restore();
   doc
     .path(letters)
     .lineWidth(5.4)
     .lineCap("round")
     .lineJoin("round")
-    .strokeOpacity(1)
     .stroke(COLORS.white);
   doc.circle(43.5, 44.5, 2.4).fill("#FFD23F");
 
@@ -326,8 +326,7 @@ export function drawBabuLogo(
     .path("M50 8.5a7.5 7.5 0 0 1 6 6M50 4a12 12 0 0 1 10.5 10.5")
     .lineWidth(2.3)
     .lineCap("round")
-    .strokeOpacity(0.9)
-    .stroke(COLORS.white);
+    .stroke("#E7EBF2");
 
   doc.restore();
 }
@@ -381,7 +380,9 @@ function drawHeader(doc: PDFKit.PDFDocument) {
   underlineGrad
     .stop(0, COLORS.gradStart)
     .stop(0.55, COLORS.gradEnd)
-    .stop(1, COLORS.gradEnd, 0);
+    // Fades into the white page (a transparent stop would need a soft mask,
+    // which printer previews can't render).
+    .stop(1, COLORS.white);
   doc.roundedRect(textX, underlineY, nameW, 2.6, 1.3).fill(underlineGrad);
 
   doc
