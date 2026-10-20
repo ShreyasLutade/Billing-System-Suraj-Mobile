@@ -6,8 +6,8 @@ import { COLORS, FONT, drawShopLogo, money, registerFonts, shop } from "./pdf";
 
 /**
  * Everything currently in stock for one condition (new / old mobiles) as an
- * A4 portrait PDF — one row per unit with its IMEI, supplier and age, plus
- * per-model subtotals. Portrait so it reads well on a phone after sharing.
+ * A4 portrait PDF — one row per unit with its IMEI and supplier, listed
+ * alphabetically. Portrait so it reads well on a phone after sharing.
  *
  * Cost and total value are admin-only: `withCost` comes from the caller's
  * role, matching how the Stock page hides prices from staff.
@@ -21,7 +21,6 @@ const W = PAGE.width - M * 2;
 const FOOTER_H = 30;
 const PAD = 5;
 const GREEN = "#0B7A5B";
-const AMBER = "#B45309";
 
 type Col = {
   key: string;
@@ -57,7 +56,6 @@ type Row = {
   serial: string;
   supplier: string;
   addedAt: Date;
-  ageDays: number;
   cost: number;
 };
 
@@ -65,7 +63,6 @@ type Totals = {
   count: number;
   models: number;
   cost: number;
-  oldestDays: number;
 };
 
 function round2(value: number) {
@@ -74,18 +71,6 @@ function round2(value: number) {
 
 function day(date: Date) {
   return format(date, "dd MMM yyyy");
-}
-
-function daysSince(date: Date) {
-  const ms = Date.now() - date.getTime();
-  return Math.max(0, Math.floor(ms / 86_400_000));
-}
-
-/** Red past 60 days, amber past 30 — the "money sitting still" signal. */
-function ageColor(days: number) {
-  if (days >= 60) return "#BE123C";
-  if (days >= 30) return AMBER;
-  return COLORS.muted;
 }
 
 function safeFilePart(value: string) {
@@ -121,14 +106,11 @@ export async function buildStockExportPdf(
   });
 
   let totalCost = 0;
-  let oldestDays = 0;
 
   const rows: Row[] = items.map((item) => {
     const addedAt = item.purchaseItem?.purchase.purchaseDate ?? item.createdAt;
-    const ageDays = daysSince(addedAt);
     const cost = round2(item.purchasePrice || 0);
     totalCost += cost;
-    if (ageDays > oldestDays) oldestDays = ageDays;
 
     return {
       name: item.mobileName,
@@ -143,13 +125,11 @@ export async function buildStockExportPdf(
       serial: item.serialNumber ? item.serialNumber.split("~")[0] : "",
       supplier: item.supplier?.name ?? "",
       addedAt,
-      ageDays,
       cost,
     };
   });
 
-  // Group by model + variant so each band covers one contiguous block;
-  // the DB sort is by name only, which interleaves colours.
+  // One plain alphabetical list — same model and variant still land together.
   rows.sort(
     (a, b) =>
       a.name.localeCompare(b.name) ||
@@ -161,7 +141,6 @@ export async function buildStockExportPdf(
     count: rows.length,
     models: new Set(rows.map(modelKey)).size,
     cost: round2(totalCost),
-    oldestDays,
   };
 
   const pdf = await render({ condition, rows, totals, withCost });
@@ -243,6 +222,7 @@ function drawSummary(
   const boxes = [
     { label: "Mobiles", value: String(totals.count), fill: "#F4F6FB", color: COLORS.ink },
     { label: "Models", value: String(totals.models), fill: "#F4F6FB", color: COLORS.ink },
+    // Stock value is admin-only, like the Cost column.
     ...(withCost
       ? [
           {
@@ -253,12 +233,6 @@ function drawSummary(
           },
         ]
       : []),
-    {
-      label: "Oldest unit",
-      value: totals.count ? `${totals.oldestDays} days` : "—",
-      fill: "#FFF7E6",
-      color: ageColor(totals.oldestDays),
-    },
   ];
 
   const gap = 8;
@@ -320,7 +294,6 @@ function drawRow(
     second: string,
     color = COLORS.ink,
     firstFont: string = FONT.medium,
-    secondColor = COLORS.muted,
   ) => {
     const col = cols[i];
     const w = col.width - PAD * 2;
@@ -338,7 +311,7 @@ function drawRow(
       doc
         .font(FONT.regular)
         .fontSize(6.8)
-        .fillColor(secondColor)
+        .fillColor(COLORS.muted)
         .text(second, x + PAD, top + 11, {
           width: w,
           align: col.align,
@@ -359,14 +332,7 @@ function drawRow(
     FONT.regular,
   );
   cell(3, row.supplier, "", COLORS.ink, FONT.regular);
-  cell(
-    4,
-    day(row.addedAt),
-    `${row.ageDays}d`,
-    COLORS.ink,
-    FONT.regular,
-    ageColor(row.ageDays),
-  );
+  cell(4, day(row.addedAt), "", COLORS.ink, FONT.regular);
   if (withCost) cell(5, money(row.cost), "");
 
   doc
@@ -376,42 +342,6 @@ function drawRow(
     .lineWidth(0.5)
     .stroke();
   return y + ROW_H;
-}
-
-/** Thin band between models so a long list stays readable. */
-function drawModelBand(
-  doc: PDFKit.PDFDocument,
-  y: number,
-  label: string,
-  count: number,
-  value: number,
-  withCost: boolean,
-) {
-  const h = 16;
-  doc.rect(M, y, W, h).fill("#EEF1F5");
-  doc
-    .font(FONT.semibold)
-    .fontSize(7.5)
-    .fillColor("#475569")
-    .text(label.toUpperCase(), M + PAD, y + 5, {
-      width: W - 160,
-      characterSpacing: 0.5,
-      lineBreak: false,
-      ellipsis: true,
-    });
-  doc
-    .font(FONT.medium)
-    .fontSize(7.5)
-    .fillColor("#7A8699")
-    .text(
-      withCost
-        ? `${count} pc${count === 1 ? "" : "s"} · Rs. ${money(value)}`
-        : `${count} pc${count === 1 ? "" : "s"}`,
-      M,
-      y + 5,
-      { width: W - PAD, align: "right", lineBreak: false },
-    );
-  return y + h;
 }
 
 function drawTotals(
@@ -521,41 +451,11 @@ function render(data: {
       y += 44;
     }
 
-    // Per-model count and value, computed once rather than per row.
-    const groups = new Map<string, { count: number; cost: number }>();
-    for (const row of rows) {
-      const key = modelKey(row);
-      const group = groups.get(key) ?? { count: 0, cost: 0 };
-      group.count += 1;
-      group.cost = round2(group.cost + row.cost);
-      groups.set(key, group);
-    }
-
-    let lastModel = "";
     rows.forEach((row, index) => {
-      const key = modelKey(row);
-      const isNewModel = key !== lastModel;
-
-      // Keep a model band with at least one row under it.
-      const needed = isNewModel ? 16 + ROW_H : ROW_H;
-      if (y + needed > bottom) {
+      if (y + ROW_H > bottom) {
         doc.addPage({ size: [PAGE.width, PAGE.height], margin: 0 });
         y = drawTableHeader(doc, M, cols);
       }
-
-      if (isNewModel) {
-        const group = groups.get(key) ?? { count: 1, cost: row.cost };
-        y = drawModelBand(
-          doc,
-          y,
-          [row.name, row.specs].filter(Boolean).join(" · "),
-          group.count,
-          group.cost,
-          withCost,
-        );
-        lastModel = key;
-      }
-
       y = drawRow(doc, y, row, index, cols, withCost);
     });
 
