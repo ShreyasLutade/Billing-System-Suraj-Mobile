@@ -286,6 +286,70 @@ authRouter.get("/users", ...manageUsers, async (_req, res, next) => {
   }
 });
 
+/**
+ * Create a login for the mobile shop. Phone + role must be free (schema is
+ * unique on the pair). New logins always get full shop access — repair-only
+ * accounts are set up separately.
+ */
+authRouter.post("/users", ...manageUsers, async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({
+        name: z.string().trim().min(1, "Enter a name"),
+        phone: z
+          .string()
+          .trim()
+          .regex(/^\d{10}$/, "Enter a valid 10-digit phone number"),
+        role: z.enum(["ADMIN", "STAFF"]),
+        password: z.string().min(8, "Password must be at least 8 characters"),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      const fields = parsed.error.flatten().fieldErrors;
+      res.status(400).json({
+        error:
+          fields.name?.[0] ||
+          fields.phone?.[0] ||
+          fields.role?.[0] ||
+          fields.password?.[0] ||
+          "Check the details and try again",
+      });
+      return;
+    }
+
+    const { name, phone, role, password } = parsed.data;
+
+    const clash = await prisma.user.findFirst({ where: { phone, role } });
+    if (clash) {
+      res.status(409).json({
+        error: `${phone} already has a ${role === "ADMIN" ? "admin" : "staff"} login`,
+      });
+      return;
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        phone,
+        role,
+        passwordHash: await bcrypt.hash(password, 10),
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        role: true,
+        repairShop: true,
+        blocked: true,
+        createdAt: true,
+      },
+    });
+    res.status(201).json({ data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /** Block / unblock an account. Admins can't block themselves. */
 authRouter.patch(
   "/users/:id/blocked",
@@ -312,22 +376,18 @@ authRouter.patch(
         return;
       }
 
-      // Keep at least one shop admin able to log in. Repair-only admins
-      // don't count — they can't run the mobile shop.
+      // Shop admins can't be blocked at all, so the shop always has a way
+      // in. Repair-only admins are a different counter's account and stay
+      // blockable, as does every staff login.
       if (
         parsed.data.blocked &&
         target.role === "ADMIN" &&
         !target.repairShop
       ) {
-        const activeAdmins = await prisma.user.count({
-          where: { role: "ADMIN", blocked: false, repairShop: null },
+        res.status(400).json({
+          error: "Admin accounts can't be blocked. Make them staff first.",
         });
-        if (activeAdmins <= 1) {
-          res
-            .status(400)
-            .json({ error: "At least one admin must stay unblocked" });
-          return;
-        }
+        return;
       }
 
       const user = await prisma.user.update({
@@ -421,7 +481,7 @@ const SEED_USERS: Array<{
   {
     phone: "7038006342",
     password: "Shreyas@026",
-    name: "Shreyas Admin",
+    name: "Shreyas",
     role: "ADMIN",
   },
   {
@@ -483,19 +543,7 @@ export async function seedUsers() {
     }
   }
 
-  // Remove accounts that are no longer part of the official seed list
-  // (e.g. old shared staff login with Mobile@123).
-  const keepKeys = new Set(
-    SEED_USERS.map((seed) => `${seed.phone}:${seed.role}`),
-  );
-  const allUsers = await prisma.user.findMany({
-    select: { id: true, phone: true, role: true },
-  });
-  const obsoleteIds = allUsers
-    .filter((user) => !keepKeys.has(`${user.phone}:${user.role}`))
-    .map((user) => user.id);
-
-  if (obsoleteIds.length) {
-    await prisma.user.deleteMany({ where: { id: { in: obsoleteIds } } });
-  }
+  // Accounts outside the seed list are left alone: admins add users from
+  // Manage users, and those must survive a redeploy. (This used to delete
+  // them, which was fine when the seed list was the only way in.)
 }
