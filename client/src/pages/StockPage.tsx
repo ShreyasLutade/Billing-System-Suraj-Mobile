@@ -8,6 +8,7 @@ import {
   Cable,
   Check,
   ChevronDown,
+  Download,
   Package,
   Plus,
   RefreshCw,
@@ -23,6 +24,7 @@ import { BackButton, EmptyState, LoadingBlock, PageHeader, SearchClearButton } f
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
 import { AddStockFab } from "../components/AddStockFab";
 import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
+import { StockExportModal } from "../components/StockExportModal";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
@@ -246,6 +248,8 @@ export function StockPage() {
   const [pendingRemove, setPendingRemove] = useState<StockItem | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [editingUnit, setEditingUnit] = useState<StockItem | null>(null);
+  /** Download icon → pick new / old mobiles, then save and share the PDF. */
+  const [exportOpen, setExportOpen] = useState(false);
   const [selectedKey, setSelectedKeyState] = useState<string | null>(
     () => itemFromUrl,
   );
@@ -525,27 +529,44 @@ export function StockPage() {
         icon={Package}
         title="Stock"
         action={
-          // Phones use the floating + instead (AddStockFab).
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="btn-primary"
-              onClick={() => openAddAccessoriesPage()}
+              className="btn-secondary px-2.5"
+              onClick={() => setExportOpen(true)}
+              aria-label="Download stock PDF"
+              title="Download stock PDF"
             >
-              <Cable className="h-4 w-4" />
-              Add accessories
+              <Download className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => openAddMobilePage()}
-            >
-              <Plus className="h-4 w-4" />
-              Add mobile
-            </button>
+            {/* Phones use the floating + instead (AddStockFab). */}
+            <div className="hidden items-center gap-2 md:flex">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => openAddAccessoriesPage()}
+              >
+                <Cable className="h-4 w-4" />
+                Add accessories
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => openAddMobilePage()}
+              >
+                <Plus className="h-4 w-4" />
+                Add mobile
+              </button>
+            </div>
           </div>
         }
       />
+
+      <AnimatePresence>
+        {exportOpen ? (
+          <StockExportModal onClose={() => setExportOpen(false)} />
+        ) : null}
+      </AnimatePresence>
 
       <div className="tb-toolbar">
         <div className="tb-tabs tb-tabs-3" role="tablist" aria-label="Stock type">

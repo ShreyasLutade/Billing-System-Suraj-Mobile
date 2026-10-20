@@ -369,6 +369,38 @@ export const api = {
       `/stock${query ? `?${query}` : ""}`,
     );
   },
+  /**
+   * Stock PDF for one condition, as a blob so the caller can both save it and
+   * hand it to the share sheet without fetching twice.
+   */
+  fetchStockExportPdf: async (condition: "NEW" | "USED") => {
+    const token = getAuthToken();
+    const params = new URLSearchParams({ condition });
+    const response = await fetch(`${API_BASE}/stock/export?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      let message = "Could not build the stock PDF";
+      try {
+        const body = await response.json();
+        message = body.error || message;
+      } catch {
+        // Not JSON — keep the default message.
+      }
+      throw new ApiError(message, response.status);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    return {
+      blob,
+      filename:
+        match?.[1] ||
+        `${condition === "USED" ? "old" : "new"}-mobiles.pdf`,
+      unitCount: Number(response.headers.get("X-Unit-Count") || 0),
+      modelCount: Number(response.headers.get("X-Model-Count") || 0),
+    };
+  },
   listAccessoryNames: () =>
     request<{ data: string[] }>("/stock/accessory-names"),
   createAccessories: (payload: {
