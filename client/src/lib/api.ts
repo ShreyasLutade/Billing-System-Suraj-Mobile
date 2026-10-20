@@ -498,6 +498,16 @@ export const api = {
     request<{ data: { removed: number } }>("/recycle-bin", { method: "DELETE" }),
   /* ---- Manage users (admin only) ---- */
   listUsers: () => request<{ data: ManagedUser[] }>("/auth/users"),
+  createUser: (payload: {
+    name: string;
+    phone: string;
+    role: "ADMIN" | "STAFF";
+    password: string;
+  }) =>
+    request<{ data: ManagedUser }>("/auth/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   setUserBlocked: (id: string, blocked: boolean) =>
     request<{ data: ManagedUser }>(`/auth/users/${id}/blocked`, {
       method: "PATCH",
