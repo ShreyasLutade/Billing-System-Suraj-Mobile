@@ -14,6 +14,8 @@ model User {
   name         String
   /// ADMIN | STAFF
   role         String
+  /// Blocked accounts keep their data but cannot log in.
+  blocked      Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

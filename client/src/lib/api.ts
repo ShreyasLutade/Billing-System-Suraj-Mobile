@@ -13,6 +13,7 @@ import type {
   PendingAccessoriesSummary,
   FinanceDuesSummary,
   FinanceCompany,
+  ManagedUser,
   MobileCatalog,
   PhoneModel,
   Purchase,
@@ -493,6 +494,22 @@ export const api = {
   /** Delete everything in the bin for good. */
   emptyRecycleBin: () =>
     request<{ data: { removed: number } }>("/recycle-bin", { method: "DELETE" }),
+  /* ---- Manage users (admin only) ---- */
+  listUsers: () => request<{ data: ManagedUser[] }>("/auth/users"),
+  setUserBlocked: (id: string, blocked: boolean) =>
+    request<{ data: ManagedUser }>(`/auth/users/${id}/blocked`, {
+      method: "PATCH",
+      body: JSON.stringify({ blocked }),
+    }),
+  /**
+   * Replaces the account's password. Existing ones are bcrypt hashes and
+   * can't be read back, so setting a new one is the only option.
+   */
+  setUserPassword: (id: string, password: string) =>
+    request<{ data: { updated: boolean } }>(`/auth/users/${id}/password`, {
+      method: "PATCH",
+      body: JSON.stringify({ password }),
+    }),
   listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
   listSupplierMobiles: () =>
     request<{ data: SupplierMobile[] }>("/suppliers/mobiles"),
