@@ -647,6 +647,12 @@ export type AuthUser = {
   role: "ADMIN" | "STAFF";
 };
 
+/** A login as the Manage users page sees it (admin only). */
+export type ManagedUser = AuthUser & {
+  blocked: boolean;
+  createdAt: string;
+};
+
 export type BillProductReturn = {
   billItemId: string | null;
   stockItemId: string;

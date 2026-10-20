@@ -12,6 +12,7 @@ import {
   Sun,
   Trash2,
   Truck,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -226,6 +227,20 @@ export function AppShell() {
                   {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
+                {isAdmin ? (
+                  <Link
+                    to="/users"
+                    role="menuitem"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onMainNavClick();
+                      setAccountMenuOpen(false);
+                    }}
+                  >
+                    <Users className="h-4 w-4" />
+                    Manage users
+                  </Link>
+                ) : null}
                 {isAdmin ? (
                   <Link
                     to="/backup"
