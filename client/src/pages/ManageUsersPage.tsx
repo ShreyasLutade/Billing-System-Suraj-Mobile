@@ -31,20 +31,14 @@ import type { ManagedUser } from "../types";
  */
 
 /**
- * Admin accounts the shop treats as staff here: listed under Staff, no
- * Admin badge, blockable like staff. Mirrors ADMINS_LISTED_AS_STAFF on the
- * server, which enforces the blocking side. They keep full admin rights
- * everywhere else in the app.
+ * Logins kept out of this list — the developer account, which isn't one of
+ * the shop's own people. It still works for signing in.
  */
-const LIST_AS_STAFF = new Set(["7038006342"]);
+const HIDDEN_PHONES = new Set(["7038006342"]);
 
-function isListedAsStaff(user: ManagedUser) {
-  return user.role === "STAFF" || LIST_AS_STAFF.has(user.phone);
-}
-
-/** Admins can't be blocked — only staff, and the admins shown as staff. */
+/** Admins can't be blocked — only staff. */
 function canBlock(user: ManagedUser) {
-  return isListedAsStaff(user);
+  return user.role !== "ADMIN";
 }
 
 function formatJoined(value: string) {
@@ -97,17 +91,18 @@ export function ManageUsersPage() {
 
   const { admins, staff } = useMemo(() => {
     const term = query.trim().toLowerCase();
+    const visible = users.filter((user) => !HIDDEN_PHONES.has(user.phone));
     const matches = term
-      ? users.filter(
+      ? visible.filter(
           (user) =>
             user.name.toLowerCase().includes(term) ||
             user.phone.includes(term),
         )
-      : users;
+      : visible;
 
     return {
-      admins: matches.filter((user) => !isListedAsStaff(user)),
-      staff: matches.filter(isListedAsStaff),
+      admins: matches.filter((user) => user.role === "ADMIN"),
+      staff: matches.filter((user) => user.role === "STAFF"),
     };
   }, [users, query]);
 
@@ -139,6 +134,12 @@ export function ManageUsersPage() {
       Add user
     </button>
   );
+
+  // Count only the logins this page shows, so hiding one doesn't read as
+  // "no users".
+  const visibleCount = users.filter(
+    (user) => !HIDDEN_PHONES.has(user.phone),
+  ).length;
 
   if (loading) {
     return (
@@ -181,14 +182,14 @@ export function ManageUsersPage() {
         </div>
       ) : null}
 
-      {!users.length && !error ? (
+      {!visibleCount && !error ? (
         <EmptyState
           title="No users yet"
           description="Logins created for this shop will appear here."
         />
       ) : null}
 
-      {users.length && !admins.length && !staff.length ? (
+      {visibleCount > 0 && !admins.length && !staff.length ? (
         <EmptyState
           title="No match"
           description="No user matches that name or number."
@@ -350,9 +351,7 @@ function UserRow({
               {user.name}
             </span>
             {isMe ? <Pill tone="neutral">You</Pill> : null}
-            {user.role === "ADMIN" && !isListedAsStaff(user) ? (
-              <Pill tone="tide">Admin</Pill>
-            ) : null}
+            {user.role === "ADMIN" ? <Pill tone="tide">Admin</Pill> : null}
             {user.blocked ? <Pill tone="rose">Blocked</Pill> : null}
           </p>
           <p className="mt-0.5 truncate text-[13px] text-ink-500">

@@ -256,13 +256,6 @@ authRouter.post("/reset-password", async (req, res, next) => {
  * admin can only set a new one, which replaces the hash.
  * ---------------------------------------------------------------- */
 
-/**
- * Admin accounts the shop treats as staff in Manage users: listed under
- * Staff, no Admin badge, and blockable like staff. They keep full admin
- * rights everywhere else.
- */
-const ADMINS_LISTED_AS_STAFF = new Set(["7038006342"]);
-
 /** Everyone with a login, admins first, then staff, each A→Z. */
 authRouter.get("/users", requireAuth, requireAdmin, async (_req, res, next) => {
   try {
@@ -364,35 +357,19 @@ authRouter.patch(
 
       const target = await prisma.user.findUnique({
         where: { id: req.params.id },
-        select: { id: true, role: true, phone: true },
+        select: { id: true, role: true },
       });
       if (!target) {
         res.status(404).json({ error: "User not found" });
         return;
       }
 
-      const treatedAsStaff = ADMINS_LISTED_AS_STAFF.has(target.phone);
-
-      // Only staff get blocked. Admins stay reachable so the shop can
-      // always be run, however many of them there are.
-      if (parsed.data.blocked && target.role === "ADMIN" && !treatedAsStaff) {
+      // Only staff get blocked, so the shop always keeps a way in.
+      if (parsed.data.blocked && target.role === "ADMIN") {
         res.status(400).json({
           error: "Admin accounts can't be blocked. Make them staff first.",
         });
         return;
-      }
-
-      // …but never block away the last admin who can still log in.
-      if (parsed.data.blocked && target.role === "ADMIN") {
-        const activeAdmins = await prisma.user.count({
-          where: { role: "ADMIN", blocked: false },
-        });
-        if (activeAdmins <= 1) {
-          res
-            .status(400)
-            .json({ error: "At least one admin must stay unblocked" });
-          return;
-        }
       }
 
       const user = await prisma.user.update({
