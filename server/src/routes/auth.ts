@@ -256,6 +256,13 @@ authRouter.post("/reset-password", async (req, res, next) => {
  * admin can only set a new one, which replaces the hash.
  * ---------------------------------------------------------------- */
 
+/**
+ * Admin accounts the shop treats as staff in Manage users: listed under
+ * Staff, no Admin badge, and blockable like staff. They keep full admin
+ * rights everywhere else.
+ */
+const ADMINS_LISTED_AS_STAFF = new Set(["7038006342"]);
+
 /** Everyone with a login, admins first, then staff, each A→Z. */
 authRouter.get("/users", requireAuth, requireAdmin, async (_req, res, next) => {
   try {
@@ -271,6 +278,65 @@ authRouter.get("/users", requireAuth, requireAdmin, async (_req, res, next) => {
       orderBy: [{ role: "asc" }, { name: "asc" }],
     });
     res.json({ data: users });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Create a login. Phone + role must be free (schema is unique on the pair). */
+authRouter.post("/users", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({
+        name: z.string().trim().min(1, "Enter a name"),
+        phone: z
+          .string()
+          .trim()
+          .regex(/^\d{10}$/, "Enter a valid 10-digit phone number"),
+        role: z.enum(["ADMIN", "STAFF"]),
+        password: z.string().min(8, "Password must be at least 8 characters"),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      const fields = parsed.error.flatten().fieldErrors;
+      res.status(400).json({
+        error:
+          fields.name?.[0] ||
+          fields.phone?.[0] ||
+          fields.role?.[0] ||
+          fields.password?.[0] ||
+          "Check the details and try again",
+      });
+      return;
+    }
+
+    const { name, phone, role, password } = parsed.data;
+
+    const clash = await prisma.user.findFirst({ where: { phone, role } });
+    if (clash) {
+      res.status(409).json({
+        error: `${phone} already has a ${role === "ADMIN" ? "admin" : "staff"} login`,
+      });
+      return;
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        phone,
+        role,
+        passwordHash: await bcrypt.hash(password, 10),
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        role: true,
+        blocked: true,
+        createdAt: true,
+      },
+    });
+    res.status(201).json({ data: user });
   } catch (error) {
     next(error);
   }
@@ -298,14 +364,25 @@ authRouter.patch(
 
       const target = await prisma.user.findUnique({
         where: { id: req.params.id },
-        select: { id: true, role: true },
+        select: { id: true, role: true, phone: true },
       });
       if (!target) {
         res.status(404).json({ error: "User not found" });
         return;
       }
 
-      // Keep at least one admin able to log in.
+      const treatedAsStaff = ADMINS_LISTED_AS_STAFF.has(target.phone);
+
+      // Only staff get blocked. Admins stay reachable so the shop can
+      // always be run, however many of them there are.
+      if (parsed.data.blocked && target.role === "ADMIN" && !treatedAsStaff) {
+        res.status(400).json({
+          error: "Admin accounts can't be blocked. Make them staff first.",
+        });
+        return;
+      }
+
+      // …but never block away the last admin who can still log in.
       if (parsed.data.blocked && target.role === "ADMIN") {
         const activeAdmins = await prisma.user.count({
           where: { role: "ADMIN", blocked: false },
@@ -407,13 +484,13 @@ const SEED_USERS: Array<{
   {
     phone: "9302222585",
     password: "Surajbudhwani@123",
-    name: "Suraj Admin",
+    name: "Suraj",
     role: "ADMIN",
   },
   {
     phone: "7038006342",
     password: "Shreyas@026",
-    name: "Shreyas Admin",
+    name: "Shreyas",
     role: "ADMIN",
   },
   {
@@ -470,19 +547,7 @@ export async function seedUsers() {
     }
   }
 
-  // Remove accounts that are no longer part of the official seed list
-  // (e.g. old shared staff login with Mobile@123).
-  const keepKeys = new Set(
-    SEED_USERS.map((seed) => `${seed.phone}:${seed.role}`),
-  );
-  const allUsers = await prisma.user.findMany({
-    select: { id: true, phone: true, role: true },
-  });
-  const obsoleteIds = allUsers
-    .filter((user) => !keepKeys.has(`${user.phone}:${user.role}`))
-    .map((user) => user.id);
-
-  if (obsoleteIds.length) {
-    await prisma.user.deleteMany({ where: { id: { in: obsoleteIds } } });
-  }
+  // Accounts outside the seed list are left alone: admins add users from
+  // Manage users, and those must survive a redeploy. (This used to delete
+  // them, which was fine when the seed list was the only way in.)
 }

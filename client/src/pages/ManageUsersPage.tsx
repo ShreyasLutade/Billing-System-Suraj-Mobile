@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -30,13 +31,20 @@ import type { ManagedUser } from "../types";
  */
 
 /**
- * Admin accounts the shop wants listed under Staff. They keep full admin
- * rights; this only moves them in this list.
+ * Admin accounts the shop treats as staff here: listed under Staff, no
+ * Admin badge, blockable like staff. Mirrors ADMINS_LISTED_AS_STAFF on the
+ * server, which enforces the blocking side. They keep full admin rights
+ * everywhere else in the app.
  */
 const LIST_AS_STAFF = new Set(["7038006342"]);
 
 function isListedAsStaff(user: ManagedUser) {
   return user.role === "STAFF" || LIST_AS_STAFF.has(user.phone);
+}
+
+/** Admins can't be blocked — only staff, and the admins shown as staff. */
+function canBlock(user: ManagedUser) {
+  return isListedAsStaff(user);
 }
 
 function formatJoined(value: string) {
@@ -61,6 +69,7 @@ export function ManageUsersPage() {
     null,
   );
   const [passwordFor, setPasswordFor] = useState<ManagedUser | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -124,10 +133,17 @@ export function ManageUsersPage() {
     }
   }
 
+  const addButton = (
+    <button type="button" className="btn-primary" onClick={() => setAddOpen(true)}>
+      <UserPlus className="h-4 w-4" />
+      Add user
+    </button>
+  );
+
   if (loading) {
     return (
       <div>
-        <PageHeader icon={Users} title="Manage users" />
+        <PageHeader icon={Users} title="Manage users" action={addButton} />
         <LoadingBlock label="Loading users…" />
       </div>
     );
@@ -135,7 +151,7 @@ export function ManageUsersPage() {
 
   return (
     <div>
-      <PageHeader icon={Users} title="Manage users" />
+      <PageHeader icon={Users} title="Manage users" action={addButton} />
 
       <div className="tb-toolbar">
         <div className="tb-searchrow">
@@ -200,6 +216,19 @@ export function ManageUsersPage() {
         onToggleBlocked={toggleBlocked}
         onSetPassword={setPasswordFor}
       />
+
+      <AnimatePresence>
+        {addOpen ? (
+          <AddUserModal
+            onClose={() => setAddOpen(false)}
+            onDone={(created) => {
+              setAddOpen(false);
+              setUsers((prev) => [...prev, created]);
+              setToast(`${created.name} added`);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {passwordFor ? (
@@ -321,7 +350,9 @@ function UserRow({
               {user.name}
             </span>
             {isMe ? <Pill tone="neutral">You</Pill> : null}
-            {user.role === "ADMIN" ? <Pill tone="tide">Admin</Pill> : null}
+            {user.role === "ADMIN" && !isListedAsStaff(user) ? (
+              <Pill tone="tide">Admin</Pill>
+            ) : null}
             {user.blocked ? <Pill tone="rose">Blocked</Pill> : null}
           </p>
           <p className="mt-0.5 truncate text-[13px] text-ink-500">
@@ -341,7 +372,7 @@ function UserRow({
           <KeyRound className="h-4 w-4" />
           Set password
         </button>
-        {isMe ? null : (
+        {isMe || !canBlock(user) ? null : (
           <button
             type="button"
             className={clsx(
@@ -391,6 +422,207 @@ function Pill({
     >
       {children}
     </span>
+  );
+}
+
+/** Create a login: name, 10-digit number, role and a starting password. */
+function AddUserModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: (user: ManagedUser) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<"ADMIN" | "STAFF">("STAFF");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const phoneOk = /^\d{10}$/.test(phone);
+  const badPhone = phone.length > 0 && !phoneOk;
+  const shortPassword = password.length > 0 && password.length < 8;
+  const canSave =
+    name.trim().length > 0 && phoneOk && password.length >= 8 && !working;
+
+  async function save() {
+    if (!canSave) return;
+    setWorking(true);
+    setError(null);
+    try {
+      const response = await api.createUser({
+        name: name.trim(),
+        phone,
+        role,
+        password,
+      });
+      onDone(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add this user");
+      setWorking(false);
+    }
+  }
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={() => !working && onClose()}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-user-title"
+        className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-white/10 dark:bg-surface-elevated"
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: 0.98 }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4 dark:border-white/10">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-500">
+              New login
+            </p>
+            <h2
+              id="add-user-title"
+              className="mt-1 font-display text-xl font-semibold text-ink-900"
+            >
+              Add user
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
+            onClick={onClose}
+            disabled={working}
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Name
+            </span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-ink-100 bg-white px-3 py-2.5 text-sm outline-none focus:border-tide-400 dark:border-white/10 dark:bg-white/5"
+              placeholder="Who is this login for?"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Mobile number
+            </span>
+            <input
+              value={phone}
+              onChange={(event) =>
+                setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))
+              }
+              inputMode="numeric"
+              className="mt-1.5 w-full rounded-xl border border-ink-100 bg-white px-3 py-2.5 text-sm outline-none focus:border-tide-400 dark:border-white/10 dark:bg-white/5"
+              placeholder="10-digit number"
+            />
+          </label>
+
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Role
+            </span>
+            <div className="mt-1.5 flex gap-2">
+              {(["STAFF", "ADMIN"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setRole(option)}
+                  className={clsx(
+                    "flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition",
+                    role === option
+                      ? "border-ink-900 bg-ink-900 text-white"
+                      : "border-ink-100 bg-white text-ink-600 dark:border-white/10 dark:bg-white/5",
+                  )}
+                >
+                  {option === "STAFF" ? "Staff" : "Admin"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[12.5px] text-ink-500">
+              {role === "ADMIN"
+                ? "Sees prices, analytics and this page. Can't be blocked later."
+                : "Day-to-day billing and stock. Can be blocked any time."}
+            </p>
+          </div>
+
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Password
+            </span>
+            <input
+              type={show ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+              className="mt-1.5 w-full rounded-xl border border-ink-100 bg-white px-3 py-2.5 text-sm outline-none focus:border-tide-400 dark:border-white/10 dark:bg-white/5"
+              placeholder="At least 8 characters"
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-ink-600">
+            <input
+              type="checkbox"
+              checked={show}
+              onChange={(event) => setShow(event.target.checked)}
+            />
+            Show what I typed
+          </label>
+
+          {badPhone ? (
+            <p className="text-[13px] text-rose-600">
+              Enter all 10 digits of the number.
+            </p>
+          ) : null}
+          {shortPassword ? (
+            <p className="text-[13px] text-rose-600">
+              Use at least 8 characters.
+            </p>
+          ) : null}
+          {error ? (
+            <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 dark:border-white/10 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={onClose}
+            disabled={working}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={save}
+            disabled={!canSave}
+          >
+            <UserPlus className="h-4 w-4" />
+            {working ? "Adding…" : "Add user"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
