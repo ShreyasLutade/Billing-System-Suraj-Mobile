@@ -6,6 +6,7 @@ import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
 import { binStockItem } from "../services/recycleBin";
+import { buildStockExportPdf } from "../services/stockExportPdf";
 import { applyPendingReturnCredits } from "../services/productReturns";
 import {
   paymentAtPurchaseError,
@@ -198,6 +199,41 @@ stockRouter.get("/", async (req, res, next) => {
         : items;
 
     res.json({ data: sorted.map(mapStockItem) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PDF of the mobiles in stock for one condition (Stock page → download).
+ * Costs are included only for admins, matching what the page itself shows.
+ */
+stockRouter.get("/export", async (req, res, next) => {
+  try {
+    const raw =
+      typeof req.query.condition === "string"
+        ? req.query.condition.toUpperCase()
+        : "";
+    if (raw !== "NEW" && raw !== "USED") {
+      res.status(400).json({ error: "Pass ?condition=NEW or ?condition=USED" });
+      return;
+    }
+
+    const withCost = req.user?.role === "ADMIN";
+    const exportFile = await buildStockExportPdf(raw, withCost);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${exportFile.filename}"`,
+    );
+    res.setHeader("X-Unit-Count", String(exportFile.unitCount));
+    res.setHeader("X-Model-Count", String(exportFile.modelCount));
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Content-Disposition, X-Unit-Count, X-Model-Count",
+    );
+    res.send(exportFile.pdf);
   } catch (error) {
     next(error);
   }
