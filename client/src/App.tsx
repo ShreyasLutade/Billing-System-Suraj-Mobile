@@ -11,6 +11,7 @@ import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
 import { AnalyticsPendingItemsPage } from "./pages/AnalyticsPendingItemsPage";
 import { BackupPage } from "./pages/BackupPage";
 import { RecycleBinPage } from "./pages/RecycleBinPage";
+import { ManageUsersPage } from "./pages/ManageUsersPage";
 import { AddAccessoriesPage } from "./pages/AddAccessoriesPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
@@ -93,6 +94,7 @@ export default function App() {
                     />
                     <Route path="backup" element={<BackupPage />} />
                     <Route path="recycle-bin" element={<RecycleBinPage />} />
+                    <Route path="users" element={<ManageUsersPage />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>

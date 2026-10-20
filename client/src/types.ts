@@ -610,6 +610,12 @@ export type AuthUser = {
   repairShop?: string | null;
 };
 
+/** A login as the Manage users page sees it (admin only). */
+export type ManagedUser = AuthUser & {
+  blocked: boolean;
+  createdAt: string;
+};
+
 
 export type RepairPlatform = "IOS" | "ANDROID";
 export type RepairCondition = "LIKE_NEW" | "GOOD" | "FAIR" | "DAMAGED" | "DEAD";
