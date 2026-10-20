@@ -17,6 +17,8 @@ model User {
   /// Repair-only account for this repair shop (see lib/repairShops). Null = full
   /// Babu Mobile NX access (mobile shop + its repair desk).
   repairShop   String?
+  /// Blocked accounts keep their data but cannot log in.
+  blocked      Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

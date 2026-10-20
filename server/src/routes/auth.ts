@@ -5,7 +5,9 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import type { RepairShop } from "../lib/repairShops";
 import {
+  requireAdmin,
   requireAuth,
+  requireFullAccess,
   signToken,
   type AuthUser,
   type Role,
@@ -67,11 +69,15 @@ authRouter.post("/login", async (req, res, next) => {
     }
 
     if (!matched) {
-      if (phone === "7038006342" && candidates.length > 0) {
-        res.status(401).json({ error: "This user is not active" });
-        return;
-      }
       res.status(401).json({ error: "Invalid phone number or password" });
+      return;
+    }
+
+    // Blocked accounts keep their history but can't get back in.
+    if (matched.blocked) {
+      res.status(403).json({
+        error: "This account is blocked. Ask the shop admin to unblock it.",
+      });
       return;
     }
 
@@ -247,11 +253,155 @@ authRouter.post("/reset-password", async (req, res, next) => {
   }
 });
 
+/* ---------------------------------------------------------------- *
+ * Manage users (shop admins only)
+ *
+ * Passwords are bcrypt hashes, so they can never be read back — the
+ * admin can only set a new one, which replaces the hash.
+ *
+ * requireFullAccess keeps repair-only admins (Luckey's shop) out: they
+ * run their own counter and have no business over shop logins.
+ * ---------------------------------------------------------------- */
+
+const manageUsers = [requireAuth, requireAdmin, requireFullAccess] as const;
+
+/** Everyone with a login, admins first, then staff, each A→Z. */
+authRouter.get("/users", ...manageUsers, async (_req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        role: true,
+        repairShop: true,
+        blocked: true,
+        createdAt: true,
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    });
+    res.json({ data: users });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Block / unblock an account. Admins can't block themselves. */
+authRouter.patch(
+  "/users/:id/blocked",
+  ...manageUsers,
+  async (req, res, next) => {
+    try {
+      const parsed = z.object({ blocked: z.boolean() }).safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Pass blocked: true or false" });
+        return;
+      }
+
+      if (req.params.id === req.user!.id) {
+        res.status(400).json({ error: "You can't block your own account" });
+        return;
+      }
+
+      const target = await prisma.user.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, role: true, repairShop: true },
+      });
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      // Keep at least one shop admin able to log in. Repair-only admins
+      // don't count — they can't run the mobile shop.
+      if (
+        parsed.data.blocked &&
+        target.role === "ADMIN" &&
+        !target.repairShop
+      ) {
+        const activeAdmins = await prisma.user.count({
+          where: { role: "ADMIN", blocked: false, repairShop: null },
+        });
+        if (activeAdmins <= 1) {
+          res
+            .status(400)
+            .json({ error: "At least one admin must stay unblocked" });
+          return;
+        }
+      }
+
+      const user = await prisma.user.update({
+        where: { id: target.id },
+        data: { blocked: parsed.data.blocked },
+        select: {
+          id: true,
+          phone: true,
+          name: true,
+          role: true,
+          repairShop: true,
+          blocked: true,
+          createdAt: true,
+        },
+      });
+      res.json({ data: user });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/** Set a new password for any account. The admin chooses the password. */
+authRouter.patch(
+  "/users/:id/password",
+  ...manageUsers,
+  async (req, res, next) => {
+    try {
+      const parsed = z
+        .object({
+          password: z.string().min(8, "Password must be at least 8 characters"),
+        })
+        .safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          error:
+            parsed.error.flatten().fieldErrors.password?.[0] ||
+            "Password must be at least 8 characters",
+        });
+        return;
+      }
+
+      const target = await prisma.user.findUnique({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      await prisma.user.update({
+        where: { id: target.id },
+        data: { passwordHash: await bcrypt.hash(parsed.data.password, 10) },
+      });
+      res.json({ data: { updated: true } });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 authRouter.get("/me", requireAuth, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
     if (!user) {
       res.status(401).json({ error: "User not found. Please log in again" });
+      return;
+    }
+    // Tokens live for 7 days, so a block has to end the current session too.
+    if (user.blocked) {
+      res.status(403).json({
+        error: "This account is blocked. Ask the shop admin to unblock it.",
+      });
       return;
     }
     res.json({ data: { user: publicUser(user) } });

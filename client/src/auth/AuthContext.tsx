@@ -60,7 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) setUser(data.user);
       } catch (err) {
         const status = err instanceof ApiError ? err.status : 0;
-        if (status === 401) {
+        // 401: token gone or expired. 403: the account was blocked while
+        // signed in — the cached session must not be trusted either.
+        if (status === 401 || status === 403) {
           clearAuthToken();
           if (active) setUser(null);
         } else if (active) {

@@ -24,6 +24,7 @@ import {
   Sun,
   Trash2,
   Truck,
+  Users,
   Wallet,
   Wrench,
   X,
@@ -255,6 +256,19 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                 </button>
                 {isAdmin && !repairOnly ? (
                   <Link
+                    to="/users"
+                    role="menuitem"
+                    className="babu-user-menu-item"
+                    onClick={() => {
+                      onMainNavClick();
+                      setUserMenuOpen(false);
+                    }}
+                  >
+                    <Users /> Manage users
+                  </Link>
+                ) : null}
+                {isAdmin && !repairOnly ? (
+                  <Link
                     to="/backup"
                     role="menuitem"
                     className="babu-user-menu-item"
@@ -395,6 +409,18 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
+                {isAdmin && !repairOnly ? (
+                  <Link
+                    to="/users"
+                    onClick={() => {
+                      onMainNavClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="babu-utility-button"
+                  >
+                    <Users /> Manage users
+                  </Link>
+                ) : null}
                 {isAdmin && !repairOnly ? (
                   <Link
                     to="/backup"
