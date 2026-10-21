@@ -4,6 +4,7 @@ import { createHash, randomInt, timingSafeEqual } from "crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import type { RepairShop } from "../lib/repairShops";
+import { canUseAccessories } from "../lib/accShop";
 import {
   requireAdmin,
   requireAuth,
@@ -36,13 +37,14 @@ function publicUser(user: {
   name: string;
   role: string;
   repairShop: string | null;
-}): AuthUser {
+}): AuthUser & { accessories: boolean } {
   return {
     id: user.id,
     phone: user.phone,
     name: user.name,
     role: user.role as Role,
     repairShop: user.repairShop,
+    accessories: canUseAccessories(user),
   };
 }
 

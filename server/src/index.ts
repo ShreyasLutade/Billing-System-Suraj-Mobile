@@ -19,6 +19,8 @@ import { productReturnsRouter } from "./routes/productReturns";
 import { purchasesRouter } from "./routes/purchases";
 import { phoneModelsRouter } from "./routes/phoneModels";
 import { repairsRouter } from "./routes/repairs";
+import { accRouter } from "./routes/acc";
+import { requireAccessories } from "./lib/accShop";
 import { requireAuth, requireAdmin, requireFullAccess } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
 import { startRecycleBinPurge } from "./services/recycleBin";
@@ -93,6 +95,7 @@ app.use("/api/purchases", requireAuth, requireFullAccess, purchasesRouter);
 app.use("/api/phone-models", requireAuth, phoneModelsRouter);
 app.use("/api/dues", requireAuth, requireFullAccess, duesRouter);
 app.use("/api/repairs", requireAuth, repairsRouter);
+app.use("/api/acc", requireAuth, requireAccessories, accRouter);
 app.use("/api/reports", requireAuth, requireFullAccess, requireAdmin, reportsRouter);
 app.use("/api/recycle-bin", requireAuth, requireFullAccess, requireAdmin, recycleBinRouter);
 

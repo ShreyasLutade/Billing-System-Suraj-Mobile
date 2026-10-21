@@ -2724,3 +2724,7 @@ html.dark .section-gate-card {
   font-size: 12px;
   font-weight: 600;
 }
+
+.section-gate-option.is-acc .section-gate-icon {
+  background: linear-gradient(135deg, #0f8a78, #1abaff);
+}

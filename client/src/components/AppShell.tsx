@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeftRight,
   ArrowUp,
+  LayoutGrid,
   BarChart3,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +26,7 @@ import {
   Trash2,
   Truck,
   Users,
+  ShoppingBag,
   Wallet,
   Wrench,
   X,
@@ -44,6 +46,8 @@ type NavItem = {
   icon: typeof FilePlus2;
   /** Only highlight on an exact match (section home). */
   end?: boolean;
+  /** Sidebar only; left out of the phone bottom bar (reached from a page). */
+  desktopOnly?: boolean;
 };
 
 /**
@@ -51,10 +55,12 @@ type NavItem = {
  * separate repair desk. Same sidebar, phone header, bottom nav and menus;
  * only the links and the "switch section" item differ.
  */
-export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) {
+export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "acc" }) {
   const isRepair = section === "repair";
-  const homePath = isRepair ? "/repair" : "/";
-  const homeLabel = isRepair ? "New repair" : "New Bill";
+  const isAcc = section === "acc";
+  const homePath = isRepair ? "/repair" : isAcc ? "/acc" : "/";
+  const homeLabel = isRepair ? "New repair" : isAcc ? "Counter" : "New Bill";
+  const sectionLabel = isRepair ? "Repair desk" : isAcc ? "Accessories" : "Balaghat";
   const { isAdmin, repairOnly, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -96,7 +102,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!user || isRepair) return;
+    if (!user || section !== "shop") return;
     let active = true;
     void api
       .listDues("all")
@@ -109,7 +115,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, section]);
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);
@@ -157,7 +163,17 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const links: NavItem[] = isRepair
+  const links: NavItem[] = isAcc
+    ? [
+        { to: "/acc", label: "Counter", icon: LayoutGrid, end: true },
+        { to: "/acc/wholesale", label: "Wholesale", icon: ShoppingBag },
+        { to: "/acc/sales", label: "Sales", icon: ReceiptText },
+        { to: "/acc/stock", label: "Stock", icon: Package },
+        { to: "/acc/suppliers", label: "Suppliers", icon: Truck, desktopOnly: true },
+        { to: "/acc/dues", label: "Dues", icon: Wallet },
+        ...(isAdmin ? [{ to: "/acc/analytics", label: "Analytics", icon: BarChart3 }] : []),
+      ]
+    : isRepair
     ? [
         { to: "/repair", label: "New Repair", icon: Wrench, end: true },
         { to: "/repair/history", label: "Tracker", icon: History },
@@ -173,6 +189,8 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
         { to: "/suppliers", label: "Suppliers", icon: Truck },
         ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
       ];
+
+  const mobileLinks = links.filter((link) => !link.desktopOnly);
 
   function onMainNavClick() {
     // Header / bottom nav = fresh list. Detail → back keeps search via session.
@@ -202,7 +220,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
             <strong>
               <BrandName />
             </strong>
-            <small>{isRepair ? "Repair desk" : "Balaghat"}</small>
+            <small>{sectionLabel}</small>
           </span>
         </Link>
 
@@ -372,7 +390,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
                     <strong>
                       <BrandName />
                     </strong>
-                    <small>{isRepair ? "Repair desk" : "Balaghat"}</small>
+                    <small>{sectionLabel}</small>
                   </span>
                 </div>
                 <button
@@ -476,9 +494,9 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" }) 
       <nav
         className="babu-mobile-nav"
         aria-label="Mobile navigation"
-        style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))` }}
       >
-        {links.map((link) => (
+        {mobileLinks.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}

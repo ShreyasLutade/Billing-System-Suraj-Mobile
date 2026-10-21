@@ -474,3 +474,242 @@ model RepairJob {
   @@index([status])
   @@index([shop])
 }
+
+// ------------------------------------------------------------------
+// Accessories shop (routes/acc). Its own catalogue, stock, sales,
+// wholesale customers and suppliers: nothing here touches the mobile
+// shop's bills or stock. Access is limited by phone (lib/accShop).
+// ------------------------------------------------------------------
+
+/// Top-level tile on the counter: Cover, Glass, Headphone…
+model AccCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  /// Second tap on the counter: TYPE (Silicone, Rubber…) or BRAND (boAt…)
+  drillBy   String   @default("TYPE")
+  /// lucide icon key picked in the UI (see client acc/icons)
+  icon      String   @default("package")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  products  AccProduct[]
+}
+
+model AccProduct {
+  id            String   @id @default(cuid())
+  categoryId    String
+  /// Display name, e.g. "Silicone Cover · Redmi Note 13"
+  name          String
+  /// Kind within the category: Silicone, Rubber, 9D, Privacy…
+  type          String   @default("")
+  brand         String   @default("")
+  /// Phone the item fits, e.g. "Redmi Note 13" (covers, glass)
+  model         String   @default("")
+  color         String   @default("")
+  barcode       String?  @unique
+  /// Weighted average cost of units in stock
+  purchasePrice Float    @default(0)
+  /// Retail price shown first on the counter
+  sellingPrice  Float    @default(0)
+  /// Default rate on wholesale bills
+  wholesalePrice Float   @default(0)
+  /// JSON number array of quick price chips on the counter
+  quickPrices   String   @default("[]")
+  stockQty      Int      @default(0)
+  /// Show as low stock at or below this (0 = off)
+  lowStockAt    Int      @default(0)
+  isFavourite   Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  category      AccCategory @relation(fields: [categoryId], references: [id])
+  moves         AccStockMove[]
+  saleItems     AccSaleItem[]
+  purchaseItems AccPurchaseItem[]
+
+  @@index([categoryId])
+  @@index([isFavourite])
+  @@index([name])
+  @@index([active])
+}
+
+/// Every change to a product's stock, newest first in the product history.
+model AccStockMove {
+  id        String   @id @default(cuid())
+  productId String
+  /// OPENING | PURCHASE | SALE | VOID | ADJUST
+  kind      String
+  /// + in, − out
+  qty       Int
+  unitCost  Float    @default(0)
+  /// Sale or purchase id
+  refId     String?
+  note      String?
+  createdByName String?
+  createdAt DateTime @default(now())
+  product   AccProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model AccCustomerGroup {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#5d73b6")
+  createdAt DateTime @default(now())
+  customers AccCustomer[]
+}
+
+/// Wholesale buyer (a shop that takes stock on credit).
+model AccCustomer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  shopName  String   @default("")
+  address   String   @default("")
+  city      String   @default("")
+  gstin     String   @default("")
+  groupId   String?
+  /// 0 = no limit
+  creditLimit Float  @default(0)
+  note      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  group     AccCustomerGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  sales     AccSale[]
+  payments  AccPayment[]
+
+  @@index([groupId])
+  @@index([name])
+}
+
+model AccSale {
+  id          String   @id @default(cuid())
+  /// AR-0001 (retail) / AW-0001 (wholesale)
+  number      String   @unique
+  /// RETAIL | WHOLESALE
+  kind        String
+  saleDate    DateTime @default(now())
+  customerId  String?
+  /// Optional for retail
+  customerName  String @default("")
+  customerPhone String @default("")
+  subtotal    Float
+  discount    Float    @default(0)
+  total       Float
+  /// Cost of goods at the time of sale
+  costTotal   Float    @default(0)
+  cashAmount   Float   @default(0)
+  onlineAmount Float   @default(0)
+  /// Left unpaid on this bill (wholesale credit)
+  dueAmount   Float    @default(0)
+  dueDate     DateTime?
+  note        String   @default("")
+  /// Set by the device per submit; a repeated submit returns the same sale
+  clientRef   String?  @unique
+  voidedAt    DateTime?
+  voidReason  String?
+  createdByUserId String?
+  createdByName   String?
+  createdAt   DateTime @default(now())
+  customer    AccCustomer? @relation(fields: [customerId], references: [id])
+  items       AccSaleItem[]
+
+  @@index([saleDate])
+  @@index([kind])
+  @@index([customerId])
+  @@index([voidedAt])
+}
+
+model AccSaleItem {
+  id         String   @id @default(cuid())
+  saleId     String
+  productId  String?
+  name       String
+  categoryName String @default("")
+  qty        Int
+  rate       Float
+  amount     Float
+  unitCost   Float    @default(0)
+  sale       AccSale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product    AccProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+/// Money received from a wholesale customer against their balance.
+model AccPayment {
+  id         String   @id @default(cuid())
+  customerId String
+  amount     Float
+  /// CASH | UPI | BANK | CHEQUE | DISCOUNT (written off)
+  method     String
+  paidAt     DateTime @default(now())
+  note       String   @default("")
+  createdByName String?
+  createdAt  DateTime @default(now())
+  customer   AccCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([paidAt])
+}
+
+model AccSupplier {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  phone     String   @default("")
+  address   String   @default("")
+  createdAt DateTime @default(now())
+  purchases AccPurchase[]
+  payments  AccSupplierPayment[]
+}
+
+/// Stock bought in one go (from a supplier or opening stock).
+model AccPurchase {
+  id           String   @id @default(cuid())
+  supplierId   String?
+  purchaseDate DateTime @default(now())
+  billNo       String   @default("")
+  total        Float    @default(0)
+  note         String   @default("")
+  createdByName String?
+  createdAt    DateTime @default(now())
+  supplier     AccSupplier? @relation(fields: [supplierId], references: [id])
+  items        AccPurchaseItem[]
+
+  @@index([supplierId])
+  @@index([purchaseDate])
+}
+
+model AccPurchaseItem {
+  id         String   @id @default(cuid())
+  purchaseId String
+  productId  String
+  qty        Int
+  unitCost   Float
+  purchase   AccPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product    AccProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+model AccSupplierPayment {
+  id         String   @id @default(cuid())
+  supplierId String
+  amount     Float
+  method     String
+  paidAt     DateTime @default(now())
+  note       String   @default("")
+  createdAt  DateTime @default(now())
+  supplier   AccSupplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+}
+
+/// Bill number counters for the accessories shop (key: RETAIL | WHOLESALE).
+model AccCounter {
+  key   String @id
+  value Int    @default(0)
+}

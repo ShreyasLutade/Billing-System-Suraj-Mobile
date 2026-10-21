@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
-import { GuestOnly, RequireAdmin, RequireAuth } from "./auth/guards";
+import { GuestOnly, RequireAccessories, RequireAdmin, RequireAuth } from "./auth/guards";
 import { AppShell } from "./components/AppShell";
 import { SectionGate } from "./components/SectionGate";
 import { ThemeProvider } from "./theme/ThemeContext";
@@ -28,6 +28,15 @@ import { RepairHistoryPage } from "./pages/RepairHistoryPage";
 import { RepairHomePage } from "./pages/RepairHomePage";
 import { RepairJobPage } from "./pages/RepairJobPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
+import { AccLayout } from "./acc/shared";
+import { AccCounterPage } from "./acc/AccCounterPage";
+import { AccWholesalePage } from "./acc/AccWholesalePage";
+import { AccStockPage } from "./acc/AccStockPage";
+import { AccProductFormPage } from "./acc/AccProductFormPage";
+import { AccSuppliersPage, AccStockInPage } from "./acc/AccSuppliersPage";
+import { AccSalesPage } from "./acc/AccSalesPage";
+import { AccDuesPage, AccCustomerPage } from "./acc/AccDuesPage";
+import { AccAnalyticsPage } from "./acc/AccAnalyticsPage";
 
 export default function App() {
   return (
@@ -50,6 +59,28 @@ export default function App() {
                   </Route>
                   <Route path=":id/edit" element={<RepairHomePage key="edit-repair" />} />
                   <Route path=":id" element={<RepairJobPage />} />
+                </Route>
+
+                {/* Accessories shop: separate counter, one tester login for now. */}
+                <Route path="acc" element={<RequireAccessories />}>
+                  <Route element={<AppShell section="acc" />}>
+                    <Route element={<AccLayout />}>
+                      <Route index element={<AccCounterPage />} />
+                      <Route path="wholesale" element={<AccWholesalePage />} />
+                      <Route path="sales" element={<AccSalesPage />} />
+                      <Route path="stock" element={<AccStockPage />} />
+                      <Route path="stock/new" element={<AccProductFormPage key="new-product" />} />
+                      <Route path="stock/in" element={<AccStockInPage />} />
+                      <Route path="stock/:id/edit" element={<AccProductFormPage key="edit-product" />} />
+                      <Route path="suppliers" element={<AccSuppliersPage />} />
+                      <Route path="dues" element={<AccDuesPage />} />
+                      <Route path="dues/:id" element={<AccCustomerPage />} />
+                      <Route element={<RequireAdmin />}>
+                        <Route path="analytics" element={<AccAnalyticsPage />} />
+                      </Route>
+                      <Route path="*" element={<Navigate to="/acc" replace />} />
+                    </Route>
+                  </Route>
                 </Route>
 
                 <Route element={<AppShell />}>

@@ -608,6 +608,8 @@ export type AuthUser = {
   role: "ADMIN" | "STAFF";
   /** Repair-only account for this repair shop (no mobile-shop access). */
   repairShop?: string | null;
+  /** May open the accessories shop (server decides; see lib/accShop). */
+  accessories?: boolean;
 };
 
 /** A login as the Manage users page sees it (admin only). */

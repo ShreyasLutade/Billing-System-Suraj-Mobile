@@ -57,3 +57,22 @@ export function GuestOnly() {
 
   return <Outlet />;
 }
+
+/** Accessories shop pages: only logins the server opened it for. */
+export function RequireAccessories() {
+  const { canUseAccessories, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <LoadingBlock label="Checking session…" />
+      </div>
+    );
+  }
+
+  if (!canUseAccessories) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
+}

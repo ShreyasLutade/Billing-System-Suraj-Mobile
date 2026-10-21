@@ -196,6 +196,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/** Shared by feature modules (e.g. acc/accApi) that keep their own endpoint lists. */
+export { request as apiRequest };
+
+/** GET a file with the session token and save it (PDF downloads). */
+export async function downloadAuthed(path: string, fallbackName: string) {
+  const token = getAuthToken();
+  const response = await fetchBackend(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    let message = "Could not download the file";
+    try {
+      const body = await response.json();
+      message = body.error || message;
+    } catch {
+      // not JSON
+    }
+    throw new ApiError(message, response.status);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = /filename="?([^"]+)"?/i.exec(disposition);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = match?.[1] || fallbackName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
   login: (phone: string, password: string) =>

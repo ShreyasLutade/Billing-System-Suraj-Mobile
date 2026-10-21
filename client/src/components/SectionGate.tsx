@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, Check, ReceiptText, Wrench, X } from "lucide-react";
+import { ArrowRight, Check, Headphones, ReceiptText, Wrench, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { BrandName } from "./BrandName";
@@ -43,24 +43,32 @@ function sectionChoicePending() {
 }
 
 const isRepairPath = (path: string) => /^\/repair(\/|$)/.test(path);
+const isAccPath = (path: string) => /^\/acc(\/|$)/.test(path);
+
+type Section = "shop" | "repair" | "acc";
 
 const OPTIONS = [
   { key: "shop", label: "Mobile shop", hint: "New bills, stock, dues and suppliers", icon: ReceiptText },
   { key: "repair", label: "Repair shop", hint: "Take in phones for repair, with photos", icon: Wrench },
+  { key: "acc", label: "Accessories shop", hint: "Quick counter billing, wholesale and dues", icon: Headphones },
 ] as const;
 
+const SECTION_HOME: Record<Section, string> = { shop: "/", repair: "/repair", acc: "/acc" };
+
 export function SectionGate() {
-  const { repairOnly } = useAuth();
+  const { repairOnly, canUseAccessories } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   /** "login": first choice after signing in; "switch": opened from the menu. */
   const [mode, setMode] = useState<"login" | "switch" | null>(() =>
     sectionChoicePending() ? "login" : null,
   );
-  const [exitingTarget, setExitingTarget] = useState<"shop" | "repair" | null>(null);
-  const [transitionTarget, setTransitionTarget] = useState<"shop" | "repair" | null>(null);
+  const [exitingTarget, setExitingTarget] = useState<Section | null>(null);
+  const [transitionTarget, setTransitionTarget] = useState<Section | null>(null);
   const [transitionExiting, setTransitionExiting] = useState(false);
-  const current = isRepairPath(location.pathname) ? "repair" : "shop";
+  const current: Section = isRepairPath(location.pathname) ? "repair" : isAccPath(location.pathname) ? "acc" : "shop";
+  // The accessories shop is only offered to the logins it's open for.
+  const options = OPTIONS.filter((option) => option.key !== "acc" || canUseAccessories);
   const transitionOption = transitionTarget
     ? OPTIONS.find((option) => option.key === transitionTarget)
     : null;
@@ -86,7 +94,7 @@ export function SectionGate() {
         setTransitionExiting(false);
         return;
       }
-      navigate(transitionTarget === "repair" ? "/repair" : "/", { replace: true });
+      navigate(SECTION_HOME[transitionTarget], { replace: true });
       setTransitionExiting(true);
     }, delay);
     return () => window.clearTimeout(timer);
@@ -129,7 +137,7 @@ export function SectionGate() {
 
   const switching = mode === "switch";
 
-  function choose(section: "shop" | "repair") {
+  function choose(section: Section) {
     cancelSectionChoice();
     if (switching && section !== current) {
       setExitingTarget(section);
@@ -138,7 +146,7 @@ export function SectionGate() {
     setExitingTarget(null);
     setMode(null);
     if (switching) return;
-    navigate(section === "repair" ? "/repair" : "/", { replace: !switching });
+    navigate(SECTION_HOME[section], { replace: !switching });
   }
 
   return (
@@ -204,7 +212,7 @@ export function SectionGate() {
             </div>
 
             <div className="section-gate-options">
-              {OPTIONS.map((option) => {
+              {options.map((option) => {
                 const here = switching && option.key === current;
                 return (
                   <button
@@ -213,6 +221,7 @@ export function SectionGate() {
                     className={clsx(
                       "section-gate-option",
                       option.key === "repair" && "is-repair",
+                      option.key === "acc" && "is-acc",
                       here && "is-current",
                     )}
                     onClick={() => choose(option.key)}

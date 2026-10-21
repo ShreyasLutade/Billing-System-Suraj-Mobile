@@ -23,6 +23,8 @@ type AuthContextValue = {
   isAdmin: boolean;
   /** Repair-only account (Luckey's shop): repair desk only, no mobile shop. */
   repairOnly: boolean;
+  /** Accessories shop is open for this login (testing: one phone only). */
+  canUseAccessories: boolean;
   login: (phone: string, password: string) => Promise<void>;
   logout: () => void;
 };
@@ -94,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       isAdmin: user?.role === "ADMIN",
       repairOnly: Boolean(user?.repairShop),
+      canUseAccessories: Boolean(user?.accessories && !user?.repairShop),
       login,
       logout,
     }),
