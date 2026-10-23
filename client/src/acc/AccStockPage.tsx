@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ClipboardCheck, Loader2, PackagePlus, Plus, Search, Star, Truck } from "lucide-react";
+import { ChevronDown, ClipboardCheck, FileDown, Loader2, PackagePlus, Search, Star, Truck } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCategory, type AccProduct } from "./accApi";
@@ -24,13 +24,25 @@ import {
 
 /**
  * Stock: every product grouped by category, with how much is sorted by
- * phone model and when it was last counted. Tap a product for its page
+ * phone brand and when it was last counted. Tap a product for its page
  * (breakdown, stock in, count, history).
  */
 
 type Filter = "all" | "fav" | "low" | "check";
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+
+/** Collapsed category ids, remembered on this device. */
+const COLLAPSED_KEY = "acc.stock.collapsed";
+
+function loadCollapsed(): string[] {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function AccStockPage() {
   const { catalog, error } = useAccCatalog();
@@ -39,6 +51,16 @@ export function AccStockPage() {
   const [categoryId, setCategoryId] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [collapsed, setCollapsedState] = useState<string[]>(loadCollapsed);
+
+  function setCollapsed(ids: string[]) {
+    setCollapsedState(ids);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(ids));
+    } catch {
+      /* ignore */
+    }
+  }
 
   const products = catalog?.products ?? [];
   const categories = catalog?.categories ?? [];
@@ -81,8 +103,8 @@ export function AccStockPage() {
       <div className="acc-title-row">
         <h1>Stock</h1>
         <div className="acc-head-actions">
-          <button type="button" className="acc-btn is-ghost" onClick={() => setPdfOpen(true)}>
-            PDF
+          <button type="button" className="acc-btn" onClick={() => setPdfOpen(true)}>
+            <FileDown /> PDF
           </button>
           <Link to="/acc/suppliers" className="acc-btn is-ghost">
             <Truck /> Suppliers
@@ -90,14 +112,10 @@ export function AccStockPage() {
         </div>
       </div>
 
-      <div className="acc-quick-actions">
-        <Link to="/acc/stock/new" className="acc-btn is-primary">
-          <Plus /> New product
-        </Link>
-        <Link to="/acc/stock/in" className="acc-btn">
-          <PackagePlus /> Stock in
-        </Link>
-      </div>
+      {/* New products are added on Add stock too, with the supplier they came from. */}
+      <Link to="/acc/stock/in" className="acc-btn is-primary is-big is-block">
+        <PackagePlus /> Add stock
+      </Link>
 
       <Link to="/acc/stock/check" className={clsx("acc-check-banner", uncheckedCount === 0 && "is-done")}>
         <span className="acc-check-banner-icon">
@@ -137,7 +155,7 @@ export function AccStockPage() {
 
       <label className="acc-search">
         <Search aria-hidden />
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product, phone model, brand…" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product, phone brand…" />
         <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
       </label>
 
@@ -183,14 +201,34 @@ export function AccStockPage() {
         )
       ) : list.length ? (
         <div className="acc-stock-sections">
+          {sections.length > 1 && !tokens.length ? (
+            <div className="acc-collapse-bar">
+              <small>{plural(sections.length, "category", "categories")}</small>
+              <button type="button" className="acc-link-btn" onClick={() => setCollapsed(sections.map((sec) => sec.category.id))}>
+                Collapse all
+              </button>
+              <button type="button" className="acc-link-btn" onClick={() => setCollapsed([])}>
+                Open all
+              </button>
+            </div>
+          ) : null}
           {sections.map(({ category, items }) => (
-            <StockSection key={category.id} category={category} items={items} />
+            <StockSection
+              key={category.id}
+              category={category}
+              items={items}
+              // A search shows every match, even in collapsed categories.
+              open={Boolean(tokens.length) || !collapsed.includes(category.id)}
+              onToggle={() =>
+                setCollapsed(collapsed.includes(category.id) ? collapsed.filter((id) => id !== category.id) : [...collapsed, category.id])
+              }
+            />
           ))}
         </div>
       ) : (
         <Empty title={products.length ? "No products match" : "No products yet"}>
-          <Link to="/acc/stock/new" className="acc-btn">
-            <Plus /> Add product
+          <Link to="/acc/stock/in" className="acc-btn">
+            <PackagePlus /> Add stock
           </Link>
         </Empty>
       )}
@@ -211,7 +249,17 @@ export function AccStockPage() {
   );
 }
 
-function StockSection({ category, items }: { category: AccCategory; items: AccProduct[] }) {
+function StockSection({
+  category,
+  items,
+  open,
+  onToggle,
+}: {
+  category: AccCategory;
+  items: AccProduct[];
+  open: boolean;
+  onToggle: () => void;
+}) {
   const navigate = useNavigate();
   const pieces = items.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
   const value = items.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
@@ -228,60 +276,65 @@ function StockSection({ category, items }: { category: AccCategory; items: AccPr
   }
 
   return (
-    <section className="acc-stock-section">
+    <section className={clsx("acc-stock-section", !open && "is-collapsed")}>
       <header>
-        <CategoryIcon icon={category.icon} variant="3d" size="sm" />
-        <span className="acc-section-text">
-          <strong>{category.name}</strong>
-          <small>
-            {plural(items.length, "product")} · {pieces} pcs
-          </small>
-        </span>
-        <b>{inr(value)}</b>
+        <button type="button" className="acc-section-toggle" onClick={onToggle} aria-expanded={open}>
+          <CategoryIcon icon={category.icon} variant="3d" size="sm" />
+          <span className="acc-section-text">
+            <strong>{category.name}</strong>
+            <small>
+              {plural(items.length, "product")} · {pieces} pcs
+            </small>
+          </span>
+          <b>{inr(value)}</b>
+          <ChevronDown className="acc-section-chevron" aria-hidden />
+        </button>
       </header>
-      <ul className="acc-list">
-        {items.map((p) => {
-          const { sorted } = sortedQty(p);
-          const total = Math.max(p.stockQty, 0);
-          const stale = needsCheck(p.countedAt);
-          return (
-            <li key={p.id} className="acc-row">
-              <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/stock/${p.id}`)}>
-                <span className="acc-row-text">
-                  <strong>{p.name}</strong>
-                  <small>
-                    {inr(p.sellingPrice)}
-                    {p.wholesalePrice ? ` · wholesale ${inr(p.wholesalePrice)}` : ""}
-                  </small>
-                  <span className="acc-row-meta">
-                    {p.models.length ? (
-                      <span className="acc-sortbar" title={`${sorted} of ${total} sorted by phone model`}>
-                        <span>
-                          <i style={{ width: `${total ? Math.min(100, (sorted / total) * 100) : 0}%` }} />
+      {open ? (
+        <ul className="acc-list">
+          {items.map((p) => {
+            const { sorted } = sortedQty(p);
+            const total = Math.max(p.stockQty, 0);
+            const stale = needsCheck(p.countedAt);
+            return (
+              <li key={p.id} className="acc-row">
+                <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/stock/${p.id}`)}>
+                  <span className="acc-row-text">
+                    <strong>{p.name}</strong>
+                    <small>
+                      {inr(p.sellingPrice)}
+                      {p.wholesalePrice ? ` · wholesale ${inr(p.wholesalePrice)}` : ""}
+                    </small>
+                    <span className="acc-row-meta">
+                      {p.models.length ? (
+                        <span className="acc-sortbar" title={`${sorted} of ${total} sorted by phone brand`}>
+                          <span>
+                            <i style={{ width: `${total ? Math.min(100, (sorted / total) * 100) : 0}%` }} />
+                          </span>
+                          <em>
+                            {sorted}/{total} sorted
+                          </em>
                         </span>
-                        <em>
-                          {sorted}/{total} sorted
-                        </em>
-                      </span>
-                    ) : null}
-                    <span className={clsx("acc-checked", stale && "is-stale")}>{checkedLabel(p.countedAt)}</span>
+                      ) : null}
+                      <span className={clsx("acc-checked", stale && "is-stale")}>{checkedLabel(p.countedAt)}</span>
+                    </span>
                   </span>
-                </span>
-                <StockBadge qty={p.stockQty} low={p.lowStockAt} long />
-              </button>
-              <button
-                type="button"
-                className={clsx("acc-star", p.isFavourite && "is-on")}
-                onClick={() => void toggleFav(p)}
-                aria-label={p.isFavourite ? "Remove from counter" : "Show on counter"}
-                title={p.isFavourite ? "On the counter" : "Show on counter"}
-              >
-                <Star />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                  <StockBadge qty={p.stockQty} low={p.lowStockAt} long />
+                </button>
+                <button
+                  type="button"
+                  className={clsx("acc-star", p.isFavourite && "is-on")}
+                  onClick={() => void toggleFav(p)}
+                  aria-label={p.isFavourite ? "Remove from counter" : "Show on counter"}
+                  title={p.isFavourite ? "On the counter" : "Show on counter"}
+                >
+                  <Star />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </section>
   );
 }

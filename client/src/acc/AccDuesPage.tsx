@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import {
+  FileDown,
   FilePlus2,
   Loader2,
   MessageCircle,
@@ -22,10 +23,8 @@ import {
   type AccCustomerRow,
   type AccDues,
   type AccGroup,
-  type AccSale,
 } from "./accApi";
 import { CustomerForm, GROUP_COLORS } from "./AccWholesalePage";
-import { SaleSheet } from "./AccSalesPage";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
 
 /** Wholesale dues: who owes what, by group, ageing, and collecting payments. */
@@ -98,8 +97,8 @@ export function AccDuesPage() {
       <div className="acc-title-row">
         <h1>Dues</h1>
         <div className="acc-head-actions">
-          <button type="button" className="acc-btn is-ghost" onClick={() => setPdfOpen(true)}>
-            PDF
+          <button type="button" className="acc-btn" onClick={() => setPdfOpen(true)}>
+            <FileDown /> PDF
           </button>
           <button type="button" className="acc-btn is-primary" onClick={() => setAdding(true)}>
             <UserPlus /> Customer
@@ -249,6 +248,10 @@ export function AccDuesPage() {
           onSaved={(id) => {
             setAdding(false);
             navigate(`/acc/dues/${id}`);
+          }}
+          onUseExisting={(c) => {
+            setAdding(false);
+            navigate(`/acc/dues/${c.id}`);
           }}
           onCancel={() => setAdding(false)}
         />
@@ -554,7 +557,6 @@ export function AccCustomerPage() {
   const [tab, setTab] = useState<"ledger" | "open" | "items">("ledger");
   const [paying, setPaying] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [sale, setSale] = useState<AccSale | null>(null);
 
   const load = () =>
     accApi
@@ -579,14 +581,8 @@ export function AccCustomerPage() {
 
   const reminder = dueReminder(data);
 
-  async function openSale(saleId: string) {
-    try {
-      const { data } = await accApi.getSale(saleId);
-      setSale(data);
-    } catch (err) {
-      toast(errorText(err), { tone: "error" });
-    }
-  }
+  // Wholesale bills open on their own page.
+  const openSale = (saleId: string) => navigate(`/acc/sales/${saleId}`);
 
   return (
     <div className="acc-page">
@@ -672,7 +668,7 @@ export function AccCustomerPage() {
               <li key={line.id} className={line.kind === "BILL" ? "is-bill" : "is-pay"}>
                 <button
                   type="button"
-                  onClick={() => (line.saleId && line.kind === "BILL" ? void openSale(line.saleId) : undefined)}
+                  onClick={() => (line.saleId && line.kind === "BILL" ? openSale(line.saleId) : undefined)}
                   disabled={!(line.saleId && line.kind === "BILL")}
                 >
                   <span>
@@ -718,7 +714,7 @@ export function AccCustomerPage() {
           <ul className="acc-list">
             {data.openBills.map((b) => (
               <li key={b.saleId} className="acc-row">
-                <button type="button" className="acc-row-main" onClick={() => void openSale(b.saleId)}>
+                <button type="button" className="acc-row-main" onClick={() => openSale(b.saleId)}>
                   <span className="acc-row-text">
                     <strong>{b.number}</strong>
                     <small>
@@ -786,14 +782,6 @@ export function AccCustomerPage() {
         />
       </Sheet>
 
-      <SaleSheet
-        sale={sale}
-        onClose={() => setSale(null)}
-        onChanged={(updated) => {
-          setSale(updated);
-          void load();
-        }}
-      />
     </div>
   );
 }

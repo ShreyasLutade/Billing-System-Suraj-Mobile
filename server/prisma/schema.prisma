@@ -676,14 +676,28 @@ model AccPayment {
   @@index([paidAt])
 }
 
+/// Supplier group (e.g. Delhi market, Nagpur, Local) for sorting the list.
+model AccSupplierGroup {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#5d73b6")
+  createdAt DateTime @default(now())
+  suppliers AccSupplier[]
+}
+
 model AccSupplier {
   id        String   @id @default(cuid())
   name      String   @unique
   phone     String   @default("")
+  city      String   @default("")
   address   String   @default("")
+  groupId   String?
   createdAt DateTime @default(now())
+  group     AccSupplierGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   purchases AccPurchase[]
   payments  AccSupplierPayment[]
+
+  @@index([groupId])
 }
 
 /// Stock bought in one go (from a supplier or opening stock).
@@ -722,6 +736,8 @@ model AccSupplierPayment {
   amount     Float
   method     String
   paidAt     DateTime @default(now())
+  /// UTR / cheque no., to match the bank statement
+  reference  String   @default("")
   note       String   @default("")
   createdAt  DateTime @default(now())
   supplier   AccSupplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)

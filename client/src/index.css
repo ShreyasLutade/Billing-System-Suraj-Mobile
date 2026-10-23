@@ -818,6 +818,16 @@ body,
     text-decoration: none;
   }
 
+  /* Seven tabs (accessories shop with Suppliers): smaller labels so they don't touch. */
+  .babu-mobile-nav.is-crowded .babu-mobile-link {
+    overflow: hidden;
+    padding: 6px 1px;
+    font-size: 9.5px;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .babu-mobile-link.is-active {
     background: var(--grad);
     color: #ffffff;

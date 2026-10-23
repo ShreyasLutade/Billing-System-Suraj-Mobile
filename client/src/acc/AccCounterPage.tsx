@@ -23,7 +23,7 @@ import {
 /**
  * Counter: quick retail billing. Favourite products sit in tiles by
  * category → product (e.g. Cover → Silicone Cover). Tap a product, tap a
- * price, Sell. The phone model is optional and only keeps the stock
+ * price, Sell. The phone brand is optional and only keeps the stock
  * breakdown in step. Several items can go in a cart for one customer.
  */
 
@@ -222,8 +222,8 @@ export function AccCounterPage() {
           </div>
         ) : (
           <Empty title={`Nothing matches “${query}”`}>
-            <Link to="/acc/stock/new" className="acc-btn is-ghost">
-              <Plus /> Add product
+            <Link to="/acc/stock/in" className="acc-btn is-ghost">
+              <Plus /> Add stock
             </Link>
           </Empty>
         )
@@ -248,8 +248,8 @@ export function AccCounterPage() {
                 </button>
               </>
             ) : (
-              <Link to="/acc/stock/new" className="acc-btn">
-                <Plus /> Add your first product
+              <Link to="/acc/stock/in" className="acc-btn">
+                <Plus /> Add your first stock
               </Link>
             )}
           </Empty>
@@ -313,7 +313,7 @@ export function AccCounterPage() {
 
 function ProductTile({ product, onTap }: { product: AccProduct; onTap: () => void }) {
   const sub = product.models.length
-    ? plural(product.models.length, "phone model")
+    ? plural(product.models.length, "phone brand")
     : [product.color, product.model].filter(Boolean).join(" · ");
   return (
     <button
@@ -466,7 +466,7 @@ function SellSheet({
 
       {product.models.length ? (
         <div className="acc-sell-quick is-scroll">
-          <span className="acc-sell-lb">Phone</span>
+          <span className="acc-sell-lb">Brand</span>
           <button type="button" className={clsx(!model && "is-on")} onClick={() => setModel("")}>
             Any
           </button>

@@ -169,7 +169,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
         { to: "/acc/wholesale", label: "Wholesale", icon: ShoppingBag },
         { to: "/acc/sales", label: "Sales", icon: ReceiptText },
         { to: "/acc/stock", label: "Stock", icon: Package },
-        { to: "/acc/suppliers", label: "Suppliers", icon: Truck, desktopOnly: true },
+        { to: "/acc/suppliers", label: "Suppliers", icon: Truck },
         { to: "/acc/dues", label: "Dues", icon: Wallet },
         ...(isAdmin ? [{ to: "/acc/analytics", label: "Analytics", icon: BarChart3 }] : []),
       ]
@@ -492,7 +492,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
       </main>
 
       <nav
-        className="babu-mobile-nav"
+        className={clsx("babu-mobile-nav", mobileLinks.length > 6 && "is-crowded")}
         aria-label="Mobile navigation"
         style={{ gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))` }}
       >

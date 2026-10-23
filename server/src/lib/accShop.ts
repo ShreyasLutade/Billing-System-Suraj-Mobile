@@ -4,16 +4,16 @@ import { endOfDayIST, istDateString, startOfDayIST } from "./ist";
 
 /**
  * Accessories shop: a separate counter (quick retail + wholesale on credit).
- * While it is being tested only these logins may open it. Set
- * ACCESSORIES_SHOP_PHONES="7038006342,7581817575" to let more people in.
+ * Every admin of the Babu shop can open it, plus these logins. Set
+ * ACCESSORIES_SHOP_PHONES="7038006342,7581817575" to let more staff in.
  */
 export const ACC_PHONES = (process.env.ACCESSORIES_SHOP_PHONES || "7038006342")
   .split(",")
   .map((phone) => phone.trim())
   .filter(Boolean);
 
-export function canUseAccessories(user: { phone: string; repairShop: string | null } | undefined) {
-  return Boolean(user && !user.repairShop && ACC_PHONES.includes(user.phone));
+export function canUseAccessories(user: { phone: string; role: string; repairShop: string | null } | undefined) {
+  return Boolean(user && !user.repairShop && (user.role === "ADMIN" || ACC_PHONES.includes(user.phone)));
 }
 
 export function requireAccessories(req: Request, res: Response, next: NextFunction) {

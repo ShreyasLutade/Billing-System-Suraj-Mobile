@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Check, ChevronDown, ClipboardCheck, Loader2, Search } from "lucide-react";
 import { BackLink, SearchClearButton } from "../components/ui";
@@ -19,8 +19,9 @@ import {
 
 /**
  * Weekly stock check: walk the shelf category by category and type what's
- * there. Sorted products are counted per phone model plus the unsorted pile.
- * Only products you touch are saved; each one is marked counted today.
+ * there. Sorted products are counted per phone brand plus the unsorted pile.
+ * Only products you touch are saved; each one is marked counted today. A
+ * count can only lower stock; extra pieces come in from a supplier.
  */
 
 type Entry = { total: string; models: Record<string, string>; loose: string };
@@ -72,6 +73,10 @@ export function AccStockCheckPage() {
     const p = products.find((x) => x.id === id);
     return p ? countedOf(p, entries[id]) !== p.stockQty : false;
   }).length;
+  // Counting more than the system would add stock without a supplier.
+  const overCounted = touched
+    .map((id) => products.find((x) => x.id === id))
+    .filter((p): p is AccProduct => Boolean(p) && countedOf(p!, entries[p!.id]) > p!.stockQty);
 
   const setEntry = (p: AccProduct, patch: Partial<Entry>) =>
     setEntries((all) => ({ ...all, [p.id]: { ...(all[p.id] || startEntry(p)), ...patch } }));
@@ -83,6 +88,10 @@ export function AccStockCheckPage() {
 
   async function save() {
     if (!touched.length || busy) return;
+    if (overCounted.length) {
+      toast(`${overCounted[0].name}: counted more than in stock. Add extra pieces from the supplier on Add stock.`, { tone: "error" });
+      return;
+    }
     setBusy(true);
     try {
       const items: AccStockCheckItem[] = touched
@@ -132,7 +141,7 @@ export function AccStockCheckPage() {
         </div>
         <p className="acc-hint">
           Count what's on the shelf. Tap ✓ if it matches, or type the real number. Sorted products are counted per phone
-          model.
+          brand. Found extra pieces? Add them from the supplier on <Link to="/acc/stock/in">Add stock</Link>.
         </p>
       </section>
 
@@ -186,7 +195,7 @@ export function AccStockCheckPage() {
                           <strong>{p.name}</strong>
                           <small>
                             System {p.stockQty}
-                            {p.models.length ? ` · ${plural(p.models.length, "model")}` : ""} · {checkedLabel(p.countedAt)}
+                            {p.models.length ? ` · ${plural(p.models.length, "brand")}` : ""} · {checkedLabel(p.countedAt)}
                           </small>
                         </button>
                         {p.models.length ? (
@@ -221,7 +230,7 @@ export function AccStockCheckPage() {
                       </div>
                       {e && diff !== 0 ? (
                         <p className={clsx("acc-check-diff", diff > 0 ? "is-green" : "is-red")}>
-                          {diff > 0 ? `+${diff} more than system` : `${-diff} missing`}
+                          {diff > 0 ? `${diff} more than stock: add them on Add stock with the supplier` : `${-diff} missing`}
                         </p>
                       ) : null}
                       {expanded ? (
