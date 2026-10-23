@@ -17,7 +17,7 @@ import { BackLink } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccModelQty, type AccProduct, type AccStockMove } from "./accApi";
 import {
-  COMMON_PHONE_MODELS,
+  COMMON_PHONE_BRANDS,
   CategoryIcon,
   Empty,
   Sheet,
@@ -36,16 +36,17 @@ import {
 } from "./shared";
 
 /**
- * One product: stock, the split by phone model (a record only), stock in,
- * weekly count and history. Covers / glass are bought as one product and
- * sorted here later, e.g. Silicone Cover 100 → iPhone 15 Pro 10, Redmi…
+ * One product: stock, the split by phone brand (a record only), weekly count
+ * and history. Covers / glass are bought as one product and sorted here
+ * later, e.g. Silicone Cover 100 → Vivo 30, Samsung 25, Redmi… Stock only
+ * comes in from a supplier on Add stock; nothing here raises it.
  */
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
 export const MOVE_LABEL: Record<AccStockMove["kind"], string> = {
   OPENING: "Opening stock",
-  PURCHASE: "Stock in",
+  PURCHASE: "Stock added",
   SALE: "Sold",
   VOID: "Bill cancelled",
   ADJUST: "Count corrected",
@@ -60,7 +61,6 @@ export function AccProductPage() {
   const product = catalog?.products.find((p) => p.id === id) || null;
   const category = catalog?.categories.find((c) => c.id === product?.categoryId);
   const [sorting, setSorting] = useState(false);
-  const [restock, setRestock] = useState(false);
   const [counting, setCounting] = useState(false);
   const [moves, setMoves] = useState<AccStockMove[] | null>(null);
 
@@ -179,7 +179,7 @@ export function AccProductPage() {
         </div>
         <div className="acc-split-legend">
           <span>
-            <i className="is-sorted" /> Sorted by model <b>{sorted}</b>
+            <i className="is-sorted" /> Sorted by brand <b>{sorted}</b>
           </span>
           <span>
             <i className="is-unsorted" /> Not sorted <b className={clsx(overSorted && "is-red")}>{Math.max(unsorted, 0)}</b>
@@ -188,13 +188,13 @@ export function AccProductPage() {
         </div>
         {overSorted ? (
           <p className="acc-warn-text">
-            Models add up to {sorted} but stock is {product.stockQty}. Do a count to fix it.
+            Brands add up to {sorted} but stock is {product.stockQty}. Update the brands or do a count to fix it.
           </p>
         ) : null}
         <div className="acc-action-tiles">
-          <button type="button" onClick={() => setRestock(true)}>
+          <Link to="/acc/stock/in" state={{ productId: product.id }}>
             <PackagePlus /> Add stock
-          </button>
+          </Link>
           <button type="button" onClick={() => setCounting(true)}>
             <ClipboardCheck /> Count
           </button>
@@ -210,7 +210,7 @@ export function AccProductPage() {
       <section className="acc-card">
         <div className="acc-card-head">
           <h3 className="acc-card-title">
-            <Smartphone /> Phone models
+            <Smartphone /> By phone brand
           </h3>
           {models.length ? (
             <button type="button" className="acc-btn is-small" onClick={() => setSorting(true)}>
@@ -242,12 +242,12 @@ export function AccProductPage() {
         ) : (
           <div className="acc-sort-empty">
             <p>
-              <strong>Not sorted yet.</strong> When you have time, split these {plural(total, "piece")} by phone model (e.g.
-              10 for iPhone 15 Pro, 10 for Redmi Note 13). It's only for your record — the counter still sells{" "}
-              <b>{product.name}</b>.
+              <strong>Not sorted yet.</strong> When you have time, split these {plural(total, "piece")} by phone brand (e.g.
+              30 Vivo, 25 Samsung, 20 Redmi). It's only for your record; check and update it each week. The counter still
+              sells <b>{product.name}</b>.
             </p>
             <button type="button" className="acc-btn is-primary" onClick={() => setSorting(true)} disabled={total <= 0}>
-              <Smartphone /> Sort by phone model
+              <Smartphone /> Sort by phone brand
             </button>
           </div>
         )}
@@ -285,7 +285,6 @@ export function AccProductPage() {
       </section>
 
       <SortSheet open={sorting} product={product} onClose={() => setSorting(false)} />
-      <RestockSheet open={restock} product={product} onClose={() => setRestock(false)} />
       <CountSheet open={counting} product={product} onClose={() => setCounting(false)} />
     </div>
   );
@@ -294,20 +293,20 @@ export function AccProductPage() {
 /** Model rows being edited; qty kept as text so the field can be cleared. */
 type Row = { model: string; qty: string };
 
-/** Models already used in the shop first (most used on top), then popular phones. */
+/** Brands already used in the shop first (most used on top), then popular phone brands. */
 function modelSuggestions(products: AccProduct[], taken: string[]) {
   const used = new Set(taken.map((t) => t.toLowerCase()));
   const seen = new Map<string, number>();
   for (const p of products) for (const m of p.models) seen.set(m.model, (seen.get(m.model) || 0) + 1);
   const inShop = [...seen.entries()].sort((a, b) => b[1] - a[1] || collator.compare(a[0], b[0])).map(([m]) => m);
   const out: string[] = [];
-  for (const m of [...inShop, ...COMMON_PHONE_MODELS]) {
+  for (const m of [...inShop, ...COMMON_PHONE_BRANDS]) {
     if (!used.has(m.toLowerCase()) && !out.some((x) => x.toLowerCase() === m.toLowerCase())) out.push(m);
   }
   return out;
 }
 
-/** Split / update the stock by phone model. */
+/** Split / update the stock by phone brand. */
 export function SortSheet({ open, product, onClose }: { open: boolean; product: AccProduct; onClose: () => void }) {
   const { catalog } = useAccCatalog();
   const [rows, setRows] = useState<Row[]>([]);
@@ -356,7 +355,7 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
         .filter((r) => r.model);
       const { data } = await accApi.setProductModels(product.id, models);
       patchCatalogProduct(data);
-      toast("Phone models saved");
+      toast("Brands saved");
       onClose();
     } catch (err) {
       toast(errorText(err), { tone: "error" });
@@ -369,7 +368,7 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
     <Sheet
       open={open}
       onClose={onClose}
-      title="Sort by phone model"
+      title="Sort by phone brand"
       subtitle={`${product.name} · ${total} in stock`}
       footer={
         <div className="acc-sort-foot">
@@ -428,11 +427,11 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
           ))}
         </ul>
       ) : (
-        <p className="acc-hint">Add the phone models you have this product for, then enter how many of each.</p>
+        <p className="acc-hint">Add the phone brands you have this product for, then enter how many of each.</p>
       )}
 
       <div className="acc-field">
-        <span>Add phone model</span>
+        <span>Add phone brand</span>
         <div className="acc-add-model">
           <input
             value={newModel}
@@ -443,7 +442,7 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
                 add(newModel);
               }
             }}
-            placeholder="e.g. iPhone 15 Pro"
+            placeholder="e.g. Vivo"
           />
           <button type="button" className="acc-btn" onClick={() => add(newModel)} disabled={!newModel.trim()}>
             <Plus /> Add
@@ -461,72 +460,10 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
   );
 }
 
-function RestockSheet({ open, product, onClose }: { open: boolean; product: AccProduct; onClose: () => void }) {
-  const [qty, setQty] = useState("");
-  const [cost, setCost] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (open) {
-      setQty("");
-      setCost(product.purchasePrice ? String(product.purchasePrice) : "");
-    }
-  }, [open, product]);
-
-  async function save() {
-    const n = Math.floor(Number(qty) || 0);
-    if (n < 1 || busy) return;
-    setBusy(true);
-    try {
-      await accApi.createPurchase({ items: [{ productId: product.id, qty: n, unitCost: Number(cost) || 0 }], note: "Quick add" });
-      toast(`+${n} ${product.name}`);
-      void refreshCatalog();
-      onClose();
-    } catch (err) {
-      toast(errorText(err), { tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title="Add stock"
-      subtitle={`${product.name} · now ${product.stockQty}`}
-      footer={
-        <button type="button" className="acc-btn is-primary is-block" onClick={() => void save()} disabled={busy || !(Number(qty) >= 1)}>
-          {busy ? <Loader2 className="acc-spin" /> : null} Add {qty || 0} pcs
-        </button>
-      }
-    >
-      <div className="acc-form-grid">
-        <label className="acc-field">
-          <span>Quantity</span>
-          <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
-        </label>
-        <label className="acc-field">
-          <span>Cost per piece ₹</span>
-          <input type="number" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-        </label>
-      </div>
-      <div className="acc-chips">
-        {[5, 10, 20, 50, 100].map((n) => (
-          <button key={n} type="button" className="acc-chip" onClick={() => setQty(String((Number(qty) || 0) + n))}>
-            +{n}
-          </button>
-        ))}
-      </div>
-      <p className="acc-hint">
-        New pieces go to "Not sorted". For a supplier bill with many items use <Link to="/acc/stock/in">Stock in</Link>.
-      </p>
-    </Sheet>
-  );
-}
-
 /**
- * Count one product on the shelf. Sorted products are counted per model
- * (plus the unsorted pile); the total follows.
+ * Count one product on the shelf. Sorted products are counted per brand
+ * (plus the unsorted pile); the total follows. A count can only find the
+ * same or fewer pieces; extra stock comes in from a supplier.
  */
 export function CountSheet({ open, product, onClose }: { open: boolean; product: AccProduct; onClose: () => void }) {
   const [total, setTotal] = useState("");
@@ -546,9 +483,10 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
     ? models.reduce((a, m) => a + (Math.floor(Number(m.qty)) || 0), 0) + (Math.floor(Number(loose)) || 0)
     : Math.max(0, Math.floor(Number(total)) || 0);
   const diff = counted - product.stockQty;
+  const tooMany = diff > 0;
 
   async function save() {
-    if (busy) return;
+    if (busy || tooMany) return;
     setBusy(true);
     try {
       const { data } = await accApi.stockCheck([
@@ -582,7 +520,7 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
             Counted <b>{counted}</b>
             {diff !== 0 ? ` (${diff > 0 ? "+" : ""}${diff})` : " · matches"}
           </span>
-          <button type="button" className="acc-btn is-primary" onClick={() => void save()} disabled={busy}>
+          <button type="button" className="acc-btn is-primary" onClick={() => void save()} disabled={busy || tooMany}>
             {busy ? <Loader2 className="acc-spin" /> : <ClipboardCheck />} Save count
           </button>
         </div>
@@ -631,6 +569,15 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
           />
         </label>
       )}
+      {tooMany ? (
+        <p className="acc-warn-text">
+          That's {diff} more than in stock. Extra pieces must come in from the supplier on{" "}
+          <Link to="/acc/stock/in" state={{ productId: product.id }}>
+            Add stock
+          </Link>
+          .
+        </p>
+      ) : null}
     </Sheet>
   );
 }

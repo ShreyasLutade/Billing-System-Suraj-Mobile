@@ -173,11 +173,24 @@ export type AccDues = {
   groups: Array<{ id: string; name: string; color: string; count: number; balance: number; overdue: number }>;
 };
 
+export type AccSupplierGroup = { id: string; name: string; color: string };
+
+export type AccSupplierInput = {
+  name: string;
+  phone: string;
+  city?: string;
+  address?: string;
+  groupId?: string | null;
+  groupName?: string;
+};
+
 export type AccSupplier = {
   id: string;
   name: string;
   phone: string;
+  city: string;
   address: string;
+  group: AccSupplierGroup | null;
   purchased: number;
   paid: number;
   balance: number;
@@ -190,20 +203,38 @@ export type AccSupplierDetail = {
   id: string;
   name: string;
   phone: string;
+  city: string;
   address: string;
+  group: AccSupplierGroup | null;
+  createdAt: string;
   purchased: number;
   paid: number;
   balance: number;
+  pieces: number;
+  lastPurchaseAt: string | null;
+  lastPaymentAt: string | null;
   purchases: Array<{
     id: string;
     purchaseDate: string;
     billNo: string;
     total: number;
     note: string;
+    createdByName: string | null;
     pieces: number;
-    items: Array<{ name: string; qty: number; unitCost: number }>;
+    items: Array<{ name: string; qty: number; unitCost: number; amount: number }>;
   }>;
-  payments: Array<{ id: string; amount: number; method: string; paidAt: string; note: string }>;
+  payments: Array<{ id: string; amount: number; method: string; paidAt: string; reference: string; note: string }>;
+  /** Purchases (Dr) and payments (Cr) by date, with the running balance. */
+  statement: Array<{
+    id: string;
+    kind: "PURCHASE" | "PAYMENT";
+    date: string;
+    detail: string;
+    reference: string;
+    debit: number;
+    credit: number;
+    balance: number;
+  }>;
 };
 
 export type AccStockMove = {
@@ -358,19 +389,28 @@ export const accApi = {
 
   suppliers: () => apiRequest<{ data: AccSupplier[] }>("/acc/suppliers"),
   supplier: (id: string) => apiRequest<{ data: AccSupplierDetail }>(`/acc/suppliers/${id}`),
-  createSupplier: (body: { name: string; phone?: string; address?: string }) => post<{ id: string }>("/acc/suppliers", body),
-  updateSupplier: (id: string, body: { name: string; phone?: string; address?: string }) =>
-    put<{ id: string }>(`/acc/suppliers/${id}`, body),
-  paySupplier: (id: string, body: { amount: number; method: string; note?: string }) =>
+  supplierGroups: () => apiRequest<{ data: AccSupplierGroup[] }>("/acc/supplier-groups"),
+  createSupplier: (body: AccSupplierInput) => post<{ id: string }>("/acc/suppliers", body),
+  updateSupplier: (id: string, body: AccSupplierInput) => put<{ id: string }>(`/acc/suppliers/${id}`, body),
+  paySupplier: (id: string, body: { amount: number; method: string; reference?: string; paidAt?: string; note?: string }) =>
     post(`/acc/suppliers/${id}/payments`, body),
   createPurchase: (body: {
     supplierId?: string | null;
-    supplierName?: string;
+    /** A new supplier, saved with the purchase. */
+    supplier?: AccSupplierInput;
     billNo?: string;
     note?: string;
     paidNow?: number;
     paidMethod?: string;
-    items: Array<{ productId: string; qty: number; unitCost: number; sellingPrice?: number }>;
+    items: Array<{
+      /** An existing product… */
+      productId?: string;
+      /** …or one bought for the first time, created with the purchase. */
+      newProduct?: { categoryId: string; name: string; wholesalePrice?: number };
+      qty: number;
+      unitCost: number;
+      sellingPrice?: number;
+    }>;
   }) => post<{ id: string }>("/acc/purchases", body),
 
   analytics: (q: PeriodQuery) => apiRequest<{ data: AccAnalytics }>(`/acc/analytics${qs(q)}`),
@@ -385,6 +425,7 @@ export const accApi = {
       downloadAuthed(`/acc/dues/pdf${qs(q)}`, "accessories-dues.pdf"),
     statement: (id: string) => downloadAuthed(`/acc/customers/${id}/statement`, "statement.pdf"),
     suppliers: () => downloadAuthed("/acc/suppliers/pdf", "accessories-suppliers.pdf"),
+    supplier: (id: string) => downloadAuthed(`/acc/suppliers/${id}/pdf`, "supplier-statement.pdf"),
     analytics: (q: PeriodQuery) => downloadAuthed(`/acc/analytics/pdf${qs(q)}`, "accessories-report.pdf"),
   },
 };

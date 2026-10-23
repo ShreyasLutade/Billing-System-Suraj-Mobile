@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, FileDown, Loader2, MessageCircle, Plus, Search, Trash2, UserPlus, X } from "lucide-react";
+import { CalendarDays, Check, FileDown, Info, Loader2, MessageCircle, Plus, Search, Trash2, UserPlus, X } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import {
@@ -12,7 +12,7 @@ import {
   type AccProduct,
   type AccSale,
 } from "./accApi";
-import { Segmented, Sheet, StockBadge, errorText, inr, newRef, plural, refreshCatalog, shortDate, toast, todayInput, useAccCatalog } from "./shared";
+import { Segmented, Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refreshCatalog, shortDate, toast, todayInput, useAccCatalog } from "./shared";
 
 /**
  * Wholesale bill: a shop buys in bulk, usually on credit. Pick (or add) the
@@ -22,10 +22,13 @@ import { Segmented, Sheet, StockBadge, errorText, inr, newRef, plural, refreshCa
 
 type Line = { key: string; productId: string | null; name: string; qty: number; rate: number; stockQty: number | null };
 
+/** CREDIT = nothing paid now; PAY = paying, full or partial not chosen yet. */
+type PayMode = "CREDIT" | "PAY" | "FULL" | "PARTIAL";
+
 type Draft = {
   customer: AccCustomerRow | null;
   lines: Line[];
-  discount: string;
+  pay: PayMode;
   paid: string;
   method: "CASH" | "ONLINE";
   dueDate: string;
@@ -33,7 +36,7 @@ type Draft = {
 };
 
 const DRAFT_KEY = "acc.wholesale.draft";
-const EMPTY: Draft = { customer: null, lines: [], discount: "", paid: "", method: "CASH", dueDate: "", note: "" };
+const EMPTY: Draft = { customer: null, lines: [], pay: "CREDIT", paid: "", method: "CASH", dueDate: "", note: "" };
 
 function loadDraft(): Draft {
   try {
@@ -51,9 +54,9 @@ export function AccWholesalePage() {
   const [draft, setDraft] = useState<Draft>(loadDraft);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<AccSale | null>(null);
-  const [pickCustomer, setPickCustomer] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
   const refId = useRef(newRef());
+  const customerInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -128,11 +131,10 @@ export function AccWholesalePage() {
     set({ lines: draft.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) });
   }
 
-  const subtotal = draft.lines.reduce((a, l) => a + l.qty * l.rate, 0);
-  const discount = Math.min(Number(draft.discount) || 0, subtotal);
-  const total = Math.round((subtotal - discount) * 100) / 100;
-  const paid = Math.min(Number(draft.paid) || 0, total);
+  const total = Math.round(draft.lines.reduce((a, l) => a + l.qty * l.rate, 0) * 100) / 100;
+  const paid = draft.pay === "FULL" ? total : draft.pay === "PARTIAL" ? Math.min(Number(draft.paid) || 0, total) : 0;
   const due = Math.round((total - paid) * 100) / 100;
+  const needsDueDate = draft.pay === "CREDIT" || draft.pay === "PARTIAL";
   const pieces = draft.lines.reduce((a, l) => a + l.qty, 0);
   const newBalance = (draft.customer?.balance || 0) + due;
   const overLimit = draft.customer && draft.customer.creditLimit > 0 && newBalance > draft.customer.creditLimit;
@@ -141,7 +143,8 @@ export function AccWholesalePage() {
     if (busy) return;
     if (!draft.customer) {
       toast("Choose the customer first", { tone: "error" });
-      setPickCustomer(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      customerInput.current?.focus({ preventScroll: true });
       return;
     }
     if (!draft.lines.length) {
@@ -152,6 +155,18 @@ export function AccWholesalePage() {
       toast("Every item needs a rate", { tone: "error" });
       return;
     }
+    if (draft.pay === "PAY") {
+      toast("Choose full amount or partial amount", { tone: "error" });
+      return;
+    }
+    if (draft.pay === "PARTIAL" && (paid <= 0 || paid >= total)) {
+      toast(paid >= total ? "That is the full amount: choose Full amount" : "Enter the amount paid now", { tone: "error" });
+      return;
+    }
+    if (needsDueDate && !draft.dueDate) {
+      toast("Add the due date for the pending amount", { tone: "error" });
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await accApi.createSale({
@@ -159,9 +174,8 @@ export function AccWholesalePage() {
         clientRef: refId.current,
         customerId: draft.customer.id,
         items: draft.lines.map((l) => (l.productId ? { productId: l.productId, qty: l.qty, rate: l.rate } : { name: l.name, qty: l.qty, rate: l.rate })),
-        discount,
         ...(draft.method === "CASH" ? { cashAmount: paid } : { onlineAmount: paid }),
-        dueDate: due > 0 && draft.dueDate ? draft.dueDate : undefined,
+        dueDate: due > 0 ? draft.dueDate : undefined,
         note: draft.note,
         allowOutOfStock,
       });
@@ -218,19 +232,13 @@ export function AccWholesalePage() {
           <div className="acc-cust-bal">
             <small>Old balance</small>
             <b className={clsx(draft.customer.balance > 0 && "is-red")}>{inr(draft.customer.balance)}</b>
-            <button type="button" className="acc-link-btn" onClick={() => setPickCustomer(true)}>
+            <button type="button" className="acc-link-btn" onClick={() => set({ customer: null })}>
               Change
             </button>
           </div>
         </div>
       ) : (
-        <button type="button" className="acc-card acc-pick-cust" onClick={() => setPickCustomer(true)}>
-          <UserPlus />
-          <span>
-            <strong>Choose customer</strong>
-            <small>Search by name, phone or shop, or add new</small>
-          </span>
-        </button>
+        <CustomerChooser inputRef={customerInput} onPick={(customer) => set({ customer })} />
       )}
 
       {/* Items */}
@@ -334,70 +342,69 @@ export function AccWholesalePage() {
           <span>
             {plural(draft.lines.length, "item")} · {pieces} pcs
           </span>
-          <span>{inr(subtotal)}</span>
         </div>
-        <div className="acc-form-grid">
-          <label className="acc-field">
-            <span>Discount ₹</span>
-            <input type="number" inputMode="decimal" value={draft.discount} onChange={(e) => set({ discount: e.target.value })} placeholder="0" />
-          </label>
-          <div className="acc-field">
-            <span>Bill total</span>
-            <b className="acc-total-big">{inr(total)}</b>
-          </div>
+        <div className="acc-sum-row is-total">
+          <span>Bill total</span>
+          <b className="acc-total-big">{inr(total)}</b>
         </div>
-        <div className="acc-form-grid">
-          <label className="acc-field">
-            <span>Paid now ₹</span>
-            <input type="number" inputMode="decimal" value={draft.paid} onChange={(e) => set({ paid: e.target.value })} placeholder="0" />
-          </label>
-          <div className="acc-field">
-            <span>Paid by</span>
-            <Segmented
-              value={draft.method}
-              onChange={(method) => set({ method })}
-              options={[
-                { value: "CASH", label: "Cash" },
-                { value: "ONLINE", label: "UPI" },
-              ]}
-            />
-          </div>
-        </div>
-        <div className="acc-chips">
-          <button type="button" className={clsx("acc-chip", paid === 0 && "is-on")} onClick={() => set({ paid: "" })}>
-            Full credit
-          </button>
-          <button type="button" className={clsx("acc-chip", paid === total && total > 0 && "is-on")} onClick={() => set({ paid: String(total) })}>
-            Paid in full
-          </button>
-          {total > 0 ? (
-            <button type="button" className="acc-chip" onClick={() => set({ paid: String(Math.round(total / 2)) })}>
-              Half
-            </button>
-          ) : null}
-        </div>
-        {due > 0 ? (
+        <Segmented
+          value={draft.pay === "CREDIT" ? "CREDIT" : "PAY"}
+          onChange={(mode) => {
+            if (mode === "CREDIT") set({ pay: "CREDIT" });
+            else if (draft.pay === "CREDIT") set({ pay: "PAY" });
+          }}
+          options={[
+            { value: "CREDIT", label: "Full credit" },
+            { value: "PAY", label: "Partial / full pay" },
+          ]}
+        />
+        {draft.pay !== "CREDIT" ? (
+          <>
+            <div className="acc-chips">
+              <button type="button" className={clsx("acc-chip", draft.pay === "FULL" && "is-on")} onClick={() => set({ pay: "FULL" })}>
+                Full amount {inr(total)}
+              </button>
+              <button type="button" className={clsx("acc-chip", draft.pay === "PARTIAL" && "is-on")} onClick={() => set({ pay: "PARTIAL" })}>
+                Partial amount
+              </button>
+            </div>
+            {draft.pay === "FULL" || draft.pay === "PARTIAL" ? (
+              <div className="acc-form-grid">
+                {draft.pay === "PARTIAL" ? (
+                  <label className="acc-field">
+                    <span>Paid now ₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={draft.paid}
+                      onChange={(e) => set({ paid: e.target.value })}
+                      placeholder="0"
+                      autoFocus
+                    />
+                  </label>
+                ) : null}
+                <div className="acc-field">
+                  <span>Paid by</span>
+                  <Segmented
+                    value={draft.method}
+                    onChange={(method) => set({ method })}
+                    options={[
+                      { value: "CASH", label: "Cash" },
+                      { value: "ONLINE", label: "UPI" },
+                    ]}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {needsDueDate ? (
           <>
             <div className="acc-due-line">
-              <span>Due on this bill</span>
+              <span>{draft.pay === "CREDIT" ? "Full amount on credit" : "Pending on this bill"}</span>
               <b>{inr(due)}</b>
             </div>
-            <div className="acc-field">
-              <span>Payment promised by</span>
-              <div className="acc-chips">
-                {[7, 15, 30].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={clsx("acc-chip", draft.dueDate === todayInput(d) && "is-on")}
-                    onClick={() => set({ dueDate: todayInput(d) })}
-                  >
-                    {d} days
-                  </button>
-                ))}
-                <input type="date" className="acc-date" value={draft.dueDate} min={todayInput()} onChange={(e) => set({ dueDate: e.target.value })} />
-              </div>
-            </div>
+            <DueDatePicker value={draft.dueDate} onChange={(dueDate) => set({ dueDate })} />
             {draft.customer ? (
               <p className={clsx("acc-hint", overLimit && "is-red")}>
                 Customer's balance after this bill: <b>{inr(newBalance)}</b>
@@ -415,15 +422,6 @@ export function AccWholesalePage() {
           Save bill {inr(total)}
         </button>
       </div>
-
-      <CustomerPicker
-        open={pickCustomer}
-        onClose={() => setPickCustomer(false)}
-        onPick={(customer) => {
-          set({ customer });
-          setPickCustomer(false);
-        }}
-      />
 
       <Sheet
         open={Boolean(saved)}
@@ -485,14 +483,74 @@ export function AccWholesalePage() {
   );
 }
 
-/** Search existing wholesale customers or add a new one. */
-export function CustomerPicker({
-  open,
-  onClose,
+const DUE_PRESETS = [7, 15, 30];
+
+/** Quick 7 / 15 / 30 days or any date, with the chosen day spelled out below. */
+function DueDatePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const dateInput = useRef<HTMLInputElement>(null);
+  const preset = DUE_PRESETS.find((d) => todayInput(d) === value);
+  const custom = Boolean(value) && !preset;
+  const days = value ? Math.round((new Date(value).getTime() - new Date(todayInput()).getTime()) / 86400000) : 0;
+
+  function openCalendar() {
+    const input = dateInput.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      input.focus();
+      input.click();
+    }
+  }
+
+  return (
+    <div className="acc-field">
+      <span>Due date *</span>
+      <div className="acc-due-pick">
+        {DUE_PRESETS.map((d) => (
+          <button key={d} type="button" className={clsx(preset === d && "is-on")} onClick={() => onChange(todayInput(d))}>
+            <b>{d} days</b>
+            <small>{shortDate(todayInput(d))}</small>
+          </button>
+        ))}
+        <button type="button" className={clsx(custom && "is-on")} onClick={openCalendar}>
+          <CalendarDays aria-hidden />
+          <small>{custom ? shortDate(value) : "Pick date"}</small>
+          <input
+            ref={dateInput}
+            type="date"
+            tabIndex={-1}
+            aria-label="Pick due date"
+            value={value}
+            min={todayInput()}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        </button>
+      </div>
+      <p className={clsx("acc-due-when", !value && "is-empty")}>
+        {value ? (
+          <>
+            We receive it by{" "}
+            <b>
+              {new Date(value).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+            </b>
+            {" · "}
+            {days <= 0 ? "today" : `in ${plural(days, "day")}`}
+          </>
+        ) : (
+          "Choose when we will receive the pending amount"
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** First thing on the bill: search existing wholesale customers, or add a new one right below. */
+function CustomerChooser({
+  inputRef,
   onPick,
 }: {
-  open: boolean;
-  onClose: () => void;
+  inputRef: React.Ref<HTMLInputElement>;
   onPick: (customer: AccCustomerRow) => void;
 }) {
   const [q, setQ] = useState("");
@@ -500,63 +558,73 @@ export function CustomerPicker({
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    const controller = setTimeout(() => {
+    const query = q.trim();
+    if (!query) {
+      setList(null);
+      return;
+    }
+    const timer = setTimeout(() => {
       accApi
-        .customers({ q, limit: 40 })
+        .customers({ q: query, limit: 8 })
         .then(({ data }) => setList(data))
         .catch(() => setList([]));
-    }, q ? 200 : 0);
-    return () => clearTimeout(controller);
-  }, [open, q]);
-
-  useEffect(() => {
-    if (!open) {
-      setAdding(false);
-      setQ("");
-    }
-  }, [open]);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [q]);
 
   return (
-    <Sheet open={open} onClose={onClose} title={adding ? "New customer" : "Choose customer"}>
+    <div className="acc-card">
+      <h2 className="acc-card-title">{adding ? "New customer" : "Customer"}</h2>
       {adding ? (
         <CustomerForm
-          initial={{ name: /\d{5,}/.test(q) ? "" : q, phone: /^\d+$/.test(q) ? q : "" }}
+          initial={{ name: /\d{5,}/.test(q) ? "" : q.trim(), phone: /^\d+$/.test(q.trim()) ? q.trim() : "" }}
           submitLabel="Save & use"
           onSaved={async (id) => {
             const { data } = await accApi.customers({ limit: 1000 });
             const c = data.find((x) => x.id === id);
             if (c) onPick(c);
           }}
+          onUseExisting={onPick}
           onCancel={() => setAdding(false)}
         />
       ) : (
         <>
           <label className="acc-search is-in-card">
             <Search aria-hidden />
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, phone, shop, city…" autoFocus />
+            <input
+              ref={inputRef}
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Customer name, phone, shop, city…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && list?.length) onPick(list[0]);
+              }}
+            />
             <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
           </label>
+          {list ? (
+            <ul className="acc-results">
+              {list.map((c) => (
+                <li key={c.id}>
+                  <button type="button" onClick={() => onPick(c)}>
+                    <span>
+                      <strong>{c.name}</strong>
+                      <small>{[c.shopName, c.city, c.phone, c.group?.name].filter(Boolean).join(" · ")}</small>
+                    </span>
+                    {c.balance > 0 ? <b className="is-red">{inr(c.balance)}</b> : <small>Clear</small>}
+                  </button>
+                </li>
+              ))}
+              {!list.length ? <li className="acc-hint">No customer found.</li> : null}
+            </ul>
+          ) : null}
           <button type="button" className="acc-btn is-ghost is-block" onClick={() => setAdding(true)}>
             <UserPlus /> Add new customer
           </button>
-          <ul className="acc-results is-tall">
-            {(list || []).map((c) => (
-              <li key={c.id}>
-                <button type="button" onClick={() => onPick(c)}>
-                  <span>
-                    <strong>{c.name}</strong>
-                    <small>{[c.shopName, c.city, c.phone, c.group?.name].filter(Boolean).join(" · ")}</small>
-                  </span>
-                  {c.balance > 0 ? <b className="is-red">{inr(c.balance)}</b> : <small>Clear</small>}
-                </button>
-              </li>
-            ))}
-            {list && !list.length ? <li className="acc-hint">No customer found.</li> : null}
-          </ul>
         </>
       )}
-    </Sheet>
+    </div>
   );
 }
 
@@ -568,12 +636,15 @@ export function CustomerForm({
   initial,
   submitLabel = "Save",
   onSaved,
+  onUseExisting,
   onCancel,
 }: {
   id?: string;
   initial?: Partial<AccCustomerInput>;
   submitLabel?: string;
   onSaved: (id: string) => void | Promise<void>;
+  /** Shown as "Use same info" when the typed mobile is already saved. */
+  onUseExisting?: (customer: AccCustomerRow) => void;
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState<AccCustomerInput>({
@@ -600,6 +671,29 @@ export function CustomerForm({
   }, []);
 
   const set = (patch: Partial<AccCustomerInput>) => setForm((f) => ({ ...f, ...patch }));
+
+  // Same mobile = same customer; checked once the whole number is typed.
+  const phoneDigits = completePhone(form.phone);
+  const [match, setMatch] = useState<AccCustomerRow | null>(null);
+  useEffect(() => {
+    if (phoneDigits.length !== 10) {
+      setMatch(null);
+      return;
+    }
+    let live = true;
+    const timer = setTimeout(() => {
+      accApi
+        .customers({ q: phoneDigits, limit: 5 })
+        .then(({ data }) => {
+          if (live) setMatch(data.find((c) => c.phone === phoneDigits && c.id !== id) ?? null);
+        })
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [phoneDigits, id]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -637,6 +731,20 @@ export function CustomerForm({
           <input value={form.city} onChange={(e) => set({ city: e.target.value })} />
         </label>
       </div>
+      {match ? (
+        <div className="acc-phone-match" role="status">
+          <Info aria-hidden />
+          <span>
+            This number is already saved as <b>{match.name}</b>
+            {match.shopName ? ` (${match.shopName})` : ""}
+          </span>
+          {onUseExisting ? (
+            <button type="button" className="acc-btn is-small" onClick={() => onUseExisting(match)}>
+              Use same info
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <label className="acc-field">
         <span>Address</span>
         <input value={form.address} onChange={(e) => set({ address: e.target.value })} />

@@ -139,9 +139,9 @@ the mobile shop's data is untouched).
   Tap a product, tap a price, Sell (Cash/UPI). Cart for several items, Undo after a sale.
 - **Wholesale**: customer (name, phone, shop, city, address, group), bulk quantities
   (+10/+50/+100), paid now / due, promised date, bill PDF and WhatsApp.
-- **Stock**: add products for many phone models at once, stock in from suppliers,
+- **Stock**: add products for many phone models at once, add stock from suppliers,
   count corrections and history. **Dues** by group with ageing, payments, statements.
 - PDFs on Stock, Sales, Dues (group-wise), customer statement, Suppliers and Analytics.
 
-Only `7038006342` can open it while it is being tested. To let more logins in, set
-`ACCESSORIES_SHOP_PHONES="7038006342,7581817575"` on the server.
+Every admin of the Babu shop can open it (repair-shop logins cannot). To let staff logins
+in too, list them in `ACCESSORIES_SHOP_PHONES="7038006342,7581817575"` on the server.

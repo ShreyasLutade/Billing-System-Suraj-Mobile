@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Ban, Loader2, Search } from "lucide-react";
+import { Ban, ChevronDown, Loader2, Search } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccSale, type AccSaleKind, type AccSalesSummary, type PeriodQuery } from "./accApi";
 import { Empty, PdfButton, PeriodChips, Segmented, Sheet, dateTime, errorText, inr, plural, refreshCatalog, toast } from "./shared";
 
-/** Every retail and wholesale bill, with day totals and cancel (void). */
+/**
+ * Sales by day. Wholesale bills are listed one by one and open their own
+ * page; the counter's retail bills are combined per day by product
+ * (Silicone cover × 10), with the single bills one tap away.
+ */
 export function AccSalesPage() {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodQuery>({ period: "today" });
   const [kind, setKind] = useState<AccSaleKind | "">("");
   const [q, setQ] = useState("");
@@ -114,40 +119,44 @@ export function AccSalesPage() {
         </div>
       ) : data.sales.length ? (
         <div className={clsx("acc-days", loading && "is-stale")}>
-          {days.map(([day, list]) => (
-            <section key={day}>
-              <h3 className="acc-day-head">
-                <span>{day}</span>
-                <b>{inr(list.filter((x) => !x.voidedAt).reduce((a, x) => a + x.total, 0))}</b>
-              </h3>
-              <ul className="acc-list">
-                {list.map((sale) => (
-                  <li key={sale.id} className={clsx("acc-row", sale.voidedAt && "is-void")}>
-                    <button type="button" className="acc-row-main" onClick={() => setOpen(sale)}>
-                      <span className={clsx("acc-kind", sale.kind === "WHOLESALE" && "is-w")}>{sale.kind === "WHOLESALE" ? "W" : "R"}</span>
-                      <span className="acc-row-text">
-                        <strong>
-                          {sale.kind === "WHOLESALE" ? sale.customerName : sale.items.map((i) => i.name).join(", ")}
-                        </strong>
-                        <small>
-                          {sale.number} · {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
-                          {sale.kind === "WHOLESALE" ? ` · ${sale.items.reduce((a, i) => a + i.qty, 0)} pcs` : ""}
-                          {sale.createdByName ? ` · ${sale.createdByName}` : ""}
-                          {sale.voidedAt ? " · CANCELLED" : ""}
-                        </small>
-                      </span>
-                      <span className="acc-row-amt">
-                        <b>{inr(sale.total)}</b>
-                        <small className={clsx(sale.dueAmount > 0 && "is-red")}>
-                          {sale.dueAmount > 0 ? `Due ${inr(sale.dueAmount)}` : sale.onlineAmount && !sale.cashAmount ? "UPI" : sale.cashAmount && sale.onlineAmount ? "Split" : "Cash"}
-                        </small>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+          {days.map(([day, list]) => {
+            const wholesale = list.filter((x) => x.kind === "WHOLESALE");
+            const retail = list.filter((x) => x.kind === "RETAIL");
+            return (
+              <section key={day}>
+                <h3 className="acc-day-head">
+                  <span>{day}</span>
+                  <b>{inr(list.filter((x) => !x.voidedAt).reduce((a, x) => a + x.total, 0))}</b>
+                </h3>
+                {wholesale.length ? (
+                  <ul className="acc-list">
+                    {wholesale.map((sale) => (
+                      <li key={sale.id} className={clsx("acc-row", sale.voidedAt && "is-void")}>
+                        <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/sales/${sale.id}`)}>
+                          <span className="acc-kind is-w">W</span>
+                          <span className="acc-row-text">
+                            <strong>{sale.customerName}</strong>
+                            <small>
+                              {sale.number} · {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })} ·{" "}
+                              {sale.items.reduce((a, i) => a + i.qty, 0)} pcs
+                              {sale.voidedAt ? " · CANCELLED" : ""}
+                            </small>
+                          </span>
+                          <span className="acc-row-amt">
+                            <b>{inr(sale.total)}</b>
+                            <small className={clsx(sale.dueAmount > 0 && "is-red")}>
+                              {sale.dueAmount > 0 ? `Due ${inr(sale.dueAmount)}` : "Paid"}
+                            </small>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {retail.length ? <CounterDay sales={retail} onOpen={setOpen} /> : null}
+              </section>
+            );
+          })}
         </div>
       ) : (
         <Empty title="No bills in this period" />
@@ -162,6 +171,73 @@ export function AccSalesPage() {
           void refreshCatalog();
         }}
       />
+    </div>
+  );
+}
+
+/** One day's counter (retail) sales, combined by product. */
+function CounterDay({ sales, onOpen }: { sales: AccSale[]; onOpen: (sale: AccSale) => void }) {
+  const [showBills, setShowBills] = useState(false);
+  const live = sales.filter((x) => !x.voidedAt);
+  const byProduct = new Map<string, { name: string; qty: number; amount: number }>();
+  for (const sale of live) {
+    for (const item of sale.items) {
+      const key = item.productId || item.name;
+      const row = byProduct.get(key) || { name: item.name, qty: 0, amount: 0 };
+      row.qty += item.qty;
+      row.amount += item.amount;
+      byProduct.set(key, row);
+    }
+  }
+  const rows = [...byProduct.values()].sort((a, b) => b.qty - a.qty || b.amount - a.amount);
+  const total = live.reduce((a, x) => a + x.total, 0);
+  const cash = live.reduce((a, x) => a + x.cashAmount, 0);
+  const online = live.reduce((a, x) => a + x.onlineAmount, 0);
+
+  return (
+    <div className="acc-counter-day">
+      <div className="acc-counter-day-head">
+        <span className="acc-kind">R</span>
+        <span>
+          <strong>Counter sales</strong>
+          <small>
+            {plural(live.length, "bill")} · {rows.reduce((a, r) => a + r.qty, 0)} pcs · Cash {inr(cash)} · UPI {inr(online)}
+          </small>
+        </span>
+        <b>{inr(total)}</b>
+      </div>
+      <table className="acc-table is-inner">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name}>
+              <td>{r.name}</td>
+              <td className="is-num is-nowrap">× {r.qty}</td>
+              <td className="is-num">{inr(r.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button type="button" className={clsx("acc-counter-day-toggle", showBills && "is-open")} onClick={() => setShowBills(!showBills)}>
+        {showBills ? "Hide" : "Show"} the {plural(sales.length, "bill")} <ChevronDown aria-hidden />
+      </button>
+      {showBills ? (
+        <ul className="acc-mini-bills">
+          {sales.map((sale) => (
+            <li key={sale.id} className={clsx(sale.voidedAt && "is-void")}>
+              <button type="button" onClick={() => onOpen(sale)}>
+                <span>
+                  {sale.number} · {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                  <small>
+                    {sale.items.map((i) => `${i.qty}× ${i.name}`).join(", ")}
+                    {sale.voidedAt ? " · CANCELLED" : ""}
+                  </small>
+                </span>
+                <b>{inr(sale.total)}</b>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

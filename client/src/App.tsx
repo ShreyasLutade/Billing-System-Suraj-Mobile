@@ -35,6 +35,8 @@ import { AccStockPage } from "./acc/AccStockPage";
 import { AccProductPage } from "./acc/AccProductPage";
 import { AccStockCheckPage } from "./acc/AccStockCheckPage";
 import { AccProductFormPage } from "./acc/AccProductFormPage";
+import { AccSaleDetailPage } from "./acc/AccSaleDetailPage";
+import { AccSupplierPage } from "./acc/AccSupplierPage";
 import { AccSuppliersPage, AccStockInPage } from "./acc/AccSuppliersPage";
 import { AccSalesPage } from "./acc/AccSalesPage";
 import { AccDuesPage, AccCustomerPage } from "./acc/AccDuesPage";
@@ -70,13 +72,16 @@ export default function App() {
                       <Route index element={<AccCounterPage />} />
                       <Route path="wholesale" element={<AccWholesalePage />} />
                       <Route path="sales" element={<AccSalesPage />} />
+                      <Route path="sales/:id" element={<AccSaleDetailPage />} />
                       <Route path="stock" element={<AccStockPage />} />
-                      <Route path="stock/new" element={<AccProductFormPage key="new-product" />} />
+                      {/* New products are added with their stock on Add stock. */}
+                      <Route path="stock/new" element={<Navigate to="/acc/stock/in" replace />} />
                       <Route path="stock/in" element={<AccStockInPage />} />
                       <Route path="stock/check" element={<AccStockCheckPage />} />
                       <Route path="stock/:id" element={<AccProductPage />} />
                       <Route path="stock/:id/edit" element={<AccProductFormPage key="edit-product" />} />
                       <Route path="suppliers" element={<AccSuppliersPage />} />
+                      <Route path="suppliers/:id" element={<AccSupplierPage />} />
                       <Route path="dues" element={<AccDuesPage />} />
                       <Route path="dues/:id" element={<AccCustomerPage />} />
                       <Route element={<RequireAdmin />}>

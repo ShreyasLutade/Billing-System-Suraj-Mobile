@@ -84,6 +84,18 @@ export function sortedQty(product: { stockQty: number; models: Array<{ qty: numb
   return { sorted, unsorted: Math.max(product.stockQty, 0) - sorted };
 }
 
+/**
+ * The 10-digit mobile once the whole number is typed (10 digits, or with a
+ * +91 / 0 prefix); "" while it is still being typed.
+ */
+export function completePhone(raw: string) {
+  const d = raw.replace(/\D/g, "");
+  if (d.length === 10) return d;
+  if (d.length === 12 && d.startsWith("91")) return d.slice(2);
+  if (d.length === 11 && d.startsWith("0")) return d.slice(1);
+  return "";
+}
+
 export function daysSince(value: string | Date | null | undefined) {
   if (!value) return null;
   return Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
@@ -105,15 +117,10 @@ export const needsCheck = (value: string | null | undefined) => {
   return days === null || days >= CHECK_EVERY_DAYS;
 };
 
-/** Suggestions when sorting covers / glass by phone. */
-export const COMMON_PHONE_MODELS = [
-  "iPhone 11", "iPhone 12", "iPhone 13", "iPhone 14", "iPhone 15", "iPhone 15 Pro", "iPhone 16", "iPhone 16 Pro",
-  "Redmi 13C", "Redmi Note 12", "Redmi Note 13", "Redmi Note 13 Pro", "Redmi A3",
-  "Samsung A05", "Samsung A15", "Samsung A35", "Samsung M14", "Samsung M34", "Samsung S23",
-  "Vivo T3", "Vivo Y18", "Vivo Y28", "Vivo V30",
-  "Oppo A18", "Oppo A79", "Oppo F25",
-  "Realme 12", "Realme C55", "Realme Narzo 70",
-  "OnePlus Nord CE 4", "OnePlus 12R", "Poco X6", "Poco M6", "Moto G54", "iQOO Z9", "Infinix Hot 40",
+/** Suggestions when sorting covers / glass by phone brand. */
+export const COMMON_PHONE_BRANDS = [
+  "Vivo", "Oppo", "Samsung", "Redmi", "Realme", "iPhone", "OnePlus", "Poco", "Motorola", "iQOO", "Infinix", "Tecno",
+  "Nokia", "Lava", "Itel", "Google Pixel", "Nothing",
 ];
 
 /* ---------------- icons ---------------- */
@@ -587,7 +594,7 @@ export function PdfButton({
     }
   }, [busy, onDownload]);
   return (
-    <button type="button" className={clsx("acc-btn is-ghost", className)} onClick={run} disabled={busy}>
+    <button type="button" className={clsx("acc-btn", className)} onClick={run} disabled={busy}>
       {busy ? <Loader2 className="acc-spin" /> : <FileDown />}
       {label}
     </button>

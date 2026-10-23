@@ -7,6 +7,7 @@ import { istDateString, startOfDayIST } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfRow } from "../../services/accPdf";
 import { money } from "../../services/pdf";
 import { customerBalances } from "../../services/accDues";
+import { renderAccBillPdf } from "../../services/accBillPdf";
 import { upsertCustomer, customerInputSchema } from "./customers";
 
 export const accSalesRouter = Router();
@@ -435,69 +436,35 @@ accSalesRouter.get("/sales/:id/pdf", async (req, res, next) => {
     const c = sale.customer;
     let balance: number | null = null;
     if (c) balance = (await customerBalances([c.id])).get(c.id)?.balance ?? null;
-    const paid = round2(sale.cashAmount + sale.onlineAmount);
-    const pdf = await renderAccPdf({
-      title: sale.kind === "WHOLESALE" ? "Wholesale bill" : "Bill",
-      subtitle: `${sale.number}  ·  ${pdfDay(sale.saleDate)}${sale.voidedAt ? "  ·  VOID" : ""}`,
-      info: [
-        { label: "Customer", value: c?.name || sale.customerName || "Walk-in customer" },
-        { label: "Phone", value: c?.phone || sale.customerPhone },
-        { label: "Shop", value: c?.shopName || "" },
-        ...(c ? [{ label: "Address", value: [c.address, c.city].filter(Boolean).join(", ") }] : []),
-        ...(c?.gstin ? [{ label: "GSTIN", value: c.gstin }] : []),
-        ...(sale.dueDate ? [{ label: "Pay by", value: pdfDay(sale.dueDate) }] : []),
-      ],
-      sections: [
-        {
-          columns: [
-            { key: "n", label: "#", width: 4, align: "right" },
-            { key: "name", label: "Item", width: 50 },
-            { key: "qty", label: "Qty", width: 8, align: "right" },
-            { key: "rate", label: "Rate", width: 12, align: "right" },
-            { key: "amount", label: "Amount", width: 14, align: "right" },
-          ],
-          rows: sale.items.map((item, i) => ({
-            cells: {
-              n: String(i + 1),
-              name: item.name,
-              qty: String(item.qty),
-              rate: money(item.rate),
-              amount: money(item.amount),
-            },
-          })),
-          total: {
-            name: `${sale.items.reduce((a, i) => a + i.qty, 0)} pcs`,
-            amount: money(sale.subtotal),
-          },
-        },
-        {
-          columns: [
-            { key: "label", label: "Summary", width: 70 },
-            { key: "value", label: "Rs.", width: 30, align: "right" },
-          ],
-          rows: [
-            ...(sale.discount ? [{ cells: { label: "Discount", value: `- ${money(sale.discount)}` } }] : []),
-            { cells: { label: "Bill total", value: money(sale.total) } },
-            ...(sale.cashAmount ? [{ cells: { label: "Paid in cash", value: money(sale.cashAmount) } }] : []),
-            ...(sale.onlineAmount ? [{ cells: { label: "Paid online", value: money(sale.onlineAmount) } }] : []),
-            ...(sale.kind === "WHOLESALE"
-              ? [
-                  {
-                    cells: { label: "Due on this bill", value: money(sale.dueAmount) },
-                    color: sale.dueAmount ? { value: PDF_TONE.red } : undefined,
-                  },
-                ]
-              : []),
-          ],
-          total:
-            balance !== null
-              ? { label: "Total outstanding (all bills)", value: money(balance) }
-              : { label: "Paid", value: money(paid) },
-        },
-      ],
-      notes: [sale.note ? `Note: ${sale.note}` : "", "Goods once sold will not be taken back. Thank you for your business!"].filter(
-        Boolean,
-      ),
+    const pdf = await renderAccBillPdf({
+      number: sale.number,
+      kind: sale.kind === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
+      saleDate: sale.saleDate,
+      dueDate: sale.dueDate,
+      voidedAt: sale.voidedAt,
+      customer: {
+        name: c?.name || sale.customerName,
+        phone: c?.phone || sale.customerPhone,
+        shopName: c?.shopName,
+        address: c?.address,
+        city: c?.city,
+        gstin: c?.gstin,
+      },
+      items: sale.items.map((item) => ({
+        name: item.name,
+        categoryName: item.categoryName,
+        qty: item.qty,
+        rate: item.rate,
+        amount: item.amount,
+      })),
+      subtotal: sale.subtotal,
+      discount: sale.discount,
+      total: sale.total,
+      cashAmount: sale.cashAmount,
+      onlineAmount: sale.onlineAmount,
+      dueAmount: sale.dueAmount,
+      outstanding: balance,
+      note: sale.note,
     });
     sendPdf(res, pdf, `${sale.number}.pdf`);
   } catch (error) {

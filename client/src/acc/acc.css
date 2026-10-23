@@ -300,6 +300,16 @@ html.dark .acc {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.acc-form-grid.is-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 560px) {
+  .acc-form-grid.is-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .acc-hint {
   margin: 0;
   color: var(--a-muted);
@@ -417,6 +427,172 @@ html.dark .acc {
   border-radius: 999px !important;
   border-style: dashed !important;
   font-size: 13.5px !important;
+}
+
+/* ---------- add stock: numbered steps ---------- */
+
+.acc-step-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.acc-step-title > i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--a-accent) 14%, var(--a-card));
+  color: var(--a-accent);
+  font: 800 14px "Sora", sans-serif;
+  font-style: normal;
+}
+
+.acc-step-title > i.is-done {
+  background: var(--a-green);
+  color: #fff;
+}
+
+.acc-step-title > i svg {
+  width: 16px;
+  height: 16px;
+}
+
+.acc-step-title > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.acc-step-title strong {
+  font: 800 16px "Sora", sans-serif;
+}
+
+.acc-step-title small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-new-product {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--a-accent) 40%, var(--a-line));
+  border-radius: 12px;
+}
+
+.acc-in-lines {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+}
+
+.acc-in-lines > li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.acc-in-lines > li + li {
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-in-line-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.acc-in-line-head > span {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-in-line-head small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-in-line-head > b {
+  font: 800 15px "Sora", sans-serif;
+}
+
+.acc-new-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-green) 16%, var(--a-card));
+  color: var(--a-green);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+/* Search results that drop down over the content below the field. */
+.acc-dropdown-wrap {
+  position: relative;
+}
+
+.acc-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  max-height: 320px;
+  background: var(--a-card);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+/* Suppliers grouped by supplier group. */
+.acc-supplier-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.acc-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font: 800 14px "Sora", sans-serif;
+  color: var(--a-ink);
+}
+
+.acc-group-head small {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-picked-supplier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+}
+
+.acc-picked-supplier > span {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-picked-supplier small {
+  color: var(--a-muted);
+  font-size: 12.5px;
 }
 
 .acc-dot {
@@ -1223,33 +1399,39 @@ html.dark .acc {
 
 /* ---------- wholesale ---------- */
 
-.acc-pick-cust {
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  border-style: dashed;
-  color: var(--a-ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.acc-pick-cust > svg {
-  width: 26px;
-  height: 26px;
-  color: var(--a-accent);
-}
-
-.acc-pick-cust span,
 .acc-cust-card > div {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.acc-pick-cust small,
 .acc-cust-card small {
   color: var(--a-muted);
   font-size: 12.5px;
+}
+
+.acc-phone-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--a-amber) 12%, var(--a-card));
+  color: var(--a-ink);
+  font-size: 13px;
+}
+
+.acc-phone-match > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--a-amber);
+}
+
+.acc-phone-match > span {
+  flex: 1;
+  min-width: 0;
 }
 
 .acc-cust-card {
@@ -1397,6 +1579,80 @@ html.dark .acc {
   color: var(--a-muted);
   font-size: 14px;
   font-weight: 700;
+}
+
+.acc-due-pick {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.acc-due-pick > button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 54px;
+  padding: 6px 4px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  cursor: pointer;
+}
+
+.acc-due-pick b {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.acc-due-pick small {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acc-due-pick svg {
+  width: 17px;
+  height: 17px;
+  color: var(--a-accent);
+}
+
+.acc-due-pick > button.is-on {
+  border-color: transparent;
+  background: var(--grad);
+  color: #fff;
+}
+
+.acc-due-pick > button.is-on small,
+.acc-due-pick > button.is-on svg {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* The native date input only anchors the calendar; the button is what shows. */
+.acc-due-pick input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.acc-due-when {
+  margin: 0;
+  color: var(--a-ink);
+  font-size: 13px;
+}
+
+.acc-due-when.is-empty {
+  color: var(--a-muted);
+}
+
+.acc-sum-row.is-total {
+  align-items: center;
+  color: var(--a-ink);
 }
 
 .acc-due-line {
@@ -2833,19 +3089,84 @@ body.acc-sheet-open {
 .acc-stock-sections {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 6px;
   padding-bottom: 90px;
 }
 
-.acc-stock-section > header {
+.acc-collapse-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-collapse-bar small {
+  flex: 1;
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.acc-collapse-bar .acc-link-btn {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+/* An open category is one card: header on top, its products as rows below. */
+.acc-stock-section:not(.is-collapsed) .acc-section-toggle {
+  border-radius: 14px 14px 0 0;
+}
+
+.acc-stock-section > .acc-list {
+  gap: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--a-line);
+  border-radius: 0 0 14px 14px;
+  background: var(--a-card);
+}
+
+.acc-stock-section > .acc-list > .acc-row {
+  border: 0;
+  border-radius: 0;
+}
+
+.acc-stock-section > .acc-list > .acc-row + .acc-row {
+  border-top: 1px solid var(--a-line);
+}
+
+/* A thin rule between categories, so collapsed headers read as separate rows. */
+.acc-stock-section + .acc-stock-section {
+  padding-top: 6px;
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-section-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
-  padding: 0 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 14px;
+  /* White card on the grey page so each category stands out. */
+  background: var(--a-card);
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
 }
 
-.acc-stock-section > header > .acc-section-text {
+.acc-section-chevron {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--a-muted);
+  transition: transform 0.15s ease;
+}
+
+.acc-stock-section.is-collapsed .acc-section-chevron {
+  transform: rotate(-90deg);
+}
+
+.acc-section-toggle > .acc-section-text {
   display: flex;
   flex: 1;
   min-width: 0;
@@ -2862,7 +3183,7 @@ body.acc-sheet-open {
   font-weight: 600;
 }
 
-.acc-stock-section > header > b {
+.acc-section-toggle > b {
   font: 800 14px "Sora", sans-serif;
   color: var(--a-muted);
 }
@@ -4144,4 +4465,457 @@ html.dark .acc-sell-pay button.is-on {
   .acc-sell-go {
     font-size: 16px;
   }
+}
+
+/* ---------- sheet-style tables (supplier list, statements, bill items) ---------- */
+
+.acc-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+  -webkit-overflow-scrolling: touch;
+}
+
+.acc-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-table th,
+.acc-table td {
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--a-line);
+}
+
+.acc-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.acc-table thead th > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.acc-sort-mark {
+  min-width: 8px;
+  color: var(--a-accent);
+  font-size: 9px;
+}
+
+.acc-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--a-field) 55%, var(--a-card));
+}
+
+.acc-table.is-clickable tbody tr {
+  cursor: pointer;
+}
+
+.acc-table.is-clickable tbody tr:hover td {
+  background: color-mix(in srgb, var(--a-accent) 8%, var(--a-card));
+}
+
+.acc-table td strong {
+  display: block;
+  font-weight: 700;
+}
+
+.acc-table td small {
+  display: block;
+  color: var(--a-muted);
+  font-size: 12px;
+}
+
+.acc-table td a {
+  color: var(--a-ink);
+  text-decoration: none;
+}
+
+.acc-table td a:hover strong {
+  color: var(--a-accent);
+}
+
+.acc-table tfoot td {
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+  font-weight: 800;
+}
+
+.acc-table .is-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.acc-table thead th.is-num > button {
+  justify-content: flex-end;
+}
+
+.acc-table .is-nowrap {
+  white-space: nowrap;
+}
+
+.acc-table .is-muted {
+  color: var(--a-muted);
+}
+
+.acc-table .is-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.acc-table .is-icon {
+  width: 44px;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.acc-table .acc-dot {
+  margin-right: 4px;
+}
+
+.acc-table-wrap.is-sheet .acc-table th,
+.acc-table-wrap.is-sheet .acc-table td {
+  padding: 9px 10px;
+}
+
+@media (max-width: 560px) {
+  .acc-table-wrap.is-sheet .acc-table {
+    font-size: 13px;
+  }
+
+  .acc-table-wrap.is-sheet .acc-table th,
+  .acc-table-wrap.is-sheet .acc-table td {
+    padding: 8px 8px;
+  }
+}
+
+/* The supplier name stays put while the numbers scroll sideways. */
+.acc-table-wrap.is-sheet .is-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 130px;
+  max-width: 190px;
+  background: var(--a-card);
+  box-shadow: 1px 0 0 var(--a-line);
+}
+
+.acc-table-wrap.is-sheet thead th.is-sticky {
+  z-index: 3;
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+}
+
+.acc-table-wrap.is-sheet tfoot .is-sticky {
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+}
+
+.acc-table.is-inner {
+  font-size: 13px;
+}
+
+.acc-table.is-inner td,
+.acc-table.is-inner th {
+  padding: 7px 4px;
+}
+
+.acc-table.is-inner tbody tr:nth-child(even) td {
+  background: transparent;
+}
+
+.acc-table.is-inner tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---------- bill & supplier pages ---------- */
+
+.acc-bill-head {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.acc-bill-head > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acc-bill-head small {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.acc-bill-head .acc-h1 {
+  margin: 0;
+}
+
+.acc-bill-meta {
+  color: var(--a-muted);
+  font-size: 13px;
+}
+
+.acc-status {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.acc-status.is-green {
+  background: color-mix(in srgb, var(--a-green) 14%, var(--a-card));
+}
+
+.acc-status.is-amber {
+  background: color-mix(in srgb, var(--a-amber) 14%, var(--a-card));
+  color: var(--a-amber);
+}
+
+.acc-status.is-red {
+  background: color-mix(in srgb, var(--a-red) 12%, var(--a-card));
+}
+
+.acc-status.is-grey {
+  background: var(--a-field);
+  color: var(--a-muted);
+}
+
+.acc-bill-customer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.acc-bill-customer > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-bill-customer strong {
+  font-size: 16px;
+}
+
+.acc-bill-customer strong a {
+  color: var(--a-ink);
+}
+
+.acc-bill-customer small {
+  color: var(--a-muted);
+  font-size: 13px;
+}
+
+.acc-bill-balance {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.acc-bill-balance b {
+  font: 800 17px "Sora", sans-serif;
+}
+
+.acc-paid-line {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--a-green) 12%, var(--a-card));
+  color: var(--a-green);
+  font-weight: 800;
+  text-align: center;
+}
+
+.acc-stat-sub {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-btn-row.is-stretch > * {
+  flex: 1 1 140px;
+}
+
+.acc-purchase-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+}
+
+.acc-purchase-list > li + li {
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-purchase-list > li > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  background: none;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-purchase-list > li > button > span {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-purchase-list small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-purchase-list > li > button > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--a-muted);
+  transition: transform 0.15s ease;
+}
+
+.acc-purchase-list > li.is-open > button > svg {
+  transform: rotate(180deg);
+}
+
+.acc-purchase-list .acc-table {
+  margin: 0 12px 10px;
+  width: calc(100% - 24px);
+}
+
+/* ---------- sales: a day's counter sales combined ---------- */
+
+.acc-counter-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+}
+
+.acc-counter-day-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.acc-counter-day-head > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-counter-day-head small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-counter-day-head > b {
+  font: 800 16px "Sora", sans-serif;
+}
+
+.acc-counter-day-toggle {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--a-accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.acc-counter-day-toggle svg {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.15s ease;
+}
+
+.acc-counter-day-toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+.acc-mini-bills {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-mini-bills li + li {
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-mini-bills li.is-void {
+  opacity: 0.5;
+}
+
+.acc-mini-bills button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 2px;
+  border: 0;
+  background: none;
+  color: var(--a-ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-mini-bills button > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-mini-bills small {
+  color: var(--a-muted);
+  font-size: 12px;
 }

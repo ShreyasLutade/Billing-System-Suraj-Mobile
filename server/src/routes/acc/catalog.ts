@@ -201,14 +201,20 @@ const createSchema = z.object({
     )
     .min(1)
     .max(100),
-  supplierId: z.string().optional(),
 });
+
+/** Stock only ever comes in through a supplier (Add stock), never directly. */
+const NO_DIRECT_STOCK = "Stock can only be added from a supplier on the Add stock page";
 
 accCatalogRouter.post("/products", async (req, res, next) => {
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
-    const { variants, supplierId, ...base } = parsed.data;
+    const { variants, ...base } = parsed.data;
+    if (variants.some((v) => v.qty > 0)) {
+      res.status(400).json({ error: `New products start at 0. ${NO_DIRECT_STOCK}.` });
+      return;
+    }
     const category = await prisma.accCategory.findUnique({ where: { id: base.categoryId } });
     if (!category) {
       res.status(400).json({ error: "Category not found" });
@@ -218,10 +224,8 @@ accCatalogRouter.post("/products", async (req, res, next) => {
       res.status(400).json({ error: "A barcode can only be set when adding one product" });
       return;
     }
-    const by = req.user?.name || null;
     const created = await prisma.$transaction(async (tx) => {
       const out = [];
-      const stocked: Array<{ productId: string; qty: number }> = [];
       for (const variant of variants) {
         const color = variant.color || base.color;
         const name =
@@ -251,35 +255,10 @@ accCatalogRouter.post("/products", async (req, res, next) => {
             quickPrices: JSON.stringify(base.quickPrices),
             lowStockAt: base.lowStockAt,
             isFavourite: base.isFavourite,
-            stockQty: variant.qty,
           },
           include: productInclude,
         });
-        if (variant.qty > 0) {
-          stocked.push({ productId: product.id, qty: variant.qty });
-        }
         out.push(product);
-      }
-      if (stocked.length) {
-        const purchase = await tx.accPurchase.create({
-          data: {
-            supplierId: supplierId || null,
-            total: round2(stocked.reduce((s, r) => s + r.qty * base.purchasePrice, 0)),
-            note: supplierId ? "" : "Opening stock",
-            createdByName: by,
-            items: { create: stocked.map((r) => ({ productId: r.productId, qty: r.qty, unitCost: base.purchasePrice })) },
-          },
-        });
-        await tx.accStockMove.createMany({
-          data: stocked.map((r) => ({
-            productId: r.productId,
-            kind: supplierId ? "PURCHASE" : "OPENING",
-            qty: r.qty,
-            unitCost: base.purchasePrice,
-            refId: purchase.id,
-            createdByName: by,
-          })),
-        });
       }
       return out;
     });
@@ -355,6 +334,9 @@ accCatalogRouter.post("/products/:id/adjust", async (req, res, next) => {
     const product = await prisma.$transaction(async (tx) => {
       const current = await tx.accProduct.findUniqueOrThrow({ where: { id: req.params.id } });
       const delta = parsed.data.setTo - current.stockQty;
+      if (delta > 0) {
+        throw Object.assign(new Error(`A correction can only lower stock. ${NO_DIRECT_STOCK}.`), { status: 400 });
+      }
       if (delta !== 0) {
         await tx.accStockMove.create({
           data: {
@@ -375,6 +357,10 @@ accCatalogRouter.post("/products/:id/adjust", async (req, res, next) => {
     });
     res.json({ data: serializeProduct(product) });
   } catch (error) {
+    if ((error as { status?: number }).status === 400) {
+      res.status(400).json({ error: (error as Error).message });
+      return;
+    }
     next(error);
   }
 });
@@ -483,6 +469,12 @@ accCatalogRouter.post("/stock-check", async (req, res, next) => {
           throw Object.assign(new Error(`${current.name}: models add up to more than the total counted`), { status: 400 });
         }
         const delta = item.qty - current.stockQty;
+        if (delta > 0) {
+          throw Object.assign(
+            new Error(`${current.name}: counted ${item.qty} but stock is ${current.stockQty}. ${NO_DIRECT_STOCK}.`),
+            { status: 400 },
+          );
+        }
         if (delta !== 0) {
           changed++;
           await tx.accStockMove.create({

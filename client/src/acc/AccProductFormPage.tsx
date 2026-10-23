@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { Check, Loader2, Plus, Star, X } from "lucide-react";
 import { BackLink } from "../components/ui";
-import { accApi, type AccCategory, type AccSupplier, type ProductInput } from "./accApi";
+import { accApi, type AccCategory, type ProductInput } from "./accApi";
 import { CATEGORY_ICONS, CategoryIcon, Sheet, errorText, inr, refreshCatalog, suggestPrices, toast, useAccCatalog } from "./shared";
 
 /**
- * Add / edit an accessory: category, type / brand, one quantity, prices.
- * Covers and glass are bought as one product (e.g. Silicone Cover × 100);
- * splitting them by phone model is done later from the product page.
+ * Add / edit an accessory: category, type / brand, prices. A new product
+ * starts at 0 pieces; stock only comes in from a supplier on Add stock.
+ * Covers and glass are one product (e.g. Silicone Cover); splitting the
+ * pieces by phone brand is done later from the product page.
  */
 
 const EMPTY_FORM: ProductInput = {
@@ -40,9 +41,6 @@ export function AccProductFormPage() {
   const { catalog } = useAccCatalog();
   const [form, setForm] = useState<ProductInput>(EMPTY_FORM);
   const [model, setModel] = useState("");
-  const [qty, setQty] = useState("");
-  const [supplierId, setSupplierId] = useState("");
-  const [suppliers, setSuppliers] = useState<AccSupplier[]>([]);
   const [priceInput, setPriceInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [newCategory, setNewCategory] = useState(false);
@@ -51,13 +49,6 @@ export function AccProductFormPage() {
   const products = catalog?.products ?? [];
   const categories = catalog?.categories ?? [];
   const category = categories.find((c) => c.id === form.categoryId);
-
-  useEffect(() => {
-    accApi
-      .suppliers()
-      .then(({ data }) => setSuppliers(data))
-      .catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     if (!editing || loaded || !catalog) return;
@@ -126,14 +117,12 @@ export function AccProductFormPage() {
       }
       const { data } = await accApi.createProducts({
         ...form,
-        variants: [{ model: "", qty: Math.max(0, Math.floor(Number(qty) || 0)) }],
-        supplierId: supplierId || undefined,
+        variants: [{ model: "", qty: 0 }],
       });
       toast(`Added ${data[0].name}`);
       void refreshCatalog();
       if (addAnother) {
         // Same category and prices: next type or brand.
-        setQty("");
         set({ name: "", barcode: "", type: "", brand: "" });
         window.scrollTo({ top: 0 });
       } else {
@@ -227,7 +216,7 @@ export function AccProductFormPage() {
           </section>
 
           <section className="acc-card">
-            <h3 className="acc-card-title">3. {editing ? "Name" : "Name & quantity"}</h3>
+            <h3 className="acc-card-title">3. Name</h3>
             <datalist id="acc-models">
               {modelOptions.map((m) => (
                 <option key={m} value={m} />
@@ -249,26 +238,14 @@ export function AccProductFormPage() {
               </>
             ) : (
               <>
-                <div className="acc-form-grid">
-                  <label className="acc-field">
-                    <span>Name on bills</span>
-                    <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder={autoName("") || "e.g. Silicone Cover"} />
-                  </label>
-                  <label className="acc-field">
-                    <span>Quantity bought</span>
-                    <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 100" />
-                  </label>
-                </div>
-                <div className="acc-chips">
-                  {[10, 25, 50, 100].map((n) => (
-                    <button key={n} type="button" className="acc-chip is-small" onClick={() => setQty(String((Number(qty) || 0) + n))}>
-                      +{n}
-                    </button>
-                  ))}
-                </div>
+                <label className="acc-field">
+                  <span>Name on bills</span>
+                  <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder={autoName("") || "e.g. Silicone Cover"} />
+                </label>
                 <p className="acc-hint">
-                  Add covers and glass as one product (e.g. Silicone Cover × 100). When you have time, open the product
-                  to split the pieces by phone model — it's only for your record; the counter sells the product as is.
+                  Add covers and glass as one product (e.g. Silicone Cover), not one per phone. It starts at 0 pieces: bring
+                  stock in from the supplier on <Link to="/acc/stock/in">Add stock</Link>. Later, open the product to split the
+                  pieces by phone brand for your record.
                 </p>
               </>
             )}
@@ -378,19 +355,6 @@ export function AccProductFormPage() {
                 <input value={form.barcode || ""} onChange={(e) => set({ barcode: e.target.value })} />
               </label>
             </div>
-            {!editing ? (
-              <label className="acc-field">
-                <span>Bought from (optional)</span>
-                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-                  <option value="">Opening stock / no supplier</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
           </section>
 
           <div className="acc-form-actions">
