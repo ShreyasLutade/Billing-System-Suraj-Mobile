@@ -18,10 +18,20 @@ function badRequest(res: import("express").Response, error: z.ZodError) {
   res.status(400).json({ error: first || "Check the details and try again" });
 }
 
+/** Category plus the phone-model breakdown, for every product sent to the app. */
+export const productInclude = {
+  category: true,
+  models: { orderBy: { model: "asc" } },
+} satisfies Prisma.AccProductInclude;
+
 export function serializeProduct(
-  product: Prisma.AccProductGetPayload<{ include: { category: true } }> | Prisma.AccProductGetPayload<object>,
+  product:
+    | Prisma.AccProductGetPayload<{ include: typeof productInclude }>
+    | Prisma.AccProductGetPayload<{ include: { category: true } }>
+    | Prisma.AccProductGetPayload<object>,
 ) {
   const category = "category" in product ? product.category : null;
+  const models = "models" in product ? product.models : [];
   return {
     id: product.id,
     categoryId: product.categoryId,
@@ -40,6 +50,8 @@ export function serializeProduct(
     lowStockAt: product.lowStockAt,
     isFavourite: product.isFavourite,
     active: product.active,
+    countedAt: product.countedAt,
+    models: models.map((m) => ({ model: m.model, qty: m.qty })),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -83,7 +95,7 @@ accCatalogRouter.get("/catalog", async (_req, res, next) => {
       prisma.accCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
       prisma.accProduct.findMany({
         where: { active: true },
-        include: { category: true },
+        include: productInclude,
         orderBy: [{ name: "asc" }],
       }),
     ]);
@@ -241,7 +253,7 @@ accCatalogRouter.post("/products", async (req, res, next) => {
             isFavourite: base.isFavourite,
             stockQty: variant.qty,
           },
-          include: { category: true },
+          include: productInclude,
         });
         if (variant.qty > 0) {
           stocked.push({ productId: product.id, qty: variant.qty });
@@ -304,7 +316,7 @@ accCatalogRouter.put("/products/:id", async (req, res, next) => {
         name: composeName({ category: category.name, ...rest }),
         quickPrices: JSON.stringify(quickPrices),
       },
-      include: { category: true },
+      include: productInclude,
     });
     res.json({ data: serializeProduct(product) });
   } catch (error) {
@@ -322,7 +334,7 @@ accCatalogRouter.patch("/products/:id/favourite", async (req, res, next) => {
     const product = await prisma.accProduct.update({
       where: { id: req.params.id },
       data: { isFavourite },
-      include: { category: true },
+      include: productInclude,
     });
     res.json({ data: serializeProduct(product) });
   } catch (error) {
@@ -357,12 +369,156 @@ accCatalogRouter.post("/products/:id/adjust", async (req, res, next) => {
       }
       return tx.accProduct.update({
         where: { id: current.id },
-        data: { stockQty: parsed.data.setTo },
-        include: { category: true },
+        data: { stockQty: parsed.data.setTo, countedAt: new Date() },
+        include: productInclude,
       });
     });
     res.json({ data: serializeProduct(product) });
   } catch (error) {
+    next(error);
+  }
+});
+
+/* ---------------- phone-model breakdown & stock check ---------------- */
+
+const modelRows = z
+  .array(
+    z.object({
+      model: z.string().trim().min(1, "Enter the phone model").max(60),
+      qty: z.coerce.number().int().min(0).max(1_000_000),
+    }),
+  )
+  .max(300);
+
+/** Same model typed twice ("iphone 15" / "iPhone 15 ") counts as one. */
+function cleanModels(rows: z.infer<typeof modelRows>) {
+  const seen = new Map<string, { model: string; qty: number }>();
+  for (const row of rows) {
+    const model = row.model.replace(/\s+/g, " ").trim();
+    const key = model.toLowerCase();
+    const prev = seen.get(key);
+    seen.set(key, { model: prev?.model || model, qty: (prev?.qty || 0) + row.qty });
+  }
+  return [...seen.values()];
+}
+
+async function replaceModels(
+  tx: Prisma.TransactionClient,
+  productId: string,
+  rows: Array<{ model: string; qty: number }>,
+) {
+  await tx.accProductModel.deleteMany({
+    where: { productId, model: { notIn: rows.map((r) => r.model) } },
+  });
+  for (const row of rows) {
+    await tx.accProductModel.upsert({
+      where: { productId_model: { productId, model: row.model } },
+      create: { productId, model: row.model, qty: row.qty },
+      update: { qty: row.qty },
+    });
+  }
+}
+
+/** Split a product's stock by phone model (for the record only). */
+accCatalogRouter.put("/products/:id/models", async (req, res, next) => {
+  try {
+    const parsed = z.object({ models: modelRows }).safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const rows = cleanModels(parsed.data.models);
+    const product = await prisma.$transaction(async (tx) => {
+      const current = await tx.accProduct.findUniqueOrThrow({ where: { id: req.params.id } });
+      const sorted = rows.reduce((a, r) => a + r.qty, 0);
+      if (sorted > Math.max(current.stockQty, 0)) {
+        throw Object.assign(
+          new Error(`Sorted ${sorted} pcs but only ${Math.max(current.stockQty, 0)} in stock. Lower a model or do a stock check.`),
+          { status: 400 },
+        );
+      }
+      await replaceModels(tx, current.id, rows);
+      return tx.accProduct.findUniqueOrThrow({ where: { id: current.id }, include: productInclude });
+    });
+    res.json({ data: serializeProduct(product) });
+  } catch (error) {
+    if ((error as { status?: number }).status === 400) {
+      res.status(400).json({ error: (error as Error).message });
+      return;
+    }
+    next(error);
+  }
+});
+
+/**
+ * Weekly stock check: the counted quantity for each product (and, for
+ * products sorted by model, each model). Differences are logged as COUNT
+ * moves; every product sent is marked as checked now.
+ */
+accCatalogRouter.post("/stock-check", async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({
+        items: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              qty: z.coerce.number().int().min(0).max(1_000_000),
+              models: modelRows.optional(),
+            }),
+          )
+          .min(1, "Count at least one product")
+          .max(2000),
+        note: text(200),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const by = req.user?.name || null;
+    const now = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+      let changed = 0;
+      const out = [];
+      for (const item of parsed.data.items) {
+        const current = await tx.accProduct.findUnique({ where: { id: item.productId } });
+        if (!current) continue;
+        const rows = item.models ? cleanModels(item.models) : null;
+        if (rows && rows.reduce((a, r) => a + r.qty, 0) > item.qty) {
+          throw Object.assign(new Error(`${current.name}: models add up to more than the total counted`), { status: 400 });
+        }
+        const delta = item.qty - current.stockQty;
+        if (delta !== 0) {
+          changed++;
+          await tx.accStockMove.create({
+            data: {
+              productId: current.id,
+              kind: "COUNT",
+              qty: delta,
+              unitCost: current.purchasePrice,
+              note: parsed.data.note || "Stock check",
+              createdByName: by,
+            },
+          });
+        }
+        if (rows) await replaceModels(tx, current.id, rows);
+        out.push(
+          await tx.accProduct.update({
+            where: { id: current.id },
+            data: { stockQty: item.qty, countedAt: now },
+            include: productInclude,
+          }),
+        );
+      }
+      return { changed, products: out };
+    });
+    res.json({
+      data: {
+        checked: result.products.length,
+        changed: result.changed,
+        products: result.products.map(serializeProduct),
+      },
+    });
+  } catch (error) {
+    if ((error as { status?: number }).status === 400) {
+      res.status(400).json({ error: (error as Error).message });
+      return;
+    }
     next(error);
   }
 });

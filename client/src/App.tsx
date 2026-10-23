@@ -32,6 +32,8 @@ import { AccLayout } from "./acc/shared";
 import { AccCounterPage } from "./acc/AccCounterPage";
 import { AccWholesalePage } from "./acc/AccWholesalePage";
 import { AccStockPage } from "./acc/AccStockPage";
+import { AccProductPage } from "./acc/AccProductPage";
+import { AccStockCheckPage } from "./acc/AccStockCheckPage";
 import { AccProductFormPage } from "./acc/AccProductFormPage";
 import { AccSuppliersPage, AccStockInPage } from "./acc/AccSuppliersPage";
 import { AccSalesPage } from "./acc/AccSalesPage";
@@ -71,6 +73,8 @@ export default function App() {
                       <Route path="stock" element={<AccStockPage />} />
                       <Route path="stock/new" element={<AccProductFormPage key="new-product" />} />
                       <Route path="stock/in" element={<AccStockInPage />} />
+                      <Route path="stock/check" element={<AccStockCheckPage />} />
+                      <Route path="stock/:id" element={<AccProductPage />} />
                       <Route path="stock/:id/edit" element={<AccProductFormPage key="edit-product" />} />
                       <Route path="suppliers" element={<AccSuppliersPage />} />
                       <Route path="dues" element={<AccDuesPage />} />

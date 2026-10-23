@@ -65,6 +65,8 @@ const saleSchema = z.object({
         productId: z.string().optional(),
         /** Only for items not in the catalogue. */
         name: z.string().trim().max(120).optional(),
+        /** Phone model from the product's breakdown (optional). */
+        model: z.string().trim().max(60).optional(),
         qty: z.coerce.number().int().min(1, "Quantity must be at least 1").max(100000),
         rate: z.coerce.number().min(0).max(10_000_000),
       }),
@@ -123,11 +125,13 @@ accSalesRouter.post("/sales", async (req, res, next) => {
     const lines = input.items.map((item) => {
       const product = item.productId ? byId.get(item.productId) : undefined;
       if (item.productId && !product) throw new SaleError("A product on this bill was removed. Refresh and try again.");
-      const name = product?.name || item.name;
-      if (!name) throw new SaleError("Every item needs a name");
+      const model = product ? item.model?.replace(/\s+/g, " ").trim() || "" : "";
+      const base = product?.name || item.name;
+      if (!base) throw new SaleError("Every item needs a name");
       return {
         productId: product?.id ?? null,
-        name,
+        name: model ? `${base} · ${model}` : base,
+        model,
         categoryName: product?.category.name ?? "",
         qty: item.qty,
         rate: round2(item.rate),
@@ -210,6 +214,17 @@ accSalesRouter.post("/sales", async (req, res, next) => {
         },
         include: saleInclude,
       });
+      // Keep the phone-model breakdown in step (never below zero).
+      for (const line of lines) {
+        if (!line.productId || !line.model) continue;
+        const row = await tx.accProductModel.findUnique({
+          where: { productId_model: { productId: line.productId, model: line.model } },
+        });
+        if (row) {
+          await tx.accProductModel.update({ where: { id: row.id }, data: { qty: Math.max(0, row.qty - line.qty) } });
+        }
+      }
+
       const moves = lines.filter((l) => l.productId);
       if (moves.length) {
         await tx.accStockMove.createMany({
@@ -519,6 +534,12 @@ accSalesRouter.post("/sales/:id/void", async (req, res, next) => {
         const exists = await tx.accProduct.findUnique({ where: { id: item.productId }, select: { id: true } });
         if (!exists) continue;
         await tx.accProduct.update({ where: { id: item.productId }, data: { stockQty: { increment: item.qty } } });
+        if (item.model) {
+          await tx.accProductModel.updateMany({
+            where: { productId: item.productId, model: item.model },
+            data: { qty: { increment: item.qty } },
+          });
+        }
         await tx.accStockMove.create({
           data: {
             productId: item.productId,

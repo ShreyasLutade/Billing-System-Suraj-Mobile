@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { Check, Loader2, Plus, Star, Trash2, X } from "lucide-react";
+import { Check, Loader2, Plus, Star, X } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccCategory, type AccSupplier, type ProductInput } from "./accApi";
 import { CATEGORY_ICONS, CategoryIcon, Sheet, errorText, inr, refreshCatalog, suggestPrices, toast, useAccCatalog } from "./shared";
 
 /**
- * Add / edit an accessory. Category → type or brand → phone models. Covers
- * and glass for many phones are added in one go: one row per model with its
- * quantity, all sharing the same prices.
+ * Add / edit an accessory: category, type / brand, one quantity, prices.
+ * Covers and glass are bought as one product (e.g. Silicone Cover × 100);
+ * splitting them by phone model is done later from the product page.
  */
-
-type Variant = { model: string; qty: string };
 
 const EMPTY_FORM: ProductInput = {
   categoryId: "",
@@ -42,7 +40,7 @@ export function AccProductFormPage() {
   const { catalog } = useAccCatalog();
   const [form, setForm] = useState<ProductInput>(EMPTY_FORM);
   const [model, setModel] = useState("");
-  const [variants, setVariants] = useState<Variant[]>([{ model: "", qty: "" }]);
+  const [qty, setQty] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [suppliers, setSuppliers] = useState<AccSupplier[]>([]);
   const [priceInput, setPriceInput] = useState("");
@@ -126,25 +124,20 @@ export function AccProductFormPage() {
         navigate("/acc/stock");
         return;
       }
-      const typed = variants.map((v) => ({ model: v.model.trim(), qty: Math.max(0, Math.floor(Number(v.qty) || 0)) }));
-      const withModel = typed.filter((v) => v.model);
-      const rows = withModel.length ? withModel : typed.slice(0, 1);
       const { data } = await accApi.createProducts({
         ...form,
-        barcode: rows.length === 1 ? form.barcode : "",
-        name: rows.length === 1 ? form.name : "",
-        variants: rows,
+        variants: [{ model: "", qty: Math.max(0, Math.floor(Number(qty) || 0)) }],
         supplierId: supplierId || undefined,
       });
-      toast(data.length === 1 ? `Added ${data[0].name}` : `Added ${data.length} products`);
+      toast(`Added ${data[0].name}`);
       void refreshCatalog();
       if (addAnother) {
-        // Same category, type, brand and prices: just new models.
-        setVariants([{ model: "", qty: "" }]);
-        set({ name: "", barcode: "" });
+        // Same category and prices: next type or brand.
+        setQty("");
+        set({ name: "", barcode: "", type: "", brand: "" });
         window.scrollTo({ top: 0 });
       } else {
-        navigate("/acc/stock");
+        navigate(`/acc/stock/${data[0].id}`);
       }
     } catch (err) {
       toast(errorText(err), { tone: "error" });
@@ -182,7 +175,7 @@ export function AccProductFormPage() {
               className={clsx("acc-cat-chip", form.categoryId === c.id && "is-on")}
               onClick={() => set({ categoryId: c.id })}
             >
-              <CategoryIcon icon={c.icon} />
+              <CategoryIcon icon={c.icon} variant="3d" size="sm" />
               {c.name}
             </button>
           ))}
@@ -234,7 +227,7 @@ export function AccProductFormPage() {
           </section>
 
           <section className="acc-card">
-            <h3 className="acc-card-title">3. {editing ? "Model" : "Phone models & quantity"}</h3>
+            <h3 className="acc-card-title">3. {editing ? "Name" : "Name & quantity"}</h3>
             <datalist id="acc-models">
               {modelOptions.map((m) => (
                 <option key={m} value={m} />
@@ -242,10 +235,13 @@ export function AccProductFormPage() {
             </datalist>
             {editing ? (
               <>
-                <label className="acc-field">
-                  <span>Fits phone / model (optional)</span>
-                  <input value={model} onChange={(e) => setModel(e.target.value)} list="acc-models" />
-                </label>
+                {model ? (
+                  // Older products were added one per phone model.
+                  <label className="acc-field">
+                    <span>Fits phone / model</span>
+                    <input value={model} onChange={(e) => setModel(e.target.value)} list="acc-models" />
+                  </label>
+                ) : null}
                 <label className="acc-field">
                   <span>Name on bills</span>
                   <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder={autoName(model)} />
@@ -253,67 +249,27 @@ export function AccProductFormPage() {
               </>
             ) : (
               <>
-                <p className="acc-hint">
-                  One row per phone model (e.g. covers for Redmi Note 13, Vivo T3…). For headphones or chargers leave the
-                  model empty or write the product model (Rockerz 450).
-                </p>
-                <ul className="acc-variants">
-                  {variants.map((v, i) => (
-                    <li key={i}>
-                      <input
-                        value={v.model}
-                        list="acc-models"
-                        placeholder={i === 0 ? "Model (optional)" : "Model"}
-                        onChange={(e) => setVariants(variants.map((x, j) => (j === i ? { ...x, model: e.target.value } : x)))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            setVariants([...variants, { model: "", qty: v.qty }]);
-                          }
-                        }}
-                      />
-                      <input
-                        className="is-qty"
-                        type="number"
-                        inputMode="numeric"
-                        value={v.qty}
-                        placeholder="Qty"
-                        onChange={(e) => setVariants(variants.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
-                      />
-                      {variants.length > 1 ? (
-                        <button
-                          type="button"
-                          className="acc-icon-btn is-small"
-                          onClick={() => setVariants(variants.filter((_, j) => j !== i))}
-                          aria-label="Remove model"
-                        >
-                          <Trash2 />
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="acc-btn is-ghost is-small"
-                  onClick={() => setVariants([...variants, { model: "", qty: variants[variants.length - 1]?.qty || "" }])}
-                >
-                  <Plus /> Add another model
-                </button>
-                {variants.length === 1 ? (
+                <div className="acc-form-grid">
                   <label className="acc-field">
-                    <span>Name on bills (optional)</span>
-                    <input
-                      value={form.name}
-                      onChange={(e) => set({ name: e.target.value })}
-                      placeholder={autoName(variants[0].model) || "e.g. boAt Rockerz 450"}
-                    />
+                    <span>Name on bills</span>
+                    <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder={autoName("") || "e.g. Silicone Cover"} />
                   </label>
-                ) : (
-                  <p className="acc-hint">
-                    Names: {autoName(variants[0].model || "…")} and {variants.length - 1} more
-                  </p>
-                )}
+                  <label className="acc-field">
+                    <span>Quantity bought</span>
+                    <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 100" />
+                  </label>
+                </div>
+                <div className="acc-chips">
+                  {[10, 25, 50, 100].map((n) => (
+                    <button key={n} type="button" className="acc-chip is-small" onClick={() => setQty(String((Number(qty) || 0) + n))}>
+                      +{n}
+                    </button>
+                  ))}
+                </div>
+                <p className="acc-hint">
+                  Add covers and glass as one product (e.g. Silicone Cover × 100). When you have time, open the product
+                  to split the pieces by phone model — it's only for your record; the counter sells the product as is.
+                </p>
               </>
             )}
           </section>
@@ -417,12 +373,10 @@ export function AccProductFormPage() {
                   onChange={(e) => set({ lowStockAt: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
                 />
               </label>
-              {editing || variants.length === 1 ? (
-                <label className="acc-field">
-                  <span>Barcode (optional)</span>
-                  <input value={form.barcode || ""} onChange={(e) => set({ barcode: e.target.value })} />
-                </label>
-              ) : null}
+              <label className="acc-field">
+                <span>Barcode (optional)</span>
+                <input value={form.barcode || ""} onChange={(e) => set({ barcode: e.target.value })} />
+              </label>
             </div>
             {!editing ? (
               <label className="acc-field">
@@ -536,7 +490,7 @@ export function CategorySheet({
         <div className="acc-icon-pick">
           {Object.keys(CATEGORY_ICONS).map((key) => (
             <button key={key} type="button" className={clsx(icon === key && "is-on")} onClick={() => setIcon(key)} aria-label={key}>
-              <CategoryIcon icon={key} />
+              <CategoryIcon icon={key} variant="3d" size="md" />
             </button>
           ))}
         </div>

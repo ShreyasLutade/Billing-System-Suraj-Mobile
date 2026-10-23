@@ -519,9 +519,12 @@ model AccProduct {
   lowStockAt    Int      @default(0)
   isFavourite   Boolean  @default(false)
   active        Boolean  @default(true)
+  /// Last physical count (weekly stock check)
+  countedAt     DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   category      AccCategory @relation(fields: [categoryId], references: [id])
+  models        AccProductModel[]
   moves         AccStockMove[]
   saleItems     AccSaleItem[]
   purchaseItems AccPurchaseItem[]
@@ -533,10 +536,26 @@ model AccProduct {
 }
 
 /// Every change to a product's stock, newest first in the product history.
+/// How many of a product are for each phone model (e.g. 10 Silicone Cover
+/// for iPhone 15 Pro). Only a record: the counter sells the product itself;
+/// stockQty minus these is "not sorted".
+model AccProductModel {
+  id        String   @id @default(cuid())
+  productId String
+  model     String
+  qty       Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   AccProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, model])
+  @@index([productId])
+}
+
 model AccStockMove {
   id        String   @id @default(cuid())
   productId String
-  /// OPENING | PURCHASE | SALE | VOID | ADJUST
+  /// OPENING | PURCHASE | SALE | VOID | ADJUST | COUNT
   kind      String
   /// + in, − out
   qty       Int
@@ -627,6 +646,8 @@ model AccSaleItem {
   productId  String?
   name       String
   categoryName String @default("")
+  /// Phone model picked at sale time (product breakdown), if any
+  model      String   @default("")
   qty        Int
   rate       Float
   amount     Float

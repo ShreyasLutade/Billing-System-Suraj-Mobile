@@ -28,9 +28,17 @@ export type AccProduct = {
   lowStockAt: number;
   isFavourite: boolean;
   active: boolean;
+  /** Last weekly stock check, if any. */
+  countedAt: string | null;
+  /** Pieces per phone model (a record only; the rest is "not sorted"). */
+  models: AccModelQty[];
   createdAt: string;
   updatedAt: string;
 };
+
+export type AccModelQty = { model: string; qty: number };
+
+export type AccStockCheckItem = { productId: string; qty: number; models?: AccModelQty[] };
 
 export type AccCatalog = { categories: AccCategory[]; products: AccProduct[] };
 
@@ -200,7 +208,7 @@ export type AccSupplierDetail = {
 
 export type AccStockMove = {
   id: string;
-  kind: "OPENING" | "PURCHASE" | "SALE" | "VOID" | "ADJUST";
+  kind: "OPENING" | "PURCHASE" | "SALE" | "VOID" | "ADJUST" | "COUNT";
   qty: number;
   unitCost: number;
   note: string | null;
@@ -274,7 +282,7 @@ export type ProductInput = {
 export type SaleInput = {
   kind: AccSaleKind;
   clientRef: string;
-  items: Array<{ productId?: string; name?: string; qty: number; rate: number }>;
+  items: Array<{ productId?: string; name?: string; model?: string; qty: number; rate: number }>;
   discount?: number;
   cashAmount?: number;
   onlineAmount?: number;
@@ -322,6 +330,9 @@ export const accApi = {
   adjustStock: (id: string, setTo: number, note: string) => post<AccProduct>(`/acc/products/${id}/adjust`, { setTo, note }),
   deleteProduct: (id: string) => apiRequest(`/acc/products/${id}`, { method: "DELETE" }),
   productHistory: (id: string) => apiRequest<{ data: AccStockMove[] }>(`/acc/products/${id}/history`),
+  setProductModels: (id: string, models: AccModelQty[]) => put<AccProduct>(`/acc/products/${id}/models`, { models }),
+  stockCheck: (items: AccStockCheckItem[], note = "") =>
+    post<{ checked: number; changed: number; products: AccProduct[] }>("/acc/stock-check", { items, note }),
 
   createSale: (body: SaleInput) => post<AccSale>("/acc/sales", body),
   listSales: (q: PeriodQuery & { kind?: AccSaleKind | ""; q?: string; customerId?: string; void?: boolean }) =>

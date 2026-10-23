@@ -4,32 +4,39 @@ import clsx from "clsx";
 import { ChevronRight, Loader2, Minus, Plus, Search, ShoppingCart, Star, Trash2, X } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { ApiError } from "../lib/api";
-import { accApi, type AccCategory, type AccProduct, type AccSalesSummary } from "./accApi";
+import { accApi, type AccProduct, type AccSalesSummary } from "./accApi";
 import {
   CategoryIcon,
   Empty,
   Segmented,
   Sheet,
   StockBadge,
-  Stepper,
   errorText,
   inr,
   newRef,
   plural,
   refreshCatalog,
-  suggestPrices,
   toast,
   useAccCatalog,
 } from "./shared";
 
 /**
  * Counter: quick retail billing. Favourite products sit in tiles by
- * category → type/brand → product. Tap a product, tap a price, Sell.
- * Several can go in a cart for one customer.
+ * category → product (e.g. Cover → Silicone Cover). Tap a product, tap a
+ * price, Sell. The phone model is optional and only keeps the stock
+ * breakdown in step. Several items can go in a cart for one customer.
  */
 
 type PayMode = "CASH" | "ONLINE";
-type CartLine = { productId: string; name: string; qty: number; rate: number; stockQty: number; cost: number };
+type CartLine = {
+  productId: string;
+  name: string;
+  model?: string;
+  qty: number;
+  rate: number;
+  stockQty: number;
+  cost: number;
+};
 
 const SHOW_ALL_KEY = "acc.counter.showAll";
 const PAY_KEY = "acc.counter.pay";
@@ -61,22 +68,11 @@ function matches(product: AccProduct, tokens: string[]) {
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
-function groupKey(product: AccProduct, category: AccCategory) {
-  return (category.drillBy === "BRAND" ? product.brand : product.type).trim();
-}
-
-/** What the tile shows as its main line inside a type/brand group. */
-function tileTitle(product: AccProduct, inGroup: boolean) {
-  if (inGroup && product.model) return product.model;
-  return product.name;
-}
-
 export function AccCounterPage() {
   const { catalog, error } = useAccCatalog();
   const [showAll, setShowAll] = useState(() => readLocal(SHOW_ALL_KEY, false));
   const [payMode, setPayMode] = useState<PayMode>(() => readLocal(PAY_KEY, "CASH"));
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [group, setGroup] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selling, setSelling] = useState<AccProduct | null>(null);
   const [cart, setCart] = useState<CartLine[]>(() => readLocal(CART_KEY, [], sessionStorage));
@@ -128,46 +124,17 @@ export function AccCounterPage() {
     [pool, category],
   );
 
-  const groups = useMemo(() => {
-    if (!category) return [];
-    const map = new Map<string, number>();
-    for (const p of inCategory) {
-      const key = groupKey(p, category);
-      map.set(key, (map.get(key) || 0) + 1);
-    }
-    return [...map.entries()]
-      .map(([key, count]) => ({ key, count }))
-      .sort((a, b) => (a.key ? (b.key ? collator.compare(a.key, b.key) : -1) : 1));
-  }, [inCategory, category]);
-
-  // One type/brand only: skip straight to the products.
-  const skipGroups = groups.length <= 1;
-  const productList = useMemo(() => {
-    if (!category) return [];
-    const list = skipGroups || group === null ? inCategory : inCategory.filter((p) => groupKey(p, category) === group);
-    return [...list].sort((a, b) => collator.compare(a.model || a.name, b.model || b.name));
-  }, [category, group, inCategory, skipGroups]);
+  const productList = useMemo(
+    () => [...inCategory].sort((a, b) => collator.compare(a.name, b.name)),
+    [inCategory],
+  );
 
   function openCategory(id: string) {
     setCategoryId(id);
-    setGroup(null);
   }
 
   function goHome() {
     setCategoryId(null);
-    setGroup(null);
-  }
-
-  function addToCart(product: AccProduct, qty: number, rate: number) {
-    setCart((lines) => {
-      const same = lines.find((l) => l.productId === product.id && l.rate === rate);
-      if (same) return lines.map((l) => (l === same ? { ...l, qty: l.qty + qty } : l));
-      return [
-        ...lines,
-        { productId: product.id, name: product.name, qty, rate, stockQty: product.stockQty, cost: product.purchasePrice },
-      ];
-    });
-    toast(`Added ${qty} × ${product.name}`);
   }
 
   const cartTotal = cart.reduce((a, l) => a + l.qty * l.rate, 0);
@@ -184,7 +151,7 @@ export function AccCounterPage() {
   }
 
   const showingSearch = tokens.length > 0;
-  const level: "home" | "groups" | "products" = !category ? "home" : !skipGroups && group === null ? "groups" : "products";
+  const level: "home" | "products" = !category ? "home" : "products";
 
   return (
     <div className="acc-page acc-counter">
@@ -218,20 +185,8 @@ export function AccCounterPage() {
             {category ? (
               <>
                 <ChevronRight aria-hidden />
-                <button
-                  type="button"
-                  className={clsx(level === "groups" && "is-on")}
-                  onClick={() => setGroup(null)}
-                >
-                  {category.name}
-                </button>
-              </>
-            ) : null}
-            {category && group !== null && !skipGroups ? (
-              <>
-                <ChevronRight aria-hidden />
                 <button type="button" className="is-on">
-                  {group || "Other"}
+                  {category.name}
                 </button>
               </>
             ) : null}
@@ -262,7 +217,7 @@ export function AccCounterPage() {
         searchResults.length ? (
           <div className="acc-tiles is-products">
             {searchResults.map((p) => (
-              <ProductTile key={p.id} product={p} title={p.name} onTap={() => setSelling(p)} />
+              <ProductTile key={p.id} product={p} onTap={() => setSelling(p)} />
             ))}
           </div>
         ) : (
@@ -277,9 +232,7 @@ export function AccCounterPage() {
           <div className="acc-tiles">
             {categoryTiles.map(({ category: c, count }) => (
               <button key={c.id} type="button" className="acc-tile is-cat" onClick={() => openCategory(c.id)}>
-                <span className="acc-tile-icon">
-                  <CategoryIcon icon={c.icon} />
-                </span>
+                <CategoryIcon icon={c.icon} variant="3d" size="lg" />
                 <strong>{c.name}</strong>
                 <small>{plural(count, "item")}</small>
               </button>
@@ -301,31 +254,11 @@ export function AccCounterPage() {
             )}
           </Empty>
         )
-      ) : level === "groups" ? (
-        <div className="acc-tiles">
-          {groups.map((g) => (
-            <button key={g.key || "_other"} type="button" className="acc-tile is-group" onClick={() => setGroup(g.key)}>
-              <strong>{g.key || "Other"}</strong>
-              <small>{plural(g.count, "item")}</small>
-            </button>
-          ))}
-          <button type="button" className="acc-tile is-group is-muted" onClick={() => setGroup("\u0000all")}>
-            <strong>All {category!.name}</strong>
-            <small>{plural(inCategory.length, "item")}</small>
-          </button>
-        </div>
       ) : (
         <div className="acc-tiles is-products">
-          {(group === "\u0000all" ? [...inCategory].sort((a, b) => collator.compare(a.name, b.name)) : productList).map(
-            (p) => (
-              <ProductTile
-                key={p.id}
-                product={p}
-                title={tileTitle(p, !skipGroups && group !== "\u0000all")}
-                onTap={() => setSelling(p)}
-              />
-            ),
-          )}
+          {productList.map((p) => (
+            <ProductTile key={p.id} product={p} onTap={() => setSelling(p)} />
+          ))}
         </div>
       )}
 
@@ -347,15 +280,14 @@ export function AccCounterPage() {
 
       <SellSheet
         product={selling}
+        icon={categories.find((c) => c.id === selling?.categoryId)?.icon}
         payMode={payMode}
         onPayMode={setPayMode}
         onClose={() => setSelling(null)}
-        onAddToCart={(qty, rate) => {
-          addToCart(selling!, qty, rate);
-          setSelling(null);
-        }}
         onSold={() => {
           setSelling(null);
+          setQuery("");
+          goHome();
           void refreshCatalog();
           void loadToday();
         }}
@@ -379,16 +311,10 @@ export function AccCounterPage() {
   );
 }
 
-function ProductTile({ product, title, onTap }: { product: AccProduct; title: string; onTap: () => void }) {
-  // Inside a type/brand group the title is the phone model; elsewhere lead
-  // with the model and say what the item is underneath.
-  const main = title === product.name && product.model ? product.model : title;
-  const sub =
-    main === product.model
-      ? title === product.name
-        ? [[product.brand, product.type, product.categoryName].filter(Boolean).join(" "), product.color].filter(Boolean).join(" · ")
-        : product.color
-      : "";
+function ProductTile({ product, onTap }: { product: AccProduct; onTap: () => void }) {
+  const sub = product.models.length
+    ? plural(product.models.length, "phone model")
+    : [product.color, product.model].filter(Boolean).join(" · ");
   return (
     <button
       type="button"
@@ -396,10 +322,10 @@ function ProductTile({ product, title, onTap }: { product: AccProduct; title: st
       onClick={onTap}
     >
       <span className="acc-tile-top">
-        <StockBadge qty={product.stockQty} low={product.lowStockAt} />
+        <StockBadge qty={product.stockQty} low={product.lowStockAt} long />
         {product.isFavourite ? <Star className="acc-tile-star" aria-label="Favourite" /> : null}
       </span>
-      <strong>{main}</strong>
+      <strong>{product.name}</strong>
       {sub ? <small>{sub}</small> : null}
       <b className="acc-tile-price">{inr(product.sellingPrice)}</b>
     </button>
@@ -409,21 +335,22 @@ function ProductTile({ product, title, onTap }: { product: AccProduct; title: st
 /** Sell one product: pick a price chip (or type), qty, Cash/UPI, Sell. */
 function SellSheet({
   product,
+  icon,
   payMode,
   onPayMode,
   onClose,
-  onAddToCart,
   onSold,
 }: {
   product: AccProduct | null;
+  icon?: string;
   payMode: PayMode;
   onPayMode: (mode: PayMode) => void;
   onClose: () => void;
-  onAddToCart: (qty: number, rate: number) => void;
   onSold: () => void;
 }) {
   const [price, setPrice] = useState("");
   const [qty, setQty] = useState(1);
+  const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
   const refId = useRef(newRef());
 
@@ -431,13 +358,14 @@ function SellSheet({
     if (!product) return;
     setPrice(product.sellingPrice ? String(product.sellingPrice) : "");
     setQty(1);
+    setModel("");
     refId.current = newRef();
   }, [product]);
 
   if (!product) return null;
   const rate = Number(price) || 0;
-  const chips = suggestPrices(product.sellingPrice, product.quickPrices);
   const belowCost = product.purchasePrice > 0 && rate > 0 && rate < product.purchasePrice;
+  const nudge = (by: number) => setPrice(String(Math.max(0, Math.round((rate + by) * 100) / 100)));
 
   async function sell(allowOutOfStock = false) {
     if (!product || busy) return;
@@ -450,11 +378,12 @@ function SellSheet({
       const { data } = await accApi.createSale({
         kind: "RETAIL",
         clientRef: refId.current,
-        items: [{ productId: product.id, qty, rate }],
+        items: [{ productId: product.id, qty, rate, ...(model ? { model } : {}) }],
         ...(payMode === "CASH" ? { cashAmount: rate * qty } : { onlineAmount: rate * qty }),
         allowOutOfStock,
       });
-      toast(`${data.number} · ${inr(data.total)} · ${payMode === "CASH" ? "Cash" : "UPI"}`, {
+      toast(`Sold · ${data.number} · ${inr(data.total)} · ${payMode === "CASH" ? "Cash" : "UPI"}`, {
+        tone: "success",
         action: { label: "Undo", run: () => void undoSale(data.id, data.number) },
       });
       onSold();
@@ -473,65 +402,111 @@ function SellSheet({
     }
   }
 
+  const mrp = product.sellingPrice;
+  const diff = rate - mrp;
+
   return (
     <Sheet
       open
       onClose={onClose}
+      className="is-sell"
+      leading={<CategoryIcon icon={icon || "package"} variant="3d" size="sm" />}
       title={product.name}
       subtitle={
         <>
-          <StockBadge qty={product.stockQty} low={product.lowStockAt} /> in stock · MRP {inr(product.sellingPrice)}
+          <StockBadge qty={product.stockQty} low={product.lowStockAt} long />
+          <span>MRP {inr(mrp)}</span>
         </>
       }
       footer={
-        <div className="acc-sell-actions">
-          <button type="button" className="acc-btn is-ghost" onClick={() => rate > 0 && onAddToCart(qty, rate)} disabled={rate <= 0}>
-            <ShoppingCart /> Add more
-          </button>
-          <button type="button" className="acc-btn is-primary is-big" onClick={() => void sell()} disabled={busy || rate <= 0}>
+        <div className="acc-sell-ft">
+          <button type="button" className="acc-sell-go" onClick={() => void sell()} disabled={busy || rate <= 0}>
             {busy ? <Loader2 className="acc-spin" /> : null}
-            Sell {inr(rate * qty)}
+            Sell <span>{inr(rate * qty)}</span>
           </button>
         </div>
       }
     >
-      <div className="acc-price-chips">
-        {chips.map((amount) => (
-          <button
-            key={amount}
-            type="button"
-            className={clsx("acc-price-chip", rate === amount && "is-on")}
-            onClick={() => setPrice(String(amount))}
-          >
-            {inr(amount)}
+      {/* The price is the hero: type into it, or nudge it with the steps. */}
+      <div className="acc-sell-price">
+        <label className="acc-sell-field">
+          <span>₹</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={price}
+            onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onFocus={(e) => e.target.select()}
+            aria-label="Selling price"
+            placeholder="0"
+            style={{ width: `${Math.max(String(price || "0").length, 1) + 0.4}ch` }}
+          />
+        </label>
+        <div className="acc-sell-note">
+          {belowCost ? (
+            <b className="is-dn">Below cost ({inr(product.purchasePrice)})</b>
+          ) : diff === 0 || !mrp ? (
+            "MRP price"
+          ) : (
+            <>
+              <s>{inr(mrp)}</s>
+              {diff < 0 ? <b className="is-dn">{inr(-diff)} off</b> : <b className="is-up">{inr(diff)} above MRP</b>}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="acc-sell-steps">
+        {[-10, -5, 5, 10].map((d) => (
+          <button key={d} type="button" className={d < 0 ? "is-mn" : "is-pl"} onClick={() => nudge(d)} disabled={rate + d < 0}>
+            {d < 0 ? `−${-d}` : `+${d}`}
           </button>
         ))}
       </div>
+
+      {product.models.length ? (
+        <div className="acc-sell-quick is-scroll">
+          <span className="acc-sell-lb">Phone</span>
+          <button type="button" className={clsx(!model && "is-on")} onClick={() => setModel("")}>
+            Any
+          </button>
+          {product.models.map((m) => (
+            <button
+              key={m.model}
+              type="button"
+              className={clsx(model === m.model && "is-on", m.qty <= 0 && "is-empty")}
+              onClick={() => setModel(model === m.model ? "" : m.model)}
+            >
+              {m.model} <small>{m.qty}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="acc-sell-row">
-        <label className={clsx("acc-amount", belowCost && "is-warn")}>
-          <span>₹</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            onFocus={(e) => e.target.select()}
-            aria-label="Selling price"
-            placeholder="Price"
-          />
-        </label>
-        <Stepper value={qty} onChange={setQty} big />
+        <div>
+          <div className="acc-sell-lb">QTY</div>
+          <div className="acc-sell-qty">
+            <button type="button" onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Less" disabled={qty <= 1}>
+              −
+            </button>
+            <span>{qty}</span>
+            <button type="button" onClick={() => setQty(qty + 1)} aria-label="More">
+              +
+            </button>
+          </div>
+        </div>
+        <div>
+          <div className="acc-sell-lb">PAID BY</div>
+          <div className="acc-sell-pay">
+            {(["CASH", "ONLINE"] as const).map((mode) => (
+              <button key={mode} type="button" className={clsx(payMode === mode && "is-on")} onClick={() => onPayMode(mode)}>
+                {mode === "CASH" ? "Cash" : "UPI"}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      {belowCost ? <p className="acc-warn-text">Below cost price ({inr(product.purchasePrice)})</p> : null}
-      <Segmented
-        className="is-pay"
-        value={payMode}
-        onChange={onPayMode}
-        options={[
-          { value: "CASH", label: "Cash" },
-          { value: "ONLINE", label: "UPI / Online" },
-        ]}
-      />
     </Sheet>
   );
 }
@@ -593,7 +568,7 @@ function CheckoutSheet({
       const { data } = await accApi.createSale({
         kind: "RETAIL",
         clientRef: refId.current,
-        items: lines.map((l) => ({ productId: l.productId, qty: l.qty, rate: l.rate })),
+        items: lines.map((l) => ({ productId: l.productId, qty: l.qty, rate: l.rate, ...(l.model ? { model: l.model } : {}) })),
         discount: disc,
         cashAmount: cash,
         onlineAmount: online,
@@ -601,7 +576,8 @@ function CheckoutSheet({
         customerPhone: phone.trim(),
         allowOutOfStock,
       });
-      toast(`${data.number} · ${inr(data.total)} saved`, {
+      toast(`Sold · ${data.number} · ${inr(data.total)}`, {
+        tone: "success",
         action: { label: "Undo", run: () => void undoSale(data.id, data.number) },
       });
       setDiscount("");

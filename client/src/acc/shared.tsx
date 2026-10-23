@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Outlet } from "react-router-dom";
 import clsx from "clsx";
@@ -6,6 +6,7 @@ import {
   Battery,
   Cable,
   Camera,
+  CheckCircle2,
   Car,
   Ear,
   FileDown,
@@ -28,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { accApi, type AccCatalog, type AccPeriod, type PeriodQuery } from "./accApi";
+import { ProductArt } from "./productArt";
 import "./acc.css";
 
 /* Shared bits for the accessories shop pages: layout, catalogue cache,
@@ -74,6 +76,46 @@ export function dateTime(value: string | Date) {
   });
 }
 
+/* ---------------- stock breakdown & checks ---------------- */
+
+/** Pieces assigned to a phone model, and what's left unsorted. */
+export function sortedQty(product: { stockQty: number; models: Array<{ qty: number }> }) {
+  const sorted = product.models.reduce((a, m) => a + m.qty, 0);
+  return { sorted, unsorted: Math.max(product.stockQty, 0) - sorted };
+}
+
+export function daysSince(value: string | Date | null | undefined) {
+  if (!value) return null;
+  return Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
+}
+
+/** "Checked today" / "Checked 3 days ago" / "Never checked". */
+export function checkedLabel(value: string | null | undefined) {
+  const days = daysSince(value);
+  if (days === null) return "Never checked";
+  if (days <= 0) return "Checked today";
+  if (days === 1) return "Checked yesterday";
+  return `Checked ${days} days ago`;
+}
+
+/** A week since the last physical count. */
+export const CHECK_EVERY_DAYS = 7;
+export const needsCheck = (value: string | null | undefined) => {
+  const days = daysSince(value);
+  return days === null || days >= CHECK_EVERY_DAYS;
+};
+
+/** Suggestions when sorting covers / glass by phone. */
+export const COMMON_PHONE_MODELS = [
+  "iPhone 11", "iPhone 12", "iPhone 13", "iPhone 14", "iPhone 15", "iPhone 15 Pro", "iPhone 16", "iPhone 16 Pro",
+  "Redmi 13C", "Redmi Note 12", "Redmi Note 13", "Redmi Note 13 Pro", "Redmi A3",
+  "Samsung A05", "Samsung A15", "Samsung A35", "Samsung M14", "Samsung M34", "Samsung S23",
+  "Vivo T3", "Vivo Y18", "Vivo Y28", "Vivo V30",
+  "Oppo A18", "Oppo A79", "Oppo F25",
+  "Realme 12", "Realme C55", "Realme Narzo 70",
+  "OnePlus Nord CE 4", "OnePlus 12R", "Poco X6", "Poco M6", "Moto G54", "iQOO Z9", "Infinix Hot 40",
+];
+
 /* ---------------- icons ---------------- */
 
 export const CATEGORY_ICONS = {
@@ -99,9 +141,59 @@ export const CATEGORY_ICONS = {
   package: Package,
 } as const;
 
-export function CategoryIcon({ icon, className }: { icon: string; className?: string }) {
-  const Icon = CATEGORY_ICONS[icon as keyof typeof CATEGORY_ICONS] || Package;
-  return <Icon className={className} aria-hidden />;
+/** Light / base / deep shade per icon, for the plate behind its illustration. */
+const ICON_TONES: Record<keyof typeof CATEGORY_ICONS, [string, string, string]> = {
+  smartphone: ["#c4b5fd", "#8b5cf6", "#4c1d95"],
+  shield: ["#a5f3fc", "#06b6d4", "#155e75"],
+  headphones: ["#fda4af", "#f43f5e", "#881337"],
+  ear: ["#bae6fd", "#0ea5e9", "#0c4a6e"],
+  plug: ["#fde68a", "#f59e0b", "#92400e"],
+  cable: ["#a7f3d0", "#10b981", "#065f46"],
+  speaker: ["#fed7aa", "#f97316", "#9a3412"],
+  battery: ["#d9f99d", "#65a30d", "#365314"],
+  watch: ["#c7d2fe", "#6366f1", "#312e81"],
+  memory: ["#99f6e4", "#14b8a6", "#134e4a"],
+  usb: ["#bfdbfe", "#3b82f6", "#1e3a8a"],
+  tablet: ["#f5d0fe", "#d946ef", "#701a75"],
+  camera: ["#fecaca", "#ef4444", "#7f1d1d"],
+  mic: ["#fbcfe8", "#ec4899", "#831843"],
+  gamepad: ["#e9d5ff", "#a855f7", "#581c87"],
+  keyboard: ["#e2e8f0", "#64748b", "#1e293b"],
+  mouse: ["#e7e5e4", "#78716c", "#292524"],
+  light: ["#fef08a", "#eab308", "#713f12"],
+  car: ["#bfdbfe", "#2563eb", "#172554"],
+  package: ["#fde68a", "#d97706", "#78350f"],
+};
+
+/**
+ * Category icon. "3d" is a product-style illustration (a real phone case,
+ * glass, headphones…) on a soft plate in the category colour; used on
+ * counter tiles, pickers and filter chips. "plain" is the bare line icon.
+ */
+export function CategoryIcon({
+  icon,
+  className,
+  variant = "plain",
+  size = "md",
+}: {
+  icon: string;
+  className?: string;
+  variant?: "plain" | "3d";
+  size?: "xs" | "sm" | "md" | "lg";
+}) {
+  const key = (icon in CATEGORY_ICONS ? icon : "package") as keyof typeof CATEGORY_ICONS;
+  const Icon = CATEGORY_ICONS[key];
+  if (variant === "plain") return <Icon className={className} aria-hidden />;
+  const [light, base, deep] = ICON_TONES[key];
+  return (
+    <span
+      className={clsx("acc-ico3d", `is-${size}`, className)}
+      style={{ "--i1": light, "--i2": base, "--i3": deep } as CSSProperties}
+      aria-hidden
+    >
+      <ProductArt kind={key} />
+    </span>
+  );
 }
 
 /* ---------------- catalogue cache ---------------- */
@@ -182,19 +274,90 @@ export function useAccCatalog() {
 
 /* ---------------- toasts ---------------- */
 
-type Toast = { id: number; text: string; tone: "ok" | "error"; action?: { label: string; run: () => void } };
+/** "ok" is the plain dark toast; "success" is the green one for completed sales. */
+type Toast = {
+  id: number;
+  text: string;
+  tone: "ok" | "success" | "error";
+  action?: { label: string; run: () => void };
+  /** Set just before removal so the toast can fade out. */
+  leaving?: boolean;
+};
+
+const TOAST_FADE_MS = 250;
 let toasts: Toast[] = [];
 let toastSeq = 0;
 const toastListeners = new Set<() => void>();
 
-export function toast(text: string, options: { tone?: "ok" | "error"; action?: Toast["action"]; ms?: number } = {}) {
+/* ---------------- sale chime ---------------- */
+
+let audioCtx: AudioContext | null = null;
+
+/**
+ * Soft, warm three-note chime (G4 → C5 → E5) so the counter hears a sale
+ * went through without a harsh beep: gentle attack, long fade, a quiet
+ * octave for a bell-like tone, and a low-pass filter to round it off.
+ * Plus a tiny vibration on phones. Made with Web Audio — no sound file.
+ */
+export function playSuccessSound() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx = audioCtx || new Ctx();
+    const ctx = audioCtx;
+    if (ctx.state === "suspended") void ctx.resume();
+    const start = ctx.currentTime + 0.02;
+
+    const warm = ctx.createBiquadFilter();
+    warm.type = "lowpass";
+    warm.frequency.value = 2200;
+    warm.Q.value = 0.4;
+    warm.connect(ctx.destination);
+
+    [
+      { freq: 392.0, at: 0 },
+      { freq: 523.25, at: 0.11 },
+      { freq: 659.25, at: 0.22 },
+    ].forEach(({ freq, at }, i) => {
+      // fundamental + a soft octave partial
+      [
+        { mult: 1, level: 0.13 },
+        { mult: 2, level: 0.035 },
+      ].forEach(({ mult, level }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq * mult;
+        const t0 = start + at;
+        const tail = i === 2 ? 1.25 : 0.9; // last note rings a little longer
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(level, t0 + 0.035);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + tail);
+        osc.connect(gain).connect(warm);
+        osc.start(t0);
+        osc.stop(t0 + tail + 0.05);
+      });
+    });
+    navigator.vibrate?.(30);
+  } catch {
+    /* sound is a nice-to-have */
+  }
+}
+
+export function toast(text: string, options: { tone?: Toast["tone"]; action?: Toast["action"]; ms?: number } = {}) {
+  if (options.tone === "success") playSuccessSound();
   const id = ++toastSeq;
   toasts = [...toasts.slice(-2), { id, text, tone: options.tone || "ok", action: options.action }];
   toastListeners.forEach((fn) => fn());
+  const ms = options.ms ?? 2000;
+  window.setTimeout(() => {
+    toasts = toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t));
+    toastListeners.forEach((fn) => fn());
+  }, Math.max(0, ms - TOAST_FADE_MS));
   window.setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     toastListeners.forEach((fn) => fn());
-  }, options.ms ?? (options.action ? 6000 : 2600));
+  }, ms);
 }
 
 function ToastHost() {
@@ -208,7 +371,8 @@ function ToastHost() {
   return createPortal(
     <div className="acc-toasts" aria-live="polite">
       {list.map((t) => (
-        <div key={t.id} className={clsx("acc-toast", t.tone === "error" && "is-error")}>
+        <div key={t.id} className={clsx("acc-toast", t.tone === "error" && "is-error", t.tone === "success" && "is-success", t.leaving && "is-leaving")}>
+          {t.tone === "success" ? <CheckCircle2 className="acc-toast-icon" aria-hidden /> : null}
           <span>{t.text}</span>
           {t.action ? (
             <button
@@ -249,6 +413,8 @@ export function Sheet({
   children,
   footer,
   wide,
+  className,
+  leading,
 }: {
   open: boolean;
   onClose: () => void;
@@ -257,6 +423,10 @@ export function Sheet({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** Extra class on the sheet for screens with their own look (e.g. the sell popup). */
+  className?: string;
+  /** Picture before the title (e.g. the product's category art). */
+  leading?: ReactNode;
 }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -276,12 +446,13 @@ export function Sheet({
   return createPortal(
     <div className="acc acc-sheet-backdrop" onClick={onClose}>
       <div
-        className={clsx("acc-sheet", wide && "is-wide")}
+        className={clsx("acc-sheet", wide && "is-wide", className)}
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="acc-sheet-head">
+          {leading ? <div className="acc-sheet-leading">{leading}</div> : null}
           <div className="acc-sheet-title">
             <h2>{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
@@ -329,12 +500,12 @@ export function Segmented<T extends string>({
   );
 }
 
-const PERIODS: Array<{ value: AccPeriod; label: string }> = [
+const PERIODS: Array<{ value: AccPeriod; label: string; short?: string }> = [
   { value: "today", label: "Today" },
   { value: "yesterday", label: "Yday" },
   { value: "week", label: "Week" },
   { value: "month", label: "Month" },
-  { value: "last30", label: "30 days" },
+  { value: "last30", label: "30 days", short: "30d" },
   { value: "all", label: "All" },
   { value: "custom", label: "Custom" },
 ];
@@ -342,12 +513,15 @@ const PERIODS: Array<{ value: AccPeriod; label: string }> = [
 export function PeriodChips({ value, onChange }: { value: PeriodQuery; onChange: (value: PeriodQuery) => void }) {
   return (
     <div className="acc-period">
-      <div className="acc-chips is-scroll">
+      {/* One equal-width bar: every option on one line, phone or laptop. */}
+      <div className="acc-period-bar" role="tablist" style={{ "--n": PERIODS.length } as CSSProperties}>
         {PERIODS.map((p) => (
           <button
             key={p.value}
             type="button"
-            className={clsx("acc-chip", value.period === p.value && "is-on")}
+            role="tab"
+            aria-selected={value.period === p.value}
+            className={clsx(value.period === p.value && "is-on")}
             onClick={() =>
               onChange(
                 p.value === "custom"
@@ -356,7 +530,14 @@ export function PeriodChips({ value, onChange }: { value: PeriodQuery; onChange:
               )
             }
           >
-            {p.label}
+            {p.short ? (
+              <>
+                <span className="acc-long">{p.label}</span>
+                <span className="acc-short">{p.short}</span>
+              </>
+            ) : (
+              p.label
+            )}
           </button>
         ))}
       </div>
@@ -455,10 +636,22 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
-export function StockBadge({ qty, low }: { qty: number; low: number }) {
-  if (qty <= 0) return <span className="acc-badge is-red">Out</span>;
+/** Stock pill. `long` spells it out: "5 in stock", "3 left", "Out of stock". */
+export function StockBadge({ qty, low, long = false }: { qty: number; low: number; long?: boolean }) {
+  // The trailing words sit in .acc-badge-unit so tight rows can hide them.
+  if (qty <= 0)
+    return (
+      <span className="acc-badge is-red">
+        Out{long ? <span className="acc-badge-unit">{"\u00a0"}of stock</span> : null}
+      </span>
+    );
   if (low > 0 && qty <= low) return <span className="acc-badge is-amber">{qty} left</span>;
-  return <span className="acc-badge">{qty}</span>;
+  return (
+    <span className={clsx("acc-badge", long && "is-ok")}>
+      {qty}
+      {long ? <span className="acc-badge-unit">{"\u00a0"}in stock</span> : null}
+    </span>
+  );
 }
 
 /** Price ladder for the counter chips when a product has none saved. */

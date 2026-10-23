@@ -354,6 +354,8 @@ html.dark .acc {
   scrollbar-width: none;
   margin: 0 -4px;
   padding: 0 4px 2px;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
 }
 
 .acc-chips.is-scroll::-webkit-scrollbar {
@@ -472,6 +474,69 @@ html.dark .acc {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* All periods in one equal-width bar; never wraps or scrolls. */
+.acc-period-bar {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-field);
+}
+
+.acc-period-bar button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.acc-period-bar button.is-on {
+  background: var(--grad);
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(var(--accent-rgb), 0.9);
+}
+
+.acc-period-bar .acc-short {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .acc-period-bar button {
+    font-size: 11.5px;
+    letter-spacing: -0.01em;
+  }
+
+  .acc-period-bar .acc-long {
+    display: none;
+  }
+
+  .acc-period-bar .acc-short {
+    display: inline;
+  }
+}
+
+@media (min-width: 700px) {
+  .acc-period-bar {
+    width: fit-content;
+    min-width: 520px;
+  }
+
+  .acc-period-bar button {
+    padding: 0 12px;
+    font-size: 13px;
+  }
 }
 
 .acc-range {
@@ -612,51 +677,86 @@ html.dark .acc {
   color: var(--a-accent);
 }
 
+/* Tiles fill their rows: with 5 tiles the last two stretch to the edge
+   instead of leaving a hole. 3 a row on phones, ~160px each on wider screens. */
 .acc-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 8px;
-  padding-bottom: 80px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 96px;
+}
+
+.acc-tiles > * {
+  flex: 1 1 calc((100% - 20px) / 3);
+  min-width: 0;
+}
+
+.acc-tiles.is-products > * {
+  flex-basis: calc((100% - 10px) / 2);
+}
+
+@media (min-width: 420px) {
+  .acc-tiles.is-products > * {
+    flex-basis: calc((100% - 20px) / 3);
+  }
+}
+
+@media (max-width: 340px) {
+  .acc-tiles > * {
+    flex-basis: calc((100% - 10px) / 2);
+  }
 }
 
 @media (min-width: 700px) {
   .acc-tiles {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px;
+    gap: 12px;
+  }
+
+  .acc-tiles > *,
+  .acc-tiles.is-products > * {
+    flex-basis: 160px;
   }
 }
 
 .acc-tile {
   position: relative;
   display: flex;
-  min-height: 92px;
+  min-height: 96px;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-end;
-  gap: 2px;
-  padding: 10px;
+  gap: 3px;
+  padding: 12px;
+  overflow: hidden;
   border: 1px solid var(--a-line);
-  border-radius: 16px;
-  background: var(--a-card);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #fff 4%, transparent), transparent 60%),
+    var(--a-card);
   color: var(--a-ink);
   text-align: left;
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 6px 16px -12px rgba(0, 0, 0, 0.55);
   cursor: pointer;
-  transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.acc-tile:hover {
-  border-color: var(--a-accent);
+@media (hover: hover) {
+  .acc-tile:hover {
+    border-color: color-mix(in srgb, var(--a-accent) 60%, var(--a-line));
+    box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 12px 26px -14px rgba(var(--accent-rgb), 0.55);
+    transform: translateY(-2px);
+  }
 }
 
 .acc-tile:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
 }
 
 .acc-tile strong {
   font-size: 14.5px;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.22;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -674,29 +774,56 @@ html.dark .acc {
   overflow: hidden;
 }
 
+/* Category: centred 3D icon, name, count. */
 .acc-tile.is-cat {
-  min-height: 104px;
-  justify-content: space-between;
+  min-height: 128px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 8px 12px;
+  text-align: center;
 }
 
-.acc-tile-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--grad);
-  color: #fff;
+.acc-tile.is-cat .acc-ico3d {
+  margin-bottom: 6px;
 }
 
-.acc-tile-icon svg {
-  width: 22px;
-  height: 22px;
+/* A lone tile on the last phone row lies flat instead of stretching tall. */
+@media (max-width: 699px) {
+  .acc-tile.is-cat:last-child:nth-child(3n + 1) {
+    min-height: 84px;
+    flex-direction: row;
+    gap: 14px;
+  }
+
+  .acc-tile.is-cat:last-child:nth-child(3n + 1) .acc-ico3d {
+    --s: 48px;
+    margin-bottom: 0;
+  }
 }
 
+.acc-tile.is-cat small {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--a-field);
+}
+
+/* Type / brand: name with an accent rail. */
 .acc-tile.is-group {
-  min-height: 72px;
-  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+  min-height: 78px;
+  justify-content: center;
+  padding-left: 16px;
+}
+
+.acc-tile.is-group::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--grad);
 }
 
 .acc-tile.is-group strong {
@@ -705,16 +832,26 @@ html.dark .acc {
 
 .acc-tile.is-muted {
   border-style: dashed;
-  background: var(--a-card);
+  background: transparent;
+  box-shadow: none;
 }
 
+.acc-tile.is-muted::before {
+  background: var(--a-line);
+}
+
+/* Product: stock + star / name / detail / price, same rhythm on every tile. */
 .acc-tile.is-product {
-  min-height: 108px;
-  justify-content: space-between;
+  min-height: 132px;
+  justify-content: flex-start;
+}
+
+.acc-tile.is-product strong {
+  margin-top: 8px;
 }
 
 .acc-tile.is-out {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .acc-tile-top {
@@ -722,19 +859,70 @@ html.dark .acc {
   width: 100%;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
 }
 
 .acc-tile-star {
-  width: 14px !important;
-  height: 14px !important;
+  width: 15px !important;
+  height: 15px !important;
   color: #f59e0b;
   fill: #f59e0b;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
 
 .acc-tile-price {
-  margin-top: 4px;
-  font: 800 16px "Sora", sans-serif;
+  margin-top: auto;
+  padding-top: 8px;
+  font: 800 17px "Sora", sans-serif;
   color: var(--a-ink);
+}
+
+/* ---------- category art ----------
+   A product illustration (see productArt.tsx) on a soft plate tinted with
+   the category colour. */
+.acc-ico3d {
+  --s: 46px;
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 30%;
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--i1) 55%, var(--a-card)), color-mix(in srgb, var(--i2) 16%, var(--a-card)) 78%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--i2) 22%, transparent);
+}
+
+.acc .acc-ico3d > svg {
+  width: 90%;
+  height: 90%;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+}
+
+.acc-ico3d.is-xs {
+  --s: 24px;
+  border-radius: 28%;
+}
+
+.acc .acc-ico3d.is-xs > svg {
+  width: 92%;
+  height: 92%;
+  filter: none;
+}
+
+.acc-ico3d.is-sm {
+  --s: 30px;
+}
+
+.acc-ico3d.is-lg {
+  --s: 64px;
+}
+
+@media (min-width: 700px) {
+  .acc-ico3d.is-lg {
+    --s: 70px;
+  }
 }
 
 .acc-badge {
@@ -747,6 +935,18 @@ html.dark .acc {
   font-size: 11.5px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.acc-badge.is-ok {
+  background: color-mix(in srgb, var(--a-green) 14%, var(--a-card));
+  color: var(--a-green);
+}
+
+/* In list rows on phones the pill is just the number. */
+@media (max-width: 699px) {
+  .acc-row .acc-badge-unit {
+    display: none;
+  }
 }
 
 .acc-badge.is-red {
@@ -1598,21 +1798,48 @@ html.dark .acc {
   margin-bottom: 12px;
 }
 
-@media (min-width: 700px) {
-  .acc-kpis {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+/* The headline card takes its own row; an odd card left at the end
+   spans the row so the grid never ends with a hole. */
+.acc-kpis:not(.is-dues) > .is-main {
+  grid-column: 1 / -1;
+}
+
+.acc-kpis:not(.is-dues):has(> .is-main) > :last-child:nth-child(even),
+.acc-kpis:not(.is-dues):not(:has(> .is-main)) > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* Laptop: everything on one line, headline card twice as wide. */
+@media (min-width: 900px) {
+  .acc-kpis:not(.is-dues) {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .acc-kpis:not(.is-dues) > .is-main {
+    grid-column: span 2;
+  }
+
+  .acc-kpis:not(.is-dues):has(> .is-main) > :last-child:nth-child(even),
+  .acc-kpis:not(.is-dues):not(:has(> .is-main)) > :last-child:nth-child(odd) {
+    grid-column: auto;
   }
 }
 
 .acc-kpis > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  justify-content: center;
+  gap: 3px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--a-line);
-  border-radius: 14px;
-  background: var(--a-card);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #fff 4%, transparent), transparent 70%),
+    var(--a-card);
+  box-shadow: 0 6px 16px -12px rgba(0, 0, 0, 0.5);
 }
 
 .acc-kpis > div.is-main {
@@ -1706,17 +1933,29 @@ html.dark .acc {
 }
 
 .acc-aging-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
   color: var(--a-muted);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .acc-aging-legend span {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 5px;
+  column-gap: 5px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--a-field);
+  white-space: nowrap;
+}
+
+.acc-aging-legend b {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .acc-aging-legend b {
@@ -1731,20 +1970,26 @@ html.dark .acc {
 
 .acc-group-cards {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -4px;
-  padding: 2px 4px;
+}
+
+.acc-group-cards > * {
+  flex: 1 1 calc((100% - 8px) / 2);
+  min-width: 0;
+}
+
+@media (min-width: 700px) {
+  .acc-group-cards > * {
+    flex-basis: 180px;
+  }
 }
 
 .acc-group-card {
   display: flex;
-  flex: none;
   flex-direction: column;
   gap: 3px;
-  min-width: 120px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: 1.5px solid var(--a-line);
   border-radius: 14px;
   background: var(--a-card);
@@ -1918,20 +2163,16 @@ html.dark .acc {
   cursor: pointer;
 }
 
-.acc-cat-chip svg {
+.acc-cat-chip > svg {
   width: 16px;
   height: 16px;
   color: var(--a-accent);
 }
 
 .acc-cat-chip.is-on {
-  border-color: transparent;
-  background: var(--grad);
-  color: #fff;
-}
-
-.acc-cat-chip.is-on svg {
-  color: #fff;
+  border-color: var(--a-accent);
+  background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-accent) 22%, transparent);
 }
 
 .acc-cat-chip.is-add {
@@ -2019,14 +2260,14 @@ html.dark .acc {
 
 .acc-icon-pick {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .acc-icon-pick button {
   display: grid;
   place-items: center;
-  height: 44px;
+  height: 58px;
   border: 1.5px solid var(--a-line);
   border-radius: 12px;
   background: var(--a-card);
@@ -2035,9 +2276,9 @@ html.dark .acc {
 }
 
 .acc-icon-pick button.is-on {
-  border-color: transparent;
-  background: var(--grad);
-  color: #fff;
+  border-color: var(--a-accent);
+  background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-accent) 22%, transparent);
 }
 
 /* ---------- analytics ---------- */
@@ -2272,7 +2513,7 @@ body.acc-sheet-open {
   animation: accFade 0.18s ease-out;
 }
 
-@media (min-width: 700px) {
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .acc-sheet-backdrop {
     align-items: center;
     padding: 24px;
@@ -2295,7 +2536,7 @@ body.acc-sheet-open {
   max-width: 720px;
 }
 
-@media (min-width: 700px) {
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .acc-sheet {
     border-radius: 22px;
   }
@@ -2383,11 +2624,51 @@ body.acc-sheet-open {
   font-weight: 700;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
   pointer-events: auto;
-  animation: accUp 0.2s ease-out;
+  animation: accToastIn 0.22s ease-out both;
+}
+
+.acc-toast.is-leaving {
+  pointer-events: none;
+  animation: accToastOut 0.25s ease-in both;
+}
+
+@keyframes accToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes accToastOut {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
 }
 
 .acc-toast.is-error {
   background: #b91c1c;
+}
+
+/* Done (e.g. a sale): bright green with a soft glow so it can't be missed. */
+.acc-toast.is-success {
+  border: 1px solid #4ade80;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25), 0 14px 32px rgba(21, 128, 61, 0.45);
+}
+
+.acc-toast-icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
 }
 
 .acc-toast span {
@@ -2421,7 +2702,1446 @@ body.acc-sheet-open {
 @media (prefers-reduced-motion: reduce) {
   .acc-sheet,
   .acc-sheet-backdrop,
-  .acc-toast {
+  .acc-toast,
+  .acc-toast.is-leaving {
     animation: none;
+  }
+}
+
+/* =========================================================
+   Stock: sections, breakdown, weekly check · Dues cards
+   ========================================================= */
+
+/* Weekly check banner on Stock */
+.acc-check-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--a-amber) 45%, var(--a-line));
+  border-radius: 16px;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--a-amber) 14%, var(--a-card)), var(--a-card) 70%);
+  color: var(--a-ink);
+  text-decoration: none;
+}
+
+.acc-check-banner.is-done {
+  border-color: color-mix(in srgb, var(--a-green) 40%, var(--a-line));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--a-green) 12%, var(--a-card)), var(--a-card) 70%);
+}
+
+.acc-check-banner-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--a-amber) 22%, var(--a-card));
+  color: var(--a-amber);
+}
+
+.acc-check-banner.is-done .acc-check-banner-icon {
+  background: color-mix(in srgb, var(--a-green) 20%, var(--a-card));
+  color: var(--a-green);
+}
+
+.acc-check-banner-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-check-banner-text strong {
+  font-size: 14.5px;
+}
+
+.acc-check-banner-text small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.acc-check-banner em {
+  padding: 7px 14px;
+  border-radius: 10px;
+  background: var(--grad);
+  color: #fff;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+/* Equal-width filter tabs with counts */
+/* 2 × 2 on phones, one row on wider screens. */
+.acc-filter-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-field);
+}
+
+.acc-filter-tabs button {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (min-width: 600px) {
+  .acc-filter-tabs {
+    grid-template-columns: none;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+  }
+}
+
+.acc-filter-tabs button small {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--a-card);
+  font-size: 11px;
+}
+
+.acc-filter-tabs button.is-on {
+  background: var(--a-card);
+  color: var(--a-ink);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 4px 10px -6px rgba(0, 0, 0, 0.45);
+}
+
+.acc-filter-tabs button.is-on small {
+  background: var(--grad);
+  color: #fff;
+}
+
+/* Category sections */
+.acc-stock-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 90px;
+}
+
+.acc-stock-section > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.acc-stock-section > header > .acc-section-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-stock-section > header strong {
+  font: 800 15px "Sora", sans-serif;
+}
+
+.acc-stock-section > header small {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acc-stock-section > header > b {
+  font: 800 14px "Sora", sans-serif;
+  color: var(--a-muted);
+}
+
+.acc-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+
+.acc-sortbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-sortbar > span {
+  width: 56px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--a-field);
+}
+
+.acc-sortbar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--grad);
+}
+
+.acc-sortbar em,
+.acc-checked {
+  color: var(--a-muted);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.acc-checked.is-stale {
+  color: var(--a-amber);
+}
+
+/* Product page */
+.acc-product-hero {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 14px;
+}
+
+.acc-product-hero-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.acc-product-hero-text small {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-product-hero .acc-h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.acc-price-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.acc-price-tags span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--a-field);
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-price-tags b {
+  color: var(--a-ink);
+}
+
+.acc-star.is-big {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+}
+
+.acc-stock-card-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.acc-stock-card-top small {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-stock-card-top b {
+  display: block;
+  font: 800 34px/1.1 "Sora", sans-serif;
+}
+
+.acc-stock-card-top b span {
+  color: var(--a-muted);
+  font-size: 15px;
+}
+
+.acc-split-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--a-field);
+}
+
+.acc-split-bar i {
+  background: var(--grad);
+}
+
+.acc-split-bar span {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--a-muted) 35%, transparent) 0 4px, transparent 4px 8px);
+}
+
+.acc-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.acc-split-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.acc-split-legend b {
+  color: var(--a-ink);
+}
+
+.acc-split-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.acc-split-legend i.is-sorted {
+  background: var(--grad);
+}
+
+.acc-split-legend i.is-unsorted {
+  background: repeating-linear-gradient(135deg, var(--a-muted) 0 2px, transparent 2px 4px);
+}
+
+.acc-split-legend .acc-checked {
+  margin-left: auto;
+}
+
+.acc-action-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acc-action-tiles > * {
+  display: flex;
+  min-height: 62px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-field);
+  color: var(--a-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.acc-action-tiles > * svg {
+  color: var(--a-accent);
+}
+
+.acc-action-tiles > .is-danger,
+.acc-action-tiles > .is-danger svg {
+  color: var(--a-red);
+}
+
+.acc-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.acc-card-head .acc-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-model-list,
+.acc-sort-rows,
+.acc-check-list,
+.acc-due-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-model-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--a-line);
+}
+
+.acc-model-list li:last-child {
+  border-bottom: 0;
+}
+
+.acc-model-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-model-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--a-field);
+}
+
+.acc-model-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--grad);
+}
+
+.acc-model-list b {
+  font: 800 15px "Sora", sans-serif;
+  text-align: right;
+}
+
+.acc-model-list li.is-zero {
+  opacity: 0.55;
+}
+
+.acc-model-list li.is-unsorted .acc-model-name,
+.acc-sort-rows li.is-unsorted .acc-model-name {
+  color: var(--a-muted);
+  font-style: italic;
+}
+
+.acc-model-list li.is-unsorted .acc-model-bar i {
+  background: repeating-linear-gradient(135deg, var(--a-muted) 0 3px, transparent 3px 6px);
+}
+
+.acc-sort-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1.5px dashed var(--a-line);
+  border-radius: 14px;
+  color: var(--a-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.acc-sort-empty p {
+  margin: 0;
+}
+
+.acc-sort-empty strong,
+.acc-sort-empty b {
+  color: var(--a-ink);
+}
+
+/* Sort / count sheets */
+.acc-sort-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--a-field);
+}
+
+.acc-sort-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--grad);
+  transition: width 0.2s ease;
+}
+
+.acc-sort-meter i.is-over {
+  background: var(--a-red);
+}
+
+.acc-sort-rows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--a-line);
+}
+
+.acc-sort-rows li:last-child {
+  border-bottom: 0;
+}
+
+.acc-sort-rows .acc-model-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.acc .acc-mini-stepper input {
+  width: 52px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: 800;
+  text-align: center;
+}
+
+.acc .acc-count-input {
+  width: 84px;
+  min-height: 40px;
+  padding: 0 8px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.acc .acc-count-big {
+  min-height: 56px;
+  font: 800 26px "Sora", sans-serif;
+  text-align: center;
+}
+
+.acc-sort-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--a-muted);
+}
+
+.acc-sort-foot b {
+  color: var(--a-ink);
+}
+
+.acc-add-model {
+  display: flex;
+  gap: 8px;
+}
+
+.acc-add-model input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Stock check */
+.acc-check-progress {
+  gap: 8px !important;
+}
+
+.acc-check-progress > div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.acc-check-progress strong {
+  font: 800 17px "Sora", sans-serif;
+}
+
+.acc-check-progress small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.acc-check-list {
+  gap: 6px;
+}
+
+.acc-check-list > li {
+  padding: 10px 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+}
+
+.acc-check-list > li.is-entered {
+  border-color: color-mix(in srgb, var(--a-green) 45%, var(--a-line));
+}
+
+.acc-check-list > li.is-diff {
+  border-color: color-mix(in srgb, var(--a-amber) 60%, var(--a-line));
+}
+
+.acc-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-check-name {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-check-name strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-check-name small {
+  color: var(--a-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.acc-check-total {
+  display: inline-flex;
+  min-width: 84px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--a-line);
+  border-radius: 10px;
+  background: var(--a-field);
+  color: var(--a-ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.acc-check-total svg {
+  width: 15px !important;
+  height: 15px !important;
+  transition: transform 0.15s ease;
+}
+
+.acc-check-total.is-open svg {
+  transform: rotate(180deg);
+}
+
+.acc-check-ok {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid var(--a-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--a-muted);
+  cursor: pointer;
+}
+
+.acc-check-ok.is-on {
+  border-color: transparent;
+  background: var(--a-green);
+  color: #fff;
+}
+
+.acc-check-diff {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-sort-rows.is-inline {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--a-line);
+}
+
+/* Dues cards */
+.acc-due-list {
+  gap: 8px;
+  padding-bottom: 90px;
+}
+
+.acc-due-card {
+  overflow: hidden;
+  border: 1px solid var(--a-line);
+  border-radius: 16px;
+  background: var(--a-card);
+  box-shadow: 0 6px 16px -12px rgba(0, 0, 0, 0.5);
+}
+
+.acc-due-card.is-overdue {
+  border-left: 4px solid var(--a-red);
+}
+
+.acc-due-main {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-due-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 10px 60px;
+}
+
+.acc-due-chip,
+.acc-due-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--a-field);
+  color: var(--a-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.acc-due-chip.is-red {
+  background: color-mix(in srgb, var(--a-red) 15%, var(--a-card));
+  color: var(--a-red);
+}
+
+.acc-due-chip.is-amber {
+  background: color-mix(in srgb, var(--a-amber) 18%, var(--a-card));
+  color: var(--a-amber);
+}
+
+.acc-due-chip.is-blue {
+  background: color-mix(in srgb, var(--a-retail) 16%, var(--a-card));
+  color: var(--a-retail);
+}
+
+.acc-due-chip.is-ok {
+  background: color-mix(in srgb, var(--a-green) 15%, var(--a-card));
+  color: var(--a-green);
+}
+
+.acc-due-group .acc-dot {
+  background: var(--g);
+}
+
+.acc-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--a-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.acc-credit > span {
+  width: 54px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--a-field);
+}
+
+.acc-credit i {
+  display: block;
+  height: 100%;
+  background: var(--a-amber);
+}
+
+.acc-credit em {
+  font-style: normal;
+}
+
+.acc-credit.is-over i {
+  background: var(--a-red);
+}
+
+.acc-credit.is-over em {
+  color: var(--a-red);
+}
+
+.acc-due-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-due-actions > * {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-right: 1px solid var(--a-line);
+  background: transparent;
+  color: var(--a-ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.acc-due-actions > *:last-child {
+  border-right: 0;
+}
+
+.acc-due-actions svg {
+  width: 16px !important;
+  height: 16px !important;
+  color: var(--a-accent);
+}
+
+.acc-due-actions .is-primary {
+  background: color-mix(in srgb, var(--a-accent) 10%, transparent);
+  color: var(--a-accent);
+}
+
+/* ---------- Retail sell popup ----------
+   One hero price, quiet step chips, qty + payment on one row, one blue
+   action. Bottom sheet on phones, 352px card on laptops. */
+.acc-sheet.is-sell {
+  --s-ink: #0d1526;
+  --s-ink-2: #5a6880;
+  --s-ink-3: #8b97ab;
+  --s-line: #e8ecf3;
+  --s-line-2: #f1f4f9;
+  --s-bg: #fff;
+  --s-blue: #2563eb;
+  --s-blue-dark: #1d4ed8;
+  --s-red: #e11d48;
+  --s-red-tint: #fff1f4;
+  --s-green: #15803d;
+  --s-green-tint: #e9f8ee;
+  position: relative;
+  background: var(--s-bg);
+  color: var(--s-ink);
+}
+
+html.dark .acc-sheet.is-sell {
+  --s-ink: #eef2f9;
+  --s-ink-2: #b4bfd1;
+  --s-ink-3: #7f8ba0;
+  --s-line: #273349;
+  --s-line-2: #1a2436;
+  --s-bg: #111a2b;
+  --s-blue: #3b82f6;
+  --s-blue-dark: #2563eb;
+  --s-red: #fb7185;
+  --s-red-tint: rgba(251, 113, 133, 0.12);
+  --s-green: #4ade80;
+  --s-green-tint: rgba(74, 222, 128, 0.12);
+}
+
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sheet.is-sell {
+    max-width: 352px;
+    border-radius: 18px;
+    box-shadow: 0 18px 48px rgba(13, 21, 38, 0.3), 0 2px 6px rgba(13, 21, 38, 0.1);
+  }
+}
+
+/* grab handle on phones */
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sheet.is-sell::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: 3px;
+    background: var(--s-line);
+  }
+}
+
+.acc-sheet.is-sell .acc-sheet-head {
+  gap: 10px;
+  padding: 16px 18px 13px;
+}
+
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sheet.is-sell .acc-sheet-head {
+    padding: 11px 16px;
+  }
+}
+
+.acc-sheet.is-sell .acc-sheet-title h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  color: var(--s-ink);
+}
+
+.acc-sheet.is-sell .acc-sheet-title p {
+  gap: 7px;
+  margin-top: 5px;
+  color: var(--s-ink-3);
+  font-size: 12px;
+}
+
+.acc-sheet.is-sell .acc-badge {
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+}
+
+.acc-sheet.is-sell .acc-sheet-head .acc-icon-btn {
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--s-line-2);
+  color: var(--s-ink-3);
+}
+
+.acc-sheet.is-sell .acc-sheet-head .acc-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.acc-sheet.is-sell .acc-sheet-head .acc-icon-btn:hover {
+  background: var(--s-line);
+  color: var(--s-ink);
+}
+
+.acc-sheet.is-sell .acc-sheet-body {
+  gap: 0;
+  padding: 0;
+}
+
+.acc-sheet.is-sell .acc-sheet-foot {
+  padding: 16px 18px 18px;
+  border-top: 0;
+}
+
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sheet.is-sell .acc-sheet-foot {
+    padding: 14px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+}
+
+/* price hero */
+.acc-sell-price {
+  padding: 2px 18px 0;
+  text-align: center;
+}
+
+.acc-sell-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-sell-field > span {
+  margin-right: 2px;
+  color: var(--s-ink-3);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.acc .acc-sell-field input {
+  min-width: 1ch;
+  max-width: 6.4ch;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--s-ink);
+  /* !important beats the app's 16px touch-input rule; big text never zooms. */
+  font-size: 40px !important;
+  font-weight: 800;
+  letter-spacing: -1.6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc .acc-sell-field input {
+    font-size: 36px !important;
+  }
+}
+
+.acc .acc-sell-field input:focus {
+  box-shadow: none;
+}
+
+.acc-sell-note {
+  height: 16px;
+  margin-top: 1px;
+  color: var(--s-ink-3);
+  font-size: 12px;
+}
+
+.acc-sell-note s {
+  margin-right: 5px;
+  color: color-mix(in srgb, var(--s-ink-3) 70%, transparent);
+}
+
+.acc-sell-note b {
+  font-weight: 700;
+}
+
+.acc-sell-note .is-dn {
+  color: var(--s-red);
+}
+
+.acc-sell-note .is-up {
+  color: var(--s-green);
+}
+
+/* step chips */
+.acc-sell-steps {
+  display: flex;
+  gap: 6px;
+  padding: 11px 18px 0;
+}
+
+.acc-sell-steps button {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--s-line);
+  border-radius: 10px;
+  background: var(--s-bg);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: 0.13s;
+}
+
+.acc-sell-steps button:active {
+  transform: scale(0.96);
+}
+
+.acc-sell-steps button:disabled {
+  opacity: 0.4;
+}
+
+.acc-sell-steps .is-mn {
+  color: var(--s-red);
+}
+
+.acc-sell-steps .is-pl {
+  color: var(--s-green);
+}
+
+@media (hover: hover) {
+  .acc-sell-steps .is-mn:hover {
+    border-color: color-mix(in srgb, var(--s-red) 30%, var(--s-line));
+    background: var(--s-red-tint);
+  }
+
+  .acc-sell-steps .is-pl:hover {
+    border-color: color-mix(in srgb, var(--s-green) 30%, var(--s-line));
+    background: var(--s-green-tint);
+  }
+}
+
+/* quick prices / phone model pills */
+.acc-sell-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px 0;
+}
+
+.acc-sell-quick.is-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.acc-sell-quick.is-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.acc-sell-lb {
+  flex: none;
+  color: var(--s-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.acc-sell-quick button {
+  flex: none;
+  padding: 4px 11px;
+  border: 1px solid var(--s-line);
+  border-radius: 16px;
+  background: var(--s-bg);
+  color: var(--s-ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: 0.13s;
+}
+
+.acc-sell-quick button small {
+  margin-left: 2px;
+  opacity: 0.6;
+  font-size: 10.5px;
+}
+
+.acc-sell-quick button.is-on {
+  border-color: var(--s-ink);
+  background: var(--s-ink);
+  color: var(--s-bg);
+}
+
+.acc-sell-quick button.is-empty {
+  opacity: 0.5;
+}
+
+/* qty + payment */
+.acc-sell-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px 0;
+}
+
+.acc-sell-row > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.acc-sell-row .acc-sell-lb {
+  margin-bottom: 6px;
+}
+
+.acc-sell-qty {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--s-line);
+  border-radius: 11px;
+}
+
+.acc-sell-qty button {
+  width: 38px;
+  height: 100%;
+  border: 0;
+  background: var(--s-bg);
+  color: var(--s-ink-2);
+  font-size: 18px;
+  cursor: pointer;
+  transition: 0.13s;
+}
+
+.acc-sell-qty button:hover:not(:disabled) {
+  background: var(--s-line-2);
+  color: var(--s-ink);
+}
+
+.acc-sell-qty button:disabled {
+  opacity: 0.4;
+}
+
+.acc-sell-qty span {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-sell-pay {
+  display: flex;
+  height: 40px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--s-line-2);
+}
+
+.acc-sell-pay button {
+  flex: 1;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--s-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.16s;
+}
+
+.acc-sell-pay button.is-on {
+  background: var(--s-bg);
+  color: var(--s-ink);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(13, 21, 38, 0.12);
+}
+
+html.dark .acc-sell-pay button.is-on {
+  background: var(--s-line);
+}
+
+/* footer */
+.acc-sell-ft {
+  display: flex;
+  gap: 9px;
+}
+
+.acc-sell-more {
+  display: inline-flex;
+  flex: none;
+  height: 46px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 15px;
+  border: 1px solid var(--s-line);
+  border-radius: 12px;
+  background: var(--s-bg);
+  color: var(--s-ink-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.13s;
+}
+
+.acc-sell-more .acc-short {
+  display: none;
+}
+
+.acc-sell-more:hover:not(:disabled) {
+  background: var(--s-line-2);
+  color: var(--s-ink);
+}
+
+.acc-sell-go {
+  display: flex;
+  flex: 1;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--s-blue);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.acc-sell-go span {
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-sell-go:hover:not(:disabled) {
+  background: var(--s-blue-dark);
+}
+
+.acc-sell-go:active {
+  transform: translateY(1px);
+}
+
+.acc-sell-go:disabled,
+.acc-sell-more:disabled {
+  opacity: 0.5;
+}
+
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sell-price,
+  .acc-sell-steps,
+  .acc-sell-quick,
+  .acc-sell-row {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .acc-sell-price {
+    padding-top: 0;
+  }
+
+  .acc-sell-more,
+  .acc-sell-go {
+    height: 48px;
+  }
+
+  .acc-sell-more .acc-long {
+    display: none;
+  }
+
+  .acc-sell-more .acc-short {
+    display: inline;
+  }
+}
+
+/* Sheet header picture (sell popup shows the product's category art). */
+.acc-sheet-leading {
+  flex: none;
+}
+
+/* Touch screens & small windows: the sell popup follows the mock exactly
+   (no picture); laptops get the roomier card below. */
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sheet.is-sell .acc-sheet-leading {
+    display: none;
+  }
+}
+
+/* Laptop / desktop: darker, blurred page behind any sheet. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .acc-sheet-backdrop {
+    background: rgba(7, 12, 22, 0.58);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+  }
+
+  /* Product tiles stay tile-sized instead of stretching across the screen. */
+  .acc-tiles.is-products > * {
+    max-width: 240px;
+  }
+
+  .acc-sheet.is-sell {
+    max-width: 440px;
+    border-radius: 22px;
+    box-shadow: 0 28px 70px rgba(5, 10, 20, 0.45), 0 2px 8px rgba(5, 10, 20, 0.15);
+  }
+
+  .acc-sheet.is-sell .acc-sheet-head {
+    align-items: center;
+    gap: 12px;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--s-line);
+  }
+
+  .acc-sheet.is-sell .acc-sheet-leading .acc-ico3d {
+    --s: 46px;
+  }
+
+  .acc-sheet.is-sell .acc-sheet-title h2 {
+    font-size: 18px;
+  }
+
+  .acc-sheet.is-sell .acc-sheet-head .acc-icon-btn {
+    align-self: flex-start;
+    width: 32px;
+    height: 32px;
+  }
+
+  /* price panel with the steps inside */
+  .acc-sheet.is-sell .acc-sell-price {
+    margin: 18px 22px 0;
+    padding: 16px 16px 4px;
+    border: 1px solid var(--s-line);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: var(--s-line-2);
+  }
+
+  .acc-sheet.is-sell .acc-sell-steps {
+    margin: 0 22px;
+    padding: 10px 16px 16px;
+    border: 1px solid var(--s-line);
+    border-top: 0;
+    border-radius: 0 0 18px 18px;
+    background: var(--s-line-2);
+  }
+
+  .acc-sheet.is-sell .acc-sell-steps button {
+    padding: 10px 0;
+    font-size: 14px;
+  }
+
+  .acc .acc-sheet.is-sell .acc-sell-field input {
+    font-size: 48px !important;
+  }
+
+  .acc-sheet.is-sell .acc-sell-field > span {
+    font-size: 26px;
+  }
+
+  .acc-sheet.is-sell .acc-sell-note {
+    font-size: 12.5px;
+  }
+
+  .acc-sheet.is-sell .acc-sell-quick {
+    padding: 14px 22px 0;
+  }
+
+  /* model pills wrap on a laptop instead of scrolling off the edge */
+  .acc-sheet.is-sell .acc-sell-quick.is-scroll {
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-top: 8px;
+  }
+
+  .acc-sheet.is-sell .acc-sell-lb {
+    min-width: 40px;
+  }
+
+  .acc-sheet.is-sell .acc-sell-row {
+    gap: 12px;
+    padding: 18px 22px 0;
+  }
+
+  .acc-sheet.is-sell .acc-sell-qty,
+  .acc-sheet.is-sell .acc-sell-pay {
+    height: 44px;
+  }
+
+  .acc-sheet.is-sell .acc-sheet-foot {
+    margin-top: 20px;
+    padding: 16px 22px 22px;
+    border-top: 1px solid var(--s-line);
+  }
+
+  .acc-sell-more,
+  .acc-sell-go {
+    height: 50px;
+  }
+
+  .acc-sell-go {
+    font-size: 16px;
   }
 }

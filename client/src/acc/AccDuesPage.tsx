@@ -30,6 +30,40 @@ import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, 
 
 /** Wholesale dues: who owes what, by group, ageing, and collecting payments. */
 
+/** WhatsApp reminder text, same on the list and the customer page. */
+function dueReminder(c: { name: string; balance: number; oldestOpen: AccCustomerRow["oldestOpen"] }) {
+  return `Namaste ${c.name} ji,\nAapka Babu Mobile Accessories me ₹${c.balance.toLocaleString("en-IN")} baaki hai${
+    c.oldestOpen ? ` (sabse purana bill ${c.oldestOpen.number}, ${shortDate(c.oldestOpen.saleDate)})` : ""
+  }.\nKripya jaldi bhugtan karein. Dhanyavaad!`;
+}
+
+/** One chip that says where this customer stands: overdue, promised or how old. */
+function DueStatus({ c }: { c: AccCustomerRow }) {
+  if (c.balance <= 0) {
+    return <span className="acc-due-chip is-ok">{c.balance < 0 ? "Advance paid" : "Settled"}</span>;
+  }
+  const open = c.oldestOpen;
+  if (c.overdue > 0 && open && open.daysOverdue > 0) {
+    return (
+      <span className="acc-due-chip is-red">
+        Overdue {plural(open.daysOverdue, "day")} · {inr(c.overdue)}
+      </span>
+    );
+  }
+  if (open?.dueDate) {
+    const days = Math.ceil((new Date(open.dueDate).getTime() - Date.now()) / 86400000);
+    return (
+      <span className={clsx("acc-due-chip", days <= 1 ? "is-amber" : "is-blue")}>
+        {days <= 0 ? "Promised today" : days === 1 ? "Promised tomorrow" : `Promised ${shortDate(open.dueDate)}`}
+      </span>
+    );
+  }
+  if (open) {
+    return <span className={clsx("acc-due-chip", open.ageDays > 30 && "is-amber")}>{open.ageDays ? `${plural(open.ageDays, "day")} old` : "Billed today"}</span>;
+  }
+  return null;
+}
+
 type Status = "due" | "overdue" | "all";
 type Sort = "balance" | "oldest" | "name" | "recent";
 
@@ -140,34 +174,58 @@ export function AccDuesPage() {
           <Loader2 className="acc-spin" />
         </div>
       ) : data.customers.length ? (
-        <ul className="acc-list">
-          {data.customers.map((c) => (
-            <li key={c.id} className="acc-row">
-              <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/dues/${c.id}`)}>
-                <span className="acc-avatar" style={{ ["--g" as string]: c.group?.color || "#94a3b8" }}>
-                  {c.name.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="acc-row-text">
-                  <strong>{c.name}</strong>
-                  <small>
-                    {[c.shopName, c.city, c.group?.name].filter(Boolean).join(" · ") || c.phone}
-                    {c.oldestOpen ? ` · oldest ${c.oldestOpen.ageDays}d` : ""}
-                  </small>
-                </span>
-                <span className="acc-row-amt">
-                  <b className={clsx(c.balance > 0 ? "is-red" : c.balance < 0 && "is-green")}>
-                    {c.balance < 0 ? `Adv ${inr(-c.balance)}` : inr(c.balance)}
-                  </b>
-                  {c.overdue > 0 ? <small className="is-red">Overdue {inr(c.overdue)}</small> : <small>{plural(c.billCount, "bill")}</small>}
-                </span>
-              </button>
-              {c.balance > 0 ? (
-                <button type="button" className="acc-row-side" onClick={() => setPaying(c)} aria-label={`Receive from ${c.name}`}>
-                  <Wallet />
+        <ul className="acc-due-list">
+          {data.customers.map((c) => {
+            const limitPct = c.creditLimit > 0 ? Math.round((Math.max(c.balance, 0) / c.creditLimit) * 100) : 0;
+            return (
+              <li key={c.id} className={clsx("acc-due-card", c.overdue > 0 && "is-overdue")}>
+                <button type="button" className="acc-due-main" onClick={() => navigate(`/acc/dues/${c.id}`)}>
+                  <span className="acc-avatar" style={{ ["--g" as string]: c.group?.color || "#94a3b8" }}>
+                    {c.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="acc-row-text">
+                    <strong>{c.name}</strong>
+                    <small>{[c.shopName, c.city].filter(Boolean).join(" · ") || c.phone}</small>
+                  </span>
+                  <span className="acc-row-amt">
+                    <b className={clsx(c.balance > 0 ? "is-red" : c.balance < 0 && "is-green")}>
+                      {c.balance < 0 ? inr(-c.balance) : inr(c.balance)}
+                    </b>
+                    <small>{c.openBillCount ? plural(c.openBillCount, "open bill") : plural(c.billCount, "bill")}</small>
+                  </span>
                 </button>
-              ) : null}
-            </li>
-          ))}
+                <div className="acc-due-status">
+                  <DueStatus c={c} />
+                  {c.group ? (
+                    <span className="acc-due-group" style={{ ["--g" as string]: c.group.color }}>
+                      <i className="acc-dot" /> {c.group.name}
+                    </span>
+                  ) : null}
+                  {c.creditLimit > 0 ? (
+                    <span className={clsx("acc-credit", limitPct >= 100 && "is-over")} title={`Credit limit ${inr(c.creditLimit)}`}>
+                      <span>
+                        <i style={{ width: `${Math.min(100, limitPct)}%` }} />
+                      </span>
+                      <em>{limitPct}% of limit</em>
+                    </span>
+                  ) : null}
+                </div>
+                {c.balance > 0 ? (
+                  <div className="acc-due-actions">
+                    <a href={`tel:${c.phone}`}>
+                      <Phone /> Call
+                    </a>
+                    <a href={`https://wa.me/91${c.phone}?text=${encodeURIComponent(dueReminder(c))}`} target="_blank" rel="noreferrer">
+                      <MessageCircle /> Remind
+                    </a>
+                    <button type="button" className="is-primary" onClick={() => setPaying(c)}>
+                      <Wallet /> Receive
+                    </button>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <Empty title={status === "all" ? "No customers yet" : "No dues here"}>
@@ -519,9 +577,7 @@ export function AccCustomerPage() {
     );
   }
 
-  const reminder = `Namaste ${data.name} ji,\nAapka Babu Mobile Accessories me ₹${data.balance.toLocaleString("en-IN")} baaki hai${
-    data.oldestOpen ? ` (sabse purana bill ${data.oldestOpen.number}, ${shortDate(data.oldestOpen.saleDate)})` : ""
-  }.\nKripya jaldi bhugtan karein. Dhanyavaad!`;
+  const reminder = dueReminder(data);
 
   async function openSale(saleId: string) {
     try {

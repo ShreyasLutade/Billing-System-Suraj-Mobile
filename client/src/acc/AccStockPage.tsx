@@ -1,78 +1,80 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { History, Loader2, PackagePlus, Pencil, Plus, Search, SlidersHorizontal, Star, Trash2, Truck } from "lucide-react";
+import { ClipboardCheck, Loader2, PackagePlus, Plus, Search, Star, Truck } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
-import { accApi, type AccProduct, type AccStockMove } from "./accApi";
+import { accApi, type AccCategory, type AccProduct } from "./accApi";
 import {
   CategoryIcon,
   Empty,
   PdfButton,
   Sheet,
   StockBadge,
+  checkedLabel,
   errorText,
-  dateTime,
   inr,
+  needsCheck,
   patchCatalogProduct,
-  refreshCatalog,
+  plural,
+  sortedQty,
   toast,
   useAccCatalog,
 } from "./shared";
 
-/** Stock: every product with qty, prices and the ★ that puts it on the counter. */
+/**
+ * Stock: every product grouped by category, with how much is sorted by
+ * phone model and when it was last counted. Tap a product for its page
+ * (breakdown, stock in, count, history).
+ */
 
-type Filter = "all" | "fav" | "low" | "out";
+type Filter = "all" | "fav" | "low" | "check";
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
 export function AccStockPage() {
   const { catalog, error } = useAccCatalog();
   const { isAdmin } = useAuth();
-  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [active, setActive] = useState<AccProduct | null>(null);
-  const [restock, setRestock] = useState<AccProduct | null>(null);
-  const [adjust, setAdjust] = useState<AccProduct | null>(null);
-  const [history, setHistory] = useState<AccProduct | null>(null);
   const [pdfOpen, setPdfOpen] = useState(false);
 
   const products = catalog?.products ?? [];
   const categories = catalog?.categories ?? [];
   const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const isLow = (p: AccProduct) => p.lowStockAt > 0 && p.stockQty > 0 && p.stockQty <= p.lowStockAt;
+  const isLow = (p: AccProduct) => p.stockQty <= 0 || (p.lowStockAt > 0 && p.stockQty <= p.lowStockAt);
 
   const list = useMemo(() => {
     return products
       .filter((p) => !categoryId || p.categoryId === categoryId)
       .filter((p) =>
-        filter === "fav" ? p.isFavourite : filter === "low" ? isLow(p) || p.stockQty <= 0 : filter === "out" ? p.stockQty <= 0 : true,
+        filter === "fav" ? p.isFavourite : filter === "low" ? isLow(p) : filter === "check" ? needsCheck(p.countedAt) : true,
       )
       .filter((p) => {
         if (!tokens.length) return true;
-        const hay = `${p.name} ${p.type} ${p.brand} ${p.model} ${p.color} ${p.barcode || ""}`.toLowerCase();
+        const hay = `${p.name} ${p.type} ${p.brand} ${p.model} ${p.color} ${p.barcode || ""} ${p.models
+          .map((m) => m.model)
+          .join(" ")}`.toLowerCase();
         return tokens.every((t) => hay.includes(t));
       })
       .sort((a, b) => collator.compare(a.name, b.name));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, categoryId, filter, q]);
 
-  const units = list.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
-  const value = list.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
-  const lowCount = products.filter((p) => isLow(p) || p.stockQty <= 0).length;
+  // Category sections in the counter's order; only categories with matches.
+  const sections = useMemo(
+    () =>
+      categories
+        .map((c) => ({ category: c, items: list.filter((p) => p.categoryId === c.id) }))
+        .filter((s) => s.items.length),
+    [categories, list],
+  );
 
-  async function toggleFav(p: AccProduct) {
-    patchCatalogProduct({ ...p, isFavourite: !p.isFavourite });
-    try {
-      const { data } = await accApi.setFavourite(p.id, !p.isFavourite);
-      patchCatalogProduct(data);
-    } catch (err) {
-      patchCatalogProduct(p);
-      toast(errorText(err), { tone: "error" });
-    }
-  }
+  const units = products.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
+  const value = products.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
+  const lowCount = products.filter(isLow).length;
+  const uncheckedCount = products.filter((p) => needsCheck(p.countedAt)).length;
 
   return (
     <div className="acc-page">
@@ -97,20 +99,37 @@ export function AccStockPage() {
         </Link>
       </div>
 
+      <Link to="/acc/stock/check" className={clsx("acc-check-banner", uncheckedCount === 0 && "is-done")}>
+        <span className="acc-check-banner-icon">
+          <ClipboardCheck />
+        </span>
+        <span className="acc-check-banner-text">
+          <strong>Weekly stock check</strong>
+          <small>
+            {products.length === 0
+              ? "Add products to start"
+              : uncheckedCount === 0
+                ? "Everything counted this week"
+                : `${uncheckedCount} of ${plural(products.length, "product")} not counted this week`}
+          </small>
+        </span>
+        <em>{uncheckedCount === 0 ? "View" : "Start"}</em>
+      </Link>
+
       <div className="acc-stat-strip">
         <div>
           <small>Products</small>
-          <b>{list.length}</b>
+          <b>{products.length}</b>
         </div>
         <div>
-          <small>Units</small>
+          <small>Pieces</small>
           <b>{units}</b>
         </div>
         <div>
           <small>Value (MRP)</small>
           <b>{inr(value)}</b>
         </div>
-        <button type="button" className={clsx(lowCount && "is-warn")} onClick={() => setFilter("low")}>
+        <button type="button" className={clsx(lowCount && "is-warn")} onClick={() => setFilter(filter === "low" ? "all" : "low")}>
           <small>Low / out</small>
           <b>{lowCount}</b>
         </button>
@@ -118,7 +137,7 @@ export function AccStockPage() {
 
       <label className="acc-search">
         <Search aria-hidden />
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, model, brand, barcode…" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product, phone model, brand…" />
         <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
       </label>
 
@@ -133,22 +152,23 @@ export function AccStockPage() {
             className={clsx("acc-chip", categoryId === c.id && "is-on")}
             onClick={() => setCategoryId(c.id === categoryId ? "" : c.id)}
           >
-            <CategoryIcon icon={c.icon} />
+            <CategoryIcon icon={c.icon} variant="3d" size="xs" />
             {c.name}
           </button>
         ))}
       </div>
-      <div className="acc-chips">
+      <div className="acc-filter-tabs">
         {(
           [
-            ["all", "All"],
-            ["fav", "★ Counter"],
-            ["low", "Low & out"],
-            ["out", "Out of stock"],
-          ] as Array<[Filter, string]>
-        ).map(([key, label]) => (
-          <button key={key} type="button" className={clsx("acc-chip is-small", filter === key && "is-on")} onClick={() => setFilter(key)}>
+            ["all", "All", products.length],
+            ["fav", "On counter", products.filter((p) => p.isFavourite).length],
+            ["low", "Low & out", lowCount],
+            ["check", "Not counted", uncheckedCount],
+          ] as Array<[Filter, string, number]>
+        ).map(([key, label, count]) => (
+          <button key={key} type="button" className={clsx(filter === key && "is-on")} onClick={() => setFilter(key)}>
             {label}
+            <small>{count}</small>
           </button>
         ))}
       </div>
@@ -162,32 +182,11 @@ export function AccStockPage() {
           </div>
         )
       ) : list.length ? (
-        <ul className="acc-list">
-          {list.map((p) => (
-            <li key={p.id} className="acc-row">
-              <button type="button" className="acc-row-main" onClick={() => setActive(p)}>
-                <span className="acc-row-text">
-                  <strong>{p.name}</strong>
-                  <small>
-                    {p.categoryName}
-                    {p.type || p.brand ? ` · ${[p.type, p.brand].filter(Boolean).join(" · ")}` : ""} · {inr(p.sellingPrice)}
-                    {p.wholesalePrice ? ` · W ${inr(p.wholesalePrice)}` : ""}
-                  </small>
-                </span>
-                <StockBadge qty={p.stockQty} low={p.lowStockAt} />
-              </button>
-              <button
-                type="button"
-                className={clsx("acc-star", p.isFavourite && "is-on")}
-                onClick={() => void toggleFav(p)}
-                aria-label={p.isFavourite ? "Remove from counter" : "Show on counter"}
-                title={p.isFavourite ? "On the counter" : "Show on counter"}
-              >
-                <Star />
-              </button>
-            </li>
+        <div className="acc-stock-sections">
+          {sections.map(({ category, items }) => (
+            <StockSection key={category.id} category={category} items={items} />
           ))}
-        </ul>
+        </div>
       ) : (
         <Empty title={products.length ? "No products match" : "No products yet"}>
           <Link to="/acc/stock/new" className="acc-btn">
@@ -195,62 +194,6 @@ export function AccStockPage() {
           </Link>
         </Empty>
       )}
-
-      {/* Row actions */}
-      <Sheet
-        open={Boolean(active)}
-        onClose={() => setActive(null)}
-        title={active?.name || ""}
-        subtitle={
-          active ? (
-            <>
-              <StockBadge qty={active.stockQty} low={active.lowStockAt} /> in stock · Sell {inr(active.sellingPrice)}
-              {isAdmin ? ` · Cost ${inr(active.purchasePrice, true)}` : ""}
-            </>
-          ) : null
-        }
-      >
-        {active ? (
-          <div className="acc-action-grid">
-            <button type="button" onClick={() => { setRestock(active); setActive(null); }}>
-              <PackagePlus /> Add stock
-            </button>
-            <button type="button" onClick={() => navigate(`/acc/stock/${active.id}/edit`)}>
-              <Pencil /> Edit
-            </button>
-            <button type="button" onClick={() => { setAdjust(active); setActive(null); }}>
-              <SlidersHorizontal /> Correct count
-            </button>
-            <button type="button" onClick={() => { setHistory(active); setActive(null); }}>
-              <History /> History
-            </button>
-            <button type="button" onClick={() => { void toggleFav(active); setActive(null); }}>
-              <Star /> {active.isFavourite ? "Remove from counter" : "Show on counter"}
-            </button>
-            <button
-              type="button"
-              className="is-danger"
-              onClick={async () => {
-                if (!window.confirm(`Remove ${active.name}? Past bills keep it.`)) return;
-                try {
-                  await accApi.deleteProduct(active.id);
-                  toast("Product removed");
-                  setActive(null);
-                  void refreshCatalog();
-                } catch (err) {
-                  toast(errorText(err), { tone: "error" });
-                }
-              }}
-            >
-              <Trash2 /> Remove
-            </button>
-          </div>
-        ) : null}
-      </Sheet>
-
-      <RestockSheet product={restock} onClose={() => setRestock(null)} />
-      <AdjustSheet product={adjust} onClose={() => setAdjust(null)} />
-      <HistorySheet product={history} onClose={() => setHistory(null)} />
 
       <Sheet open={pdfOpen} onClose={() => setPdfOpen(false)} title="Stock PDF" subtitle="Download the stock list">
         <div className="acc-pdf-options">
@@ -268,172 +211,77 @@ export function AccStockPage() {
   );
 }
 
-function RestockSheet({ product, onClose }: { product: AccProduct | null; onClose: () => void }) {
-  const [qty, setQty] = useState("");
-  const [cost, setCost] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (product) {
-      setQty("");
-      setCost(product.purchasePrice ? String(product.purchasePrice) : "");
-    }
-  }, [product]);
-  if (!product) return null;
+function StockSection({ category, items }: { category: AccCategory; items: AccProduct[] }) {
+  const navigate = useNavigate();
+  const pieces = items.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
+  const value = items.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
 
-  async function save() {
-    const n = Math.floor(Number(qty) || 0);
-    if (n < 1 || busy) return;
-    setBusy(true);
+  async function toggleFav(p: AccProduct) {
+    patchCatalogProduct({ ...p, isFavourite: !p.isFavourite });
     try {
-      await accApi.createPurchase({ items: [{ productId: product!.id, qty: n, unitCost: Number(cost) || 0 }], note: "Quick add" });
-      toast(`+${n} ${product!.name}`);
-      void refreshCatalog();
-      onClose();
-    } catch (err) {
-      toast(errorText(err), { tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title="Add stock"
-      subtitle={`${product.name} · now ${product.stockQty}`}
-      footer={
-        <button type="button" className="acc-btn is-primary is-block" onClick={() => void save()} disabled={busy || !(Number(qty) >= 1)}>
-          {busy ? <Loader2 className="acc-spin" /> : null} Add {qty || 0} pcs
-        </button>
-      }
-    >
-      <div className="acc-form-grid">
-        <label className="acc-field">
-          <span>Quantity</span>
-          <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
-        </label>
-        <label className="acc-field">
-          <span>Cost per piece ₹</span>
-          <input type="number" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-        </label>
-      </div>
-      <div className="acc-chips">
-        {[5, 10, 20, 50, 100].map((n) => (
-          <button key={n} type="button" className="acc-chip" onClick={() => setQty(String((Number(qty) || 0) + n))}>
-            +{n}
-          </button>
-        ))}
-      </div>
-      <p className="acc-hint">
-        For a supplier bill with many items use <Link to="/acc/stock/in">Stock in</Link>.
-      </p>
-    </Sheet>
-  );
-}
-
-function AdjustSheet({ product, onClose }: { product: AccProduct | null; onClose: () => void }) {
-  const [count, setCount] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (product) {
-      setCount(String(product.stockQty));
-      setNote("");
-    }
-  }, [product]);
-  if (!product) return null;
-
-  async function save() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const { data } = await accApi.adjustStock(product!.id, Math.max(0, Math.floor(Number(count) || 0)), note);
+      const { data } = await accApi.setFavourite(p.id, !p.isFavourite);
       patchCatalogProduct(data);
-      toast("Stock count updated");
-      onClose();
     } catch (err) {
+      patchCatalogProduct(p);
       toast(errorText(err), { tone: "error" });
-    } finally {
-      setBusy(false);
     }
   }
 
   return (
-    <Sheet
-      open
-      onClose={onClose}
-      title="Correct stock count"
-      subtitle={`${product.name} · system says ${product.stockQty}`}
-      footer={
-        <button type="button" className="acc-btn is-primary is-block" onClick={() => void save()} disabled={busy}>
-          Save count
-        </button>
-      }
-    >
-      <label className="acc-field">
-        <span>Actual pieces in shop</span>
-        <input type="number" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} autoFocus />
-      </label>
-      <label className="acc-field">
-        <span>Reason</span>
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Damaged, counted, lost…" />
-      </label>
-    </Sheet>
-  );
-}
-
-const MOVE_LABEL: Record<AccStockMove["kind"], string> = {
-  OPENING: "Opening stock",
-  PURCHASE: "Stock in",
-  SALE: "Sold",
-  VOID: "Bill cancelled",
-  ADJUST: "Count corrected",
-};
-
-function HistorySheet({ product, onClose }: { product: AccProduct | null; onClose: () => void }) {
-  const [moves, setMoves] = useState<AccStockMove[] | null>(null);
-  useEffect(() => {
-    if (!product) return;
-    setMoves(null);
-    accApi
-      .productHistory(product.id)
-      .then(({ data }) => setMoves(data))
-      .catch((err) => {
-        toast(errorText(err), { tone: "error" });
-        setMoves([]);
-      });
-  }, [product]);
-  if (!product) return null;
-  return (
-    <Sheet open onClose={onClose} title="Stock history" subtitle={product.name}>
-      {!moves ? (
-        <div className="acc-loading">
-          <Loader2 className="acc-spin" />
-        </div>
-      ) : moves.length ? (
-        <ul className="acc-moves">
-          {moves.map((m) => (
-            <li key={m.id}>
-              <span>
-                <strong>{MOVE_LABEL[m.kind]}</strong>
-                <small>
-                  {dateTime(m.createdAt)}
-                  {m.sale ? ` · ${m.sale.number}${m.sale.customerName ? ` · ${m.sale.customerName}` : ""}` : ""}
-                  {m.note ? ` · ${m.note}` : ""}
-                  {m.createdByName ? ` · ${m.createdByName}` : ""}
-                </small>
-              </span>
-              <b className={m.qty > 0 ? "is-green" : "is-red"}>
-                {m.qty > 0 ? "+" : ""}
-                {m.qty}
-              </b>
+    <section className="acc-stock-section">
+      <header>
+        <CategoryIcon icon={category.icon} variant="3d" size="sm" />
+        <span className="acc-section-text">
+          <strong>{category.name}</strong>
+          <small>
+            {plural(items.length, "product")} · {pieces} pcs
+          </small>
+        </span>
+        <b>{inr(value)}</b>
+      </header>
+      <ul className="acc-list">
+        {items.map((p) => {
+          const { sorted } = sortedQty(p);
+          const total = Math.max(p.stockQty, 0);
+          const stale = needsCheck(p.countedAt);
+          return (
+            <li key={p.id} className="acc-row">
+              <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/stock/${p.id}`)}>
+                <span className="acc-row-text">
+                  <strong>{p.name}</strong>
+                  <small>
+                    {inr(p.sellingPrice)}
+                    {p.wholesalePrice ? ` · wholesale ${inr(p.wholesalePrice)}` : ""}
+                  </small>
+                  <span className="acc-row-meta">
+                    {p.models.length ? (
+                      <span className="acc-sortbar" title={`${sorted} of ${total} sorted by phone model`}>
+                        <span>
+                          <i style={{ width: `${total ? Math.min(100, (sorted / total) * 100) : 0}%` }} />
+                        </span>
+                        <em>
+                          {sorted}/{total} sorted
+                        </em>
+                      </span>
+                    ) : null}
+                    <span className={clsx("acc-checked", stale && "is-stale")}>{checkedLabel(p.countedAt)}</span>
+                  </span>
+                </span>
+                <StockBadge qty={p.stockQty} low={p.lowStockAt} long />
+              </button>
+              <button
+                type="button"
+                className={clsx("acc-star", p.isFavourite && "is-on")}
+                onClick={() => void toggleFav(p)}
+                aria-label={p.isFavourite ? "Remove from counter" : "Show on counter"}
+                title={p.isFavourite ? "On the counter" : "Show on counter"}
+              >
+                <Star />
+              </button>
             </li>
-          ))}
-        </ul>
-      ) : (
-        <Empty title="No stock changes yet" />
-      )}
-    </Sheet>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
