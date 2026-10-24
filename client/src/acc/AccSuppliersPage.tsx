@@ -553,7 +553,7 @@ export function AccStockInPage() {
   const [newSupplier, setNewSupplier] = useState<AccSupplierInput>(EMPTY_SUPPLIER);
   const [lines, setLines] = useState<InLine[]>(() => Array.from({ length: 5 }, emptyStockSheetLine));
   const [paid, setPaid] = useState("");
-  const [method, setMethod] = useState<"CASH" | "UPI" | "BANK">("CASH");
+  const [method, setMethod] = useState<"CASH" | "UPI">("CASH");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -594,7 +594,7 @@ export function AccStockInPage() {
   const paidNow = Math.min(Number(paid) || 0, total);
   const hasSupplier = supplierMode === "NEW" || Boolean(supplierId);
 
-  function choosePayment(nextMethod: "CASH" | "UPI" | "BANK") {
+  function choosePayment(nextMethod: "CASH" | "UPI") {
     setMethod(nextMethod);
     if (!(Number(paid) > 0)) setPaid(total > 0 ? String(total) : "");
   }
@@ -657,10 +657,6 @@ export function AccStockInPage() {
       }
       if (!(Number(line.cost) > 0)) {
         focusInvalid(`[data-stock-cell="${rowIndex}-4"]`, `Enter the cost price in row ${rowIndex + 1}`);
-        return;
-      }
-      if (!(Number(line.sell) > 0)) {
-        focusInvalid(`[data-stock-cell="${rowIndex}-5"]`, `Enter the selling price in row ${rowIndex + 1}`);
         return;
       }
     }
@@ -785,16 +781,6 @@ export function AccStockInPage() {
                 tone="online"
                 checked={paidNow > 0 && method === "UPI"}
                 onSelect={() => choosePayment("UPI")}
-                amount={paid}
-                total={total}
-                onAmount={setPaid}
-              />
-              <StockPaymentOption
-                label="Bank"
-                hint="Paid by bank transfer"
-                tone="online"
-                checked={paidNow > 0 && method === "BANK"}
-                onSelect={() => choosePayment("BANK")}
                 amount={paid}
                 total={total}
                 onAmount={setPaid}
@@ -941,7 +927,7 @@ function BulkStockSheet({
             <span>Category *</span>
             <span>Qty *</span>
             <span>Cost / pc ₹ *</span>
-            <span>Selling ₹ *</span>
+            <span>Selling ₹</span>
             <span>Wholesale ₹</span>
             <span />
           </div>

@@ -18,6 +18,7 @@ export type OpenBill = {
   saleDate: Date;
   dueDate: Date | null;
   total: number;
+  transportCharge: number;
   open: number;
   /** Days past the due date (or bill date when no due date); 0 = not yet due */
   daysOverdue: number;
@@ -70,6 +71,7 @@ export async function customerBalances(customerIds?: string[], db: Db = prisma) 
         saleDate: true,
         dueDate: true,
         total: true,
+        transportCharge: true,
         cashAmount: true,
         onlineAmount: true,
         dueAmount: true,
@@ -128,6 +130,7 @@ export async function customerBalances(customerIds?: string[], db: Db = prisma) 
         saleDate: sale.saleDate,
         dueDate: sale.dueDate,
         total: sale.total,
+        transportCharge: sale.transportCharge,
         open,
         daysOverdue,
         ageDays,

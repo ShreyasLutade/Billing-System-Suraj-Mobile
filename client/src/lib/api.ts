@@ -235,13 +235,13 @@ export async function downloadAuthed(path: string, fallbackName: string) {
 }
 
 /** GET an authenticated file and open the device's native share sheet. */
-export async function shareAuthed(path: string, fallbackName: string, title: string) {
+export async function shareAuthed(path: string, fallbackName: string, title: string, text?: string) {
   if (typeof navigator.share !== "function") {
     throw new Error("Sharing isn’t supported in this browser. Use the download button instead.");
   }
   const { blob, filename } = await getAuthedFile(path, fallbackName);
   const file = new File([blob], filename, { type: blob.type || "application/pdf" });
-  const data: ShareData = { title, files: [file] };
+  const data: ShareData = { title, text, files: [file] };
   if (typeof navigator.canShare === "function" && !navigator.canShare(data)) {
     throw new Error("This device can’t share this file. Download it, then share it from your device.");
   }

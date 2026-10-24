@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { CalendarDays, Check, Info, Loader2, MessageCircle, Plus, Search, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, ClipboardCheck, Clock3, Eye, FileDown, Info, Loader2, Minus, Plus, ReceiptText, Search, Share2, Trash2, WalletCards, X } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import {
@@ -12,7 +12,7 @@ import {
   type AccProduct,
   type AccSale,
 } from "./accApi";
-import { PdfButton, Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refreshCatalog, shortDate, toast, todayInput, useAccCatalog } from "./shared";
+import { Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refreshCatalog, shortDate, toast, todayInput, useAccCatalog } from "./shared";
 
 /**
  * Wholesale bill: a shop buys in bulk, usually on credit. Pick (or add) the
@@ -33,6 +33,7 @@ type Draft = {
   useOnline: boolean;
   cashPaid: string;
   onlinePaid: string;
+  transportCharge: string;
   dueDate: string;
   note: string;
 };
@@ -58,6 +59,7 @@ const EMPTY: Draft = {
   useOnline: false,
   cashPaid: "",
   onlinePaid: "",
+  transportCharge: "",
   dueDate: "",
   note: "",
 };
@@ -104,9 +106,13 @@ export function AccWholesalePage() {
   const [draft, setDraft] = useState<Draft>(loadDraft);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<AccSale | null>(null);
+  const [savedAction, setSavedAction] = useState<"share" | "download" | null>(null);
   const [itemQuery, setItemQuery] = useState("");
   const refId = useRef(newRef());
   const customerInput = useRef<HTMLInputElement>(null);
+  const itemSearchInput = useRef<HTMLInputElement>(null);
+  const lineElements = useRef(new Map<string, HTMLLIElement>());
+  const pendingLineFocus = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -115,6 +121,23 @@ export function AccWholesalePage() {
       /* ignore */
     }
   }, [draft]);
+
+  useEffect(() => {
+    const key = pendingLineFocus.current;
+    if (!key) return;
+    pendingLineFocus.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      const line = lineElements.current.get(key);
+      if (!line) return;
+      line.scrollIntoView({ behavior: "smooth", block: "center" });
+      const rateInput = line.querySelector<HTMLInputElement>("input[data-line-rate]");
+      const quantityInput = line.querySelector<HTMLInputElement>("input[data-line-quantity]");
+      const input = rateInput && !rateInput.value ? rateInput : quantityInput;
+      input?.focus({ preventScroll: true });
+      input?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [draft.lines]);
 
   // "New bill" from a customer page preselects them.
   useEffect(() => {
@@ -147,6 +170,9 @@ export function AccWholesalePage() {
   }, [products, itemQuery]);
 
   function addProduct(p: AccProduct) {
+    const existingLine = draft.lines.find((line) => line.productId === p.id);
+    const lineKey = existingLine?.key || newRef();
+    pendingLineFocus.current = lineKey;
     setDraft((d) => {
       const existing = d.lines.find((l) => l.productId === p.id);
       if (existing) {
@@ -157,7 +183,7 @@ export function AccWholesalePage() {
         lines: [
           ...d.lines,
           {
-            key: newRef(),
+            key: lineKey,
             productId: p.id,
             name: p.name,
             qty: 1,
@@ -173,7 +199,9 @@ export function AccWholesalePage() {
   function addCustom() {
     const name = itemQuery.trim();
     if (!name) return;
-    set({ lines: [...draft.lines, { key: newRef(), productId: null, name, qty: 1, rate: 0, stockQty: null }] });
+    const lineKey = newRef();
+    pendingLineFocus.current = lineKey;
+    set({ lines: [...draft.lines, { key: lineKey, productId: null, name, qty: 1, rate: 0, stockQty: null }] });
     setItemQuery("");
   }
 
@@ -181,7 +209,9 @@ export function AccWholesalePage() {
     set({ lines: draft.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) });
   }
 
-  const total = Math.round(draft.lines.reduce((a, l) => a + l.qty * l.rate, 0) * 100) / 100;
+  const itemsTotal = Math.round(draft.lines.reduce((a, l) => a + l.qty * l.rate, 0) * 100) / 100;
+  const transportCharge = Math.max(Math.round((Number(draft.transportCharge) || 0) * 100) / 100, 0);
+  const total = Math.round((itemsTotal + transportCharge) * 100) / 100;
   const cashPaid = draft.pay === "PAY" && draft.useCash ? Math.max(Number(draft.cashPaid) || 0, 0) : 0;
   const onlinePaid = draft.pay === "PAY" && draft.useOnline ? Math.max(Number(draft.onlinePaid) || 0, 0) : 0;
   const paid = Math.min(cashPaid + onlinePaid, total);
@@ -294,6 +324,7 @@ export function AccWholesalePage() {
         clientRef: refId.current,
         customer: draft.customerInput,
         items: draft.lines.map((l) => (l.productId ? { productId: l.productId, qty: l.qty, rate: l.rate } : { name: l.name, qty: l.qty, rate: l.rate })),
+        transportCharge,
         cashAmount: cashPaid,
         onlineAmount: onlinePaid,
         dueDate: due > 0 ? draft.dueDate : undefined,
@@ -316,6 +347,40 @@ export function AccWholesalePage() {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function shareSavedBill(sale: AccSale) {
+    if (savedAction) return;
+    setSavedAction("share");
+    const paidAmount = sale.cashAmount + sale.onlineAmount;
+    const message = [
+      `Thank you ${sale.customerName} for purchasing with us!`,
+      `Your bill ${sale.number} for ₹${sale.total} is attached.`,
+      sale.transportCharge > 0 ? `Transport charges: ₹${sale.transportCharge}` : "",
+      `Paid: ₹${paidAmount}${sale.dueAmount > 0 ? ` · Due: ₹${sale.dueAmount}` : ""}`,
+      "We appreciate your business.",
+    ].filter(Boolean).join("\n");
+    try {
+      await accApi.sharePdf.bill(sale.id, message);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        toast(errorText(error), { tone: "error" });
+      }
+    } finally {
+      setSavedAction(null);
+    }
+  }
+
+  async function downloadSavedBill(sale: AccSale) {
+    if (savedAction) return;
+    setSavedAction("download");
+    try {
+      await accApi.pdf.bill(sale.id);
+    } catch (error) {
+      toast(errorText(error), { tone: "error" });
+    } finally {
+      setSavedAction(null);
     }
   }
 
@@ -346,97 +411,152 @@ export function AccWholesalePage() {
       />
 
       {/* Items */}
-      <div className="acc-card">
-        <label className="acc-search is-in-card">
-          <Search aria-hidden />
-          <input
-            type="search"
-            value={itemQuery}
-            onChange={(e) => setItemQuery(e.target.value)}
-            placeholder="Add item: search product…"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && results.length) addProduct(results[0]);
-            }}
-          />
-          <SearchClearButton visible={Boolean(itemQuery)} onClear={() => setItemQuery("")} />
-        </label>
-        {tokens.length ? (
-          <ul className="acc-results">
-            {results.map((p) => (
-              <li key={p.id}>
-                <button type="button" onClick={() => addProduct(p)}>
-                  <span>
-                    <strong>{p.name}</strong>
-                    <small>
-                      {p.categoryName} · W {inr(p.wholesalePrice || p.sellingPrice)}
-                    </small>
-                  </span>
-                  <StockBadge qty={p.stockQty} low={p.lowStockAt} />
+      <div className="acc-card acc-wholesale-items">
+        <div className="acc-wholesale-items-head">
+          <span>
+            <h2>Add items</h2>
+            <p>Search your stock or add a custom item.</p>
+          </span>
+          {draft.lines.length ? <b>{plural(draft.lines.length, "item")} · {pieces} pcs</b> : null}
+        </div>
+        <div className="acc-dropdown-wrap">
+          <label className="acc-search is-in-card acc-item-search">
+            <Search aria-hidden />
+            <input
+              ref={itemSearchInput}
+              type="search"
+              value={itemQuery}
+              onChange={(e) => setItemQuery(e.target.value)}
+              placeholder="Search product name, brand or model…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && results.length) addProduct(results[0]);
+              }}
+            />
+            <SearchClearButton visible={Boolean(itemQuery)} onClear={() => setItemQuery("")} />
+          </label>
+          {tokens.length ? (
+            <ul className="acc-results acc-dropdown acc-item-results">
+              {results.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => addProduct(p)}>
+                    <span>
+                      <strong>{p.name}</strong>
+                      <small>
+                        {[p.brand, p.categoryName].filter(Boolean).join(" · ")} · Wholesale {inr(p.wholesalePrice || p.sellingPrice)}
+                      </small>
+                    </span>
+                    <StockBadge qty={p.stockQty} low={p.lowStockAt} />
+                  </button>
+                </li>
+              ))}
+              <li>
+                <button type="button" className="is-custom" onClick={addCustom}>
+                  <Plus /> Add “{itemQuery.trim()}” as a custom item
                 </button>
               </li>
-            ))}
-            <li>
-              <button type="button" className="is-custom" onClick={addCustom}>
-                <Plus /> Add “{itemQuery.trim()}” as a custom item
-              </button>
-            </li>
-          </ul>
-        ) : null}
+            </ul>
+          ) : null}
+        </div>
 
         {draft.lines.length ? (
-          <ul className="acc-lines">
-            {draft.lines.map((line) => (
-              <li key={line.key}>
-                <div className="acc-line-head">
-                  <strong>{line.name}</strong>
-                  {line.stockQty !== null && line.qty > line.stockQty ? (
-                    <span className="acc-badge is-red">Stock {line.stockQty}</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="acc-icon-btn is-small"
-                    onClick={() => set({ lines: draft.lines.filter((l) => l.key !== line.key) })}
-                    aria-label="Remove"
-                  >
-                    <Trash2 />
-                  </button>
-                </div>
-                <div className="acc-line-edit">
-                  <label className="acc-field is-qty">
-                    <span>Qty</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={line.qty || ""}
-                      onChange={(e) => updateLine(line.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-                      onBlur={() => line.qty < 1 && updateLine(line.key, { qty: 1 })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                  </label>
-                  <div className="acc-qty-chips">
-                    {[10, 50, 100].map((n) => (
-                      <button key={n} type="button" onClick={() => updateLine(line.key, { qty: line.qty === 1 ? n : line.qty + n })}>
-                        +{n}
-                      </button>
-                    ))}
+          <>
+            <ul className="acc-lines acc-wholesale-lines">
+              {draft.lines.map((line) => (
+                <li
+                  key={line.key}
+                  ref={(element) => {
+                    if (element) lineElements.current.set(line.key, element);
+                    else lineElements.current.delete(line.key);
+                  }}
+                  className={clsx("acc-wholesale-line", {
+                    "is-over-stock": line.stockQty !== null && line.qty > line.stockQty,
+                  })}
+                >
+                  <div className="acc-wholesale-line-row">
+                    <span className="acc-wholesale-product-inline">
+                      <strong>{line.name}</strong>
+                      <small>
+                        {line.stockQty === null
+                          ? "Custom item"
+                          : line.qty > line.stockQty
+                            ? `We have only ${line.stockQty} pcs in stock`
+                            : `${line.stockQty} pcs in stock`}
+                      </small>
+                    </span>
+                    <div className="acc-wholesale-quantity-row">
+                      <span className="acc-wholesale-mobile-label">Qty</span>
+                      <div className="acc-wholesale-qty">
+                        <button type="button" onClick={() => updateLine(line.key, { qty: Math.max(1, line.qty - 1) })} aria-label="Decrease quantity">
+                          <Minus />
+                        </button>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          data-line-quantity
+                          min="1"
+                          value={line.qty || ""}
+                          onChange={(e) => updateLine(line.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                          onBlur={() => line.qty < 1 && updateLine(line.key, { qty: 1 })}
+                          onFocus={(e) => e.target.select()}
+                          aria-label={`${line.name} quantity`}
+                        />
+                        <button type="button" onClick={() => updateLine(line.key, { qty: line.qty + 1 })} aria-label="Increase quantity">
+                          <Plus />
+                        </button>
+                      </div>
+                      <div className="acc-wholesale-quick-qty">
+                        {[5, 10, 50].map((quantity) => (
+                          <button key={quantity} type="button" onClick={() => updateLine(line.key, { qty: line.qty === 1 ? quantity : line.qty + quantity })}>
+                            +{quantity}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <span className="acc-wholesale-mobile-multiply" aria-hidden>×</span>
+                    <label className="acc-wholesale-rate-input">
+                      <b>₹</b>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        data-line-rate
+                        min="0"
+                        placeholder="Rate"
+                        value={line.rate || ""}
+                        onChange={(e) => updateLine(line.key, { rate: Number(e.target.value) || 0 })}
+                        onFocus={(e) => e.target.select()}
+                        aria-label={`${line.name} rate per piece`}
+                      />
+                    </label>
+                    <b className="acc-wholesale-line-amount">{inr(line.qty * line.rate)}</b>
+                    <button
+                      type="button"
+                      className="acc-icon-btn is-small acc-line-delete"
+                      onClick={() => set({ lines: draft.lines.filter((item) => item.key !== line.key) })}
+                      aria-label={`Remove ${line.name}`}
+                    >
+                      <Trash2 />
+                    </button>
                   </div>
-                  <label className="acc-field is-rate">
-                    <span>Rate ₹</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={line.rate || ""}
-                      onChange={(e) => updateLine(line.key, { rate: Number(e.target.value) || 0 })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                  </label>
-                  <b className="acc-line-amt">{inr(line.qty * line.rate)}</b>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="acc-btn is-ghost acc-add-another-product"
+              onClick={() => {
+                itemSearchInput.current?.focus({ preventScroll: true });
+                itemSearchInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            >
+              <Plus /> Add another product
+            </button>
+          </>
         ) : (
-          <p className="acc-hint">Search above to add items. Use +10 / +50 / +100 for bulk quantities.</p>
+          <div className="acc-wholesale-empty">
+            <Search aria-hidden />
+            <b>No items added</b>
+            <span>Search above and select a product to start the bill.</span>
+          </div>
         )}
       </div>
 
@@ -453,9 +573,39 @@ export function AccWholesalePage() {
             {plural(draft.lines.length, "item")} · {pieces} pcs
           </span>
         </div>
-        <div className="acc-sum-row is-total">
-          <span>Bill total</span>
-          <b className="acc-total-big">{inr(total)}</b>
+        <div className="acc-transport-charge-field">
+          <label className="acc-field">
+            <span>Transport charges</span>
+            <div className="acc-money-input">
+              <b>₹</b>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={draft.transportCharge}
+                onChange={(event) => set({ transportCharge: event.target.value })}
+                placeholder="0"
+              />
+            </div>
+          </label>
+          <small>Collected from the customer for the transporter. It is not counted as sales or profit.</small>
+        </div>
+        <div className="acc-payment-breakdown">
+          <div className="acc-sum-row">
+            <span>Items total</span>
+            <b>{inr(itemsTotal)}</b>
+          </div>
+          {transportCharge > 0 ? (
+            <div className="acc-sum-row">
+              <span>Transport charges</span>
+              <b>{inr(transportCharge)}</b>
+            </div>
+          ) : null}
+          <div className="acc-sum-row is-total">
+            <span>Amount payable</span>
+            <b className="acc-total-big">{inr(total)}</b>
+          </div>
         </div>
         <div className="acc-payment-options">
           <PaymentOption
@@ -476,7 +626,7 @@ export function AccWholesalePage() {
           />
           <PaymentOption
             label="Online"
-            hint="UPI or bank transfer"
+            hint="Amount received through UPI"
             tone="online"
             checked={draft.pay === "PAY" && draft.useOnline}
             onChecked={(checked) => togglePayment("ONLINE", checked)}
@@ -501,7 +651,7 @@ export function AccWholesalePage() {
         ) : null}
         <label className="acc-field">
           <span>Note</span>
-          <input value={draft.note} onChange={(e) => set({ note: e.target.value })} placeholder="Transport, bundle no., etc." />
+          <input value={draft.note} onChange={(e) => set({ note: e.target.value })} placeholder="Bundle number or any other note" />
         </label>
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
           {busy ? <Loader2 className="acc-spin" /> : <Check />}
@@ -512,49 +662,69 @@ export function AccWholesalePage() {
       <Sheet
         open={Boolean(saved)}
         onClose={() => setSaved(null)}
-        title={`Saved ${saved?.number || ""}`}
-        subtitle={saved ? `${saved.customerName} · ${inr(saved.total)}` : ""}
-        footer={
-          <button type="button" className="acc-btn is-primary is-block" onClick={() => setSaved(null)}>
-            <Plus /> New bill
-          </button>
+        title="Bill saved successfully"
+        subtitle={saved ? `${saved.number} · ${saved.customerName}` : ""}
+        className="is-bill-success"
+        centered
+        leading={
+          <div className="acc-bill-success-mark" aria-hidden>
+            <Check />
+          </div>
         }
       >
         {saved ? (
           <div className="acc-saved">
-            <div className="acc-kv">
-              <span>Bill total</span>
-              <b>{inr(saved.total)}</b>
-              <span>Paid now</span>
-              <b>{inr(saved.cashAmount + saved.onlineAmount)}</b>
-              <span>Due on bill</span>
-              <b className="is-red">{inr(saved.dueAmount)}</b>
+            <div className="acc-bill-ready">
+              <ClipboardCheck aria-hidden />
+              <span>Your bill has been saved and is ready to view, share, or download.</span>
+            </div>
+            <div className="acc-bill-summary">
+              <div className="is-total">
+                <span className="acc-bill-summary-icon"><ReceiptText /></span>
+                <span>Amount payable</span>
+                <b>{inr(saved.total)}</b>
+              </div>
+              {saved.transportCharge > 0 ? (
+                <div>
+                  <span className="acc-bill-summary-icon"><ReceiptText /></span>
+                  <span>Transport charges</span>
+                  <b>{inr(saved.transportCharge)}</b>
+                </div>
+              ) : null}
+              <div className="is-paid">
+                <span className="acc-bill-summary-icon"><WalletCards /></span>
+                <span>Paid now</span>
+                <b>{inr(saved.cashAmount + saved.onlineAmount)}</b>
+              </div>
+              <div className="is-due">
+                <span className="acc-bill-summary-icon"><Clock3 /></span>
+                <span>Due on bill</span>
+                <b>{inr(saved.dueAmount)}</b>
+              </div>
               {saved.dueDate ? (
-                <>
+                <div className="is-date">
+                  <span className="acc-bill-summary-icon"><CalendarDays /></span>
                   <span>Pay by</span>
                   <b>{shortDate(saved.dueDate)}</b>
-                </>
+                </div>
               ) : null}
             </div>
-            <div className="acc-btn-row">
-              <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(saved.id)} onShare={() => accApi.sharePdf.bill(saved.id)} />
-              <a
-                className="acc-btn is-ghost"
-                target="_blank"
-                rel="noreferrer"
-                href={`https://wa.me/91${saved.customerPhone}?text=${encodeURIComponent(
-                  `Bill ${saved.number}\n${saved.items.map((i) => `${i.qty} × ${i.name} @ ${i.rate}`).join("\n")}\nTotal: ₹${saved.total}\nPaid: ₹${
-                    saved.cashAmount + saved.onlineAmount
-                  }\nDue: ₹${saved.dueAmount}`,
-                )}`}
-              >
-                <MessageCircle /> WhatsApp
-              </a>
-              {saved.customerId ? (
-                <Link className="acc-btn is-ghost" to={`/acc/dues/${saved.customerId}`}>
-                  Customer
-                </Link>
-              ) : null}
+            <div className="acc-bill-success-actions">
+              <Link className="acc-bill-success-action" to={`/acc/sales/${saved.id}`}>
+                <Eye />
+                <strong>View bill</strong>
+                <small>Open bill</small>
+              </Link>
+              <button type="button" className="acc-bill-success-action is-share" disabled={Boolean(savedAction)} onClick={() => void shareSavedBill(saved)}>
+                {savedAction === "share" ? <Loader2 className="acc-spin" /> : <Share2 />}
+                <strong>{savedAction === "share" ? "Preparing…" : "Share"}</strong>
+                <small>WhatsApp</small>
+              </button>
+              <button type="button" className="acc-bill-success-action is-download" disabled={Boolean(savedAction)} onClick={() => void downloadSavedBill(saved)}>
+                {savedAction === "download" ? <Loader2 className="acc-spin" /> : <FileDown />}
+                <strong>{savedAction === "download" ? "Downloading…" : "Download"}</strong>
+                <small>PDF</small>
+              </button>
             </div>
           </div>
         ) : null}

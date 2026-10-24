@@ -419,8 +419,7 @@ const purchaseSchema = z.object({
           sellingPrice: z.coerce.number().min(0).max(10_000_000).optional(),
           wholesalePrice: z.coerce.number().min(0).max(10_000_000).optional(),
         })
-        .refine((i) => Boolean(i.productId) !== Boolean(i.newProduct), "Each item needs a product")
-        .refine((i) => !i.newProduct || (i.sellingPrice || 0) > 0, "Enter the selling price for the new product"),
+        .refine((i) => Boolean(i.productId) !== Boolean(i.newProduct), "Each item needs a product"),
     )
     .min(1, "Add at least one item")
     .max(300),

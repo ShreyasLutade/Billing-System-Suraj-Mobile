@@ -99,6 +99,10 @@ export function AccSalesPage() {
           <small>On credit</small>
           <b className="is-red">{s ? inr(s.due) : "…"}</b>
         </div>
+        <div>
+          <small>Transport collected</small>
+          <b>{s ? inr(s.transport) : "…"}</b>
+        </div>
         {isAdmin ? (
           <div>
             <small>Profit</small>
@@ -129,7 +133,7 @@ export function AccSalesPage() {
               <section key={day}>
                 <h3 className="acc-day-head">
                   <span>{day}</span>
-                  <b>{inr(list.filter((x) => !x.voidedAt).reduce((a, x) => a + x.total, 0))}</b>
+                  <b>{inr(list.filter((x) => !x.voidedAt).reduce((a, x) => a + x.total - x.transportCharge, 0))}</b>
                 </h3>
                 {wholesale.length ? (
                   <ul className="acc-list">
@@ -142,6 +146,7 @@ export function AccSalesPage() {
                             <small>
                               {sale.number} · {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })} ·{" "}
                               {sale.items.reduce((a, i) => a + i.qty, 0)} pcs
+                              {sale.transportCharge ? ` · transport ${inr(sale.transportCharge)}` : ""}
                               {sale.voidedAt ? " · CANCELLED" : ""}
                             </small>
                           </span>
@@ -317,7 +322,13 @@ export function SaleSheet({
             <b>−{inr(sale.discount, true)}</b>
           </>
         ) : null}
-        <span>Total</span>
+        {sale.transportCharge ? (
+          <>
+            <span>Transport charges</span>
+            <b>{inr(sale.transportCharge, true)}</b>
+          </>
+        ) : null}
+        <span>{sale.transportCharge ? "Amount payable" : "Total"}</span>
         <b>{inr(sale.total, true)}</b>
         {sale.cashAmount ? (
           <>

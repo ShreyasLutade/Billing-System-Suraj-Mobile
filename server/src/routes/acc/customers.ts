@@ -187,6 +187,7 @@ type LedgerLine = {
   debit: number;
   credit: number;
   balance: number;
+  transportCharge?: number;
   saleId?: string;
   method?: string;
 };
@@ -203,6 +204,7 @@ async function customerLedger(customerId: string) {
   const lines: Omit<LedgerLine, "balance">[] = [];
   for (const sale of sales) {
     const pcs = sale.items.reduce((a, i) => a + i.qty, 0);
+    const paid = round2(sale.cashAmount + sale.onlineAmount);
     lines.push({
       id: sale.id,
       saleId: sale.id,
@@ -214,23 +216,9 @@ async function customerLedger(customerId: string) {
         .map((i) => i.name)
         .join(", ")}${sale.items.length > 3 ? "…" : ""}`,
       debit: sale.total,
-      credit: 0,
+      credit: paid,
+      transportCharge: sale.transportCharge,
     });
-    const paid = round2(sale.cashAmount + sale.onlineAmount);
-    if (paid > 0) {
-      lines.push({
-        id: `${sale.id}-paid`,
-        saleId: sale.id,
-        date: sale.saleDate,
-        kind: "PAYMENT",
-        ref: sale.number,
-        detail: `Paid with bill${sale.cashAmount ? ` · cash ${money(sale.cashAmount)}` : ""}${
-          sale.onlineAmount ? ` · online ${money(sale.onlineAmount)}` : ""
-        }`,
-        debit: 0,
-        credit: paid,
-      });
-    }
   }
   for (const p of payments) {
     lines.push({
@@ -541,7 +529,7 @@ accCustomersRouter.get("/customers/:id/statement", async (req, res, next) => {
             cells: {
               date: pdfDay(l.date),
               ref: l.ref,
-              detail: l.detail,
+              detail: l.transportCharge ? `${l.detail} · Transport ${money(l.transportCharge)}` : l.detail,
               debit: l.debit ? money(l.debit) : "",
               credit: l.credit ? money(l.credit) : "",
               balance: money(l.balance),
@@ -559,15 +547,17 @@ accCustomersRouter.get("/customers/:id/statement", async (req, res, next) => {
                   { key: "number", label: "Bill", width: 18 },
                   { key: "date", label: "Date", width: 18 },
                   { key: "due", label: "Pay by", width: 18 },
-                  { key: "total", label: "Bill total", width: 16, align: "right" as const },
-                  { key: "open", label: "Still due", width: 16, align: "right" as const },
-                  { key: "age", label: "Age", width: 14, align: "right" as const },
+                  { key: "transport", label: "Transport", width: 14, align: "right" as const },
+                  { key: "total", label: "Bill total", width: 14, align: "right" as const },
+                  { key: "open", label: "Still due", width: 14, align: "right" as const },
+                  { key: "age", label: "Age", width: 10, align: "right" as const },
                 ],
                 rows: bal.openBills.map((b) => ({
                   cells: {
                     number: b.number,
                     date: pdfDay(b.saleDate),
                     due: b.dueDate ? pdfDay(b.dueDate) : "",
+                    transport: b.transportCharge ? money(b.transportCharge) : "—",
                     total: money(b.total),
                     open: money(b.open),
                     age: `${b.ageDays} days`,

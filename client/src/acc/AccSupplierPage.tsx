@@ -7,7 +7,7 @@ import { accApi, type AccSupplierDetail } from "./accApi";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
 
 type Tab = "statement" | "purchases" | "payments";
-type Method = "CASH" | "UPI" | "BANK" | "CHEQUE";
+type Method = "CASH" | "UPI" | "CHEQUE";
 
 const METHOD_LABEL: Record<string, string> = { CASH: "Cash", UPI: "UPI", BANK: "Bank transfer", CHEQUE: "Cheque" };
 
@@ -333,7 +333,6 @@ function PaySupplierSheet({
           onChange={setMethod}
           options={[
             { value: "UPI", label: "UPI" },
-            { value: "BANK", label: "Bank" },
             { value: "CHEQUE", label: "Cheque" },
             { value: "CASH", label: "Cash" },
           ]}

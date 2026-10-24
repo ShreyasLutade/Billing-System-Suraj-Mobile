@@ -423,6 +423,7 @@ export function Sheet({
   wide,
   className,
   leading,
+  centered,
 }: {
   open: boolean;
   onClose: () => void;
@@ -435,13 +436,36 @@ export function Sheet({
   className?: string;
   /** Picture before the title (e.g. the product's category art). */
   leading?: ReactNode;
+  /** Centers the dialog on every screen instead of using the mobile bottom-sheet position. */
+  centered?: boolean;
 }) {
   const closeRef = useRef(onClose);
+  const closeTimer = useRef<number | null>(null);
+  const closingRef = useRef(false);
+  const [closing, setClosing] = useState(false);
   closeRef.current = onClose;
+  const requestClose = () => {
+    if (!centered) {
+      closeRef.current();
+      return;
+    }
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      closingRef.current = false;
+      setClosing(false);
+      closeRef.current();
+    }, 180);
+  };
+  useEffect(() => () => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+  }, []);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeRef.current();
+      if (event.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     document.body.classList.add("acc-sheet-open");
@@ -452,9 +476,9 @@ export function Sheet({
   }, [open]);
   if (!open) return null;
   return createPortal(
-    <div className="acc acc-sheet-backdrop" onClick={onClose}>
+    <div className={clsx("acc acc-sheet-backdrop", centered && "is-centered", closing && "is-closing")} onClick={requestClose}>
       <div
-        className={clsx("acc-sheet", wide && "is-wide", className)}
+        className={clsx("acc-sheet", wide && "is-wide", centered && "is-centered", closing && "is-closing", className)}
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
@@ -465,7 +489,7 @@ export function Sheet({
             <h2>{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
           </div>
-          <button type="button" className="acc-icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="acc-icon-btn" onClick={requestClose} aria-label="Close">
             <X />
           </button>
         </div>

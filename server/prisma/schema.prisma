@@ -616,6 +616,8 @@ model AccSale {
   subtotal    Float
   discount    Float    @default(0)
   total       Float
+  /// Collected from the customer and passed through to the transporter; excluded from revenue/profit
+  transportCharge Float @default(0)
   /// Cost of goods at the time of sale
   costTotal   Float    @default(0)
   cashAmount   Float   @default(0)

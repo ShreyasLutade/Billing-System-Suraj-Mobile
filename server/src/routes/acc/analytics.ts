@@ -24,6 +24,7 @@ async function salesIn(filter: { gte?: Date; lte?: Date } | undefined) {
       kind: true,
       saleDate: true,
       total: true,
+      transportCharge: true,
       costTotal: true,
       discount: true,
       cashAmount: true,
@@ -46,8 +47,9 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
     round2(list.reduce((a, s) => a + fn(s), 0));
   const retail = sales.filter((s) => s.kind === "RETAIL");
   const wholesale = sales.filter((s) => s.kind === "WHOLESALE");
-  const revenue = sum(sales, (s) => s.total);
-  const profit = sum(sales, (s) => s.total - s.costTotal);
+  const saleRevenue = (sale: (typeof sales)[number]) => sale.total - sale.transportCharge;
+  const revenue = sum(sales, saleRevenue);
+  const profit = sum(sales, (s) => saleRevenue(s) - s.costTotal);
   const pieces = sales.reduce((a, s) => a + s.items.reduce((b, i) => b + i.qty, 0), 0);
 
   // Same-length window right before this one, for the growth arrow.
@@ -56,8 +58,8 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
     const span = range.to.getTime() - range.from.getTime();
     const prev = await salesIn({ gte: new Date(range.from.getTime() - span - 1), lte: new Date(range.from.getTime() - 1) });
     previous = {
-      revenue: sum(prev, (s) => s.total),
-      profit: sum(prev, (s) => s.total - s.costTotal),
+      revenue: sum(prev, saleRevenue),
+      profit: sum(prev, (s) => saleRevenue(s) - s.costTotal),
       bills: prev.length,
     };
   }
@@ -82,9 +84,9 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
     const day = istDateString(s.saleDate);
     const key = byMonth ? day.slice(0, 7) : day;
     const row = trendMap.get(key) || { key, retail: 0, wholesale: 0, profit: 0 };
-    if (s.kind === "RETAIL") row.retail = round2(row.retail + s.total);
-    else row.wholesale = round2(row.wholesale + s.total);
-    row.profit = round2(row.profit + s.total - s.costTotal);
+    if (s.kind === "RETAIL") row.retail = round2(row.retail + saleRevenue(s));
+    else row.wholesale = round2(row.wholesale + saleRevenue(s));
+    row.profit = round2(row.profit + saleRevenue(s) - s.costTotal);
     trendMap.set(key, row);
   }
 
@@ -92,7 +94,7 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
   for (const s of retail) {
     const h = hours[istHour(s.saleDate)];
     h.bills += 1;
-    h.revenue = round2(h.revenue + s.total);
+    h.revenue = round2(h.revenue + saleRevenue(s));
   }
 
   const cat = new Map<string, { name: string; qty: number; revenue: number; profit: number }>();
@@ -125,7 +127,7 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
     const g = s.customer?.group;
     const key = g?.id || "none";
     const row = groups.get(key) || { id: key, name: g?.name || "No group", color: g?.color || "#94a3b8", revenue: 0, bills: 0, credit: 0 };
-    row.revenue = round2(row.revenue + s.total);
+    row.revenue = round2(row.revenue + saleRevenue(s));
     row.credit = round2(row.credit + s.dueAmount);
     row.bills += 1;
     groups.set(key, row);
@@ -138,7 +140,7 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
         bills: 0,
         pieces: 0,
       };
-      c.revenue = round2(c.revenue + s.total);
+      c.revenue = round2(c.revenue + saleRevenue(s));
       c.bills += 1;
       c.pieces += s.items.reduce((a, i) => a + i.qty, 0);
       customers.set(s.customerId, c);
@@ -150,7 +152,7 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
     const name = s.createdByName || "—";
     const row = staff.get(name) || { name, bills: 0, revenue: 0 };
     row.bills += 1;
-    row.revenue = round2(row.revenue + s.total);
+    row.revenue = round2(row.revenue + saleRevenue(s));
     staff.set(name, row);
   }
 
@@ -200,12 +202,12 @@ export async function buildAccAnalytics(query: Record<string, unknown>) {
       bills: sales.length,
       pieces,
       avgBill: sales.length ? round2(revenue / sales.length) : 0,
-      retail: sum(retail, (s) => s.total),
+      retail: sum(retail, saleRevenue),
       retailBills: retail.length,
-      retailProfit: sum(retail, (s) => s.total - s.costTotal),
-      wholesale: sum(wholesale, (s) => s.total),
+      retailProfit: sum(retail, (s) => saleRevenue(s) - s.costTotal),
+      wholesale: sum(wholesale, saleRevenue),
       wholesaleBills: wholesale.length,
-      wholesaleProfit: sum(wholesale, (s) => s.total - s.costTotal),
+      wholesaleProfit: sum(wholesale, (s) => saleRevenue(s) - s.costTotal),
       cash: sum(sales, (s) => s.cashAmount),
       online: sum(sales, (s) => s.onlineAmount),
       creditGiven: sum(sales, (s) => s.dueAmount),

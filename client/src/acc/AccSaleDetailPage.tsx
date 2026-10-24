@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { Ban, Loader2, MessageCircle, Phone } from "lucide-react";
+import { Ban, Loader2, MessageCircle, Phone, UserRound } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccCustomerDetail, type AccSale } from "./accApi";
 import { Empty, PdfButton, dateTime, errorText, inr, plural, refreshCatalog, shortDate, toast } from "./shared";
@@ -77,6 +77,7 @@ export function AccSaleDetailPage() {
   const message = [
     `Bill ${sale.number} · ${shortDate(sale.saleDate)}`,
     ...sale.items.map((i) => `${i.qty} × ${i.name} @ ${i.rate}`),
+    sale.transportCharge > 0 ? `Transport charges: ₹${sale.transportCharge}` : "",
     `Total: ₹${sale.total}`,
     `Paid: ₹${paid}`,
     stillDue > 0 ? `Due: ₹${stillDue}${sale.dueDate ? ` by ${shortDate(sale.dueDate)}` : ""}` : "",
@@ -102,55 +103,79 @@ export function AccSaleDetailPage() {
 
   return (
     <div className="acc-page acc-bill-page">
-      <BackLink to="/acc/sales">Sales</BackLink>
-
-      <section className="acc-card acc-bill-head">
-        <div>
-          <small>{wholesale ? "Wholesale bill" : "Counter bill"}</small>
-          <h1 className="acc-h1">{sale.number}</h1>
-          <span className="acc-bill-meta">
-            {dateTime(sale.saleDate)}
-            {sale.createdByName ? ` · by ${sale.createdByName}` : ""}
-          </span>
-        </div>
-        <span className={clsx("acc-status", status.tone)}>{status.label}</span>
-      </section>
-
-      {sale.voidReason ? <p className="acc-warn-text">Cancelled: {sale.voidReason}</p> : null}
-
-      {sale.customerName ? (
-        <section className="acc-card">
-          <h3 className="acc-card-title">Customer</h3>
-          <div className="acc-bill-customer">
-            <span>
-              <strong>
-                {sale.customerId ? <Link to={`/acc/dues/${sale.customerId}`}>{sale.customerName}</Link> : sale.customerName}
-              </strong>
-              <small>{[sale.customerShop, customer?.city, phone, sale.groupName].filter(Boolean).join(" · ")}</small>
-            </span>
-            {customer ? (
-              <span className="acc-bill-balance">
-                <small>Total balance</small>
-                <b className={clsx(customer.balance > 0 && "is-red")}>{inr(customer.balance)}</b>
-              </span>
-            ) : null}
-          </div>
+      <div className="acc-bill-topbar">
+        <BackLink to="/acc/sales">Sales</BackLink>
+        <div className="acc-bill-top-actions">
+          <PdfButton
+            actionLabels
+            className="has-action-labels"
+            onDownload={() => accApi.pdf.bill(sale.id)}
+            onShare={() => accApi.sharePdf.bill(sale.id)}
+          />
+          {sale.customerId ? (
+            <button type="button" className="acc-btn is-ghost" onClick={() => navigate(`/acc/dues/${sale.customerId}`)}>
+              <UserRound /> Customer account
+            </button>
+          ) : null}
           {phone ? (
-            <div className="acc-btn-row">
-              <a className="acc-btn" href={`tel:${phone}`}>
+            <>
+              <a className="acc-btn is-ghost" href={`tel:${phone}`}>
                 <Phone /> Call
               </a>
-              <a className="acc-btn" target="_blank" rel="noreferrer" href={`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`}>
+              <a className="acc-btn is-ghost" target="_blank" rel="noreferrer" href={`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`}>
                 <MessageCircle /> WhatsApp
               </a>
-            </div>
+            </>
           ) : null}
-        </section>
-      ) : null}
+          {!sale.voidedAt ? (
+            <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
+              {busy ? <Loader2 className="acc-spin" /> : <Ban />} Cancel bill
+            </button>
+          ) : null}
+        </div>
+      </div>
 
-      <section className="acc-card">
-        <h3 className="acc-card-title">Items</h3>
-        <div className="acc-table-wrap">
+      <article className="acc-bill-document">
+        <header className="acc-bill-head">
+          <div>
+            <small>{wholesale ? "Wholesale bill" : "Counter bill"}</small>
+            <h1 className="acc-h1">{sale.number}</h1>
+            <span className="acc-bill-meta">
+              {dateTime(sale.saleDate)}
+              {sale.createdByName ? ` · by ${sale.createdByName}` : ""}
+            </span>
+          </div>
+          <span className={clsx("acc-status", status.tone)}>{status.label}</span>
+        </header>
+
+        {sale.voidReason ? <p className="acc-warn-text acc-bill-cancel-note">Cancelled: {sale.voidReason}</p> : null}
+
+        {sale.customerName ? (
+          <section className="acc-bill-section acc-bill-customer-section">
+            <span className="acc-bill-section-label">Customer</span>
+            <div className="acc-bill-customer">
+              <span>
+                <strong>
+                  {sale.customerId ? <Link to={`/acc/dues/${sale.customerId}`}>{sale.customerName}</Link> : sale.customerName}
+                </strong>
+                <small>{[sale.customerShop, customer?.city, phone, sale.groupName].filter(Boolean).join(" · ")}</small>
+              </span>
+              {customer ? (
+                <span className="acc-bill-balance">
+                  <small>Total balance</small>
+                  <b className={clsx(customer.balance > 0 && "is-red")}>{inr(customer.balance)}</b>
+                </span>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="acc-bill-section acc-bill-items-section">
+          <div className="acc-bill-section-heading">
+            <span className="acc-bill-section-label">Items</span>
+            <small>{plural(sale.items.length, "item")} · {pieces} pcs</small>
+          </div>
+          <div className="acc-table-wrap acc-bill-items-table">
           <table className="acc-table">
             <thead>
               <tr>
@@ -187,19 +212,27 @@ export function AccSaleDetailPage() {
               </tr>
             </tfoot>
           </table>
-        </div>
-      </section>
+          </div>
+        </section>
 
-      <section className="acc-card">
-        <h3 className="acc-card-title">Payment</h3>
-        <div className="acc-kv">
+        <section className="acc-bill-section acc-bill-payment-section">
+          <span className="acc-bill-section-label">Payment summary</span>
+          <div className="acc-kv acc-bill-payment-kv">
           {sale.discount ? (
             <>
               <span>Discount</span>
               <b>−{inr(sale.discount, true)}</b>
             </>
           ) : null}
-          <span>Bill total</span>
+          {sale.transportCharge > 0 ? (
+            <>
+              <span>Items after discount</span>
+              <b>{inr(sale.total - sale.transportCharge, true)}</b>
+              <span>Transport charges</span>
+              <b>{inr(sale.transportCharge, true)}</b>
+            </>
+          ) : null}
+          <span>{sale.transportCharge > 0 ? "Amount payable" : "Bill total"}</span>
           <b>{inr(sale.total, true)}</b>
           {sale.cashAmount ? (
             <>
@@ -228,33 +261,20 @@ export function AccSaleDetailPage() {
               </b>
             </>
           ) : null}
-        </div>
-        {wholesale && !sale.voidedAt ? (
-          stillDue > 0 ? (
-            <div className="acc-due-line">
-              <span>Still due on this bill</span>
-              <b>{inr(stillDue, true)}</b>
-            </div>
-          ) : (
-            <p className="acc-paid-line">This bill is fully paid</p>
-          )
-        ) : null}
-        {sale.note ? <p className="acc-hint">Note: {sale.note}</p> : null}
-      </section>
-
-      <div className="acc-btn-row">
-        <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(sale.id)} onShare={() => accApi.sharePdf.bill(sale.id)} />
-        {sale.customerId ? (
-          <button type="button" className="acc-btn" onClick={() => navigate(`/acc/dues/${sale.customerId}`)}>
-            Customer account
-          </button>
-        ) : null}
-        {!sale.voidedAt ? (
-          <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
-            <Ban /> Cancel bill
-          </button>
-        ) : null}
-      </div>
+          </div>
+          {wholesale && !sale.voidedAt ? (
+            stillDue > 0 ? (
+              <div className="acc-due-line">
+                <span>Still due on this bill</span>
+                <b>{inr(stillDue, true)}</b>
+              </div>
+            ) : (
+              <p className="acc-paid-line">This bill is fully paid</p>
+            )
+          ) : null}
+          {sale.note ? <p className="acc-hint acc-bill-note">Note: {sale.note}</p> : null}
+        </section>
+      </article>
     </div>
   );
 }

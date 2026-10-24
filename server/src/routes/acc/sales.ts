@@ -6,7 +6,6 @@ import { accRange, nextAccNumber, round2 } from "../../lib/accShop";
 import { istDateString, startOfDayIST } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfRow } from "../../services/accPdf";
 import { money } from "../../services/pdf";
-import { customerBalances } from "../../services/accDues";
 import { renderAccBillPdf } from "../../services/accBillPdf";
 import { upsertCustomer, customerInputSchema } from "./customers";
 
@@ -33,8 +32,9 @@ export function serializeSale(sale: SaleWithItems) {
     subtotal: sale.subtotal,
     discount: sale.discount,
     total: sale.total,
+    transportCharge: sale.transportCharge,
     costTotal: sale.costTotal,
-    profit: round2(sale.total - sale.costTotal),
+    profit: round2(sale.total - sale.transportCharge - sale.costTotal),
     cashAmount: sale.cashAmount,
     onlineAmount: sale.onlineAmount,
     dueAmount: sale.dueAmount,
@@ -75,6 +75,7 @@ const saleSchema = z.object({
     .min(1, "Add at least one item")
     .max(200),
   discount: z.coerce.number().min(0).max(10_000_000).default(0),
+  transportCharge: z.coerce.number().min(0).max(10_000_000).default(0),
   cashAmount: z.coerce.number().min(0).max(10_000_000).default(0),
   onlineAmount: z.coerce.number().min(0).max(10_000_000).default(0),
   customerId: z.string().optional(),
@@ -143,7 +144,8 @@ accSalesRouter.post("/sales", async (req, res, next) => {
 
     const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
     const discount = round2(Math.min(input.discount, subtotal));
-    const total = round2(subtotal - discount);
+    const transportCharge = input.kind === "WHOLESALE" ? round2(input.transportCharge) : 0;
+    const total = round2(subtotal - discount + transportCharge);
     let cash = round2(input.cashAmount);
     let online = round2(input.onlineAmount);
 
@@ -202,6 +204,7 @@ accSalesRouter.post("/sales", async (req, res, next) => {
           subtotal,
           discount,
           total,
+          transportCharge,
           costTotal,
           cashAmount: cash,
           onlineAmount: online,
@@ -290,20 +293,22 @@ function salesWhere(query: Record<string, unknown>) {
 function summarize(sales: SaleWithItems[]) {
   const live = sales.filter((s) => !s.voidedAt);
   const sum = (fn: (s: SaleWithItems) => number) => round2(live.reduce((acc, s) => acc + fn(s), 0));
+  const revenue = (sale: SaleWithItems) => sale.total - sale.transportCharge;
   const retail = live.filter((s) => s.kind === "RETAIL");
   const wholesale = live.filter((s) => s.kind === "WHOLESALE");
   return {
     count: live.length,
-    total: sum((s) => s.total),
-    retailTotal: round2(retail.reduce((a, s) => a + s.total, 0)),
+    total: sum(revenue),
+    retailTotal: round2(retail.reduce((a, s) => a + revenue(s), 0)),
     retailCount: retail.length,
-    wholesaleTotal: round2(wholesale.reduce((a, s) => a + s.total, 0)),
+    wholesaleTotal: round2(wholesale.reduce((a, s) => a + revenue(s), 0)),
     wholesaleCount: wholesale.length,
     cash: sum((s) => s.cashAmount),
     online: sum((s) => s.onlineAmount),
     due: sum((s) => s.dueAmount),
+    transport: sum((s) => s.transportCharge),
     discount: sum((s) => s.discount),
-    profit: sum((s) => s.total - s.costTotal),
+    profit: sum((s) => revenue(s) - s.costTotal),
     items: live.reduce((a, s) => a + s.items.reduce((b, i) => b + i.qty, 0), 0),
   };
 }
@@ -341,7 +346,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           cells: {
             a: pdfDay(sale.saleDate),
             b: `${daySales.length} bills`,
-            c: rs(round2(daySales.reduce((a, x) => a + x.total, 0))),
+            c: rs(round2(daySales.reduce((a, x) => a + x.total - x.transportCharge, 0))),
           },
         });
       }
@@ -352,6 +357,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           time: sale.saleDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }),
           party: sale.customer?.name || sale.customerName || (sale.kind === "RETAIL" ? "Walk-in" : ""),
           items: detailed ? itemsText : `${sale.items.reduce((a, i) => a + i.qty, 0)} pcs`,
+          transport: sale.transportCharge ? money(sale.transportCharge) : "",
           total: money(sale.total),
           cash: sale.cashAmount ? money(sale.cashAmount) : "",
           online: sale.onlineAmount ? money(sale.onlineAmount) : "",
@@ -375,6 +381,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
         { label: "Retail", value: `${rs(s.retailTotal)} (${s.retailCount})` },
         { label: "Wholesale", value: `${rs(s.wholesaleTotal)} (${s.wholesaleCount})` },
         { label: "Pieces sold", value: String(s.items) },
+        { label: "Transport collected", value: rs(s.transport) },
         { label: "Cash", value: rs(s.cash), tone: "green" },
         { label: "Online", value: rs(s.online), tone: "green" },
         { label: "Given on credit", value: rs(s.due), tone: "red" },
@@ -387,8 +394,9 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
             { key: "number", label: "Bill", width: 9 },
             { key: "time", label: "Time", width: 7 },
             { key: "party", label: "Customer", width: 17 },
-            { key: "items", label: "Items", width: 33 },
-            { key: "total", label: "Total", width: 9, align: "right" },
+            { key: "items", label: "Items", width: 25 },
+            { key: "transport", label: "Transport", width: 8, align: "right" },
+            { key: "total", label: "Payable", width: 9, align: "right" },
             { key: "cash", label: "Cash", width: 8, align: "right" },
             { key: "online", label: "Online", width: 8, align: "right" },
             { key: "due", label: "Due", width: 8, align: "right" },
@@ -396,7 +404,8 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           rows,
           total: {
             number: `${s.count} bills`,
-            total: money(s.total),
+            transport: money(s.transport),
+            total: money(round2(s.total + s.transport)),
             cash: money(s.cash),
             online: money(s.online),
             due: money(s.due),
@@ -434,8 +443,6 @@ accSalesRouter.get("/sales/:id/pdf", async (req, res, next) => {
       return;
     }
     const c = sale.customer;
-    let balance: number | null = null;
-    if (c) balance = (await customerBalances([c.id])).get(c.id)?.balance ?? null;
     const pdf = await renderAccBillPdf({
       number: sale.number,
       kind: sale.kind === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
@@ -460,10 +467,10 @@ accSalesRouter.get("/sales/:id/pdf", async (req, res, next) => {
       subtotal: sale.subtotal,
       discount: sale.discount,
       total: sale.total,
+      transportCharge: sale.transportCharge,
       cashAmount: sale.cashAmount,
       onlineAmount: sale.onlineAmount,
       dueAmount: sale.dueAmount,
-      outstanding: balance,
       note: sale.note,
     });
     sendPdf(res, pdf, `${sale.number}.pdf`);

@@ -67,6 +67,7 @@ export type AccSale = {
   subtotal: number;
   discount: number;
   total: number;
+  transportCharge: number;
   costTotal: number;
   profit: number;
   cashAmount: number;
@@ -91,6 +92,7 @@ export type AccSalesSummary = {
   cash: number;
   online: number;
   due: number;
+  transport: number;
   discount: number;
   profit: number;
   items: number;
@@ -106,6 +108,7 @@ export type AccOpenBill = {
   saleDate: string;
   dueDate: string | null;
   total: number;
+  transportCharge: number;
   open: number;
   daysOverdue: number;
   ageDays: number;
@@ -141,6 +144,7 @@ export type AccLedgerLine = {
   debit: number;
   credit: number;
   balance: number;
+  transportCharge?: number;
   saleId?: string;
   method?: string;
 };
@@ -315,6 +319,7 @@ export type SaleInput = {
   clientRef: string;
   items: Array<{ productId?: string; name?: string; model?: string; qty: number; rate: number }>;
   discount?: number;
+  transportCharge?: number;
   cashAmount?: number;
   onlineAmount?: number;
   customerId?: string;
@@ -434,7 +439,7 @@ export const accApi = {
       shareAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf", "Accessories stock"),
     sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string }) =>
       shareAuthed(`/acc/sales/pdf${qs(q)}`, "accessories-sales.pdf", "Accessories sales"),
-    bill: (id: string) => shareAuthed(`/acc/sales/${id}/pdf`, "bill.pdf", "Accessories bill"),
+    bill: (id: string, text?: string) => shareAuthed(`/acc/sales/${id}/pdf`, "bill.pdf", "Accessories bill", text),
     dues: (q: { groupId?: string; groupIds?: string; status?: string; sort?: string; columns?: string }) =>
       shareAuthed(`/acc/dues/pdf${qs(q)}`, "accessories-dues.pdf", "Accessories dues"),
     statement: (id: string) =>

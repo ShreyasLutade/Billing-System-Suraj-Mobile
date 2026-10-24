@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import {
+  ArrowDownLeft,
   FileDown,
   FilePlus2,
   Loader2,
+  MapPin,
   MessageCircle,
   Pencil,
   Phone,
+  ReceiptText,
   Search,
   Settings2,
   Trash2,
@@ -426,7 +429,6 @@ export function PaymentSheet({
         options={[
           { value: "CASH", label: "Cash" },
           { value: "UPI", label: "UPI" },
-          { value: "BANK", label: "Bank" },
           { value: "CHEQUE", label: "Cheque" },
           { value: "DISCOUNT", label: "Write off" },
         ]}
@@ -577,58 +579,29 @@ export function AccCustomerPage() {
   const openSale = (saleId: string) => navigate(`/acc/sales/${saleId}`);
 
   return (
-    <div className="acc-page">
+    <div className="acc-page acc-customer-ledger-page">
       <BackLink to="/acc/dues">Dues</BackLink>
-      <section className="acc-card acc-cust-hero">
-        <div className="acc-cust-hero-top">
-          <span className="acc-avatar is-big" style={{ ["--g" as string]: data.group?.color || "#94a3b8" }}>
-            {data.name.slice(0, 1).toUpperCase()}
-          </span>
+      <header className="acc-customer-account-header">
+        <div className="acc-customer-account-title">
+          <small>Customer account</small>
           <div>
             <h1>{data.name}</h1>
-            <p>{[data.shopName, data.city].filter(Boolean).join(" · ")}</p>
-            <p>
-              {data.phone}
-              {data.group ? (
-                <span className="acc-group-tag" style={{ ["--g" as string]: data.group.color }}>
-                  {data.group.name}
-                </span>
-              ) : null}
-            </p>
+            <span className={clsx("acc-status", data.balance > 0 ? "is-red" : "is-green")}>
+              {data.balance > 0 ? `${inr(data.balance)} due` : data.balance < 0 ? `${inr(-data.balance)} advance` : "Account clear"}
+            </span>
           </div>
-          <button type="button" className="acc-icon-btn" onClick={() => setEditing(true)} aria-label="Edit customer">
-            <Pencil />
-          </button>
-        </div>
-        <div className="acc-stat-strip is-3">
-          <div>
-            <small>Balance</small>
-            <b className={clsx(data.balance > 0 ? "is-red" : "is-green")}>{data.balance < 0 ? `Adv ${inr(-data.balance)}` : inr(data.balance)}</b>
-          </div>
-          <div>
-            <small>Overdue</small>
-            <b className={clsx(data.overdue > 0 && "is-red")}>{inr(data.overdue)}</b>
-          </div>
-          <div>
-            <small>Total billed</small>
-            <b>{inr(data.billed)}</b>
-          </div>
-        </div>
-        {data.creditLimit > 0 ? (
-          <p className={clsx("acc-hint", data.balance > data.creditLimit && "is-red")}>
-            Credit limit {inr(data.creditLimit)}
-            {data.balance > data.creditLimit ? " — over the limit" : ""}
+          <p>
+            {[data.shopName, data.city].filter(Boolean).join(" · ") || data.phone}
+            {data.group ? ` · ${data.group.name}` : ""}
           </p>
-        ) : null}
-        <div className="acc-action-row">
-          <button type="button" className="acc-btn is-primary" onClick={() => setPaying(true)}>
-            <Wallet /> Receive
+        </div>
+        <div className="acc-action-row acc-customer-account-actions">
+          <button type="button" className="acc-btn is-ghost" onClick={() => setEditing(true)}>
+            <Pencil /> Edit
           </button>
-          <button type="button" className="acc-btn" onClick={() => navigate("/acc/wholesale", { state: { customerId: data.id } })}>
-            <FilePlus2 /> New bill
-          </button>
+          <PdfButton actionLabels className="has-action-labels" onDownload={() => accApi.pdf.statement(data.id)} onShare={() => accApi.sharePdf.statement(data.id)} />
           <a className="acc-btn is-ghost" href={`tel:${data.phone}`} aria-label="Call">
-            <Phone />
+            <Phone /> Call
           </a>
           <a
             className="acc-btn is-ghost"
@@ -637,67 +610,114 @@ export function AccCustomerPage() {
             href={`https://wa.me/91${data.phone}?text=${encodeURIComponent(reminder)}`}
             aria-label="WhatsApp reminder"
           >
-            <MessageCircle />
+            <MessageCircle /> WhatsApp
           </a>
-          <PdfButton label="Statement" onDownload={() => accApi.pdf.statement(data.id)} onShare={() => accApi.sharePdf.statement(data.id)} />
+          <button type="button" className="acc-btn is-primary" onClick={() => setPaying(true)}>
+            <Wallet /> Receive
+          </button>
+          <button type="button" className="acc-btn" onClick={() => navigate("/acc/wholesale", { state: { customerId: data.id } })}>
+            <FilePlus2 /> New bill
+          </button>
         </div>
-      </section>
+      </header>
 
-      <Segmented
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "ledger", label: "Ledger" },
-          { value: "open", label: `Unpaid (${data.openBills.length})` },
-          { value: "items", label: "Top items" },
-        ]}
-      />
+      <div className="acc-customer-account-layout">
+        <main className="acc-customer-account-main">
+          <section className="acc-customer-contact-section">
+            <span className="acc-avatar is-big" style={{ ["--g" as string]: data.group?.color || "#94a3b8" }}>
+              {data.name.slice(0, 1).toUpperCase()}
+            </span>
+            <div>
+              <small>Customer details</small>
+              <strong>{data.shopName || data.name}</strong>
+              <a href={`tel:${data.phone}`}><Phone /> {data.phone}</a>
+              {[data.address, data.city].filter(Boolean).length ? (
+                <span><MapPin /> {[data.address, data.city].filter(Boolean).join(", ")}</span>
+              ) : null}
+            </div>
+          </section>
+
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "ledger", label: "Ledger" },
+              { value: "open", label: `Unpaid (${data.openBills.length})` },
+              { value: "items", label: "Top items" },
+            ]}
+          />
 
       {tab === "ledger" ? (
         data.ledger.length ? (
-          <ul className="acc-ledger">
-            {data.ledger.map((line) => (
-              <li key={line.id} className={line.kind === "BILL" ? "is-bill" : "is-pay"}>
-                <button
-                  type="button"
-                  onClick={() => (line.saleId && line.kind === "BILL" ? openSale(line.saleId) : undefined)}
-                  disabled={!(line.saleId && line.kind === "BILL")}
-                >
-                  <span>
-                    <strong>{line.kind === "BILL" ? line.ref : line.detail.split(" · ")[0]}</strong>
-                    <small>
-                      {shortDate(line.date)} · {line.kind === "BILL" ? line.detail : line.detail.split(" · ").slice(1).join(" · ") || line.ref}
-                    </small>
-                  </span>
-                  <span className="acc-row-amt">
-                    <b className={line.kind === "BILL" ? "" : "is-green"}>
-                      {line.kind === "BILL" ? `+${inr(line.debit)}` : `−${inr(line.credit)}`}
-                    </b>
-                    <small>Bal {inr(line.balance)}</small>
-                  </span>
-                </button>
-                {isAdmin && line.kind === "PAYMENT" && !line.saleId ? (
+          <section className="acc-ledger-panel">
+            <div className="acc-ledger-guide">
+              <span className="is-debit"><ReceiptText /> <b>Debit</b> = new bill, amount owed increases</span>
+              <span className="is-credit"><ArrowDownLeft /> <b>Credit</b> = payment received, amount owed decreases</span>
+            </div>
+            <div className="acc-ledger-head" aria-hidden>
+              <span>Date</span>
+              <span>Details</span>
+              <span>Debit</span>
+              <span>Credit</span>
+              <span>Balance</span>
+              <span />
+            </div>
+            <ul className="acc-ledger acc-ledger-statement">
+              {data.ledger.map((line) => (
+                <li key={line.id} className={line.kind === "BILL" ? "is-bill" : "is-pay"}>
                   <button
                     type="button"
-                    className="acc-icon-btn is-small"
-                    aria-label="Delete payment"
-                    onClick={async () => {
-                      if (!window.confirm(`Delete this payment of ${inr(line.credit)}?`)) return;
-                      try {
-                        await accApi.deletePayment(line.id);
-                        toast("Payment deleted");
-                        void load();
-                      } catch (err) {
-                        toast(errorText(err), { tone: "error" });
-                      }
-                    }}
+                    className="acc-ledger-entry"
+                    onClick={() => (line.saleId && line.kind === "BILL" ? openSale(line.saleId) : undefined)}
+                    disabled={!(line.saleId && line.kind === "BILL")}
                   >
-                    <Trash2 />
+                    <span className="acc-ledger-date">{shortDate(line.date)}</span>
+                    <span className="acc-ledger-detail">
+                      <span className="acc-ledger-kind-icon">{line.kind === "BILL" ? <ReceiptText /> : <ArrowDownLeft />}</span>
+                      <span>
+                        <strong>{line.kind === "BILL" ? line.ref : line.detail.split(" · ")[0]}</strong>
+                        <small>{line.kind === "BILL" ? line.detail : line.detail.split(" · ").slice(1).join(" · ") || line.ref}</small>
+                        {line.kind === "BILL" && line.transportCharge ? (
+                          <em className="acc-ledger-transport">Transport {inr(line.transportCharge)}</em>
+                        ) : null}
+                      </span>
+                    </span>
+                    <span className="acc-ledger-money is-debit">
+                      <small>Debit</small>
+                      <b>{line.debit ? inr(line.debit) : "—"}</b>
+                    </span>
+                    <span className={clsx("acc-ledger-money is-credit", line.credit > 0 && "has-value")}>
+                      <small>Credit</small>
+                      <b>{line.credit ? inr(line.credit) : "—"}</b>
+                    </span>
+                    <span className="acc-ledger-money is-balance">
+                      <small>Balance</small>
+                      <b className={clsx(line.balance > 0 ? "is-red" : "is-green")}>{inr(line.balance)}</b>
+                    </span>
                   </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+                  {isAdmin && line.kind === "PAYMENT" && !line.saleId ? (
+                    <button
+                      type="button"
+                      className="acc-icon-btn is-small acc-ledger-delete"
+                      aria-label="Delete payment"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete this payment of ${inr(line.credit)}?`)) return;
+                        try {
+                          await accApi.deletePayment(line.id);
+                          toast("Payment deleted");
+                          void load();
+                        } catch (err) {
+                          toast(errorText(err), { tone: "error" });
+                        }
+                      }}
+                    >
+                      <Trash2 />
+                    </button>
+                  ) : <span className="acc-ledger-action-space" />}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : (
           <Empty title="No bills yet" />
         )
@@ -712,6 +732,7 @@ export function AccCustomerPage() {
                     <small>
                       {shortDate(b.saleDate)} · {b.ageDays} days old
                       {b.dueDate ? ` · pay by ${shortDate(b.dueDate)}` : ""}
+                      {b.transportCharge ? ` · transport ${inr(b.transportCharge)}` : ""}
                     </small>
                   </span>
                   <span className="acc-row-amt">
@@ -742,6 +763,34 @@ export function AccCustomerPage() {
       ) : (
         <Empty title="Nothing bought yet" />
       )}
+        </main>
+
+        <aside className="acc-customer-account-summary">
+          <div className="acc-customer-account-balance">
+            <small>{data.balance < 0 ? "Advance available" : "Current balance"}</small>
+            <strong className={clsx(data.balance > 0 ? "is-red" : "is-green")}>
+              {data.balance < 0 ? inr(-data.balance) : inr(data.balance)}
+            </strong>
+            <span>{data.balance > 0 ? "Customer has to pay you" : data.balance < 0 ? "Available for future bills" : "Nothing is pending"}</span>
+          </div>
+          <div className="acc-customer-account-totals">
+            <div><span>Total billed</span><b>{inr(data.billed)}</b></div>
+            <div><span>Total received</span><b className="is-green">{inr(data.paid)}</b></div>
+            <div><span>Overdue</span><b className={clsx(data.overdue > 0 && "is-red")}>{inr(data.overdue)}</b></div>
+            <div><span>Wholesale bills</span><b>{data.billCount}</b></div>
+          </div>
+          {data.creditLimit > 0 ? (
+            <div className={clsx("acc-customer-credit-limit", data.balance > data.creditLimit && "is-over")}>
+              <span>Credit limit</span>
+              <b>{inr(data.creditLimit)}</b>
+              {data.balance > data.creditLimit ? <small>Limit exceeded by {inr(data.balance - data.creditLimit)}</small> : null}
+            </div>
+          ) : null}
+          <button type="button" className="acc-btn is-primary is-block" onClick={() => setPaying(true)}>
+            <Wallet /> Receive payment
+          </button>
+        </aside>
+      </div>
 
       <PaymentSheet
         customer={paying ? data : null}
