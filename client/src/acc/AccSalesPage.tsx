@@ -53,7 +53,10 @@ export function AccSalesPage() {
     <div className="acc-page">
       <div className="acc-title-row">
         <h1>Sales</h1>
-        <PdfButton onDownload={() => accApi.pdf.sales({ ...period, kind, items: true, q: q.trim() })} />
+        <PdfButton
+          onDownload={() => accApi.pdf.sales({ ...period, kind, items: true, q: q.trim() })}
+          onShare={() => accApi.sharePdf.sales({ ...period, kind, items: true, q: q.trim() })}
+        />
       </div>
       <PeriodChips value={period} onChange={setPeriod} />
       <Segmented
@@ -277,7 +280,7 @@ export function SaleSheet({
       subtitle={`${sale.kind === "WHOLESALE" ? "Wholesale" : "Retail"} · ${dateTime(sale.saleDate)}${sale.createdByName ? ` · ${sale.createdByName}` : ""}`}
       footer={
         <div className="acc-btn-row">
-          <PdfButton label="Bill PDF" onDownload={() => accApi.pdf.bill(sale.id)} />
+          <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(sale.id)} onShare={() => accApi.sharePdf.bill(sale.id)} />
           {!sale.voidedAt ? (
             <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
               <Ban /> Cancel bill

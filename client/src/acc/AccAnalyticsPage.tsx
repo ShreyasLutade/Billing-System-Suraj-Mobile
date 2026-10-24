@@ -29,7 +29,7 @@ export function AccAnalyticsPage() {
     <div className="acc-page acc-analytics">
       <div className="acc-title-row">
         <h1>Analytics</h1>
-        <PdfButton label="Report" onDownload={() => accApi.pdf.analytics(period)} />
+        <PdfButton label="Report" onDownload={() => accApi.pdf.analytics(period)} onShare={() => accApi.sharePdf.analytics(period)} />
       </div>
       <PeriodChips value={period} onChange={setPeriod} />
 

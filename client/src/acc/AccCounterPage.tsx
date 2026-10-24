@@ -22,7 +22,7 @@ import {
 
 /**
  * Counter: quick retail billing. Favourite products sit in tiles by
- * category → product (e.g. Cover → Silicone Cover). Tap a product, tap a
+ * category → type or brand → product (e.g. Cable → boAt → …). Tap a product, tap a
  * price, Sell. The phone brand is optional and only keeps the stock
  * breakdown in step. Several items can go in a cart for one customer.
  */
@@ -68,11 +68,23 @@ function matches(product: AccProduct, tokens: string[]) {
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
+/** Empty brand/type bucket on the counter. */
+function drillRaw(p: AccProduct, drillBy: "TYPE" | "BRAND") {
+  return (drillBy === "BRAND" ? p.brand : p.type).trim();
+}
+
+function drillLabel(raw: string, drillBy: "TYPE" | "BRAND") {
+  if (raw) return raw;
+  return drillBy === "BRAND" ? "Local" : "General";
+}
+
 export function AccCounterPage() {
   const { catalog, error } = useAccCatalog();
   const [showAll, setShowAll] = useState(() => readLocal(SHOW_ALL_KEY, false));
   const [payMode, setPayMode] = useState<PayMode>(() => readLocal(PAY_KEY, "CASH"));
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  /** Raw type/brand key within the open category ("" = Local / General). */
+  const [drillKey, setDrillKey] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selling, setSelling] = useState<AccProduct | null>(null);
   const [cart, setCart] = useState<CartLine[]>(() => readLocal(CART_KEY, [], sessionStorage));
@@ -124,17 +136,43 @@ export function AccCounterPage() {
     [pool, category],
   );
 
-  const productList = useMemo(
-    () => [...inCategory].sort((a, b) => collator.compare(a.name, b.name)),
-    [inCategory],
-  );
+  const drillBy = category?.drillBy ?? "TYPE";
+
+  const drillTiles = useMemo(() => {
+    if (!category) return [];
+    const map = new Map<string, number>();
+    for (const p of inCategory) {
+      const raw = drillRaw(p, drillBy);
+      map.set(raw, (map.get(raw) || 0) + 1);
+    }
+    return [...map.entries()]
+      .map(([raw, count]) => ({ raw, label: drillLabel(raw, drillBy), count }))
+      .sort((a, b) => collator.compare(a.label, b.label));
+  }, [inCategory, category, drillBy]);
+
+  const productList = useMemo(() => {
+    if (!category || drillKey === null) return [];
+    return inCategory
+      .filter((p) => drillRaw(p, drillBy) === drillKey)
+      .sort((a, b) => collator.compare(a.name, b.name));
+  }, [inCategory, category, drillKey, drillBy]);
 
   function openCategory(id: string) {
     setCategoryId(id);
+    setDrillKey(null);
+  }
+
+  function openDrill(raw: string) {
+    setDrillKey(raw);
   }
 
   function goHome() {
     setCategoryId(null);
+    setDrillKey(null);
+  }
+
+  function goCategory() {
+    setDrillKey(null);
   }
 
   const cartTotal = cart.reduce((a, l) => a + l.qty * l.rate, 0);
@@ -151,7 +189,8 @@ export function AccCounterPage() {
   }
 
   const showingSearch = tokens.length > 0;
-  const level: "home" | "products" = !category ? "home" : "products";
+  const level: "home" | "drill" | "products" = !category ? "home" : drillKey === null ? "drill" : "products";
+  const drillCrumb = drillKey === null ? null : drillLabel(drillKey, drillBy);
 
   return (
     <div className="acc-page acc-counter">
@@ -185,8 +224,16 @@ export function AccCounterPage() {
             {category ? (
               <>
                 <ChevronRight aria-hidden />
-                <button type="button" className="is-on">
+                <button type="button" className={clsx(level === "drill" && "is-on")} onClick={goCategory}>
                   {category.name}
+                </button>
+              </>
+            ) : null}
+            {drillCrumb ? (
+              <>
+                <ChevronRight aria-hidden />
+                <button type="button" className="is-on">
+                  {drillCrumb}
                 </button>
               </>
             ) : null}
@@ -252,6 +299,23 @@ export function AccCounterPage() {
                 <Plus /> Add your first stock
               </Link>
             )}
+          </Empty>
+        )
+      ) : level === "drill" ? (
+        drillTiles.length ? (
+          <div className="acc-tiles">
+            {drillTiles.map(({ raw, label, count }) => (
+              <button key={raw || "__empty"} type="button" className="acc-tile is-group" onClick={() => openDrill(raw)}>
+                <strong>{label}</strong>
+                <small>{plural(count, "item")}</small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <Empty title="Nothing in this category">
+            <Link to="/acc/stock/in" className="acc-btn">
+              <Plus /> Add stock
+            </Link>
           </Empty>
         )
       ) : (

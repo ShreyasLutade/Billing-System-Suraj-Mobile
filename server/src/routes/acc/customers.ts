@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { round2 } from "../../lib/accShop";
 import { istDateString } from "../../lib/ist";
 import { customerBalances, duesList, serializeDueRow, type DueFilter } from "../../services/accDues";
-import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfRow } from "../../services/accPdf";
+import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfCol, type PdfRow } from "../../services/accPdf";
 import { money } from "../../services/pdf";
 
 export const accCustomersRouter = Router();
@@ -406,142 +406,93 @@ accCustomersRouter.get("/dues", async (req, res, next) => {
 
 accCustomersRouter.get("/dues/pdf", async (req, res, next) => {
   try {
-    const filter = dueFilter(req.query);
-    const byGroup = req.query.groupBy !== "none";
-    const showBills = req.query.bills === "1";
+    const selectedGroupIds = typeof req.query.groupIds === "string" ? req.query.groupIds.split(",").filter(Boolean) : [];
+    const filter = { ...dueFilter(req.query), groupIds: selectedGroupIds.length ? selectedGroupIds : undefined };
+    const selectedColumns = new Set(String(req.query.columns || "shop,phone,overdue").split(","));
+    const showShop = selectedColumns.has("shop");
+    const showPhone = selectedColumns.has("phone");
+    const showOverdue = selectedColumns.has("overdue");
     const rows = await duesList(filter);
-    if (byGroup) {
-      rows.sort(
-        (a, b) =>
-          (a.customer.group?.name || "~").localeCompare(b.customer.group?.name || "~") || b.bal.balance - a.bal.balance,
-      );
-    }
+    rows.sort((a, b) => (a.customer.group?.name || "~").localeCompare(b.customer.group?.name || "~"));
 
     const pdfRows: PdfRow[] = [];
     let group: string | null = null;
-    let gt = { billed: 0, paid: 0, balance: 0, overdue: 0, a: 0, b: 0, c: 0, n: 0 };
-    const flush = () => {
-      if (group === null || !byGroup) return;
-      pdfRows.push({
-        kind: "subtotal",
-        cells: {
-          name: `${group} · ${gt.n} customers`,
-          billed: money(gt.billed),
-          paid: money(gt.paid),
-          balance: money(gt.balance),
-          a: money(gt.a),
-          b: money(gt.b),
-          c: money(gt.c),
-        },
-      });
-    };
-    const totals = { billed: 0, paid: 0, balance: 0, overdue: 0, a: 0, b: 0, c: 0 };
+    let serial = 0;
+    const totals = { billed: 0, paid: 0, balance: 0, overdue: 0 };
     for (const { customer, bal } of rows) {
       const name = customer.group?.name || "No group";
-      if (byGroup && name !== group) {
-        flush();
+      if (name !== group) {
         group = name;
-        gt = { billed: 0, paid: 0, balance: 0, overdue: 0, a: 0, b: 0, c: 0, n: 0 };
-        pdfRows.push({ kind: "group", cells: { name: name.toUpperCase() } });
+        serial = 0;
+        pdfRows.push({ kind: "group", cells: { name } });
       }
       const paid = round2(bal.paidAtBill + bal.paidLater);
-      const a = bal.aging.d0_30;
-      const b = bal.aging.d31_60;
-      const c = round2(bal.aging.d61_90 + bal.aging.d90p);
-      for (const [k, v] of Object.entries({ billed: bal.billed, paid, balance: bal.balance, overdue: bal.overdue, a, b, c })) {
-        totals[k as keyof typeof totals] = round2(totals[k as keyof typeof totals] + v);
-        gt[k as keyof typeof gt] = round2(gt[k as keyof typeof gt] + v);
+      for (const [key, value] of Object.entries({ billed: bal.billed, paid, balance: bal.balance, overdue: bal.overdue })) {
+        const k = key as keyof typeof totals;
+        totals[k] = round2(totals[k] + value);
       }
-      gt.n += 1;
+      serial += 1;
       pdfRows.push({
         cells: {
+          serial: String(serial),
           name: customer.name,
-          phone: customer.phone,
-          last: pdfDay(bal.lastSaleAt),
-          billed: money(bal.billed),
+          phone: showPhone ? customer.phone : "",
           paid: money(paid),
           balance: money(bal.balance),
-          a: a ? money(a) : "",
-          b: b ? money(b) : "",
-          c: c ? money(c) : "",
-          oldest: bal.oldestOpen ? `${bal.oldestOpen.ageDays}d` : "",
+          overdue: showOverdue && bal.overdue ? money(bal.overdue) : "",
         },
-        sub: {
-          name: [customer.shopName, customer.city].filter(Boolean).join(" · "),
-          last: bal.lastPaymentAt ? `Paid ${pdfDay(bal.lastPaymentAt)}` : "",
-          balance: bal.overdue ? `Overdue ${money(bal.overdue)}` : "",
-          oldest: bal.oldestOpen?.number || "",
+        sub: showShop ? { name: [customer.shopName, customer.address, customer.city].filter(Boolean).join(" · ") } : undefined,
+        color: {
+          balance: bal.balance > 0 ? PDF_TONE.red : PDF_TONE.green,
+          overdue: PDF_TONE.amber,
         },
-        color: { balance: bal.balance > 0 ? PDF_TONE.red : PDF_TONE.green, c: PDF_TONE.red, b: PDF_TONE.amber },
       });
-      if (showBills) {
-        for (const bill of bal.openBills) {
-          pdfRows.push({
-            cells: {
-              name: `   ${bill.number}`,
-              last: pdfDay(bill.saleDate),
-              billed: money(bill.total),
-              balance: money(bill.open),
-              oldest: `${bill.ageDays}d`,
-            },
-            sub: { name: bill.dueDate ? `   Pay by ${pdfDay(bill.dueDate)}` : "" },
-          });
-        }
-      }
     }
-    flush();
 
-    const groupName =
-      filter.groupId === "none"
-        ? "No group"
-        : filter.groupId
-          ? (await prisma.accCustomerGroup.findUnique({ where: { id: filter.groupId } }))?.name
-          : "All groups";
+    let groupName = "All groups";
+    if (selectedGroupIds.length === 1) {
+      groupName =
+        selectedGroupIds[0] === "none"
+          ? "No group"
+          : (await prisma.accCustomerGroup.findUnique({ where: { id: selectedGroupIds[0] } }))?.name || "Selected group";
+    } else if (selectedGroupIds.length > 1) {
+      groupName = `${selectedGroupIds.length} selected groups`;
+    } else if (filter.groupId === "none") {
+      groupName = "No group";
+    } else if (filter.groupId) {
+      groupName = (await prisma.accCustomerGroup.findUnique({ where: { id: filter.groupId } }))?.name || "Selected group";
+    }
     const statusLabel = { all: "All customers", due: "With balance", overdue: "Overdue only", clear: "Cleared" }[
       filter.status || "due"
     ];
+    const columns: PdfCol[] = [
+      { key: "serial", label: "S.No.", width: 7, align: "center" },
+      { key: "name", label: "Customer", width: showPhone ? 32 : 44 },
+    ];
+    if (showPhone) columns.push({ key: "phone", label: "Phone", width: 17 });
+    columns.push({ key: "paid", label: "Total paid", width: 16, align: "right" });
+    columns.push({ key: "balance", label: "Pending due", width: 17, align: "right" });
+    if (showOverdue) columns.push({ key: "overdue", label: "Overdue", width: 13, align: "right" });
     const pdf = await renderAccPdf({
       title: "Wholesale dues",
       subtitle: `${groupName} · ${statusLabel} · as of ${pdfDay(new Date())}`,
-      landscape: true,
-      summary: [
-        { label: "Customers", value: String(rows.length) },
-        { label: "Total outstanding", value: rs(totals.balance), tone: "red" },
-        { label: "Overdue", value: rs(totals.overdue), tone: "amber" },
-        { label: "0–30 days", value: rs(totals.a) },
-        { label: "31–60 days", value: rs(totals.b), tone: "amber" },
-        { label: "Over 60 days", value: rs(totals.c), tone: "red" },
-        { label: "Total billed", value: rs(totals.billed), tone: "blue" },
-        { label: "Total received", value: rs(totals.paid), tone: "green" },
-      ],
       sections: [
         {
-          columns: [
-            { key: "name", label: "Customer", width: 22 },
-            { key: "phone", label: "Phone", width: 10 },
-            { key: "last", label: "Last bill", width: 11 },
-            { key: "billed", label: "Billed", width: 10, align: "right" },
-            { key: "paid", label: "Received", width: 10, align: "right" },
-            { key: "balance", label: "Balance", width: 11, align: "right" },
-            { key: "a", label: "0–30 d", width: 8, align: "right" },
-            { key: "b", label: "31–60 d", width: 8, align: "right" },
-            { key: "c", label: "60+ d", width: 8, align: "right" },
-            { key: "oldest", label: "Oldest", width: 7, align: "right" },
-          ],
+          columns,
           rows: pdfRows,
           total: {
-            name: `Total · ${rows.length} customers`,
-            billed: money(totals.billed),
+            name: `Grand total · ${rows.length} customers`,
             paid: money(totals.paid),
             balance: money(totals.balance),
-            a: money(totals.a),
-            b: money(totals.b),
-            c: money(totals.c),
+            overdue: showOverdue ? money(totals.overdue) : "",
           },
           empty: "No customers for this filter.",
         },
       ],
-      footNote: "Payments clear the oldest bills first. Age = days since the bill.",
+      notes: [
+        `Customers: ${rows.length}   ·   Total billed: ${rs(totals.billed)}   ·   Total received: ${rs(totals.paid)}   ·   Total dues: ${rs(totals.balance)}${showOverdue ? `   ·   Overdue: ${rs(totals.overdue)}` : ""}`,
+      ],
+      footNote: "Staff collection list · amounts shown are current as of the report date.",
     });
     sendPdf(res, pdf, `accessories-dues-${istDateString()}.pdf`);
   } catch (error) {

@@ -97,8 +97,8 @@ export function AccDuesPage() {
       <div className="acc-title-row">
         <h1>Dues</h1>
         <div className="acc-head-actions">
-          <button type="button" className="acc-btn" onClick={() => setPdfOpen(true)}>
-            <FileDown /> PDF
+          <button type="button" className="acc-icon-btn" onClick={() => setPdfOpen(true)} aria-label="Download or share dues" title="Download or share">
+            <FileDown />
           </button>
           <button type="button" className="acc-btn is-primary" onClick={() => setAdding(true)}>
             <UserPlus /> Customer
@@ -307,53 +307,45 @@ function DuesPdfSheet({
   initialStatus: Status;
   sort: Sort;
 }) {
-  const [groupId, setGroupId] = useState(initialGroup);
-  const [status, setStatus] = useState<Status>(initialStatus);
-  const [byGroup, setByGroup] = useState(true);
-  const [bills, setBills] = useState(false);
+  const [groupIds, setGroupIds] = useState<string[]>(initialGroup ? [initialGroup] : []);
+  const [showAllGroups, setShowAllGroups] = useState(false);
   useEffect(() => {
     if (open) {
-      setGroupId(initialGroup);
-      setStatus(initialStatus);
+      setGroupIds(initialGroup ? [initialGroup] : []);
+      setShowAllGroups(false);
     }
-  }, [open, initialGroup, initialStatus]);
+  }, [open, initialGroup, initialStatus, sort]);
+  const visibleGroups = showAllGroups ? groups : groups.slice(0, 3);
+  const hiddenSelected = groups.slice(3).filter((group) => groupIds.includes(group.id)).length;
+  const pdfQuery = { groupIds: groupIds.join(","), status: initialStatus, sort };
+  const toggleGroup = (id: string) =>
+    setGroupIds((current) => (current.includes(id) ? current.filter((groupId) => groupId !== id) : [...current, id]));
   return (
-    <Sheet open={open} onClose={onClose} title="Dues PDF" subtitle="Choose what goes in the report">
+    <Sheet open={open} onClose={onClose} title="Dues PDF" subtitle="Create a clear collection list for staff">
       <div className="acc-field">
-        <span>Group</span>
+        <span>Which groups?</span>
         <div className="acc-chips">
-          <button type="button" className={clsx("acc-chip", !groupId && "is-on")} onClick={() => setGroupId("")}>
+          <button type="button" className={clsx("acc-chip", !groupIds.length && "is-on")} onClick={() => setGroupIds([])}>
             All groups
           </button>
-          {groups.map((g) => (
-            <button key={g.id} type="button" className={clsx("acc-chip", groupId === g.id && "is-on")} onClick={() => setGroupId(g.id)}>
+          {visibleGroups.map((g) => (
+            <button key={g.id} type="button" className={clsx("acc-chip", groupIds.includes(g.id) && "is-on")} onClick={() => toggleGroup(g.id)}>
               <i className="acc-dot" style={{ background: g.color }} /> {g.name}
             </button>
           ))}
+          {groups.length > 3 ? (
+            <button type="button" className="acc-chip" onClick={() => setShowAllGroups((value) => !value)}>
+              {showAllGroups ? "Show less" : `Show ${groups.length - 3} more${hiddenSelected ? ` · ${hiddenSelected} selected` : ""}`}
+            </button>
+          ) : null}
         </div>
       </div>
-      <div className="acc-field">
-        <span>Customers</span>
-        <Segmented
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: "due", label: "With balance" },
-            { value: "overdue", label: "Overdue" },
-            { value: "all", label: "All" },
-          ]}
-        />
-      </div>
-      <label className="acc-check">
-        <input type="checkbox" checked={byGroup} onChange={(e) => setByGroup(e.target.checked)} /> Group-wise with subtotals
-      </label>
-      <label className="acc-check">
-        <input type="checkbox" checked={bills} onChange={(e) => setBills(e.target.checked)} /> List each unpaid bill
-      </label>
+      <p className="acc-hint">The PDF is grouped automatically and shows each customer’s total paid and pending due.</p>
       <PdfButton
-        className="is-block"
-        label="Download dues PDF"
-        onDownload={() => accApi.pdf.dues({ groupId, status, sort, groupBy: byGroup ? "group" : "none", bills })}
+        className="is-block has-action-labels"
+        actionLabels
+        onDownload={() => accApi.pdf.dues(pdfQuery)}
+        onShare={() => accApi.sharePdf.dues(pdfQuery)}
       />
     </Sheet>
   );
@@ -647,7 +639,7 @@ export function AccCustomerPage() {
           >
             <MessageCircle />
           </a>
-          <PdfButton label="Statement" onDownload={() => accApi.pdf.statement(data.id)} />
+          <PdfButton label="Statement" onDownload={() => accApi.pdf.statement(data.id)} onShare={() => accApi.sharePdf.statement(data.id)} />
         </div>
       </section>
 

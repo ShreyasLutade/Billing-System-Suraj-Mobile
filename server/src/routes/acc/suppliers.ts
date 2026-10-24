@@ -409,13 +409,15 @@ const purchaseSchema = z.object({
             .object({
               categoryId: z.string().min(1, "Choose a category"),
               name: z.string().trim().min(2, "Enter the product name").max(120),
+              brand: z.string().trim().max(40).optional().default(""),
               wholesalePrice: z.coerce.number().min(0).max(10_000_000).default(0),
             })
             .optional(),
           qty: z.coerce.number().int().min(1).max(1_000_000),
-          unitCost: z.coerce.number().min(0).max(10_000_000),
+          unitCost: z.coerce.number().gt(0, "Enter the cost price").max(10_000_000),
           /** Selling price: required for a new product, optional new MRP otherwise. */
           sellingPrice: z.coerce.number().min(0).max(10_000_000).optional(),
+          wholesalePrice: z.coerce.number().min(0).max(10_000_000).optional(),
         })
         .refine((i) => Boolean(i.productId) !== Boolean(i.newProduct), "Each item needs a product")
         .refine((i) => !i.newProduct || (i.sellingPrice || 0) > 0, "Enter the selling price for the new product"),
@@ -448,7 +450,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
       let supplierId = input.supplierId || null;
       if (!supplierId && input.supplier) supplierId = (await saveSupplier(tx, input.supplier)).id;
       // New products start at 0; this purchase is what stocks them.
-      const items: Array<{ productId: string; qty: number; unitCost: number; sellingPrice?: number }> = [];
+      const items: Array<{ productId: string; qty: number; unitCost: number; sellingPrice?: number; wholesalePrice?: number }> = [];
       for (const item of input.items) {
         let productId = item.productId;
         if (item.newProduct) {
@@ -456,6 +458,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
             data: {
               categoryId: item.newProduct.categoryId,
               name: item.newProduct.name,
+              brand: item.newProduct.brand?.trim() || "",
               purchasePrice: item.unitCost,
               sellingPrice: item.sellingPrice || 0,
               wholesalePrice: item.newProduct.wholesalePrice,
@@ -465,7 +468,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
           });
           productId = created.id;
         }
-        items.push({ productId: productId!, qty: item.qty, unitCost: item.unitCost, sellingPrice: item.sellingPrice });
+        items.push({ productId: productId!, qty: item.qty, unitCost: item.unitCost, sellingPrice: item.sellingPrice, wholesalePrice: item.wholesalePrice });
       }
       const total = round2(items.reduce((a, i) => a + i.qty * i.unitCost, 0));
       const created = await tx.accPurchase.create({
@@ -492,6 +495,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
             stockQty: { increment: item.qty },
             purchasePrice: cost,
             ...(item.sellingPrice ? { sellingPrice: item.sellingPrice } : {}),
+            ...(item.wholesalePrice ? { wholesalePrice: item.wholesalePrice } : {}),
           },
         });
         await tx.accStockMove.create({

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, FileDown, Info, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronRight, FileDown, Info, Loader2, Plus, Search, Share2, Trash2 } from "lucide-react";
 import { BackLink, SearchClearButton } from "../components/ui";
 import {
   accApi,
@@ -12,10 +12,10 @@ import {
   type AccSupplierInput,
 } from "./accApi";
 import {
-  CategoryIcon,
   Empty,
   PdfButton,
   Segmented,
+  Sheet,
   StockBadge,
   completePhone,
   errorText,
@@ -108,7 +108,7 @@ export function AccSuppliersPage() {
       <div className="acc-title-row">
         <h1>Suppliers</h1>
         <div className="acc-head-actions">
-          <PdfButton onDownload={() => accApi.pdf.suppliers()} />
+          <PdfButton onDownload={() => accApi.pdf.suppliers()} onShare={() => accApi.sharePdf.suppliers()} />
         </div>
       </div>
       <div className="acc-stat-strip">
@@ -177,7 +177,7 @@ export function AccSuppliersPage() {
                     </button>
                   </th>
                 ))}
-                <th className="is-icon">PDF</th>
+                <th className="is-icon" aria-label="Download or share"><FileDown /></th>
               </tr>
             </thead>
             <tbody>
@@ -238,27 +238,26 @@ export function AccSuppliersPage() {
 
 /** Statement PDF for one supplier, straight from the list. */
 function SupplierPdfIcon({ id, name }: { id: string; name: string }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"download" | "share" | null>(null);
+  const run = async (action: "download" | "share") => {
+    setBusy(action);
+    try {
+      await (action === "download" ? accApi.pdf.supplier(id) : accApi.sharePdf.supplier(id));
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) toast(errorText(err), { tone: "error" });
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
-    <button
-      type="button"
-      className="acc-icon-btn is-small"
-      aria-label={`${name} statement PDF`}
-      title="Statement PDF"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await accApi.pdf.supplier(id);
-        } catch (err) {
-          toast(errorText(err), { tone: "error" });
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      {busy ? <Loader2 className="acc-spin" /> : <FileDown />}
-    </button>
+    <div className="acc-pdf-actions">
+      <button type="button" className="acc-icon-btn is-small" aria-label={`Download ${name} statement`} title="Download" disabled={Boolean(busy)} onClick={() => void run("download")}>
+        {busy === "download" ? <Loader2 className="acc-spin" /> : <FileDown />}
+      </button>
+      <button type="button" className="acc-icon-btn is-small" aria-label={`Share ${name} statement`} title="Share" disabled={Boolean(busy)} onClick={() => void run("share")}>
+        {busy === "share" ? <Loader2 className="acc-spin" /> : <Share2 />}
+      </button>
+    </div>
   );
 }
 
@@ -293,11 +292,12 @@ function SupplierFields({
       <div className="acc-form-grid">
         <label className="acc-field">
           <span>Supplier name *</span>
-          <input value={value.name} onChange={(e) => set({ name: e.target.value })} placeholder="Business / dealer name" autoFocus />
+          <input data-stock-supplier-name value={value.name} onChange={(e) => set({ name: e.target.value })} placeholder="Business / dealer name" autoFocus />
         </label>
         <label className="acc-field">
           <span>Mobile *</span>
           <input
+            data-stock-supplier-phone
             inputMode="tel"
             value={value.phone}
             onChange={(e) => set({ phone: e.target.value })}
@@ -429,6 +429,7 @@ function SupplierChooser({
           <label className="acc-search is-in-card">
             <Search aria-hidden />
             <input
+              data-stock-supplier-search
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -490,17 +491,52 @@ type InLine = {
   key: string;
   product: AccProduct | null;
   /** Set for a product bought for the first time. */
-  draft: { categoryId: string; categoryName: string; name: string; wholesale: string } | null;
+  draft: { categoryId: string; categoryName: string; name: string; brand: string } | null;
   qty: string;
   cost: string;
   sell: string;
+  wholesale: string;
 };
 
-type NewProductForm = { categoryId: string; name: string; qty: string; cost: string; sell: string; wholesale: string };
+let stockSheetLineId = 0;
 
-const EMPTY_NEW_PRODUCT: NewProductForm = { categoryId: "", name: "", qty: "", cost: "", sell: "", wholesale: "" };
+function emptyStockSheetLine(): InLine {
+  stockSheetLineId += 1;
+  return {
+    key: `stock-sheet-${stockSheetLineId}`,
+    product: null,
+    draft: { categoryId: "", categoryName: "", name: "", brand: "" },
+    qty: "",
+    cost: "",
+    sell: "",
+    wholesale: "",
+  };
+}
+
+function productStockSheetLine(product: AccProduct): InLine {
+  return {
+    key: `stock-sheet-${product.id}-${++stockSheetLineId}`,
+    product,
+    draft: null,
+    qty: "",
+    cost: "",
+    sell: "",
+    wholesale: "",
+  };
+}
 
 const lineAmount = (l: InLine) => (Math.floor(Number(l.qty)) || 0) * (Number(l.cost) || 0);
+const isStockSheetLineActive = (line: InLine) =>
+  Boolean(
+    line.product ||
+      line.draft?.name.trim() ||
+      line.draft?.categoryId ||
+      (line.draft?.brand.trim() && line.draft.brand.trim().toLowerCase() !== "local") ||
+      line.wholesale ||
+      line.qty ||
+      line.cost ||
+      line.sell,
+  );
 
 /**
  * The only way stock comes in, so every piece is tracked to a supplier:
@@ -515,10 +551,7 @@ export function AccStockInPage() {
   const [supplierMode, setSupplierMode] = useState<"EXISTING" | "NEW">("EXISTING");
   const [supplierId, setSupplierId] = useState("");
   const [newSupplier, setNewSupplier] = useState<AccSupplierInput>(EMPTY_SUPPLIER);
-  const [itemMode, setItemMode] = useState<"EXISTING" | "NEW">("EXISTING");
-  /** What was typed in the product search, carried into New product. */
-  const [typedName, setTypedName] = useState("");
-  const [lines, setLines] = useState<InLine[]>([]);
+  const [lines, setLines] = useState<InLine[]>(() => Array.from({ length: 5 }, emptyStockSheetLine));
   const [paid, setPaid] = useState("");
   const [method, setMethod] = useState<"CASH" | "UPI" | "BANK">("CASH");
   const [busy, setBusy] = useState(false);
@@ -533,17 +566,6 @@ export function AccStockInPage() {
   const products = catalog?.products ?? [];
   const categories = catalog?.categories ?? [];
 
-  function addExisting(p: AccProduct) {
-    if (lines.some((l) => l.product?.id === p.id)) {
-      toast(`${p.name} is already on the list`);
-      return;
-    }
-    setLines((ls) => [
-      ...ls,
-      { key: p.id, product: p, draft: null, qty: "", cost: p.purchasePrice ? String(p.purchasePrice) : "", sell: "" },
-    ]);
-  }
-
   // "Add stock" on a supplier's page arrives with that supplier chosen.
   const presetSupplier = (location.state as { supplierId?: string } | null)?.supplierId;
   useEffect(() => {
@@ -555,34 +577,100 @@ export function AccStockInPage() {
   useEffect(() => {
     if (!preselect || !catalog) return;
     const p = catalog.products.find((x) => x.id === preselect);
-    if (p) setLines((ls) => (ls.some((l) => l.product?.id === p.id) ? ls : [...ls, { key: p.id, product: p, draft: null, qty: "", cost: p.purchasePrice ? String(p.purchasePrice) : "", sell: "" }]));
+    if (p)
+      setLines((current) => {
+        if (current.some((line) => line.product?.id === p.id)) return current;
+        const blankIndex = current.findIndex((line) => !line.product && !line.draft?.name.trim());
+        if (blankIndex < 0) return [...current, productStockSheetLine(p), emptyStockSheetLine()];
+        return current.map((line, index) => (index === blankIndex ? productStockSheetLine(p) : line));
+      });
     navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselect, catalog]);
 
-  const setLine = (key: string, patch: Partial<InLine>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
-
-  const total = lines.reduce((a, l) => a + lineAmount(l), 0);
-  const pieces = lines.reduce((a, l) => a + (Math.floor(Number(l.qty)) || 0), 0);
+  const enteredLines = lines.filter(isStockSheetLineActive);
+  const total = enteredLines.reduce((a, l) => a + lineAmount(l), 0);
+  const pieces = enteredLines.reduce((a, l) => a + (Math.floor(Number(l.qty)) || 0), 0);
   const paidNow = Math.min(Number(paid) || 0, total);
   const hasSupplier = supplierMode === "NEW" || Boolean(supplierId);
+
+  function choosePayment(nextMethod: "CASH" | "UPI" | "BANK") {
+    setMethod(nextMethod);
+    if (!(Number(paid) > 0)) setPaid(total > 0 ? String(total) : "");
+  }
+
+  function focusInvalid(selector: string, message: string) {
+    toast(message, { tone: "error" });
+    requestAnimationFrame(() => {
+      document.querySelectorAll("[data-stock-invalid]").forEach((element) => element.removeAttribute("data-stock-invalid"));
+      const target = document.querySelector<HTMLElement>(selector);
+      if (!target) return;
+      target.setAttribute("data-stock-invalid", "true");
+      const clear = () => target.removeAttribute("data-stock-invalid");
+      target.addEventListener("input", clear, { once: true });
+      target.addEventListener("change", clear, { once: true });
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    });
+  }
 
   async function save() {
     if (busy) return;
     const problem =
       supplierMode === "NEW" ? supplierProblem(newSupplier, suppliers) : supplierId ? "" : "Choose the supplier this stock came from";
     if (problem) {
-      toast(problem, { tone: "error" });
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const selector =
+        supplierMode === "NEW"
+          ? problem.toLowerCase().includes("name")
+            ? "[data-stock-supplier-name]"
+            : "[data-stock-supplier-phone]"
+          : "[data-stock-supplier-search]";
+      focusInvalid(selector, problem);
       return;
     }
-    if (!lines.length) {
-      toast("Add at least one product", { tone: "error" });
+    if (!enteredLines.length) {
+      focusInvalid('[data-stock-cell="0-1"]', "Add at least one product");
       return;
     }
-    const noQty = lines.find((l) => !(Math.floor(Number(l.qty)) >= 1));
-    if (noQty) {
-      toast(`Enter the quantity for ${noQty.product?.name || noQty.draft?.name}`, { tone: "error" });
+    const linesForSave = enteredLines.map((line) => {
+      const rowIndex = lines.indexOf(line);
+      if (line.product) return { line, rowIndex };
+      const sameName = products.filter((product) => product.name.trim().toLowerCase() === line.draft!.name.trim().toLowerCase());
+      const lineBrand = line.draft!.brand.trim().toLowerCase() || "local";
+      const exactExisting =
+        sameName.find((product) => (product.brand.trim().toLowerCase() || "local") === lineBrand) ||
+        (sameName.length === 1 ? sameName[0] : undefined);
+      return { line: exactExisting ? { ...line, product: exactExisting, draft: null } : line, rowIndex };
+    });
+    for (const { line, rowIndex } of linesForSave) {
+      if (!line.product && (line.draft?.name.trim().length || 0) < 2) {
+        focusInvalid(`[data-stock-cell="${rowIndex}-1"]`, `Enter the product name in row ${rowIndex + 1}`);
+        return;
+      }
+      if (!line.product && !line.draft?.categoryId) {
+        focusInvalid(`[data-stock-cell="${rowIndex}-2"]`, `Choose a category in row ${rowIndex + 1}`);
+        return;
+      }
+      if (!(Math.floor(Number(line.qty)) >= 1)) {
+        focusInvalid(`[data-stock-cell="${rowIndex}-3"]`, `Enter the quantity in row ${rowIndex + 1}`);
+        return;
+      }
+      if (!(Number(line.cost) > 0)) {
+        focusInvalid(`[data-stock-cell="${rowIndex}-4"]`, `Enter the cost price in row ${rowIndex + 1}`);
+        return;
+      }
+      if (!(Number(line.sell) > 0)) {
+        focusInvalid(`[data-stock-cell="${rowIndex}-5"]`, `Enter the selling price in row ${rowIndex + 1}`);
+        return;
+      }
+    }
+    const existingIds = linesForSave.flatMap(({ line }) => (line.product ? [line.product.id] : []));
+    if (new Set(existingIds).size !== existingIds.length) {
+      toast("The same existing product is entered more than once", { tone: "error" });
+      return;
+    }
+    if ((Number(paid) || 0) > total) {
+      toast("Paid amount cannot be more than the purchase total", { tone: "error" });
       return;
     }
     setBusy(true);
@@ -593,13 +681,21 @@ export function AccStockInPage() {
           : { supplierId }),
         paidNow,
         paidMethod: method,
-        items: lines.map((l) => ({
+        items: linesForSave.map(({ line: l }) => ({
           ...(l.product
             ? { productId: l.product.id }
-            : { newProduct: { categoryId: l.draft!.categoryId, name: l.draft!.name, wholesalePrice: Number(l.draft!.wholesale) || 0 } }),
+            : {
+                newProduct: {
+                  categoryId: l.draft!.categoryId,
+                  name: l.draft!.name,
+                  brand: l.draft!.brand.trim() || "Local",
+                  wholesalePrice: Number(l.wholesale) || 0,
+                },
+              }),
           qty: Math.floor(Number(l.qty)),
           unitCost: Number(l.cost) || 0,
           sellingPrice: Number(l.sell) || undefined,
+          ...(l.product && Number(l.wholesale) > 0 ? { wholesalePrice: Number(l.wholesale) } : {}),
         })),
       });
       toast(`Stock added: ${plural(pieces, "piece")}`);
@@ -615,177 +711,481 @@ export function AccStockInPage() {
   return (
     <div className="acc-page acc-add-stock">
       <BackLink to="/acc/stock">Stock</BackLink>
-      <h1 className="acc-h1">Add stock</h1>
+      <div className="acc-stock-header">
+        <div>
+          <h1 className="acc-h1">Add stock</h1>
+          <p>Choose a supplier, add products, and record the payment.</p>
+        </div>
+        <div className="acc-stock-header-total">
+          <span>Purchase total</span>
+          <b>{inr(total)}</b>
+          <small>{plural(pieces, "piece")}</small>
+        </div>
+      </div>
 
-      <section className="acc-card">
-        <StepTitle n={1} done={hasSupplier} title="Supplier" hint="Who did this stock come from?" />
-        <SupplierChooser
-          suppliers={suppliers}
-          mode={supplierMode}
-          onMode={setSupplierMode}
-          supplierId={supplierId}
-          onPick={setSupplierId}
-          draft={newSupplier}
-          onDraft={setNewSupplier}
-        />
-      </section>
+      <div className="acc-stock-workspace">
+        <div className="acc-stock-main">
+          <section className="acc-card acc-stock-step">
+            <StepTitle n={1} done={hasSupplier} title="Supplier" hint="Who did this stock come from?" />
+            <SupplierChooser
+              suppliers={suppliers}
+              mode={supplierMode}
+              onMode={setSupplierMode}
+              supplierId={supplierId}
+              onPick={setSupplierId}
+              draft={newSupplier}
+              onDraft={setNewSupplier}
+            />
+          </section>
 
-      <section className="acc-card">
-        <StepTitle n={2} done={lines.length > 0} title="Products" hint="Products already in the shop, or new ones" />
-        <Segmented
-          value={itemMode}
-          onChange={setItemMode}
-          options={[
-            { value: "EXISTING", label: "Existing product" },
-            { value: "NEW", label: "New product" },
-          ]}
-        />
-        {itemMode === "EXISTING" ? (
-          <ProductSearch
-            products={products}
-            onPick={addExisting}
-            onNotFound={(typed) => {
-              setTypedName(typed);
-              setItemMode("NEW");
-            }}
-          />
-        ) : (
-          <NewProductCard
-            initialName={typedName}
-            categories={categories}
-            products={products}
-            onAdd={(f) => {
-              const category = categories.find((c) => c.id === f.categoryId);
-              setLines((ls) => [
-                ...ls,
-                {
-                  key: `new-${Date.now()}`,
-                  product: null,
-                  draft: { categoryId: f.categoryId, categoryName: category?.name || "", name: f.name.trim(), wholesale: f.wholesale },
-                  qty: f.qty,
-                  cost: f.cost,
-                  sell: f.sell,
-                },
-              ]);
-              toast(`${f.name.trim()} added to the list`);
-            }}
-            onUseExisting={(p) => {
-              addExisting(p);
-              setItemMode("EXISTING");
-            }}
-          />
-        )}
+          <section className="acc-card acc-stock-step">
+            <StepTitle n={2} done={enteredLines.length > 0} title="Products" hint="Enter stock quickly, one row at a time" />
+            <BulkStockSheet products={products} categories={categories} lines={lines} onLines={setLines} />
+          </section>
+        </div>
 
-        {lines.length ? (
-          <ul className="acc-in-lines">
-            {lines.map((l) => (
-              <li key={l.key}>
-                <div className="acc-in-line-head">
-                  <span>
-                    <strong>{l.product?.name || l.draft?.name}</strong>
-                    <small>
-                      {l.product ? (
-                        <>
-                          {l.product.categoryName} · now {l.product.stockQty} pcs
-                        </>
-                      ) : (
-                        <>
-                          <em className="acc-new-tag">New</em> {l.draft?.categoryName}
-                        </>
-                      )}
-                    </small>
-                  </span>
-                  <b>{inr(lineAmount(l))}</b>
+        <aside className="acc-stock-payment">
+          <section className="acc-card acc-pay-card">
+            <StepTitle n={3} done={total > 0} title="Payment" hint="Record what you paid the supplier" />
+            <div className="acc-stock-summary">
+              <span>
+                <small>Items</small>
+                <b>{enteredLines.length}</b>
+              </span>
+              <span>
+                <small>Pieces</small>
+                <b>{pieces}</b>
+              </span>
+              <span className="is-total">
+                <small>Total</small>
+                <b>{inr(total)}</b>
+              </span>
+            </div>
+            <div className="acc-payment-options is-stock">
+              <StockPaymentOption
+                label="Pay later"
+                hint="Keep the full amount due"
+                tone="due"
+                checked={!paidNow}
+                onSelect={() => setPaid("")}
+              />
+              <StockPaymentOption
+                label="Cash"
+                hint="Paid from the cash counter"
+                tone="cash"
+                checked={paidNow > 0 && method === "CASH"}
+                onSelect={() => choosePayment("CASH")}
+                amount={paid}
+                total={total}
+                onAmount={setPaid}
+              />
+              <StockPaymentOption
+                label="UPI"
+                hint="Paid using a UPI app"
+                tone="online"
+                checked={paidNow > 0 && method === "UPI"}
+                onSelect={() => choosePayment("UPI")}
+                amount={paid}
+                total={total}
+                onAmount={setPaid}
+              />
+              <StockPaymentOption
+                label="Bank"
+                hint="Paid by bank transfer"
+                tone="online"
+                checked={paidNow > 0 && method === "BANK"}
+                onSelect={() => choosePayment("BANK")}
+                amount={paid}
+                total={total}
+                onAmount={setPaid}
+              />
+            </div>
+            <div className={clsx("acc-payment-result", total - paidNow > 0 ? "is-due" : "is-paid")}>
+              <span>{total - paidNow > 0 ? "Amount due to supplier" : "Fully paid"}</span>
+              <b>{inr(Math.max(total - paidNow, 0))}</b>
+            </div>
+            <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || !enteredLines.length}>
+              {busy ? <Loader2 className="acc-spin" /> : <Check />} Save stock · {inr(total)}
+            </button>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+const STOCK_SHEET_COLUMNS = 7;
+
+function BulkStockSheet({
+  products,
+  categories,
+  lines,
+  onLines,
+}: {
+  products: AccProduct[];
+  categories: AccCategory[];
+  lines: InLine[];
+  onLines: React.Dispatch<React.SetStateAction<InLine[]>>;
+}) {
+  const [suggestions, setSuggestions] = useState<{ row: number; kind: "brand" | "product" } | null>(null);
+  const [deleteLineKey, setDeleteLineKey] = useState<string | null>(null);
+  const brands = useMemo(
+    () => [...new Set(["Local", ...products.map((product) => product.brand.trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
+    [products],
+  );
+
+  function draftFor(line: InLine) {
+    if (line.draft) return line.draft;
+    return {
+      categoryId: line.product?.categoryId || "",
+      categoryName: line.product?.categoryName || "",
+      name: line.product?.name || "",
+      brand: line.product?.brand || "",
+    };
+  }
+
+  function changeLine(rowIndex: number, change: (line: InLine) => InLine, addTrailingRow = false) {
+    onLines((current) => {
+      const next = current.map((line, index) => (index === rowIndex ? change(line) : line));
+      if (addTrailingRow && rowIndex === next.length - 1) next.push(emptyStockSheetLine());
+      return next;
+    });
+  }
+
+  function changeDraft(rowIndex: number, patch: Partial<NonNullable<InLine["draft"]>>, addTrailingRow = false) {
+    changeLine(
+      rowIndex,
+      (line) => ({ ...line, product: null, draft: { ...draftFor(line), ...patch } }),
+      addTrailingRow,
+    );
+  }
+
+  function chooseProduct(rowIndex: number, product: AccProduct) {
+    onLines((current) => {
+      if (current.some((line, index) => index !== rowIndex && line.product?.id === product.id)) {
+        toast(`${product.name} is already in the sheet`);
+        return current;
+      }
+      const currentLine = current[rowIndex];
+      return current.map((line, index) =>
+        index === rowIndex
+          ? {
+              ...productStockSheetLine(product),
+              key: currentLine.key,
+              qty: currentLine.qty,
+              cost: currentLine.cost,
+            }
+          : line,
+      );
+    });
+    setSuggestions(null);
+    requestAnimationFrame(() => focusCell(rowIndex, 3));
+  }
+
+  function removeLine(key: string) {
+    onLines((current) => {
+      const remaining = current.filter((line) => line.key !== key);
+      return remaining.length ? remaining : [emptyStockSheetLine()];
+    });
+    setSuggestions(null);
+    setDeleteLineKey(null);
+  }
+
+  function focusCell(rowIndex: number, columnIndex: number) {
+    let nextRow = rowIndex;
+    let nextColumn = columnIndex;
+    if (nextColumn >= STOCK_SHEET_COLUMNS) {
+      nextRow += 1;
+      nextColumn = 0;
+      if (nextRow >= lines.length) onLines((current) => [...current, emptyStockSheetLine()]);
+    }
+    requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(`[data-stock-cell="${nextRow}-${nextColumn}"]`);
+      if (target instanceof HTMLSelectElement && target.disabled) {
+        focusCell(nextRow, nextColumn + 1);
+        return;
+      }
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    });
+  }
+
+  function nextButton(rowIndex: number, columnIndex: number) {
+    return (
+      <button
+        type="button"
+        className="acc-sheet-next"
+        tabIndex={-1}
+        aria-label="Go to next field"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          focusCell(rowIndex, columnIndex + 1);
+        }}
+      >
+        <ChevronRight />
+      </button>
+    );
+  }
+
+  return (
+    <div className="acc-bulk-stock">
+      <div className="acc-bulk-stock-note">
+        <span>Type a product and select a suggestion. If no match exists, it will be saved as a new product.</span>
+        <b>{lines.filter(isStockSheetLineActive).length} filled</b>
+      </div>
+      <div className="acc-stock-sheet-scroll">
+        <div className="acc-stock-sheet">
+          <div className="acc-stock-sheet-head" aria-hidden>
+            <span>Brand</span>
+            <span>Product name *</span>
+            <span>Category *</span>
+            <span>Qty *</span>
+            <span>Cost / pc ₹ *</span>
+            <span>Selling ₹ *</span>
+            <span>Wholesale ₹</span>
+            <span />
+          </div>
+          {lines.map((line, rowIndex) => {
+            const draft = draftFor(line);
+            const brandQuery = draft.brand.trim().toLowerCase();
+            const brandMatches = brands.filter((brand) => brand.toLowerCase().includes(brandQuery) && brand.toLowerCase() !== brandQuery).slice(0, 6);
+            const productQuery = (line.product?.name || draft.name).trim().toLowerCase();
+            const productMatches = productQuery
+              ? products
+                  .filter((product) => `${product.brand} ${product.name} ${product.model}`.toLowerCase().includes(productQuery))
+                  .sort((a, b) => Number(b.brand.toLowerCase() === brandQuery) - Number(a.brand.toLowerCase() === brandQuery))
+                  .slice(0, 7)
+              : [];
+            return (
+              <div className="acc-stock-sheet-row" key={line.key}>
+                <div className={clsx("acc-stock-sheet-cell", suggestions?.row === rowIndex && suggestions.kind === "brand" && "is-open")}>
+                  <input
+                    data-stock-cell={`${rowIndex}-0`}
+                    value={draft.brand}
+                    placeholder="Local"
+                    autoComplete="off"
+                    onFocus={(event) => event.currentTarget.select()}
+                    onChange={(event) => {
+                      changeDraft(rowIndex, { brand: event.target.value }, true);
+                      setSuggestions({ row: rowIndex, kind: "brand" });
+                    }}
+                    onBlur={() => setSuggestions(null)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        focusCell(rowIndex, 1);
+                      }
+                    }}
+                    aria-label={`Row ${rowIndex + 1} brand`}
+                  />
+                  {suggestions?.row === rowIndex && suggestions.kind === "brand" && brandMatches.length ? (
+                    <ul className="acc-sheet-suggestions">
+                      {brandMatches.map((brand) => (
+                        <li key={brand}>
+                          <button
+                            type="button"
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              changeDraft(rowIndex, { brand }, true);
+                              setSuggestions(null);
+                              focusCell(rowIndex, 1);
+                            }}
+                          >
+                            {brand}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {nextButton(rowIndex, 0)}
+                </div>
+                <div className={clsx("acc-stock-sheet-cell is-product", suggestions?.row === rowIndex && suggestions.kind === "product" && "is-open")}>
+                  <input
+                    data-stock-cell={`${rowIndex}-1`}
+                    value={line.product?.name || draft.name}
+                    placeholder="Type product name"
+                    autoComplete="off"
+                    onChange={(event) => {
+                      changeDraft(rowIndex, { name: event.target.value }, true);
+                      setSuggestions({ row: rowIndex, kind: "product" });
+                    }}
+                    onFocus={() => productQuery && setSuggestions({ row: rowIndex, kind: "product" })}
+                    onBlur={() => setSuggestions(null)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        if (productMatches.length) chooseProduct(rowIndex, productMatches[0]);
+                        else focusCell(rowIndex, 2);
+                      }
+                    }}
+                    aria-label={`Row ${rowIndex + 1} product name`}
+                  />
+                  {line.product ? <small className="acc-sheet-status is-existing">Existing · {line.product.stockQty} in stock</small> : draft.name.trim() ? <small className="acc-sheet-status">New product</small> : null}
+                  {suggestions?.row === rowIndex && suggestions.kind === "product" && productMatches.length ? (
+                    <ul className="acc-sheet-suggestions">
+                      {productMatches.map((product) => (
+                        <li key={product.id}>
+                          <button type="button" onPointerDown={(event) => { event.preventDefault(); chooseProduct(rowIndex, product); }}>
+                            <span><b>{product.name}</b><small>{product.brand || "Local"} · {product.categoryName}</small></span>
+                            <StockBadge qty={product.stockQty} low={product.lowStockAt} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {nextButton(rowIndex, 1)}
+                </div>
+                <div className="acc-stock-sheet-cell">
+                  <select
+                    data-stock-cell={`${rowIndex}-2`}
+                    value={line.product?.categoryId || draft.categoryId}
+                    disabled={Boolean(line.product)}
+                    onChange={(event) => {
+                      const category = categories.find((item) => item.id === event.target.value);
+                      changeDraft(rowIndex, { categoryId: event.target.value, categoryName: category?.name || "" });
+                    }}
+                    aria-label={`Row ${rowIndex + 1} category`}
+                  >
+                    <option value="">Choose</option>
+                    {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                  </select>
+                  {nextButton(rowIndex, 2)}
+                </div>
+                {[
+                  { value: line.qty, patch: "qty" as const, type: "numeric" as const, placeholder: "0" },
+                  { value: line.cost, patch: "cost" as const, type: "decimal" as const, placeholder: "0" },
+                  { value: line.sell, patch: "sell" as const, type: "decimal" as const, placeholder: "0" },
+                ].map((field, fieldIndex) => {
+                  const columnIndex = fieldIndex + 3;
+                  return (
+                    <div className="acc-stock-sheet-cell is-number" key={field.patch}>
+                      <input
+                        data-stock-cell={`${rowIndex}-${columnIndex}`}
+                        type="number"
+                        inputMode={field.type}
+                        min="0"
+                        value={field.value}
+                        placeholder={field.placeholder}
+                        onChange={(event) => changeLine(rowIndex, (current) => ({ ...current, [field.patch]: event.target.value }), true)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            focusCell(rowIndex, columnIndex + 1);
+                          }
+                        }}
+                        aria-label={`Row ${rowIndex + 1} ${field.patch}`}
+                      />
+                      {nextButton(rowIndex, columnIndex)}
+                    </div>
+                  );
+                })}
+                <div className="acc-stock-sheet-cell is-number">
+                  <input
+                    data-stock-cell={`${rowIndex}-6`}
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={line.wholesale}
+                    placeholder="0"
+                    onChange={(event) => changeLine(rowIndex, (current) => ({ ...current, wholesale: event.target.value }), true)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        focusCell(rowIndex, 7);
+                      }
+                    }}
+                    aria-label={`Row ${rowIndex + 1} wholesale price`}
+                  />
+                  {nextButton(rowIndex, 6)}
+                </div>
+                <div className="acc-stock-sheet-action">
+                  <b>{lineAmount(line) ? inr(lineAmount(line)) : `#${rowIndex + 1}`}</b>
                   <button
                     type="button"
-                    className="acc-icon-btn is-small"
-                    onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
-                    aria-label={`Remove ${l.product?.name || l.draft?.name}`}
+                    aria-label={`Delete row ${rowIndex + 1}`}
+                    onClick={() => {
+                      if (isStockSheetLineActive(line)) setDeleteLineKey(line.key);
+                      else removeLine(line.key);
+                    }}
                   >
                     <Trash2 />
                   </button>
                 </div>
-                <div className="acc-form-grid is-3">
-                  <label className="acc-field">
-                    <span>Qty *</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={l.qty}
-                      placeholder="0"
-                      onChange={(e) => setLine(l.key, { qty: e.target.value })}
-                      autoFocus={!l.qty}
-                    />
-                  </label>
-                  <label className="acc-field">
-                    <span>Cost ₹</span>
-                    <input type="number" inputMode="decimal" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} />
-                  </label>
-                  <label className="acc-field">
-                    <span>{l.product ? "New MRP ₹" : "Selling ₹"}</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={l.sell}
-                      placeholder={l.product ? String(l.product.sellingPrice) : ""}
-                      onChange={(e) => setLine(l.key, { sell: e.target.value })}
-                    />
-                  </label>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="acc-hint">Nothing added yet. Search a product above, or switch to New product.</p>
-        )}
-      </section>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <button type="button" className="acc-btn is-ghost acc-sheet-add-rows" onClick={() => onLines((current) => [...current, ...Array.from({ length: 5 }, emptyStockSheetLine)])}>
+        <Plus /> Add 5 rows
+      </button>
+      <Sheet
+        open={Boolean(deleteLineKey)}
+        onClose={() => setDeleteLineKey(null)}
+        title="Delete this row?"
+        subtitle="This row has information entered in it."
+      >
+        <div className="acc-confirm-actions">
+          <button type="button" className="acc-btn is-ghost" onClick={() => setDeleteLineKey(null)}>
+            Keep row
+          </button>
+          <button type="button" className="acc-btn is-danger" onClick={() => deleteLineKey && removeLine(deleteLineKey)}>
+            <Trash2 /> Delete row
+          </button>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
 
-      <section className="acc-card acc-pay-card">
-        <StepTitle n={3} done={false} title="Payment" hint="What did you pay the supplier now?" />
-        <div className="acc-kv">
-          <span>Products</span>
-          <b>
-            {lines.length} · {plural(pieces, "pc")}
-          </b>
-          <span>Bill total</span>
-          <b>{inr(total)}</b>
-        </div>
-        <div className="acc-form-grid">
-          <label className="acc-field">
-            <span>Paid now ₹</span>
-            <input type="number" inputMode="decimal" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder="0" />
-          </label>
-          <div className="acc-field">
-            <span>Paid by</span>
-            <Segmented
-              value={method}
-              onChange={setMethod}
-              options={[
-                { value: "CASH", label: "Cash" },
-                { value: "UPI", label: "UPI" },
-                { value: "BANK", label: "Bank" },
-              ]}
+function StockPaymentOption({
+  label,
+  hint,
+  tone,
+  checked,
+  onSelect,
+  amount,
+  total,
+  onAmount,
+}: {
+  label: string;
+  hint: string;
+  tone: "cash" | "online" | "due";
+  checked: boolean;
+  onSelect: () => void;
+  amount?: string;
+  total?: number;
+  onAmount?: (amount: string) => void;
+}) {
+  return (
+    <div className={clsx("acc-payment-option", `is-${tone}`, checked && "is-on")}>
+      <label>
+        <input type="radio" name="stock-payment" checked={checked} onChange={onSelect} />
+        <span>
+          <b>{label}</b>
+          <small>{hint}</small>
+        </span>
+      </label>
+      {checked && onAmount ? (
+        <div className="acc-payment-amount">
+          <span>Amount paid now</span>
+          <label>
+            <b>₹</b>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={total}
+              step="0.01"
+              value={amount || ""}
+              onChange={(event) => onAmount(event.target.value)}
+              onFocus={(event) => event.currentTarget.select()}
+              placeholder="0"
+              aria-label={`${label} amount`}
             />
-          </div>
+          </label>
         </div>
-        <div className="acc-chips">
-          <button type="button" className={clsx("acc-chip", !paidNow && "is-on")} onClick={() => setPaid("")}>
-            Pay later
-          </button>
-          <button type="button" className={clsx("acc-chip", total > 0 && paidNow === total && "is-on")} onClick={() => setPaid(String(total))}>
-            Paid in full
-          </button>
-        </div>
-        {total - paidNow > 0 ? (
-          <div className="acc-due-line">
-            <span>Still to pay supplier</span>
-            <b>{inr(total - paidNow)}</b>
-          </div>
-        ) : null}
-        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
-          {busy ? <Loader2 className="acc-spin" /> : <Check />} Add {plural(pieces, "piece")} to stock
-        </button>
-      </section>
+      ) : null}
     </div>
   );
 }
@@ -798,170 +1198,6 @@ function StepTitle({ n, done, title, hint }: { n: number; done: boolean; title: 
         <strong>{title}</strong>
         <small>{hint}</small>
       </span>
-    </div>
-  );
-}
-
-/** Type to find a product already in the shop; matches drop down. Low stock shows as quick picks. */
-function ProductSearch({
-  products,
-  onPick,
-  onNotFound,
-}: {
-  products: AccProduct[];
-  onPick: (p: AccProduct) => void;
-  onNotFound: (typed: string) => void;
-}) {
-  const [q, setQ] = useState("");
-  const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const results = tokens.length
-    ? products.filter((p) => tokens.every((t) => `${p.name} ${p.categoryName} ${p.barcode || ""}`.toLowerCase().includes(t))).slice(0, 8)
-    : [];
-  const low = products.filter((p) => p.stockQty <= 0 || (p.lowStockAt > 0 && p.stockQty <= p.lowStockAt)).slice(0, 12);
-  const pick = (p: AccProduct) => {
-    onPick(p);
-    setQ("");
-  };
-
-  return (
-    <>
-      <div className="acc-dropdown-wrap">
-        <label className="acc-search is-in-card">
-          <Search aria-hidden />
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Type product name…"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && results.length) pick(results[0]);
-            }}
-          />
-          <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
-        </label>
-        {tokens.length ? (
-          <ul className="acc-results acc-dropdown">
-            {results.map((p) => (
-              <li key={p.id}>
-                <button type="button" onClick={() => pick(p)}>
-                  <span>
-                    <strong>{p.name}</strong>
-                    <small>{p.categoryName}</small>
-                  </span>
-                  <StockBadge qty={p.stockQty} low={p.lowStockAt} />
-                </button>
-              </li>
-            ))}
-            {!results.length ? (
-              <li>
-                <button type="button" className="is-custom" onClick={() => onNotFound(q.trim())}>
-                  <Plus /> Not in the shop yet: add as new product
-                </button>
-              </li>
-            ) : null}
-          </ul>
-        ) : null}
-      </div>
-      {!tokens.length && low.length ? (
-        <div className="acc-field">
-          <span>Running low: tap to add</span>
-          <div className="acc-chips">
-            {low.map((p) => (
-              <button key={p.id} type="button" className="acc-chip" onClick={() => pick(p)}>
-                {p.name} <small>({p.stockQty})</small>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-/** A product bought for the first time: category, name, quantity and prices. */
-function NewProductCard({
-  initialName,
-  categories,
-  products,
-  onAdd,
-  onUseExisting,
-}: {
-  initialName: string;
-  categories: AccCategory[];
-  products: AccProduct[];
-  onAdd: (form: NewProductForm) => void;
-  onUseExisting: (p: AccProduct) => void;
-}) {
-  const [form, setForm] = useState<NewProductForm>({ ...EMPTY_NEW_PRODUCT, name: initialName });
-  const set = (patch: Partial<NewProductForm>) => setForm((f) => ({ ...f, ...patch }));
-  const name = form.name.trim().toLowerCase();
-  // Same name already in the shop: add stock to it instead of a duplicate.
-  const existing = name.length >= 3 ? products.find((p) => p.name.trim().toLowerCase() === name) : undefined;
-
-  function add() {
-    if (!form.categoryId) return toast("Choose a category", { tone: "error" });
-    if (form.name.trim().length < 2) return toast("Enter the product name", { tone: "error" });
-    if (existing) return toast(`${existing.name} is already in the shop`, { tone: "error" });
-    if (!(Math.floor(Number(form.qty)) >= 1)) return toast("Enter the quantity", { tone: "error" });
-    if (!(Number(form.sell) > 0)) return toast("Enter the selling price", { tone: "error" });
-    onAdd(form);
-    setForm({ ...EMPTY_NEW_PRODUCT, categoryId: form.categoryId });
-  }
-
-  return (
-    <div className="acc-new-product">
-      <div className="acc-field">
-        <span>Category *</span>
-        <div className="acc-chips">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={clsx("acc-chip", form.categoryId === c.id && "is-on")}
-              onClick={() => set({ categoryId: c.id })}
-            >
-              <CategoryIcon icon={c.icon} variant="3d" size="xs" />
-              {c.name}
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="acc-field">
-        <span>Product name *</span>
-        <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Silicone cover, Boat Type-C cable" />
-      </label>
-      {existing ? (
-        <div className="acc-phone-match" role="status">
-          <Info aria-hidden />
-          <span>
-            <b>{existing.name}</b> is already in the shop ({existing.stockQty} pcs)
-          </span>
-          <button type="button" className="acc-btn is-small" onClick={() => onUseExisting(existing)}>
-            Add stock to it
-          </button>
-        </div>
-      ) : null}
-      <div className="acc-form-grid is-4">
-        <label className="acc-field">
-          <span>Qty *</span>
-          <input type="number" inputMode="numeric" value={form.qty} onChange={(e) => set({ qty: e.target.value })} placeholder="0" />
-        </label>
-        <label className="acc-field">
-          <span>Cost ₹</span>
-          <input type="number" inputMode="decimal" value={form.cost} onChange={(e) => set({ cost: e.target.value })} />
-        </label>
-        <label className="acc-field">
-          <span>Selling ₹ *</span>
-          <input type="number" inputMode="decimal" value={form.sell} onChange={(e) => set({ sell: e.target.value })} />
-        </label>
-        <label className="acc-field">
-          <span>Wholesale ₹</span>
-          <input type="number" inputMode="decimal" value={form.wholesale} onChange={(e) => set({ wholesale: e.target.value })} />
-        </label>
-      </div>
-      <button type="button" className="acc-btn is-block" onClick={add}>
-        <Plus /> Add to list
-      </button>
     </div>
   );
 }

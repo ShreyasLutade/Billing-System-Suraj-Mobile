@@ -148,6 +148,7 @@ export async function customerBalances(customerIds?: string[], db: Db = prisma) 
 
 export type DueFilter = {
   groupId?: string;
+  groupIds?: string[];
   status?: "all" | "due" | "overdue" | "clear";
   q?: string;
   sort?: "balance" | "name" | "oldest" | "recent";
@@ -156,11 +157,21 @@ export type DueFilter = {
 /** Customers with their balances, filtered and sorted for the Dues page and PDF. */
 export async function duesList(filter: DueFilter) {
   const q = filter.q?.trim();
+  const groupWhere: Prisma.AccCustomerWhereInput = filter.groupIds?.length
+    ? filter.groupIds.includes("none")
+      ? { OR: [{ groupId: null }, { groupId: { in: filter.groupIds.filter((id) => id !== "none") } }] }
+      : { groupId: { in: filter.groupIds } }
+    : filter.groupId === "none"
+      ? { groupId: null }
+      : filter.groupId
+        ? { groupId: filter.groupId }
+        : {};
   const customers = await prisma.accCustomer.findMany({
     where: {
-      ...(filter.groupId === "none" ? { groupId: null } : filter.groupId ? { groupId: filter.groupId } : {}),
-      ...(q
-        ? {
+      AND: [
+        groupWhere,
+        q
+          ? {
             OR: [
               { name: { contains: q } },
               { phone: { contains: q } },
@@ -168,7 +179,8 @@ export async function duesList(filter: DueFilter) {
               { city: { contains: q } },
             ],
           }
-        : {}),
+          : {},
+      ],
     },
     include: { group: true },
   });

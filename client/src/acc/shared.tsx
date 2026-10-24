@@ -21,6 +21,7 @@ import {
   Package,
   Plug,
   Shield,
+  Share2,
   Smartphone,
   Speaker,
   Tablet,
@@ -571,33 +572,46 @@ export function PeriodChips({ value, onChange }: { value: PeriodQuery; onChange:
   );
 }
 
-/** Button that downloads a PDF; shows a spinner while the server builds it. */
+/** Paired download/share controls for a generated PDF. */
 export function PdfButton({
   onDownload,
-  label = "PDF",
+  onShare,
+  label,
+  actionLabels = false,
   className,
 }: {
   onDownload: () => Promise<void>;
+  onShare: () => Promise<void>;
   label?: string;
+  actionLabels?: boolean;
   className?: string;
 }) {
-  const [busy, setBusy] = useState(false);
-  const run = useCallback(async () => {
+  const [busy, setBusy] = useState<"download" | "share" | null>(null);
+  const run = useCallback(async (action: "download" | "share") => {
     if (busy) return;
-    setBusy(true);
+    setBusy(action);
     try {
-      await onDownload();
+      await (action === "download" ? onDownload() : onShare());
     } catch (err) {
-      toast(errorText(err), { tone: "error" });
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        toast(errorText(err), { tone: "error" });
+      }
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
-  }, [busy, onDownload]);
+  }, [busy, onDownload, onShare]);
   return (
-    <button type="button" className={clsx("acc-btn", className)} onClick={run} disabled={busy}>
-      {busy ? <Loader2 className="acc-spin" /> : <FileDown />}
-      {label}
-    </button>
+    <div className={clsx("acc-pdf-actions", className)}>
+      {label ? <span>{label.replace(/\s*PDF\s*/gi, " ").trim()}</span> : null}
+      <button type="button" className="acc-icon-btn" onClick={() => void run("download")} disabled={Boolean(busy)} aria-label={`Download${label ? ` ${label}` : " PDF"}`} title="Download">
+        {busy === "download" ? <Loader2 className="acc-spin" /> : <FileDown />}
+        {actionLabels ? <span>{busy === "download" ? "Preparing…" : "Download"}</span> : null}
+      </button>
+      <button type="button" className="acc-icon-btn" onClick={() => void run("share")} disabled={Boolean(busy)} aria-label={`Share${label ? ` ${label}` : " PDF"}`} title="Share">
+        {busy === "share" ? <Loader2 className="acc-spin" /> : <Share2 />}
+        {actionLabels ? <span>{busy === "share" ? "Preparing…" : "Share"}</span> : null}
+      </button>
+    </div>
   );
 }
 

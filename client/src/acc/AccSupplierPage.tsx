@@ -65,7 +65,7 @@ export function AccSupplierPage() {
           <h1 className="acc-h1">{data.name}</h1>
           <span className="acc-bill-meta">{[data.city, data.address, data.phone].filter(Boolean).join(" · ")}</span>
         </div>
-        <PdfButton label="Statement" onDownload={() => accApi.pdf.supplier(data.id)} />
+        <PdfButton label="Statement" onDownload={() => accApi.pdf.supplier(data.id)} onShare={() => accApi.sharePdf.supplier(data.id)} />
       </section>
 
       <div className="acc-stat-strip">

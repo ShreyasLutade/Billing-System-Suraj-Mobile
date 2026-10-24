@@ -243,7 +243,7 @@ export function AccSaleDetailPage() {
       </section>
 
       <div className="acc-btn-row">
-        <PdfButton label="Bill PDF" onDownload={() => accApi.pdf.bill(sale.id)} />
+        <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(sale.id)} onShare={() => accApi.sharePdf.bill(sale.id)} />
         {sale.customerId ? (
           <button type="button" className="acc-btn" onClick={() => navigate(`/acc/dues/${sale.customerId}`)}>
             Customer account

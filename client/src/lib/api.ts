@@ -199,8 +199,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /** Shared by feature modules (e.g. acc/accApi) that keep their own endpoint lists. */
 export { request as apiRequest };
 
-/** GET a file with the session token and save it (PDF downloads). */
-export async function downloadAuthed(path: string, fallbackName: string) {
+/** GET a file with the session token for download or native sharing. */
+async function getAuthedFile(path: string, fallbackName: string) {
   const token = getAuthToken();
   const response = await fetchBackend(`${API_BASE}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -218,14 +218,34 @@ export async function downloadAuthed(path: string, fallbackName: string) {
   const blob = await response.blob();
   const disposition = response.headers.get("Content-Disposition") || "";
   const match = /filename="?([^"]+)"?/i.exec(disposition);
+  return { blob, filename: match?.[1] || fallbackName };
+}
+
+/** GET a file with the session token and save it. */
+export async function downloadAuthed(path: string, fallbackName: string) {
+  const { blob, filename } = await getAuthedFile(path, fallbackName);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = match?.[1] || fallbackName;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** GET an authenticated file and open the device's native share sheet. */
+export async function shareAuthed(path: string, fallbackName: string, title: string) {
+  if (typeof navigator.share !== "function") {
+    throw new Error("Sharing isn’t supported in this browser. Use the download button instead.");
+  }
+  const { blob, filename } = await getAuthedFile(path, fallbackName);
+  const file = new File([blob], filename, { type: blob.type || "application/pdf" });
+  const data: ShareData = { title, files: [file] };
+  if (typeof navigator.canShare === "function" && !navigator.canShare(data)) {
+    throw new Error("This device can’t share this file. Download it, then share it from your device.");
+  }
+  await navigator.share(data);
 }
 
 export const api = {

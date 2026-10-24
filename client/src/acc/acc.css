@@ -431,6 +431,500 @@ html.dark .acc {
 
 /* ---------- add stock: numbered steps ---------- */
 
+.acc-add-stock {
+  max-width: 1480px;
+}
+
+.acc-stock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 4px 2px;
+}
+
+.acc-stock-header p {
+  margin: 4px 0 0;
+  color: var(--a-muted);
+  font-size: 13px;
+}
+
+.acc-stock-header-total {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 1px 10px;
+  min-width: 180px;
+  padding: 10px 14px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+  text-align: right;
+}
+
+.acc-stock-header-total span,
+.acc-stock-header-total small {
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.acc-stock-header-total b {
+  grid-row: span 2;
+  font: 800 20px "Sora", sans-serif;
+}
+
+.acc-stock-workspace,
+.acc-stock-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.acc-stock-step {
+  gap: 14px;
+}
+
+.acc-bulk-stock {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.acc-bulk-stock-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--a-muted);
+  font-size: 12px;
+}
+
+.acc-bulk-stock-note b {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--a-field);
+  color: var(--a-ink);
+}
+
+.acc-stock-sheet-scroll {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--a-line);
+  border-radius: 13px;
+  background: var(--a-card);
+  overscroll-behavior-inline: contain;
+}
+
+.acc-stock-sheet {
+  min-width: 1040px;
+}
+
+.acc-stock-sheet-head,
+.acc-stock-sheet-row {
+  display: grid;
+  grid-template-columns: 140px minmax(230px, 1fr) 155px 82px 112px 112px 118px 78px;
+}
+
+.acc-stock-sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--a-line);
+  background: var(--a-field);
+}
+
+.acc-stock-sheet-head span {
+  padding: 9px 8px;
+  border-right: 1px solid var(--a-line);
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.acc-stock-sheet-row {
+  position: relative;
+  min-height: 54px;
+  border-bottom: 1px solid var(--a-line);
+}
+
+.acc-stock-sheet-row:last-child {
+  border-bottom: 0;
+}
+
+.acc-stock-sheet-row:focus-within {
+  z-index: 5;
+  background: color-mix(in srgb, var(--a-accent) 3%, var(--a-card));
+}
+
+.acc-stock-sheet-cell {
+  position: relative;
+  min-width: 0;
+  padding: 6px;
+  border-right: 1px solid var(--a-line);
+  scroll-snap-align: center;
+}
+
+.acc-stock-sheet-cell.is-open {
+  z-index: 20;
+}
+
+.acc .acc-stock-sheet-cell input,
+.acc .acc-stock-sheet-cell select {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 8px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.acc .acc-stock-sheet-cell input:hover,
+.acc .acc-stock-sheet-cell select:hover {
+  border-color: var(--a-line);
+  background: var(--a-card);
+}
+
+.acc .acc-stock-sheet-cell input:focus,
+.acc .acc-stock-sheet-cell select:focus {
+  border-color: var(--a-accent);
+  background: var(--a-card);
+}
+
+.acc [data-stock-invalid="true"] {
+  border-color: var(--a-red) !important;
+  background: color-mix(in srgb, var(--a-red) 7%, var(--a-card)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-red) 18%, transparent) !important;
+}
+
+.acc .acc-stock-sheet-cell input[readonly],
+.acc .acc-stock-sheet-cell select:disabled {
+  color: var(--a-muted);
+  cursor: default;
+  opacity: 0.8;
+}
+
+.acc-stock-sheet-cell.is-number input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-stock-sheet-cell.is-product {
+  padding-bottom: 17px;
+}
+
+.acc-sheet-status {
+  position: absolute;
+  right: 9px;
+  bottom: 3px;
+  left: 9px;
+  overflow: hidden;
+  color: var(--a-muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.acc-sheet-status.is-existing {
+  color: var(--a-green);
+}
+
+.acc-sheet-suggestions {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 4px;
+  left: 4px;
+  z-index: 40;
+  max-height: 230px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--a-line);
+  border-radius: 10px;
+  background: var(--a-card);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+  list-style: none;
+}
+
+.acc-sheet-suggestions button {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-sheet-suggestions button:hover {
+  background: var(--a-field);
+}
+
+.acc-sheet-suggestions button > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-sheet-suggestions button small {
+  color: var(--a-muted);
+  font-size: 10px;
+}
+
+.acc-stock-sheet-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 5px;
+}
+
+.acc-stock-sheet-action > b {
+  overflow: hidden;
+  max-width: 48px;
+  color: var(--a-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.acc-stock-sheet-action > button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--a-red);
+  cursor: pointer;
+}
+
+.acc-stock-sheet-action > button:hover {
+  background: color-mix(in srgb, var(--a-red) 9%, var(--a-card));
+  color: var(--a-red);
+}
+
+.acc-stock-sheet-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+.acc-sheet-next {
+  display: none;
+}
+
+.acc-sheet-add-rows {
+  align-self: flex-start;
+}
+
+.acc-confirm-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acc-stock-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.acc-stock-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.acc-stock-list-title b {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+  color: var(--a-accent);
+  font-size: 12px;
+}
+
+.acc-stock-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 22px 12px;
+  border: 1px dashed var(--a-line);
+  border-radius: 12px;
+  color: var(--a-muted);
+  text-align: center;
+}
+
+.acc-stock-empty b {
+  color: var(--a-ink);
+  font-size: 13px;
+}
+
+.acc-stock-empty span {
+  font-size: 12px;
+}
+
+.acc-stock-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acc-stock-summary > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  background: var(--a-field);
+}
+
+.acc-stock-summary > span.is-total {
+  grid-column: span 2;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--a-accent) 9%, var(--a-card));
+}
+
+.acc-stock-summary small {
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.acc-stock-summary b {
+  font: 800 16px "Sora", sans-serif;
+}
+
+.acc-stock-summary .is-total b {
+  color: var(--a-accent);
+  font-size: 20px;
+}
+
+@media (min-width: 860px) {
+  .acc-stock-workspace {
+    display: flex;
+  }
+
+  .acc-stock-payment {
+    position: static;
+  }
+
+  .acc-stock-payment .acc-stock-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .acc-stock-payment .acc-stock-summary > span.is-total {
+    grid-column: auto;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .acc-stock-payment .acc-payment-options.is-stock {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .acc-stock-header {
+    align-items: flex-end;
+  }
+
+  .acc-stock-header p {
+    display: none;
+  }
+
+  .acc-stock-header-total {
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .acc-stock-header-total span {
+    display: none;
+  }
+
+  .acc-stock-header-total b {
+    grid-row: auto;
+    font-size: 17px;
+  }
+
+  .acc-stock-header-total small {
+    grid-column: span 2;
+  }
+
+  .acc-stock-step {
+    padding: 12px;
+  }
+
+  .acc-stock-payment .acc-pay-card {
+    padding: 12px;
+  }
+
+  .acc-bulk-stock-note span {
+    max-width: 240px;
+  }
+
+  .acc-stock-sheet-scroll {
+    scroll-snap-type: x proximity;
+  }
+
+  .acc-stock-sheet {
+    min-width: 1010px;
+  }
+
+  .acc-stock-sheet-head,
+  .acc-stock-sheet-row {
+    grid-template-columns: 132px 220px 150px 78px 108px 108px 112px 74px;
+  }
+
+  .acc-sheet-next {
+    position: absolute;
+    top: 50%;
+    right: -13px;
+    z-index: 30;
+    display: grid;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    place-items: center;
+    translate: 0 -50%;
+    border: 1px solid color-mix(in srgb, var(--a-accent) 45%, var(--a-line));
+    border-radius: 50%;
+    background: var(--a-card);
+    color: var(--a-accent);
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.18);
+  }
+
+  .acc-sheet-next svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
 .acc-step-title {
   display: flex;
   align-items: center;
@@ -1573,6 +2067,158 @@ html.dark .acc {
   gap: 12px;
 }
 
+.acc-payment-heading h2,
+.acc-payment-heading p {
+  margin: 0;
+}
+
+.acc-existing-customer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, #12b886 35%, var(--a-line));
+  border-radius: 11px;
+  background: color-mix(in srgb, #12b886 8%, var(--a-card));
+  color: #07815e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-payment-heading h2 {
+  font: 700 16px "Sora", sans-serif;
+}
+
+.acc-payment-heading p {
+  margin-top: 4px;
+  color: var(--a-muted);
+  font-size: 12px;
+}
+
+.acc-payment-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acc-payment-option {
+  --pay-tone: var(--a-accent);
+  overflow: hidden;
+  border: 1px solid var(--a-line);
+  border-left: 3px solid var(--pay-tone);
+  border-radius: 12px;
+  background: var(--a-card);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.acc-payment-option.is-cash {
+  --pay-tone: #12b886;
+}
+
+.acc-payment-option.is-online {
+  --pay-tone: #5d73b6;
+}
+
+.acc-payment-option.is-due {
+  --pay-tone: #f59e0b;
+}
+
+.acc-payment-option.is-on {
+  border-color: color-mix(in srgb, var(--pay-tone) 45%, var(--a-line));
+  background: color-mix(in srgb, var(--pay-tone) 6%, var(--a-card));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pay-tone) 15%, transparent);
+}
+
+.acc-payment-option > label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  cursor: pointer;
+}
+
+.acc-payment-option > label input {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  accent-color: var(--pay-tone);
+}
+
+.acc-payment-option > label span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acc-payment-option > label b {
+  font-size: 13px;
+}
+
+.acc-payment-option > label small {
+  color: var(--a-muted);
+  font-size: 11px;
+}
+
+.acc-payment-amount {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--a-line);
+}
+
+.acc-payment-amount > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-payment-amount > label {
+  position: relative;
+  display: block;
+}
+
+.acc-payment-amount > label > b {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 12px;
+  translate: 0 -50%;
+  color: var(--a-muted);
+}
+
+.acc .acc-payment-amount input {
+  padding-left: 30px;
+}
+
+.acc-payment-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.acc-payment-result.is-due {
+  border-color: color-mix(in srgb, #f59e0b 35%, var(--a-line));
+  background: color-mix(in srgb, #f59e0b 9%, var(--a-card));
+  color: #b45309;
+}
+
+.acc-payment-result.is-paid {
+  border-color: color-mix(in srgb, #12b886 35%, var(--a-line));
+  background: color-mix(in srgb, #12b886 9%, var(--a-card));
+  color: #07815e;
+}
+
+.acc-payment-result b {
+  font: 800 17px "Sora", sans-serif;
+}
+
 .acc-sum-row {
   display: flex;
   justify-content: space-between;
@@ -2359,8 +3005,55 @@ html.dark .acc {
   gap: 8px;
 }
 
-.acc-pdf-options .acc-btn {
-  justify-content: flex-start;
+.acc-pdf-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-pdf-actions > span {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.acc-pdf-options .acc-pdf-actions {
+  width: 100%;
+  padding: 5px 0 5px 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+}
+
+.acc-pdf-actions.is-block {
+  width: 100%;
+  padding: 5px 0 5px 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+}
+
+.acc-pdf-actions.has-action-labels {
+  padding: 0;
+  border: 0;
+  gap: 10px;
+}
+
+.acc-pdf-actions.has-action-labels .acc-icon-btn {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  gap: 7px;
+  padding: 0 14px;
+  color: var(--a-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.acc-table th.is-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Product sheet actions */
@@ -3086,11 +3779,25 @@ body.acc-sheet-open {
 }
 
 /* Category sections */
+.acc-stock-page {
+  max-width: 1180px;
+}
+
+.acc-stock-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 16px;
+  background: var(--a-card);
+}
+
 .acc-stock-sections {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-bottom: 90px;
+  padding-bottom: 24px;
 }
 
 .acc-collapse-bar {
@@ -3131,6 +3838,109 @@ body.acc-sheet-open {
 
 .acc-stock-section > .acc-list > .acc-row + .acc-row {
   border-top: 1px solid var(--a-line);
+}
+
+.acc-stock-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-stock-list-footer b {
+  color: var(--a-ink);
+}
+
+@media (min-width: 760px) {
+  .acc-stock-page .acc-title-row {
+    min-height: 46px;
+  }
+
+  .acc-stock-page .acc-check-banner {
+    padding-block: 9px;
+  }
+
+  .acc-stock-page .acc-stock-section > .acc-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .acc-stock-page .acc-stock-section > .acc-list > .acc-row,
+  .acc-stock-page .acc-stock-section > .acc-list > .acc-row + .acc-row {
+    min-width: 0;
+    border: 1px solid var(--a-line);
+    border-radius: 11px;
+  }
+
+  .acc-stock-page .acc-row-main {
+    padding: 8px 10px;
+  }
+
+  .acc-stock-page .acc-star {
+    width: 42px;
+  }
+}
+
+@media (max-width: 620px) {
+  .acc-stock-page .acc-title-row {
+    align-items: flex-start;
+  }
+
+  .acc-stock-page .acc-head-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .acc-stock-page .acc-head-actions .acc-btn {
+    min-height: 36px;
+    padding-inline: 10px;
+    font-size: 12.5px;
+  }
+
+  .acc-stock-page .acc-stat-strip > * {
+    padding: 7px 8px;
+  }
+
+  .acc-stock-controls {
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .acc-stock-page .acc-row-main {
+    padding: 8px 9px;
+  }
+
+  .acc-stock-page .acc-row-text {
+    gap: 1px;
+  }
+
+  .acc-stock-page .acc-row-text strong {
+    font-size: 13.5px;
+  }
+
+  .acc-stock-page .acc-row-meta {
+    display: none;
+  }
+
+  .acc-stock-page .acc-star {
+    width: 40px;
+  }
+
+  .acc-stock-page .acc-star svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .acc-stock-list-footer {
+    align-items: stretch;
+    flex-direction: column;
+    text-align: center;
+  }
 }
 
 /* A thin rule between categories, so collapsed headers read as separate rows. */

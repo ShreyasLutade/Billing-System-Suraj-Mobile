@@ -73,10 +73,17 @@ export function composeName(parts: {
 
 async function ensureCategories() {
   const count = await prisma.accCategory.count();
-  if (count) return;
-  await prisma.accCategory.createMany({
-    data: DEFAULT_ACC_CATEGORIES.map((c, i) => ({ ...c, sortOrder: i })),
-  });
+  if (!count) {
+    await prisma.accCategory.createMany({
+      data: DEFAULT_ACC_CATEGORIES.map((c, i) => ({ ...c, sortOrder: i })),
+    });
+    return;
+  }
+  await Promise.all(
+    DEFAULT_ACC_CATEGORIES.map((c, i) =>
+      prisma.accCategory.updateMany({ where: { name: c.name }, data: { drillBy: c.drillBy, icon: c.icon, sortOrder: i } }),
+    ),
+  );
 }
 
 /* ---------------- categories ---------------- */

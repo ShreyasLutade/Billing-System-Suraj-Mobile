@@ -1,4 +1,4 @@
-import { apiRequest, downloadAuthed } from "../lib/api";
+import { apiRequest, downloadAuthed, shareAuthed } from "../lib/api";
 
 /* Accessories shop API (/api/acc). Types mirror server/src/routes/acc. */
 
@@ -406,10 +406,11 @@ export const accApi = {
       /** An existing product… */
       productId?: string;
       /** …or one bought for the first time, created with the purchase. */
-      newProduct?: { categoryId: string; name: string; wholesalePrice?: number };
+      newProduct?: { categoryId: string; name: string; brand?: string; wholesalePrice?: number };
       qty: number;
       unitCost: number;
       sellingPrice?: number;
+      wholesalePrice?: number;
     }>;
   }) => post<{ id: string }>("/acc/purchases", body),
 
@@ -421,11 +422,27 @@ export const accApi = {
     sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string }) =>
       downloadAuthed(`/acc/sales/pdf${qs(q)}`, "accessories-sales.pdf"),
     bill: (id: string) => downloadAuthed(`/acc/sales/${id}/pdf`, "bill.pdf"),
-    dues: (q: { groupId?: string; status?: string; sort?: string; groupBy?: string; bills?: boolean }) =>
+    dues: (q: { groupId?: string; groupIds?: string; status?: string; sort?: string; columns?: string }) =>
       downloadAuthed(`/acc/dues/pdf${qs(q)}`, "accessories-dues.pdf"),
     statement: (id: string) => downloadAuthed(`/acc/customers/${id}/statement`, "statement.pdf"),
     suppliers: () => downloadAuthed("/acc/suppliers/pdf", "accessories-suppliers.pdf"),
     supplier: (id: string) => downloadAuthed(`/acc/suppliers/${id}/pdf`, "supplier-statement.pdf"),
     analytics: (q: PeriodQuery) => downloadAuthed(`/acc/analytics/pdf${qs(q)}`, "accessories-report.pdf"),
+  },
+  sharePdf: {
+    stock: (q: { filter?: string; categoryId?: string; cost?: boolean }) =>
+      shareAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf", "Accessories stock"),
+    sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string }) =>
+      shareAuthed(`/acc/sales/pdf${qs(q)}`, "accessories-sales.pdf", "Accessories sales"),
+    bill: (id: string) => shareAuthed(`/acc/sales/${id}/pdf`, "bill.pdf", "Accessories bill"),
+    dues: (q: { groupId?: string; groupIds?: string; status?: string; sort?: string; columns?: string }) =>
+      shareAuthed(`/acc/dues/pdf${qs(q)}`, "accessories-dues.pdf", "Accessories dues"),
+    statement: (id: string) =>
+      shareAuthed(`/acc/customers/${id}/statement`, "statement.pdf", "Customer statement"),
+    suppliers: () => shareAuthed("/acc/suppliers/pdf", "accessories-suppliers.pdf", "Accessories suppliers"),
+    supplier: (id: string) =>
+      shareAuthed(`/acc/suppliers/${id}/pdf`, "supplier-statement.pdf", "Supplier statement"),
+    analytics: (q: PeriodQuery) =>
+      shareAuthed(`/acc/analytics/pdf${qs(q)}`, "accessories-report.pdf", "Accessories report"),
   },
 };
