@@ -630,7 +630,8 @@ accCatalogRouter.get("/products/pdf", async (req, res, next) => {
       groupCost += qty * p.purchasePrice;
       retailValue += qty * p.sellingPrice;
       groupRetail += qty * p.sellingPrice;
-      const low = p.stockQty <= 0 || (p.lowStockAt > 0 && p.stockQty <= p.lowStockAt);
+      const outOfStock = p.stockQty <= 0;
+      const low = p.lowStockAt > 0 && p.stockQty <= p.lowStockAt;
       pdfRows.push({
         cells: {
           name: p.name,
@@ -642,7 +643,7 @@ accCatalogRouter.get("/products/pdf", async (req, res, next) => {
           value: money(qty * p.sellingPrice),
         },
         sub: { name: [p.model, p.color, p.isFavourite ? "★ Counter" : ""].filter(Boolean).join(" · ") },
-        color: low ? { qty: p.stockQty <= 0 ? PDF_TONE.red : PDF_TONE.amber } : undefined,
+        color: outOfStock ? { name: PDF_TONE.red, qty: PDF_TONE.red } : low ? { qty: PDF_TONE.amber } : undefined,
       });
     }
     flush();

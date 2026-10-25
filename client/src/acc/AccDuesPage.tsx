@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import {
-  ArrowDownLeft,
   FileDown,
   FilePlus2,
   Loader2,
@@ -10,7 +9,6 @@ import {
   MessageCircle,
   Pencil,
   Phone,
-  ReceiptText,
   Search,
   Settings2,
   Trash2,
@@ -33,10 +31,8 @@ import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, 
 /** Wholesale dues: who owes what, by group, ageing, and collecting payments. */
 
 /** WhatsApp reminder text, same on the list and the customer page. */
-function dueReminder(c: { name: string; balance: number; oldestOpen: AccCustomerRow["oldestOpen"] }) {
-  return `Namaste ${c.name} ji,\nAapka Babu Mobile Accessories me ₹${c.balance.toLocaleString("en-IN")} baaki hai${
-    c.oldestOpen ? ` (sabse purana bill ${c.oldestOpen.number}, ${shortDate(c.oldestOpen.saleDate)})` : ""
-  }.\nKripya jaldi bhugtan karein. Dhanyavaad!`;
+function dueReminder(c: { name: string; balance: number }) {
+  return `Namaste ${c.name} ji,\nAapka Babu Mobile Accessories me ₹${c.balance.toLocaleString("en-IN")} baaki hai.\nKripya jaldi bhugtan karein. Dhanyavaad!`;
 }
 
 /** One chip that says where this customer stands: overdue, promised or how old. */
@@ -565,7 +561,7 @@ export function AccCustomerPage() {
   if (!data) {
     return (
       <div className="acc-page">
-        <BackLink to="/acc/dues">Dues</BackLink>
+        <BackLink to="/acc/dues" historyBack>Dues</BackLink>
         <div className="acc-loading">
           <Loader2 className="acc-spin" />
         </div>
@@ -580,7 +576,7 @@ export function AccCustomerPage() {
 
   return (
     <div className="acc-page acc-customer-ledger-page">
-      <BackLink to="/acc/dues">Dues</BackLink>
+      <BackLink to="/acc/dues" historyBack>Dues</BackLink>
       <header className="acc-customer-account-header">
         <div className="acc-customer-account-title">
           <small>Customer account</small>
@@ -651,8 +647,8 @@ export function AccCustomerPage() {
         data.ledger.length ? (
           <section className="acc-ledger-panel">
             <div className="acc-ledger-guide">
-              <span className="is-debit"><ReceiptText /> <b>Debit</b> = new bill, amount owed increases</span>
-              <span className="is-credit"><ArrowDownLeft /> <b>Credit</b> = payment received, amount owed decreases</span>
+              <span className="is-debit"><i className="acc-ledger-guide-mark">DR</i> <b>Debit</b> = bill amount added</span>
+              <span className="is-credit"><i className="acc-ledger-guide-mark">CR</i> <b>Credit</b> = payment received</span>
             </div>
             <div className="acc-ledger-head" aria-hidden>
               <span>Date</span>
@@ -673,7 +669,7 @@ export function AccCustomerPage() {
                   >
                     <span className="acc-ledger-date">{shortDate(line.date)}</span>
                     <span className="acc-ledger-detail">
-                      <span className="acc-ledger-kind-icon">{line.kind === "BILL" ? <ReceiptText /> : <ArrowDownLeft />}</span>
+                      <span className="acc-ledger-kind-icon">{line.kind === "BILL" ? "BILL" : "PAY"}</span>
                       <span>
                         <strong>{line.kind === "BILL" ? line.ref : line.detail.split(" · ")[0]}</strong>
                         <small>{line.kind === "BILL" ? line.detail : line.detail.split(" · ").slice(1).join(" · ") || line.ref}</small>

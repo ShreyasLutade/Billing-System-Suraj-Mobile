@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { ChevronDown, Loader2, PackagePlus, Phone, Wallet } from "lucide-react";
+import { ChevronDown, Loader2, PackagePlus, Phone, Search, Wallet } from "lucide-react";
 import { BackLink } from "../components/ui";
-import { accApi, type AccSupplierDetail } from "./accApi";
+import { accApi, type AccSupplier, type AccSupplierDetail } from "./accApi";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
 
 type Tab = "statement" | "purchases" | "payments";
@@ -40,7 +41,7 @@ export function AccSupplierPage() {
   if (missing) {
     return (
       <div className="acc-page">
-        <BackLink to="/acc/suppliers">Suppliers</BackLink>
+        <BackLink to="/acc/suppliers" historyBack>Suppliers</BackLink>
         <Empty title="Supplier not found" />
       </div>
     );
@@ -57,11 +58,11 @@ export function AccSupplierPage() {
 
   return (
     <div className="acc-page acc-supplier-page">
-      <BackLink to="/acc/suppliers">Suppliers</BackLink>
+      <BackLink to="/acc/suppliers" historyBack>Suppliers</BackLink>
 
       <section className="acc-card acc-bill-head">
         <div>
-          <small>Supplier{data.group ? ` · ${data.group.name}` : ""}</small>
+          <small>Supplier</small>
           <h1 className="acc-h1">{data.name}</h1>
           <span className="acc-bill-meta">{[data.city, data.address, data.phone].filter(Boolean).join(" · ")}</span>
         </div>
@@ -251,18 +252,24 @@ export function AccSupplierPage() {
 }
 
 /** Pay the whole outstanding or part of it; the reference ties it to the bank statement. */
-function PaySupplierSheet({
+type PayableSupplier = Pick<AccSupplier, "id" | "name" | "phone" | "balance">;
+
+export function PaySupplierSheet({
   open,
-  supplier,
+  supplier: fixedSupplier,
+  suppliers = [],
   onClose,
   onPaid,
 }: {
   open: boolean;
-  supplier: AccSupplierDetail;
+  supplier?: PayableSupplier | null;
+  suppliers?: PayableSupplier[];
   onClose: () => void;
   onPaid: () => void;
 }) {
-  const outstanding = Math.max(supplier.balance, 0);
+  const [selectedId, setSelectedId] = useState("");
+  const [query, setQuery] = useState("");
+  const [listOpen, setListOpen] = useState(false);
   const [mode, setMode] = useState<"FULL" | "PART">("FULL");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<Method>("UPI");
@@ -270,22 +277,100 @@ function PaySupplierSheet({
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  const payable = useMemo(
+    () => suppliers.filter((item) => item.balance > 0).sort((a, b) => a.name.localeCompare(b.name)),
+    [suppliers],
+  );
+  const matches = useMemo(() => {
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return payable.filter((item) => tokens.every((token) => `${item.name} ${item.phone}`.toLowerCase().includes(token)));
+  }, [payable, query]);
+  const supplier = fixedSupplier || payable.find((item) => item.id === selectedId) || null;
+  const outstanding = Math.max(supplier?.balance || 0, 0);
+  const fixedSupplierId = fixedSupplier?.id || "";
+  const fixedSupplierName = fixedSupplier?.name || "";
+  const hasFixedSupplier = Boolean(fixedSupplier);
+  const fixedOutstanding = Math.max(fixedSupplier?.balance || 0, 0);
 
   useEffect(() => {
     if (!open) return;
-    setMode(outstanding > 0 ? "FULL" : "PART");
+    setSelectedId(fixedSupplierId);
+    setQuery(fixedSupplierName);
+    setListOpen(!hasFixedSupplier && payable.length > 0);
+    setMode(fixedOutstanding > 0 ? "FULL" : "PART");
     setAmount("");
     setMethod("UPI");
     setPaidAt(todayInput());
     setReference("");
     setNote("");
-  }, [open, outstanding]);
+    setBusy(false);
+  }, [open, fixedSupplierId, fixedSupplierName, hasFixedSupplier, fixedOutstanding, payable.length]);
+
+  useEffect(() => {
+    if (!listOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!pickerRef.current?.contains(target) && !menuRef.current?.contains(target)) setListOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [listOpen]);
+
+  useLayoutEffect(() => {
+    if (!listOpen) {
+      setMenuPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const anchor = searchRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const viewportTop = window.visualViewport?.offsetTop || 0;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const gap = 6;
+      const below = viewportTop + viewportHeight - rect.bottom - gap - 8;
+      const above = rect.top - viewportTop - gap - 8;
+      const openAbove = below < 180 && above > below;
+      const available = Math.max(openAbove ? above : below, 96);
+      const maxHeight = Math.min(280, available);
+      setMenuPosition({
+        top: openAbove ? rect.top - gap - maxHeight : rect.bottom + gap,
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    window.visualViewport?.addEventListener("resize", updatePosition);
+    window.visualViewport?.addEventListener("scroll", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.visualViewport?.removeEventListener("resize", updatePosition);
+      window.visualViewport?.removeEventListener("scroll", updatePosition);
+    };
+  }, [listOpen]);
 
   const value = mode === "FULL" ? outstanding : Number(amount) || 0;
   const left = Math.round((outstanding - value) * 100) / 100;
 
+  function chooseSupplier(item: PayableSupplier) {
+    setSelectedId(item.id);
+    setQuery(item.name);
+    setListOpen(false);
+    setMode("FULL");
+    setAmount("");
+  }
+
   async function save() {
     if (busy) return;
+    if (!supplier) return toast("Choose a supplier", { tone: "error" });
     if (!(value > 0)) return toast("Enter the amount paid", { tone: "error" });
     if (value > outstanding && !window.confirm(`That is ${inr(value - outstanding)} more than you owe. Save as an advance?`)) return;
     setBusy(true);
@@ -301,17 +386,63 @@ function PaySupplierSheet({
   }
 
   return (
-    <Sheet
+    <>
+      <Sheet
       open={open}
       onClose={onClose}
       title="Pay supplier"
-      subtitle={`${supplier.name} · you owe ${inr(outstanding)}`}
+      subtitle={supplier ? `${supplier.name} · you owe ${inr(outstanding)}` : "Choose a supplier with an unpaid balance"}
       footer={
-        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
+        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || !supplier || !(value > 0)}>
           {busy ? <Loader2 className="acc-spin" /> : <Wallet />} Pay {inr(value)}
         </button>
       }
     >
+      {!fixedSupplier ? (
+        <div className="acc-field acc-pay-supplier-picker" ref={pickerRef}>
+          <span>Supplier *</span>
+          <div className="acc-dropdown-wrap" ref={searchRef}>
+            <div className="acc-search is-in-card">
+              <Search aria-hidden />
+              <input
+                value={query}
+                autoFocus
+                autoComplete="off"
+                placeholder={payable.length ? "Type or choose a supplier…" : "No supplier has dues"}
+                disabled={!payable.length || busy}
+                role="combobox"
+                aria-label="Supplier"
+                aria-expanded={listOpen}
+                aria-controls="acc-pay-supplier-list"
+                onFocus={() => setListOpen(true)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setSelectedId("");
+                  setListOpen(true);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && matches.length) {
+                    event.preventDefault();
+                    chooseSupplier(matches[0]);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="acc-pay-supplier-toggle"
+                aria-label={listOpen ? "Hide suppliers" : "Show suppliers"}
+                aria-expanded={listOpen}
+                disabled={!payable.length || busy}
+                onClick={() => setListOpen((current) => !current)}
+              >
+                <ChevronDown aria-hidden className={clsx(listOpen && "is-open")} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {supplier ? (
+        <>
       <Segmented
         value={mode}
         onChange={setMode}
@@ -359,6 +490,33 @@ function PaySupplierSheet({
           {left > 0 ? `After this you will still owe ${inr(left)}.` : left === 0 ? "This clears the full balance." : `Advance of ${inr(-left)}.`}
         </p>
       ) : null}
-    </Sheet>
+        </>
+      ) : null}
+      </Sheet>
+      {listOpen && payable.length && menuPosition
+        ? createPortal(
+            <ul
+              ref={menuRef}
+              id="acc-pay-supplier-list"
+              className="acc acc-results acc-pay-supplier-overlay"
+              role="listbox"
+              style={menuPosition}
+            >
+              {matches.length ? matches.map((item) => (
+                <li key={item.id}>
+                  <button type="button" role="option" aria-selected={item.id === selectedId} onClick={() => chooseSupplier(item)}>
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>{item.phone}</small>
+                    </span>
+                    <b className="is-red">{inr(item.balance)}</b>
+                  </button>
+                </li>
+              )) : <li className="acc-empty-row">No supplier with dues matches your search</li>}
+            </ul>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

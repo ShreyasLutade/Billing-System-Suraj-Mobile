@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
@@ -9,14 +9,30 @@ export function BackLink({
   state,
   children,
   className,
+  historyBack = false,
 }: {
   to: string;
   state?: unknown;
   children: ReactNode;
   className?: string;
+  historyBack?: boolean;
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   return (
-    <Link to={to} state={state} className={clsx("back-pill", className)}>
+    <Link
+      to={to}
+      state={state}
+      className={clsx("back-pill", className)}
+      onClick={(event) => {
+        if (!historyBack || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const historyIndex = Number(window.history.state?.idx);
+        if (location.key === "default" || !Number.isFinite(historyIndex) || historyIndex <= 0) return;
+        event.preventDefault();
+        navigate(-1);
+      }}
+    >
       <ArrowLeft strokeWidth={2} />
       {children}
     </Link>

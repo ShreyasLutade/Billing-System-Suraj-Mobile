@@ -123,7 +123,7 @@ export function AccStockCheckPage() {
 
   return (
     <div className="acc-page acc-check-page">
-      <BackLink to="/acc/stock">Stock</BackLink>
+      <BackLink to="/acc/stock" historyBack>Stock</BackLink>
       <div className="acc-title-row">
         <h1>Stock check</h1>
       </div>

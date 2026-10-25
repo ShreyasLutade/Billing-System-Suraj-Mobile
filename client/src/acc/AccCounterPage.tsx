@@ -199,7 +199,7 @@ export function AccCounterPage() {
           <h1>Counter</h1>
           <span className="acc-today" title="Today's retail sales">
             Today <b>{today ? inr(today.total) : "…"}</b>
-            <small>{today ? plural(today.count, "bill") : ""}</small>
+            <small>{today ? plural(today.count, "sale") : ""}</small>
           </span>
         </div>
         <label className="acc-search">
@@ -446,9 +446,9 @@ function SellSheet({
         ...(payMode === "CASH" ? { cashAmount: rate * qty } : { onlineAmount: rate * qty }),
         allowOutOfStock,
       });
-      toast(`Sold · ${data.number} · ${inr(data.total)} · ${payMode === "CASH" ? "Cash" : "UPI"}`, {
+      toast(`Sold · ${inr(data.total)} · ${payMode === "CASH" ? "Cash" : "UPI"}`, {
         tone: "success",
-        action: { label: "Undo", run: () => void undoSale(data.id, data.number) },
+        action: { label: "Undo", run: () => void undoSale(data.id) },
       });
       onSold();
     } catch (err) {
@@ -575,10 +575,10 @@ function SellSheet({
   );
 }
 
-async function undoSale(id: string, number: string) {
+async function undoSale(id: string) {
   try {
     await accApi.voidSale(id, "Undo at counter");
-    toast(`${number} cancelled, stock put back`);
+    toast("Sale cancelled, stock put back");
     void refreshCatalog();
   } catch (err) {
     toast(errorText(err), { tone: "error" });
@@ -640,9 +640,9 @@ function CheckoutSheet({
         customerPhone: phone.trim(),
         allowOutOfStock,
       });
-      toast(`Sold · ${data.number} · ${inr(data.total)}`, {
+      toast(`Sold · ${inr(data.total)}`, {
         tone: "success",
-        action: { label: "Undo", run: () => void undoSale(data.id, data.number) },
+        action: { label: "Undo", run: () => void undoSale(data.id) },
       });
       setDiscount("");
       setName("");
@@ -674,7 +674,7 @@ function CheckoutSheet({
       footer={
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void submit()} disabled={busy || !lines.length}>
           {busy ? <Loader2 className="acc-spin" /> : null}
-          Save bill {inr(total)}
+          Complete sale {inr(total)}
         </button>
       }
     >

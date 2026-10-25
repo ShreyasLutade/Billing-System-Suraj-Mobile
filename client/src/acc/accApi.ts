@@ -43,6 +43,7 @@ export type AccStockCheckItem = { productId: string; qty: number; models?: AccMo
 export type AccCatalog = { categories: AccCategory[]; products: AccProduct[] };
 
 export type AccSaleKind = "RETAIL" | "WHOLESALE";
+export type AccSaleSearchScope = "all" | "customer" | "product" | "bill";
 
 export type AccSaleItem = {
   id: string;
@@ -177,15 +178,11 @@ export type AccDues = {
   groups: Array<{ id: string; name: string; color: string; count: number; balance: number; overdue: number }>;
 };
 
-export type AccSupplierGroup = { id: string; name: string; color: string };
-
 export type AccSupplierInput = {
   name: string;
   phone: string;
   city?: string;
   address?: string;
-  groupId?: string | null;
-  groupName?: string;
 };
 
 export type AccSupplier = {
@@ -194,7 +191,6 @@ export type AccSupplier = {
   phone: string;
   city: string;
   address: string;
-  group: AccSupplierGroup | null;
   purchased: number;
   paid: number;
   balance: number;
@@ -209,7 +205,6 @@ export type AccSupplierDetail = {
   phone: string;
   city: string;
   address: string;
-  group: AccSupplierGroup | null;
   createdAt: string;
   purchased: number;
   paid: number;
@@ -371,7 +366,7 @@ export const accApi = {
     post<{ checked: number; changed: number; products: AccProduct[] }>("/acc/stock-check", { items, note }),
 
   createSale: (body: SaleInput) => post<AccSale>("/acc/sales", body),
-  listSales: (q: PeriodQuery & { kind?: AccSaleKind | ""; q?: string; customerId?: string; void?: boolean }) =>
+  listSales: (q: PeriodQuery & { kind?: AccSaleKind | ""; q?: string; scope?: AccSaleSearchScope; customerId?: string; void?: boolean }) =>
     apiRequest<{ data: { sales: AccSale[]; summary: AccSalesSummary; label: string } }>(`/acc/sales${qs(q)}`),
   getSale: (id: string) => apiRequest<{ data: AccSale }>(`/acc/sales/${id}`),
   voidSale: (id: string, reason: string) => post<AccSale>(`/acc/sales/${id}/void`, { reason }),
@@ -394,7 +389,6 @@ export const accApi = {
 
   suppliers: () => apiRequest<{ data: AccSupplier[] }>("/acc/suppliers"),
   supplier: (id: string) => apiRequest<{ data: AccSupplierDetail }>(`/acc/suppliers/${id}`),
-  supplierGroups: () => apiRequest<{ data: AccSupplierGroup[] }>("/acc/supplier-groups"),
   createSupplier: (body: AccSupplierInput) => post<{ id: string }>("/acc/suppliers", body),
   updateSupplier: (id: string, body: AccSupplierInput) => put<{ id: string }>(`/acc/suppliers/${id}`, body),
   paySupplier: (id: string, body: { amount: number; method: string; reference?: string; paidAt?: string; note?: string }) =>
@@ -424,7 +418,7 @@ export const accApi = {
   pdf: {
     stock: (q: { filter?: string; categoryId?: string; cost?: boolean }) =>
       downloadAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf"),
-    sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string }) =>
+    sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string; scope?: AccSaleSearchScope; void?: boolean }) =>
       downloadAuthed(`/acc/sales/pdf${qs(q)}`, "accessories-sales.pdf"),
     bill: (id: string) => downloadAuthed(`/acc/sales/${id}/pdf`, "bill.pdf"),
     dues: (q: { groupId?: string; groupIds?: string; status?: string; sort?: string; columns?: string }) =>
@@ -437,7 +431,7 @@ export const accApi = {
   sharePdf: {
     stock: (q: { filter?: string; categoryId?: string; cost?: boolean }) =>
       shareAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf", "Accessories stock"),
-    sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string }) =>
+    sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string; scope?: AccSaleSearchScope; void?: boolean }) =>
       shareAuthed(`/acc/sales/pdf${qs(q)}`, "accessories-sales.pdf", "Accessories sales"),
     bill: (id: string, text?: string) => shareAuthed(`/acc/sales/${id}/pdf`, "bill.pdf", "Accessories bill", text),
     dues: (q: { groupId?: string; groupIds?: string; status?: string; sort?: string; columns?: string }) =>

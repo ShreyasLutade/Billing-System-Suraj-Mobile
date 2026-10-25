@@ -127,7 +127,7 @@ html.dark .acc {
 }
 
 .acc-btn.is-ghost {
-  background: transparent;
+  background: var(--a-card);
 }
 
 .acc-btn.is-danger {
@@ -597,6 +597,57 @@ html.dark .acc {
   background: var(--a-card);
 }
 
+.acc-stock-category-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--a-ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-stock-category-trigger:hover,
+.acc-stock-category-trigger:focus-visible,
+.acc-stock-sheet-cell.is-category.is-open .acc-stock-category-trigger {
+  border-color: var(--a-accent);
+  background: var(--a-card);
+  outline: 0;
+}
+
+.acc-stock-category-trigger > span {
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.acc-stock-category-trigger > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--a-muted);
+  transition: transform 160ms ease;
+}
+
+.acc-stock-sheet-cell.is-category.is-open .acc-stock-category-trigger > svg {
+  transform: rotate(180deg);
+}
+
+.acc-stock-category-trigger:disabled {
+  color: var(--a-muted);
+  cursor: default;
+  opacity: 0.8;
+}
+
 .acc [data-stock-invalid="true"] {
   border-color: var(--a-red) !important;
   background: color-mix(in srgb, var(--a-red) 7%, var(--a-card)) !important;
@@ -684,6 +735,28 @@ html.dark .acc {
   font-size: 10px;
 }
 
+.acc-stock-category-menu {
+  right: auto;
+  min-width: 210px;
+}
+
+.acc-stock-category-menu button {
+  justify-content: flex-start;
+}
+
+.acc-stock-category-menu button > span:not(.acc-ico3d) {
+  display: block;
+  flex: 1;
+  font-weight: 700;
+}
+
+.acc-stock-category-check {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--a-accent);
+}
+
 .acc-stock-sheet-action {
   display: flex;
   align-items: center;
@@ -720,10 +793,6 @@ html.dark .acc {
 .acc-stock-sheet-action svg {
   width: 15px;
   height: 15px;
-}
-
-.acc-sheet-next {
-  display: none;
 }
 
 .acc-sheet-add-rows {
@@ -901,28 +970,6 @@ html.dark .acc {
     grid-template-columns: 132px 220px 150px 78px 108px 108px 112px 74px;
   }
 
-  .acc-sheet-next {
-    position: absolute;
-    top: 50%;
-    right: -13px;
-    z-index: 30;
-    display: grid;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    place-items: center;
-    translate: 0 -50%;
-    border: 1px solid color-mix(in srgb, var(--a-accent) 45%, var(--a-line));
-    border-radius: 50%;
-    background: var(--a-card);
-    color: var(--a-accent);
-    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.18);
-  }
-
-  .acc-sheet-next svg {
-    width: 15px;
-    height: 15px;
-  }
 }
 
 .acc-step-title {
@@ -1043,28 +1090,6 @@ html.dark .acc {
   max-height: 320px;
   background: var(--a-card);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-}
-
-/* Suppliers grouped by supplier group. */
-.acc-supplier-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.acc-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 6px;
-  font: 800 14px "Sora", sans-serif;
-  color: var(--a-ink);
-}
-
-.acc-group-head small {
-  color: var(--a-muted);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .acc-picked-supplier {
@@ -1256,6 +1281,64 @@ html.dark .acc {
 .acc-search .tb-search-clear {
   position: absolute;
   right: 10px;
+}
+
+.acc-pay-supplier-toggle {
+  position: absolute;
+  right: 7px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--a-muted);
+  cursor: pointer;
+}
+
+.acc-pay-supplier-toggle:hover {
+  background: var(--a-card);
+  color: var(--a-ink);
+}
+
+.acc-pay-supplier-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.acc-pay-supplier-toggle svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 160ms ease;
+}
+
+.acc-pay-supplier-toggle svg.is-open {
+  transform: rotate(180deg);
+}
+
+.acc-pay-supplier-picker .acc-empty-row {
+  padding: 10px 12px;
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acc-pay-supplier-overlay {
+  position: fixed;
+  z-index: 90;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: var(--a-card);
+  box-shadow: 0 16px 38px rgba(7, 17, 28, 0.24);
+}
+
+.acc-pay-supplier-overlay .acc-empty-row {
+  padding: 10px 12px;
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ---------- counter ---------- */
@@ -4043,6 +4126,38 @@ html.dark .acc {
   font-weight: 700;
 }
 
+.acc-pdf-options .acc-stock-pdf-action {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) auto auto;
+  align-items: center;
+}
+
+.acc-pdf-options .acc-stock-pdf-action > span {
+  font-weight: 800;
+}
+
+.acc-pdf-options .acc-stock-pdf-action .acc-icon-btn {
+  min-width: 96px;
+  flex: none;
+}
+
+.acc-pdf-options .acc-stock-pdf-action.is-out > span {
+  color: var(--a-red);
+}
+
+@media (max-width: 420px) {
+  .acc-pdf-options .acc-stock-pdf-action {
+    grid-template-columns: minmax(70px, 1fr) auto auto;
+    gap: 5px;
+  }
+
+  .acc-pdf-options .acc-stock-pdf-action .acc-icon-btn {
+    min-width: 78px;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+}
+
 .acc-table th.is-icon svg {
   width: 16px;
   height: 16px;
@@ -4830,6 +4945,14 @@ body.acc-sheet-open {
   max-width: 1180px;
 }
 
+.acc-stock-fab-wrap {
+  display: none;
+}
+
+.acc-stock-fab {
+  text-decoration: none;
+}
+
 .acc-stock-controls {
   display: flex;
   flex-direction: column;
@@ -4838,6 +4961,241 @@ body.acc-sheet-open {
   border: 1px solid var(--a-line);
   border-radius: 16px;
   background: var(--a-card);
+}
+
+.acc-stock-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.acc-stock-search-row > .acc-search {
+  min-width: 0;
+  flex: 1;
+}
+
+.acc-stock-filter-wrap {
+  position: relative;
+  flex: none;
+}
+
+.acc-stock-filter-button {
+  position: relative;
+  display: inline-flex;
+  height: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.acc-stock-filter-button svg {
+  width: 17px;
+  height: 17px;
+  color: var(--a-muted);
+}
+
+.acc-stock-filter-button.is-active {
+  border-color: color-mix(in srgb, var(--a-accent) 42%, var(--a-line));
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+  color: var(--a-accent);
+}
+
+.acc-stock-filter-button.is-active svg {
+  color: var(--a-accent);
+}
+
+.acc-stock-filter-button > i {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--a-card);
+  border-radius: 50%;
+  background: var(--a-accent);
+}
+
+.acc-stock-filter-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 20;
+  width: min(310px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+  box-shadow: 0 18px 45px color-mix(in srgb, var(--a-ink) 18%, transparent);
+}
+
+.acc-stock-filter-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--a-line);
+  background: var(--a-field);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.acc-stock-filter-menu-head button {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--a-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.acc-stock-filter-menu > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--a-line);
+  background: transparent;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-stock-filter-menu > button:last-child {
+  border-bottom: 0;
+}
+
+.acc-stock-filter-menu > button:hover,
+.acc-stock-filter-menu > button.is-on {
+  background: color-mix(in srgb, var(--a-accent) 6%, var(--a-card));
+}
+
+.acc-stock-filter-menu > button > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.acc-stock-filter-menu > button b {
+  font-size: 13px;
+}
+
+.acc-stock-filter-menu > button small {
+  margin-top: 1px;
+  color: var(--a-muted);
+  font-size: 11px;
+}
+
+.acc-stock-filter-menu > button em {
+  min-width: 28px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--a-field);
+  color: var(--a-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+}
+
+.acc-stock-filter-menu > button svg {
+  width: 17px;
+  height: 17px;
+  color: var(--a-accent);
+}
+
+.acc-bills-filter-menu {
+  width: min(440px, calc(100vw - 32px));
+  overflow: visible;
+}
+
+.acc-bills-kind-tabs {
+  width: 100%;
+  overflow: hidden;
+}
+
+.acc-bills-kind-tabs button {
+  min-height: 34px;
+}
+
+.acc-bills-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--a-line);
+}
+
+.acc-bills-filter-section > b {
+  color: var(--a-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.acc-bills-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.acc-bills-filter-chips button {
+  padding: 6px 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  background: var(--a-card);
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.acc-bills-filter-chips button.is-on {
+  border-color: var(--a-ink);
+  background: var(--a-ink);
+  color: var(--a-card);
+}
+
+.acc-bills-filter-menu .acc-period-bar {
+  width: 100%;
+  min-width: 0;
+}
+
+.acc-bills-cancelled-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--a-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.acc-bills-result-bar {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-bills-result-bar b {
+  color: var(--a-ink);
 }
 
 .acc-stock-sections {
@@ -4933,7 +5291,56 @@ body.acc-sheet-open {
   }
 }
 
+@media (max-width: 759px) {
+  .acc-stock-desktop-add {
+    display: none !important;
+  }
+
+  .acc-stock-fab-wrap {
+    position: fixed;
+    right: 16px;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    z-index: 50;
+    display: block;
+  }
+
+  .acc-stock-fab {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    place-items: center;
+    border-radius: 50%;
+  }
+
+  .acc-stock-fab svg {
+    width: 25px;
+    height: 25px;
+    color: #fff;
+    stroke-width: 2.5;
+  }
+}
+
 @media (max-width: 620px) {
+  .acc-suppliers-page .acc-supplier-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .acc-suppliers-page .acc-supplier-summary > * {
+    min-height: 50px;
+    padding: 6px;
+  }
+
+  .acc-suppliers-page .acc-supplier-summary small {
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+  }
+
+  .acc-suppliers-page .acc-supplier-summary b {
+    font-size: 12px;
+  }
+
   .acc-stock-page .acc-title-row {
     align-items: flex-start;
   }
@@ -4950,12 +5357,88 @@ body.acc-sheet-open {
   }
 
   .acc-stock-page .acc-stat-strip > * {
-    padding: 7px 8px;
+    min-height: 52px;
+    padding: 6px;
+  }
+
+  .acc-stock-page .acc-stat-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .acc-stock-page .acc-stat-strip small {
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+  }
+
+  .acc-stock-page .acc-stat-strip b {
+    font-size: 13px;
+  }
+
+  .acc-stock-page .acc-check-banner {
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 13px;
+  }
+
+  .acc-stock-page .acc-check-banner-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .acc-stock-page .acc-check-banner-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .acc-stock-page .acc-check-banner-text strong {
+    font-size: 13px;
+  }
+
+  .acc-stock-page .acc-check-banner-text small {
+    overflow: hidden;
+    font-size: 10.5px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .acc-stock-page .acc-check-banner em {
+    padding: 6px 9px;
+    font-size: 11px;
   }
 
   .acc-stock-controls {
-    padding: 8px;
+    gap: 6px;
+    padding: 7px;
     border-radius: 14px;
+  }
+
+  .acc-stock-search-row {
+    gap: 6px;
+  }
+
+  .acc-bills-controls .acc-stock-search-row {
+    position: relative;
+  }
+
+  .acc-bills-controls .acc-stock-filter-wrap {
+    position: static;
+  }
+
+  .acc-bills-controls .acc-bills-filter-menu {
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: none;
+  }
+
+  .acc-stock-filter-button {
+    min-height: 42px;
+    padding: 0 10px;
+    font-size: 12px;
   }
 
   .acc-stock-page .acc-row-main {
@@ -5051,6 +5534,28 @@ body.acc-sheet-open {
   align-items: center;
   gap: 4px 10px;
   margin-top: 4px;
+}
+
+.acc-stock-product-details {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.acc-stock-product-details > small {
+  min-width: 0;
+  flex: 1;
+}
+
+.acc-stock-product-details > .acc-row-meta {
+  flex: none;
+  flex-wrap: nowrap;
+  margin-top: 0;
+}
+
+.acc-stock-page .acc-star {
+  padding-bottom: 0;
 }
 
 .acc-sortbar {
@@ -6489,6 +6994,13 @@ html.dark .acc-sell-pay button.is-on {
   background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
 }
 
+.acc-suppliers-page .acc-table-wrap.is-sheet .is-sticky {
+  width: 1%;
+  min-width: 0;
+  max-width: none;
+  white-space: nowrap;
+}
+
 .acc-table.is-inner {
   font-size: 13px;
 }
@@ -7301,31 +7813,46 @@ html.dark .acc-sell-pay button.is-on {
   font-size: 12.5px;
 }
 
-.acc-ledger-guide svg {
-  width: 17px;
-  height: 17px;
+.acc-ledger-guide-mark {
+  display: grid;
+  width: 27px;
+  height: 22px;
   flex: none;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.04em;
 }
 
-.acc-ledger-guide .is-debit svg,
+.acc-ledger-guide .is-debit .acc-ledger-guide-mark,
 .acc-ledger-guide .is-debit b {
   color: var(--a-red);
 }
 
-.acc-ledger-guide .is-credit svg,
+.acc-ledger-guide .is-credit .acc-ledger-guide-mark,
 .acc-ledger-guide .is-credit b {
   color: var(--a-green);
+}
+
+.acc-ledger-guide .is-debit .acc-ledger-guide-mark {
+  background: color-mix(in srgb, var(--a-red) 11%, var(--a-card));
+}
+
+.acc-ledger-guide .is-credit .acc-ledger-guide-mark {
+  background: color-mix(in srgb, var(--a-green) 11%, var(--a-card));
 }
 
 .acc-ledger-head,
 .acc-ledger-statement .acc-ledger-entry {
   display: grid;
-  grid-template-columns: 86px minmax(190px, 1fr) 112px 112px 116px;
+  grid-template-columns: 86px minmax(0, 1fr) 112px 112px 116px;
   align-items: center;
 }
 
 .acc-ledger-head {
-  grid-template-columns: 86px minmax(190px, 1fr) 112px 112px 116px 48px;
+  grid-template-columns: 86px minmax(0, 1fr) 112px 112px 116px 48px;
   padding: 9px 0 9px 14px;
   border-bottom: 1px solid var(--a-line);
   background: color-mix(in srgb, var(--a-accent) 5%, var(--a-field));
@@ -7410,18 +7937,16 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc-ledger-kind-icon {
   display: grid;
-  width: 32px;
+  width: 38px;
   height: 32px;
   flex: none;
   place-items: center;
   border-radius: 10px;
   background: color-mix(in srgb, var(--a-red) 10%, var(--a-card));
   color: var(--a-red);
-}
-
-.acc-ledger-kind-icon svg {
-  width: 16px;
-  height: 16px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
 }
 
 .acc-ledger-statement li.is-pay .acc-ledger-kind-icon {
@@ -7474,6 +7999,7 @@ html.dark .acc-sell-pay button.is-on {
 
   .acc-ledger-head > span {
     display: flex;
+    box-sizing: border-box;
     min-height: 38px;
     align-items: center;
     padding: 9px 12px;
@@ -7497,15 +8023,18 @@ html.dark .acc-sell-pay button.is-on {
 
   .acc-ledger-statement .acc-ledger-date {
     display: flex;
-    justify-content: center;
+    box-sizing: border-box;
+    justify-content: flex-start;
     padding: 12px 10px 12px 14px;
   }
 
   .acc-ledger-statement .acc-ledger-detail {
+    box-sizing: border-box;
     padding: 9px 12px;
   }
 
   .acc-ledger-statement .acc-ledger-money {
+    box-sizing: border-box;
     justify-content: center;
     padding: 10px 12px;
   }

@@ -1,33 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Ban, ChevronDown, Loader2, Search } from "lucide-react";
+import { Ban, ChevronDown, Filter, Loader2, Search } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
-import { useAuth } from "../auth/AuthContext";
-import { accApi, type AccSale, type AccSaleKind, type AccSalesSummary, type PeriodQuery } from "./accApi";
+import { accApi, type AccSale, type AccSaleKind, type AccSaleSearchScope, type PeriodQuery } from "./accApi";
 import { Empty, PdfButton, PeriodChips, Segmented, Sheet, dateTime, errorText, inr, plural, refreshCatalog, toast } from "./shared";
 
 /**
- * Sales by day. Wholesale bills are listed one by one and open their own
- * page; the counter's retail bills are combined per day by product
- * (Silicone cover × 10), with the single bills one tap away.
+ * Wholesale bills and counter sales by day. Wholesale bills open their own
+ * page; counter sales are combined per day by product (Silicone cover × 10).
  */
 export function AccSalesPage() {
-  const { isAdmin } = useAuth();
   const navigate = useNavigate();
-  const [period, setPeriod] = useState<PeriodQuery>({ period: "today" });
+  const [period, setPeriod] = useState<PeriodQuery>({ period: "all" });
   const [kind, setKind] = useState<AccSaleKind | "">("");
   const [q, setQ] = useState("");
+  const [searchScope, setSearchScope] = useState<AccSaleSearchScope>("all");
   const [showVoid, setShowVoid] = useState(false);
-  const [data, setData] = useState<{ sales: AccSale[]; summary: AccSalesSummary } | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [data, setData] = useState<{ sales: AccSale[] } | null>(null);
   const [open, setOpen] = useState<AccSale | null>(null);
   const [loading, setLoading] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
     setLoading(true);
     return accApi
-      .listSales({ ...period, kind, q: q.trim(), void: showVoid })
-      .then(({ data }) => setData(data))
+      .listSales({ ...period, kind, q: q.trim(), scope: searchScope, void: showVoid })
+      .then(({ data }) => setData({ sales: data.sales }))
       .catch((err) => toast(errorText(err), { tone: "error" }))
       .finally(() => setLoading(false));
   };
@@ -36,7 +36,23 @@ export function AccSalesPage() {
     const t = setTimeout(load, q ? 250 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, kind, q, showVoid]);
+  }, [period, kind, q, searchScope, showVoid]);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!filterRef.current?.contains(event.target as Node)) setFilterOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFilterOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [filterOpen]);
 
   const days = useMemo(() => {
     const map = new Map<string, AccSale[]>();
@@ -47,78 +63,108 @@ export function AccSalesPage() {
     return [...map.entries()];
   }, [data]);
 
-  const s = data?.summary;
+  const filtersActive = period.period !== "all" || searchScope !== "all" || showVoid;
+  const periodLabel =
+    period.period === "custom"
+      ? [period.from, period.to].filter(Boolean).join(" to ") || "Custom"
+      : ({ today: "Today", yesterday: "Yesterday", week: "This week", month: "This month", last30: "30 days", all: "All time" } as const)[period.period];
+  const searchPlaceholder =
+    searchScope === "customer"
+      ? "Search customer name or phone…"
+      : searchScope === "product"
+        ? "Search product name…"
+        : searchScope === "bill"
+          ? "Search bill number…"
+          : "Bill no., customer, phone or product…";
+  const resultNoun = kind === "RETAIL" ? "sale" : kind === "WHOLESALE" ? "bill" : "entry";
+
+  function resetFilters() {
+    setPeriod({ period: "all" });
+    setSearchScope("all");
+    setShowVoid(false);
+  }
 
   return (
     <div className="acc-page">
       <div className="acc-title-row">
-        <h1>Sales</h1>
+        <h1>Bills</h1>
         <PdfButton
-          onDownload={() => accApi.pdf.sales({ ...period, kind, items: true, q: q.trim() })}
-          onShare={() => accApi.sharePdf.sales({ ...period, kind, items: true, q: q.trim() })}
+          onDownload={() => accApi.pdf.sales({ ...period, kind, items: true, q: q.trim(), scope: searchScope, void: showVoid })}
+          onShare={() => accApi.sharePdf.sales({ ...period, kind, items: true, q: q.trim(), scope: searchScope, void: showVoid })}
         />
       </div>
-      <PeriodChips value={period} onChange={setPeriod} />
-      <Segmented
-        value={kind}
-        onChange={setKind}
-        options={[
-          { value: "", label: "All" },
-          { value: "RETAIL", label: "Retail" },
-          { value: "WHOLESALE", label: "Wholesale" },
-        ]}
-      />
-
-      <div className="acc-kpis">
-        <div className="is-main">
-          <small>Total sales</small>
-          <b>{s ? inr(s.total) : "…"}</b>
-          <em>
-            {plural(s?.count ?? 0, "bill")} · {s?.items ?? 0} pcs
-          </em>
-        </div>
-        <div>
-          <small>Retail</small>
-          <b>{s ? inr(s.retailTotal) : "…"}</b>
-          <em>{plural(s?.retailCount ?? 0, "bill")}</em>
-        </div>
-        <div>
-          <small>Wholesale</small>
-          <b>{s ? inr(s.wholesaleTotal) : "…"}</b>
-          <em>{plural(s?.wholesaleCount ?? 0, "bill")}</em>
-        </div>
-        <div>
-          <small>Cash</small>
-          <b className="is-green">{s ? inr(s.cash) : "…"}</b>
-        </div>
-        <div>
-          <small>UPI / online</small>
-          <b className="is-green">{s ? inr(s.online) : "…"}</b>
-        </div>
-        <div>
-          <small>On credit</small>
-          <b className="is-red">{s ? inr(s.due) : "…"}</b>
-        </div>
-        <div>
-          <small>Transport collected</small>
-          <b>{s ? inr(s.transport) : "…"}</b>
-        </div>
-        {isAdmin ? (
-          <div>
-            <small>Profit</small>
-            <b className="is-green">{s ? inr(s.profit) : "…"}</b>
+      <div className="acc-stock-controls acc-bills-controls">
+        <div className="acc-stock-search-row">
+          <label className="acc-search">
+            <Search aria-hidden />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} />
+            <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
+          </label>
+          <div className="acc-stock-filter-wrap" ref={filterRef}>
+            <button
+              type="button"
+              className={clsx("acc-stock-filter-button", filtersActive && "is-active")}
+              onClick={() => setFilterOpen((current) => !current)}
+              aria-expanded={filterOpen}
+              aria-label="Filter bills"
+            >
+              <Filter />
+              <span>Filter</span>
+              {filtersActive ? <i /> : null}
+            </button>
+            {filterOpen ? (
+              <div className="acc-stock-filter-menu acc-bills-filter-menu" role="dialog" aria-label="Bill filters">
+                <div className="acc-stock-filter-menu-head">
+                  <span>Filter bills</span>
+                  {filtersActive ? <button type="button" onClick={resetFilters}>Reset</button> : null}
+                </div>
+                <div className="acc-bills-filter-section">
+                  <b>Match search on</b>
+                  <div className="acc-bills-filter-chips">
+                    {([
+                      ["all", "Everything"],
+                      ["customer", "Customer"],
+                      ["product", "Product"],
+                      ["bill", "Bill no."],
+                    ] as Array<[AccSaleSearchScope, string]>)
+                      .filter(([value]) => value !== "bill" || kind !== "RETAIL")
+                      .map(([value, label]) => (
+                      <button key={value} type="button" className={clsx(searchScope === value && "is-on")} onClick={() => setSearchScope(value)}>
+                        {label}
+                      </button>
+                      ))}
+                  </div>
+                </div>
+                <div className="acc-bills-filter-section">
+                  <b>Period</b>
+                  <PeriodChips value={period} onChange={setPeriod} />
+                </div>
+                <label className="acc-bills-cancelled-filter">
+                  <input type="checkbox" checked={showVoid} onChange={(event) => setShowVoid(event.target.checked)} />
+                  <span>Include cancelled bills</span>
+                </label>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
+        <Segmented
+          className="acc-bills-kind-tabs"
+          value={kind}
+          onChange={(nextKind) => {
+            setKind(nextKind);
+            if (nextKind === "RETAIL" && searchScope === "bill") setSearchScope("all");
+          }}
+          options={[
+            { value: "", label: "All" },
+            { value: "RETAIL", label: "Counter sales" },
+            { value: "WHOLESALE", label: "Wholesale" },
+          ]}
+        />
       </div>
-
-      <label className="acc-search">
-        <Search aria-hidden />
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bill no., customer, item…" />
-        <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
-      </label>
-      <label className="acc-check">
-        <input type="checkbox" checked={showVoid} onChange={(e) => setShowVoid(e.target.checked)} /> Show cancelled bills
-      </label>
+      <div className="acc-bills-result-bar">
+        <span><b>{plural(data?.sales.length ?? 0, resultNoun)}</b> · {periodLabel}</span>
+        {loading ? <Loader2 className="acc-spin" /> : null}
+      </div>
 
       {!data ? (
         <div className="acc-loading">
@@ -133,7 +179,7 @@ export function AccSalesPage() {
               <section key={day}>
                 <h3 className="acc-day-head">
                   <span>{day}</span>
-                  <b>{inr(list.filter((x) => !x.voidedAt).reduce((a, x) => a + x.total - x.transportCharge, 0))}</b>
+                  <b>{plural(list.length, kind === "RETAIL" ? "sale" : kind === "WHOLESALE" ? "bill" : "entry")}</b>
                 </h3>
                 {wholesale.length ? (
                   <ul className="acc-list">
@@ -167,7 +213,7 @@ export function AccSalesPage() {
           })}
         </div>
       ) : (
-        <Empty title="No bills in this period" />
+        <Empty title={kind === "RETAIL" ? "No counter sales in this period" : kind === "WHOLESALE" ? "No bills in this period" : "No activity in this period"} />
       )}
 
       <SaleSheet
@@ -185,7 +231,7 @@ export function AccSalesPage() {
 
 /** One day's counter (retail) sales, combined by product. */
 function CounterDay({ sales, onOpen }: { sales: AccSale[]; onOpen: (sale: AccSale) => void }) {
-  const [showBills, setShowBills] = useState(false);
+  const [showSales, setShowSales] = useState(false);
   const live = sales.filter((x) => !x.voidedAt);
   const byProduct = new Map<string, { name: string; qty: number; amount: number }>();
   for (const sale of live) {
@@ -209,7 +255,7 @@ function CounterDay({ sales, onOpen }: { sales: AccSale[]; onOpen: (sale: AccSal
         <span>
           <strong>Counter sales</strong>
           <small>
-            {plural(live.length, "bill")} · {rows.reduce((a, r) => a + r.qty, 0)} pcs · Cash {inr(cash)} · UPI {inr(online)}
+            {plural(live.length, "sale")} · {rows.reduce((a, r) => a + r.qty, 0)} pcs · Cash {inr(cash)} · UPI {inr(online)}
           </small>
         </span>
         <b>{inr(total)}</b>
@@ -225,16 +271,16 @@ function CounterDay({ sales, onOpen }: { sales: AccSale[]; onOpen: (sale: AccSal
           ))}
         </tbody>
       </table>
-      <button type="button" className={clsx("acc-counter-day-toggle", showBills && "is-open")} onClick={() => setShowBills(!showBills)}>
-        {showBills ? "Hide" : "Show"} the {plural(sales.length, "bill")} <ChevronDown aria-hidden />
+      <button type="button" className={clsx("acc-counter-day-toggle", showSales && "is-open")} onClick={() => setShowSales(!showSales)}>
+        {showSales ? "Hide" : "Show"} the {plural(sales.length, "sale")} <ChevronDown aria-hidden />
       </button>
-      {showBills ? (
+      {showSales ? (
         <ul className="acc-mini-bills">
           {sales.map((sale) => (
             <li key={sale.id} className={clsx(sale.voidedAt && "is-void")}>
               <button type="button" onClick={() => onOpen(sale)}>
                 <span>
-                  {sale.number} · {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                  {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
                   <small>
                     {sale.items.map((i) => `${i.qty}× ${i.name}`).join(", ")}
                     {sale.voidedAt ? " · CANCELLED" : ""}
@@ -263,12 +309,15 @@ export function SaleSheet({
   if (!sale) return null;
 
   async function cancelBill() {
-    const reason = window.prompt(`Cancel ${sale!.number}? Stock goes back. Reason:`, "");
+    const reason = window.prompt(
+      sale!.kind === "WHOLESALE" ? `Cancel ${sale!.number}? Stock goes back. Reason:` : "Cancel this counter sale? Stock goes back. Reason:",
+      "",
+    );
     if (reason === null) return;
     setBusy(true);
     try {
       const { data } = await accApi.voidSale(sale!.id, reason);
-      toast(`${data.number} cancelled`);
+      toast(data.kind === "WHOLESALE" ? `${data.number} cancelled` : "Counter sale cancelled");
       onChanged(data);
     } catch (err) {
       toast(errorText(err), { tone: "error" });
@@ -281,14 +330,16 @@ export function SaleSheet({
     <Sheet
       open
       onClose={onClose}
-      title={`${sale.number}${sale.voidedAt ? " · Cancelled" : ""}`}
-      subtitle={`${sale.kind === "WHOLESALE" ? "Wholesale" : "Retail"} · ${dateTime(sale.saleDate)}${sale.createdByName ? ` · ${sale.createdByName}` : ""}`}
+      title={`${sale.kind === "WHOLESALE" ? sale.number : "Counter sale"}${sale.voidedAt ? " · Cancelled" : ""}`}
+      subtitle={`${sale.kind === "WHOLESALE" ? "Wholesale bill" : "Sale"} · ${dateTime(sale.saleDate)}${sale.createdByName ? ` · ${sale.createdByName}` : ""}`}
       footer={
         <div className="acc-btn-row">
-          <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(sale.id)} onShare={() => accApi.sharePdf.bill(sale.id)} />
+          {sale.kind === "WHOLESALE" ? (
+            <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(sale.id)} onShare={() => accApi.sharePdf.bill(sale.id)} />
+          ) : null}
           {!sale.voidedAt ? (
             <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
-              <Ban /> Cancel bill
+              <Ban /> Cancel {sale.kind === "WHOLESALE" ? "bill" : "sale"}
             </button>
           ) : null}
         </div>

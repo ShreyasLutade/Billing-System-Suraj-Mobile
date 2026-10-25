@@ -90,7 +90,7 @@ export function AccProductPage() {
   if (!product) {
     return (
       <div className="acc-page">
-        <BackLink to="/acc/stock">Stock</BackLink>
+        <BackLink to="/acc/stock" historyBack>Stock</BackLink>
         <Empty title="Product not found">It may have been removed.</Empty>
       </div>
     );
@@ -129,7 +129,7 @@ export function AccProductPage() {
 
   return (
     <div className="acc-page acc-product-page">
-      <BackLink to="/acc/stock">Stock</BackLink>
+      <BackLink to="/acc/stock" historyBack>Stock</BackLink>
 
       <section className="acc-card acc-product-hero">
         <CategoryIcon icon={category?.icon || "package"} variant="3d" size="lg" />

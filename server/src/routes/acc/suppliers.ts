@@ -16,7 +16,7 @@ function badRequest(res: import("express").Response, error: z.ZodError) {
 
 async function supplierRows() {
   const [suppliers, bought, paid] = await Promise.all([
-    prisma.accSupplier.findMany({ orderBy: { name: "asc" }, include: { group: true } }),
+    prisma.accSupplier.findMany({ orderBy: { name: "asc" } }),
     prisma.accPurchase.groupBy({
       by: ["supplierId"],
       where: { supplierId: { not: null } },
@@ -37,7 +37,6 @@ async function supplierRows() {
       phone: s.phone,
       city: s.city,
       address: s.address,
-      group: s.group ? { id: s.group.id, name: s.group.name, color: s.group.color } : null,
       purchased,
       paid: paidTotal,
       balance: round2(purchased - paidTotal),
@@ -56,8 +55,6 @@ accSuppliersRouter.get("/suppliers", async (_req, res, next) => {
   }
 });
 
-const GROUP_COLORS = ["#5d73b6", "#0ea5e9", "#16a34a", "#d97706", "#dc2626", "#9333ea", "#db2777", "#0f766e"];
-
 export const supplierSchema = z.object({
   name: z.string().trim().min(2, "Enter the supplier name").max(80),
   phone: z
@@ -66,9 +63,6 @@ export const supplierSchema = z.object({
     .pipe(z.string().length(10, "Enter the supplier's 10-digit mobile number")),
   city: z.string().trim().max(60).default(""),
   address: z.string().trim().max(200).default(""),
-  groupId: z.string().optional().nullable(),
-  /** A new group typed on the form. */
-  groupName: z.string().trim().max(40).optional(),
 });
 
 type SupplierInput = z.infer<typeof supplierSchema>;
@@ -82,18 +76,7 @@ async function saveSupplier(tx: Prisma.TransactionClient, input: SupplierInput, 
   const samePhone = await tx.accSupplier.findFirst({ where: { phone: input.phone, ...(id ? { NOT: { id } } : {}) } });
   if (samePhone) throw new SupplierClash(`${input.phone} is already saved as ${samePhone.name}`);
 
-  let groupId = input.groupId || null;
-  if (input.groupName) {
-    const count = await tx.accSupplierGroup.count();
-    groupId = (
-      await tx.accSupplierGroup.upsert({
-        where: { name: input.groupName },
-        create: { name: input.groupName, color: GROUP_COLORS[count % GROUP_COLORS.length] },
-        update: {},
-      })
-    ).id;
-  }
-  const data = { name: input.name, phone: input.phone, city: input.city, address: input.address, groupId };
+  const data = { name: input.name, phone: input.phone, city: input.city, address: input.address };
   return id ? tx.accSupplier.update({ where: { id }, data }) : tx.accSupplier.create({ data });
 }
 
@@ -104,14 +87,6 @@ function clashResponse(res: import("express").Response, error: unknown) {
   }
   return false;
 }
-
-accSuppliersRouter.get("/supplier-groups", async (_req, res, next) => {
-  try {
-    res.json({ data: await prisma.accSupplierGroup.findMany({ orderBy: { name: "asc" } }) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 accSuppliersRouter.post("/suppliers", async (req, res, next) => {
   try {
@@ -139,8 +114,6 @@ accSuppliersRouter.get("/suppliers/pdf", async (_req, res, next) => {
   try {
     const rows = await supplierRows();
     const total = (k: "purchased" | "paid" | "balance", list = rows) => round2(list.reduce((a, r) => a + r[k], 0));
-    // One section per supplier group, groups by name, "No group" last.
-    const groupNames = [...new Set(rows.map((r) => r.group?.name || ""))].sort((a, b) => (!a ? 1 : !b ? -1 : a.localeCompare(b)));
     const pdf = await renderAccPdf({
       title: "Suppliers",
       summary: [
@@ -149,10 +122,9 @@ accSuppliersRouter.get("/suppliers/pdf", async (_req, res, next) => {
         { label: "Total paid", value: rs(total("paid")), tone: "green" },
         { label: "Balance to pay", value: rs(total("balance")), tone: "red" },
       ],
-      sections: groupNames.map((groupName) => {
-        const list = rows.filter((r) => (r.group?.name || "") === groupName);
-        return {
-          heading: `${groupName || "No group"}  ·  ${list.length} supplier${list.length === 1 ? "" : "s"}`,
+      sections: [
+        {
+          heading: `All suppliers  ·  ${rows.length} supplier${rows.length === 1 ? "" : "s"}`,
           columns: [
             { key: "name", label: "Supplier", width: 28 },
             { key: "phone", label: "Phone", width: 13 },
@@ -161,7 +133,7 @@ accSuppliersRouter.get("/suppliers/pdf", async (_req, res, next) => {
             { key: "paid", label: "Paid", width: 15, align: "right" },
             { key: "balance", label: "Balance", width: 15, align: "right" },
           ],
-          rows: list.map((r) => ({
+          rows: rows.map((r) => ({
             cells: {
               name: r.name,
               phone: r.phone,
@@ -175,13 +147,13 @@ accSuppliersRouter.get("/suppliers/pdf", async (_req, res, next) => {
           })),
           total: {
             name: "Total",
-            purchased: money(total("purchased", list)),
-            paid: money(total("paid", list)),
-            balance: money(total("balance", list)),
+            purchased: money(total("purchased")),
+            paid: money(total("paid")),
+            balance: money(total("balance")),
           },
           empty: "No suppliers yet.",
-        };
-      }),
+        },
+      ],
     });
     sendPdf(res, pdf, `accessories-suppliers-${istDateString()}.pdf`);
   } catch (error) {
@@ -200,7 +172,6 @@ async function supplierAccount(id: string) {
   const supplier = await prisma.accSupplier.findUnique({
     where: { id },
     include: {
-      group: true,
       purchases: { include: { items: { include: { product: { select: { name: true, categoryId: true } } } } }, orderBy: { purchaseDate: "desc" } },
       payments: { orderBy: { paidAt: "desc" } },
     },
@@ -241,7 +212,6 @@ async function supplierAccount(id: string) {
     phone: supplier.phone,
     city: supplier.city,
     address: supplier.address,
-    group: supplier.group ? { id: supplier.group.id, name: supplier.group.name, color: supplier.group.color } : null,
     createdAt: supplier.createdAt,
     purchased,
     paid,
@@ -336,7 +306,6 @@ accSuppliersRouter.get("/suppliers/:id/pdf", async (req, res, next) => {
         { label: "Phone", value: a.phone },
         { label: "City", value: a.city },
         { label: "Address", value: a.address },
-        { label: "Group", value: a.group?.name || "" },
       ],
       summary: [
         { label: "Purchases", value: String(a.purchases.length) },

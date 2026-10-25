@@ -7,9 +7,8 @@ import { accApi, type AccCustomerDetail, type AccSale } from "./accApi";
 import { Empty, PdfButton, dateTime, errorText, inr, plural, refreshCatalog, shortDate, toast } from "./shared";
 
 /**
- * One bill on its own page: who bought, what, how it was paid and what is
- * still due on it. Wholesale bills open here from Sales and from the
- * customer's account.
+ * One wholesale bill on its own page: who bought, what, how it was paid and
+ * what is still due on it. Counter records may also open here from old links.
  */
 export function AccSaleDetailPage() {
   const { id } = useParams();
@@ -45,7 +44,7 @@ export function AccSaleDetailPage() {
   if (missing) {
     return (
       <div className="acc-page">
-        <BackLink to="/acc/sales">Sales</BackLink>
+        <BackLink to="/acc/sales" historyBack>Bills</BackLink>
         <Empty title="Bill not found">It may have been removed.</Empty>
       </div>
     );
@@ -75,7 +74,7 @@ export function AccSaleDetailPage() {
   const pieces = sale.items.reduce((a, i) => a + i.qty, 0);
   const phone = customer?.phone || sale.customerPhone;
   const message = [
-    `Bill ${sale.number} · ${shortDate(sale.saleDate)}`,
+    wholesale ? `Bill ${sale.number} · ${shortDate(sale.saleDate)}` : `Counter sale · ${shortDate(sale.saleDate)}`,
     ...sale.items.map((i) => `${i.qty} × ${i.name} @ ${i.rate}`),
     sale.transportCharge > 0 ? `Transport charges: ₹${sale.transportCharge}` : "",
     `Total: ₹${sale.total}`,
@@ -86,12 +85,15 @@ export function AccSaleDetailPage() {
     .join("\n");
 
   async function cancelBill() {
-    const reason = window.prompt(`Cancel ${sale!.number}? Stock goes back. Reason:`, "");
+    const reason = window.prompt(
+      sale!.kind === "WHOLESALE" ? `Cancel ${sale!.number}? Stock goes back. Reason:` : "Cancel this counter sale? Stock goes back. Reason:",
+      "",
+    );
     if (reason === null) return;
     setBusy(true);
     try {
       const { data } = await accApi.voidSale(sale!.id, reason);
-      toast(`${data.number} cancelled`);
+      toast(data.kind === "WHOLESALE" ? `${data.number} cancelled` : "Counter sale cancelled");
       void refreshCatalog();
       await load();
     } catch (err) {
@@ -104,14 +106,16 @@ export function AccSaleDetailPage() {
   return (
     <div className="acc-page acc-bill-page">
       <div className="acc-bill-topbar">
-        <BackLink to="/acc/sales">Sales</BackLink>
+        <BackLink to="/acc/sales" historyBack>Bills</BackLink>
         <div className="acc-bill-top-actions">
-          <PdfButton
-            actionLabels
-            className="has-action-labels"
-            onDownload={() => accApi.pdf.bill(sale.id)}
-            onShare={() => accApi.sharePdf.bill(sale.id)}
-          />
+          {wholesale ? (
+            <PdfButton
+              actionLabels
+              className="has-action-labels"
+              onDownload={() => accApi.pdf.bill(sale.id)}
+              onShare={() => accApi.sharePdf.bill(sale.id)}
+            />
+          ) : null}
           {sale.customerId ? (
             <button type="button" className="acc-btn is-ghost" onClick={() => navigate(`/acc/dues/${sale.customerId}`)}>
               <UserRound /> Customer account
@@ -129,7 +133,7 @@ export function AccSaleDetailPage() {
           ) : null}
           {!sale.voidedAt ? (
             <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
-              {busy ? <Loader2 className="acc-spin" /> : <Ban />} Cancel bill
+              {busy ? <Loader2 className="acc-spin" /> : <Ban />} Cancel {wholesale ? "bill" : "sale"}
             </button>
           ) : null}
         </div>
@@ -138,8 +142,8 @@ export function AccSaleDetailPage() {
       <article className="acc-bill-document">
         <header className="acc-bill-head">
           <div>
-            <small>{wholesale ? "Wholesale bill" : "Counter bill"}</small>
-            <h1 className="acc-h1">{sale.number}</h1>
+            <small>{wholesale ? "Wholesale bill" : "Counter sale"}</small>
+            <h1 className="acc-h1">{wholesale ? sale.number : "Sale details"}</h1>
             <span className="acc-bill-meta">
               {dateTime(sale.saleDate)}
               {sale.createdByName ? ` · by ${sale.createdByName}` : ""}

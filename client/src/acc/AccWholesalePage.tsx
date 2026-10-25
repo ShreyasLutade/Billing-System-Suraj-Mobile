@@ -17,7 +17,8 @@ import { Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refre
 /**
  * Wholesale bill: a shop buys in bulk, usually on credit. Pick (or add) the
  * customer, add items with big quantities, take what they pay now, and the
- * rest goes to their dues. The draft survives a reload on this device.
+ * rest goes to their dues. Items and payment details survive a reload, but
+ * customer details always start blank when the page is opened again.
  */
 
 type Line = { key: string; productId: string | null; name: string; qty: number; rate: number; stockQty: number | null };
@@ -74,20 +75,8 @@ function loadDraft(): Draft {
     return {
       ...EMPTY,
       ...saved,
-      customerInput: saved.customerInput
-        ? { ...EMPTY_CUSTOMER, ...saved.customerInput }
-        : saved.customer
-          ? {
-              ...EMPTY_CUSTOMER,
-              name: saved.customer.name,
-              phone: saved.customer.phone,
-              shopName: saved.customer.shopName,
-              city: saved.customer.city,
-              address: saved.customer.address,
-              groupId: saved.customer.group?.id || null,
-              creditLimit: saved.customer.creditLimit,
-            }
-          : EMPTY_CUSTOMER,
+      customer: null,
+      customerInput: EMPTY_CUSTOMER,
       pay: legacyPay === "CREDIT" ? "CREDIT" : "PAY",
       useCash: saved.useCash ?? (Boolean(legacyPaid) && saved.method !== "ONLINE"),
       useOnline: saved.useOnline ?? (Boolean(legacyPaid) && saved.method === "ONLINE"),
@@ -106,7 +95,7 @@ export function AccWholesalePage() {
   const [draft, setDraft] = useState<Draft>(loadDraft);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<AccSale | null>(null);
-  const [savedAction, setSavedAction] = useState<"share" | "download" | null>(null);
+  const [savedAction, setSavedAction] = useState<"download" | null>(null);
   const [itemQuery, setItemQuery] = useState("");
   const refId = useRef(newRef());
   const customerInput = useRef<HTMLInputElement>(null);
@@ -116,7 +105,10 @@ export function AccWholesalePage() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ ...draft, customer: null, customerInput: EMPTY_CUSTOMER }),
+      );
     } catch {
       /* ignore */
     }
@@ -350,26 +342,23 @@ export function AccWholesalePage() {
     }
   }
 
-  async function shareSavedBill(sale: AccSale) {
+  function shareSavedBill(sale: AccSale) {
     if (savedAction) return;
-    setSavedAction("share");
+    const phone = completePhone(sale.customerPhone);
+    if (!phone) {
+      toast("This customer does not have a valid WhatsApp number", { tone: "error" });
+      return;
+    }
     const paidAmount = sale.cashAmount + sale.onlineAmount;
     const message = [
       `Thank you ${sale.customerName} for purchasing with us!`,
-      `Your bill ${sale.number} for ₹${sale.total} is attached.`,
+      `Your bill ${sale.number} is ₹${sale.total}.`,
       sale.transportCharge > 0 ? `Transport charges: ₹${sale.transportCharge}` : "",
       `Paid: ₹${paidAmount}${sale.dueAmount > 0 ? ` · Due: ₹${sale.dueAmount}` : ""}`,
+      sale.dueAmount > 0 && sale.dueDate ? `Please pay by ${shortDate(sale.dueDate)}.` : "",
       "We appreciate your business.",
     ].filter(Boolean).join("\n");
-    try {
-      await accApi.sharePdf.bill(sale.id, message);
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        toast(errorText(error), { tone: "error" });
-      }
-    } finally {
-      setSavedAction(null);
-    }
+    window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   }
 
   async function downloadSavedBill(sale: AccSale) {
@@ -715,9 +704,9 @@ export function AccWholesalePage() {
                 <strong>View bill</strong>
                 <small>Open bill</small>
               </Link>
-              <button type="button" className="acc-bill-success-action is-share" disabled={Boolean(savedAction)} onClick={() => void shareSavedBill(saved)}>
-                {savedAction === "share" ? <Loader2 className="acc-spin" /> : <Share2 />}
-                <strong>{savedAction === "share" ? "Preparing…" : "Share"}</strong>
+              <button type="button" className="acc-bill-success-action is-share" disabled={savedAction === "download"} onClick={() => shareSavedBill(saved)}>
+                <Share2 />
+                <strong>Share</strong>
                 <small>WhatsApp</small>
               </button>
               <button type="button" className="acc-bill-success-action is-download" disabled={Boolean(savedAction)} onClick={() => void downloadSavedBill(saved)}>

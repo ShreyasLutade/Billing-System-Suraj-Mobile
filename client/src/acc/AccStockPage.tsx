@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ChevronDown, ClipboardCheck, FileDown, Loader2, PackagePlus, Search, Star, Truck } from "lucide-react";
+import { Check, ChevronDown, ClipboardCheck, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCategory, type AccProduct } from "./accApi";
@@ -51,6 +52,7 @@ export function AccStockPage() {
   const [q, setQ] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState<string[]>(loadCollapsed);
   const [visibleCount, setVisibleCount] = useState(STOCK_PAGE_SIZE);
@@ -88,6 +90,11 @@ export function AccStockPage() {
 
   useEffect(() => setVisibleCount(STOCK_PAGE_SIZE), [q, categoryId, filter]);
 
+  useEffect(() => {
+    document.body.classList.add("has-fab");
+    return () => document.body.classList.remove("has-fab");
+  }, []);
+
   const visibleList = list.slice(0, visibleCount);
 
   // Category sections in the counter's order; only categories with matches.
@@ -107,6 +114,13 @@ export function AccStockPage() {
   const value = products.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
   const lowCount = products.filter(isLow).length;
   const uncheckedCount = products.filter((p) => needsCheck(p.countedAt)).length;
+  const filterOptions: Array<[Filter, string, string, number]> = [
+    ["all", "All stock", "Every product", products.length],
+    ["fav", "On counter", "Counter favourites", products.filter((p) => p.isFavourite).length],
+    ["low", "Low & out", "Needs restocking", lowCount],
+    ["check", "Not counted", "Weekly check pending", uncheckedCount],
+  ];
+  const activeFilterLabel = filterOptions.find(([key]) => key === filter)?.[1] || "All stock";
 
   return (
     <div className="acc-page acc-stock-page">
@@ -116,14 +130,20 @@ export function AccStockPage() {
           <button type="button" className="acc-icon-btn" onClick={() => setPdfOpen(true)} aria-label="Download or share stock" title="Download or share">
             <FileDown />
           </button>
-          <Link to="/acc/suppliers" className="acc-btn is-ghost">
-            <Truck /> Suppliers
-          </Link>
-          <Link to="/acc/stock/in" className="acc-btn is-primary">
+          <Link to="/acc/stock/in" className="acc-btn is-primary acc-stock-desktop-add">
             <PackagePlus /> Add stock
           </Link>
         </div>
       </div>
+
+      {createPortal(
+        <div className="acc-stock-fab-wrap">
+          <Link to="/acc/stock/in" className="acc-stock-fab fab-glass" aria-label="Add stock" title="Add stock">
+            <Plus />
+          </Link>
+        </div>,
+        document.body,
+      )}
 
       <Link to="/acc/stock/check" className={clsx("acc-check-banner", uncheckedCount === 0 && "is-done")}>
         <span className="acc-check-banner-icon">
@@ -162,11 +182,62 @@ export function AccStockPage() {
       </div>
 
       <div className="acc-stock-controls">
-        <label className="acc-search">
-          <Search aria-hidden />
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, model or barcode…" />
-          <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
-        </label>
+        <div className="acc-stock-search-row">
+          <label className="acc-search">
+            <Search aria-hidden />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, model or barcode…" />
+            <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
+          </label>
+          <div className="acc-stock-filter-wrap">
+            <button
+              type="button"
+              className={clsx("acc-stock-filter-button", filter !== "all" && "is-active")}
+              onClick={() => setFilterOpen((open) => !open)}
+              aria-expanded={filterOpen}
+              aria-label="Filter stock"
+            >
+              <SlidersHorizontal />
+              <span>{filter === "all" ? "Filter" : activeFilterLabel}</span>
+              {filter !== "all" ? <i /> : null}
+            </button>
+            {filterOpen ? (
+              <div className="acc-stock-filter-menu" role="dialog" aria-label="Stock filters">
+                <div className="acc-stock-filter-menu-head">
+                  <span>Show products</span>
+                  {filter !== "all" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilter("all");
+                        setFilterOpen(false);
+                      }}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                {filterOptions.map(([key, label, hint, count]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={clsx(filter === key && "is-on")}
+                    onClick={() => {
+                      setFilter(key);
+                      setFilterOpen(false);
+                    }}
+                  >
+                    <span>
+                      <b>{label}</b>
+                      <small>{hint}</small>
+                    </span>
+                    <em>{count}</em>
+                    {filter === key ? <Check /> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
 
         <div className="acc-chips is-scroll">
           <button type="button" className={clsx("acc-chip", !categoryId && "is-on")} onClick={() => setCategoryId("")}>
@@ -181,21 +252,6 @@ export function AccStockPage() {
             >
               <CategoryIcon icon={c.icon} variant="3d" size="xs" />
               {c.name}
-            </button>
-          ))}
-        </div>
-        <div className="acc-filter-tabs">
-          {(
-            [
-              ["all", "All", products.length],
-              ["fav", "On counter", products.filter((p) => p.isFavourite).length],
-              ["low", "Low & out", lowCount],
-              ["check", "Not counted", uncheckedCount],
-            ] as Array<[Filter, string, number]>
-          ).map(([key, label, count]) => (
-            <button key={key} type="button" className={clsx(filter === key && "is-on")} onClick={() => setFilter(key)}>
-              {label}
-              <small>{count}</small>
             </button>
           ))}
         </div>
@@ -254,12 +310,11 @@ export function AccStockPage() {
         </Empty>
       )}
 
-      <Sheet open={pdfOpen} onClose={() => setPdfOpen(false)} title="Stock PDF" subtitle="Download the stock list">
+      <Sheet open={pdfOpen} onClose={() => setPdfOpen(false)} title="Stock PDF" subtitle="Choose products, then download or share">
         <div className="acc-pdf-options">
-          <PdfButton label="All products" onDownload={() => accApi.pdf.stock({ categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ categoryId, cost: isAdmin })} />
-          <PdfButton label="Low & out of stock (to order)" onDownload={() => accApi.pdf.stock({ filter: "low", categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ filter: "low", categoryId, cost: isAdmin })} />
-          <PdfButton label="Only in stock" onDownload={() => accApi.pdf.stock({ filter: "instock", categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ filter: "instock", categoryId, cost: isAdmin })} />
-          <PdfButton label="Counter favourites" onDownload={() => accApi.pdf.stock({ filter: "fav", categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ filter: "fav", categoryId, cost: isAdmin })} />
+          <PdfButton actionLabels className="has-action-labels acc-stock-pdf-action" label="All products" onDownload={() => accApi.pdf.stock({ categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ categoryId, cost: isAdmin })} />
+          <PdfButton actionLabels className="has-action-labels acc-stock-pdf-action" label="In stock" onDownload={() => accApi.pdf.stock({ filter: "instock", categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ filter: "instock", categoryId, cost: isAdmin })} />
+          <PdfButton actionLabels className="has-action-labels acc-stock-pdf-action is-out" label="Out of stock" onDownload={() => accApi.pdf.stock({ filter: "out", categoryId, cost: isAdmin })} onShare={() => accApi.sharePdf.stock({ filter: "out", categoryId, cost: isAdmin })} />
           <p className="acc-hint">
             {categoryId ? `Only ${categories.find((c) => c.id === categoryId)?.name}. ` : ""}
             {isAdmin ? "Includes cost price." : ""}
@@ -324,23 +379,25 @@ function StockSection({
                 <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/stock/${p.id}`)}>
                   <span className="acc-row-text">
                     <strong>{p.name}</strong>
-                    <small>
-                      {p.brand ? `${p.brand} · ` : ""}
-                      {inr(p.sellingPrice)}
-                      {p.wholesalePrice ? ` · wholesale ${inr(p.wholesalePrice)}` : ""}
-                    </small>
-                    <span className="acc-row-meta">
-                      {p.models.length ? (
-                        <span className="acc-sortbar" title={`${sorted} of ${total} sorted by phone brand`}>
-                          <span>
-                            <i style={{ width: `${total ? Math.min(100, (sorted / total) * 100) : 0}%` }} />
+                    <span className="acc-stock-product-details">
+                      <small>
+                        {p.brand ? `${p.brand} · ` : ""}
+                        {inr(p.sellingPrice)}
+                        {p.wholesalePrice ? ` · wholesale ${inr(p.wholesalePrice)}` : ""}
+                      </small>
+                      <span className="acc-row-meta">
+                        {p.models.length ? (
+                          <span className="acc-sortbar" title={`${sorted} of ${total} sorted by phone brand`}>
+                            <span>
+                              <i style={{ width: `${total ? Math.min(100, (sorted / total) * 100) : 0}%` }} />
+                            </span>
+                            <em>
+                              {sorted}/{total} sorted
+                            </em>
                           </span>
-                          <em>
-                            {sorted}/{total} sorted
-                          </em>
-                        </span>
-                      ) : null}
-                      <span className={clsx("acc-checked", stale && "is-stale")}>{checkedLabel(p.countedAt)}</span>
+                        ) : null}
+                        <span className={clsx("acc-checked", stale && "is-stale")}>{checkedLabel(p.countedAt)}</span>
+                      </span>
                     </span>
                   </span>
                   <StockBadge qty={p.stockQty} low={p.lowStockAt} long />

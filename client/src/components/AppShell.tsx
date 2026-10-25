@@ -167,7 +167,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
     ? [
         { to: "/acc", label: "Counter", icon: LayoutGrid, end: true },
         { to: "/acc/wholesale", label: "Wholesale", icon: ShoppingBag },
-        { to: "/acc/sales", label: "Sales", icon: ReceiptText },
+        { to: "/acc/sales", label: "Bills", icon: ReceiptText },
         { to: "/acc/stock", label: "Stock", icon: Package },
         { to: "/acc/suppliers", label: "Suppliers", icon: Truck },
         { to: "/acc/dues", label: "Dues", icon: Wallet },

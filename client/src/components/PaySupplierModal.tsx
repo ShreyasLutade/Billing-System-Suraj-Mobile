@@ -6,7 +6,15 @@ import clsx from "clsx";
 import { useVisualViewportStyle } from "../hooks/useVisualViewport";
 import { api, formatINR } from "../lib/api";
 import { matchesElasticFields } from "../lib/elasticSearch";
-import type { Supplier } from "../types";
+
+export type PaySupplierListItem = {
+  id: string;
+  name: string;
+  phone?: string | null;
+  outstanding: number;
+};
+
+type PaySupplierResponse = Promise<{ data: { paid: number; outstanding: number } }>;
 
 /** Rupees → paise, so comparisons against the outstanding are exact. */
 function toPaise(value: number) {
@@ -33,13 +41,16 @@ export function PaySupplierModal({
   suppliers,
   onClose,
   onPaid,
+  paySupplier = api.paySupplier,
 }: {
   open: boolean;
   /** Suppliers from the list page (with their ledger totals). */
-  suppliers: Supplier[];
+  suppliers: PaySupplierListItem[];
   onClose: () => void;
   /** Called after a successful payment so the page can reload totals. */
   onPaid: (message: string) => void;
+  /** Allows another shop section to reuse this exact payment experience. */
+  paySupplier?: (id: string, amount?: number, paidAt?: string) => PaySupplierResponse;
 }) {
   const [query, setQuery] = useState("");
   const [listOpen, setListOpen] = useState(false);
@@ -107,7 +118,7 @@ export function PaySupplierModal({
     !overpay &&
     (mode === "full" || (parsed !== null && "paise" in parsed));
 
-  function choose(supplier: Supplier) {
+  function choose(supplier: PaySupplierListItem) {
     setSelectedId(supplier.id);
     setQuery(supplier.name);
     setListOpen(false);
@@ -146,7 +157,7 @@ export function PaySupplierModal({
     try {
       // "Full" sends no amount, so the server clears exactly what it has as
       // outstanding even if the list here is a little out of date.
-      const { data } = await api.paySupplier(
+      const { data } = await paySupplier(
         selected.id,
         mode === "full" ? undefined : payPaise / 100,
         paidAt,

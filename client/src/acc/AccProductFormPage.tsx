@@ -151,7 +151,7 @@ export function AccProductFormPage() {
 
   return (
     <div className="acc-page acc-product-form">
-      <BackLink to="/acc/stock">Stock</BackLink>
+      <BackLink to="/acc/stock" historyBack>Stock</BackLink>
       <h1 className="acc-h1">{editing ? "Edit product" : "New product"}</h1>
 
       <section className="acc-card">

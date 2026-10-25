@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, ChevronRight, FileDown, Info, Loader2, Plus, Search, Share2, Trash2 } from "lucide-react";
+import { Check, ChevronDown, FileDown, Info, Loader2, Plus, Search, Share2, Trash2, Wallet } from "lucide-react";
 import { BackLink, SearchClearButton } from "../components/ui";
+import { PaySupplierModal } from "../components/PaySupplierModal";
 import {
   accApi,
   type AccCategory,
   type AccProduct,
   type AccSupplier,
-  type AccSupplierGroup,
   type AccSupplierInput,
 } from "./accApi";
 import {
+  CategoryIcon,
   Empty,
   PdfButton,
   Segmented,
@@ -27,7 +28,7 @@ import {
   useAccCatalog,
 } from "./shared";
 
-const EMPTY_SUPPLIER: AccSupplierInput = { name: "", phone: "", city: "", address: "", groupId: null, groupName: "" };
+const EMPTY_SUPPLIER: AccSupplierInput = { name: "", phone: "", city: "", address: "" };
 
 /** What stops a new supplier from being saved, or "" when it can be. */
 function supplierProblem(input: AccSupplierInput, suppliers: AccSupplier[]) {
@@ -40,7 +41,7 @@ function supplierProblem(input: AccSupplierInput, suppliers: AccSupplier[]) {
 }
 
 
-type SortKey = "name" | "city" | "group" | "purchaseCount" | "purchased" | "paid" | "balance" | "lastPurchaseAt";
+type SortKey = "name" | "city" | "purchaseCount" | "purchased" | "paid" | "balance" | "lastPurchaseAt";
 
 /** Money first, so "to pay" is on screen without scrolling sideways. */
 const SUPPLIER_COLUMNS: Array<{ key: SortKey; label: string; num?: boolean }> = [
@@ -51,26 +52,23 @@ const SUPPLIER_COLUMNS: Array<{ key: SortKey; label: string; num?: boolean }> = 
   { key: "purchaseCount", label: "Bills", num: true },
   { key: "lastPurchaseAt", label: "Last bought" },
   { key: "city", label: "City" },
-  { key: "group", label: "Group" },
 ];
 
 function sortValue(s: AccSupplier, key: SortKey): string | number {
-  if (key === "group") return s.group?.name || "";
   if (key === "lastPurchaseAt") return s.lastPurchaseAt ? new Date(s.lastPurchaseAt).getTime() : 0;
   return s[key];
 }
 
 /**
- * Suppliers as a sheet: one row each, sortable columns, search and group
- * filter, totals at the bottom. Tap a row for the supplier's page; the PDF
- * icon gives their statement.
+ * Suppliers as a sheet: one row each, sortable columns, search and totals at
+ * the bottom. Tap a row for the supplier's page; the PDF icon gives their
+ * statement.
  */
 export function AccSuppliersPage() {
   const navigate = useNavigate();
   const [list, setList] = useState<AccSupplier[] | null>(null);
   const [q, setQ] = useState("");
-  const [groupFilter, setGroupFilter] = useState("");
-  const [onlyOwed, setOnlyOwed] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "balance", dir: -1 });
 
   useEffect(() => {
@@ -81,14 +79,13 @@ export function AccSuppliersPage() {
   }, []);
 
   const all = list || [];
-  const groups = [...new Map(all.filter((s) => s.group).map((s) => [s.group!.id, s.group!])).values()].sort((a, b) =>
-    a.name.localeCompare(b.name),
+  const paymentSuppliers = useMemo(
+    () => (list || []).map((supplier) => ({ id: supplier.id, name: supplier.name, phone: supplier.phone, outstanding: Math.max(supplier.balance, 0) })),
+    [list],
   );
   const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const rows = all
-    .filter((s) => !groupFilter || (groupFilter === "-" ? !s.group : s.group?.id === groupFilter))
-    .filter((s) => !onlyOwed || s.balance > 0)
-    .filter((s) => tokens.every((t) => `${s.name} ${s.phone} ${s.city} ${s.group?.name || ""}`.toLowerCase().includes(t)))
+    .filter((s) => tokens.every((t) => `${s.name} ${s.phone} ${s.city}`.toLowerCase().includes(t)))
     .sort((a, b) => {
       const x = sortValue(a, sort.key);
       const y = sortValue(b, sort.key);
@@ -99,19 +96,22 @@ export function AccSuppliersPage() {
   const owed = all.reduce((a, s) => a + Math.max(s.balance, 0), 0);
 
   function sortBy(key: SortKey) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: key === "name" || key === "city" || key === "group" ? 1 : -1 }));
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: key === "name" || key === "city" ? 1 : -1 }));
   }
 
   return (
     <div className="acc-page acc-suppliers-page">
-      <BackLink to="/acc/stock">Stock</BackLink>
+      <BackLink to="/acc/stock" historyBack>Stock</BackLink>
       <div className="acc-title-row">
         <h1>Suppliers</h1>
         <div className="acc-head-actions">
+          <button type="button" className="acc-btn is-primary" onClick={() => setPaying(true)}>
+            <Wallet /> Pay supplier
+          </button>
           <PdfButton onDownload={() => accApi.pdf.suppliers()} onShare={() => accApi.sharePdf.suppliers()} />
         </div>
       </div>
-      <div className="acc-stat-strip">
+      <div className="acc-stat-strip acc-supplier-summary">
         <div>
           <small>Suppliers</small>
           <b>{list?.length ?? "…"}</b>
@@ -125,7 +125,7 @@ export function AccSuppliersPage() {
           <b className="is-green">{inr(all.reduce((a, s) => a + s.paid, 0))}</b>
         </div>
         <div>
-          <small>To pay</small>
+          <small>Due</small>
           <b className="is-red">{inr(owed)}</b>
         </div>
       </div>
@@ -135,31 +135,6 @@ export function AccSuppliersPage() {
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search supplier, city, phone…" />
         <SearchClearButton visible={Boolean(q)} onClear={() => setQ("")} />
       </label>
-      <div className="acc-chips is-scroll">
-        <button type="button" className={clsx("acc-chip", !groupFilter && "is-on")} onClick={() => setGroupFilter("")}>
-          All groups
-        </button>
-        {groups.map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            className={clsx("acc-chip", groupFilter === g.id && "is-on")}
-            onClick={() => setGroupFilter(groupFilter === g.id ? "" : g.id)}
-          >
-            <i className="acc-dot" style={{ background: g.color }} />
-            {g.name}
-          </button>
-        ))}
-        {all.some((s) => !s.group) ? (
-          <button type="button" className={clsx("acc-chip", groupFilter === "-" && "is-on")} onClick={() => setGroupFilter(groupFilter === "-" ? "" : "-")}>
-            No group
-          </button>
-        ) : null}
-        <button type="button" className={clsx("acc-chip", onlyOwed && "is-on")} onClick={() => setOnlyOwed(!onlyOwed)}>
-          Only to pay
-        </button>
-      </div>
-
       {!list ? (
         <div className="acc-loading">
           <Loader2 className="acc-spin" />
@@ -197,15 +172,6 @@ export function AccSuppliersPage() {
                   <td className="is-num">{s.purchaseCount}</td>
                   <td className="is-nowrap">{s.lastPurchaseAt ? shortDate(s.lastPurchaseAt) : "—"}</td>
                   <td>{s.city || "—"}</td>
-                  <td className="is-nowrap">
-                    {s.group ? (
-                      <>
-                        <i className="acc-dot" style={{ background: s.group.color }} /> {s.group.name}
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
                   <td className="is-icon" onClick={(e) => e.stopPropagation()}>
                     <SupplierPdfIcon id={s.id} name={s.name} />
                   </td>
@@ -222,7 +188,6 @@ export function AccSuppliersPage() {
                 <td />
                 <td />
                 <td />
-                <td />
               </tr>
             </tfoot>
           </table>
@@ -232,6 +197,25 @@ export function AccSuppliersPage() {
           {all.length ? null : "Suppliers are added on Add stock, with their first purchase."}
         </Empty>
       )}
+      <PaySupplierModal
+        open={paying}
+        suppliers={paymentSuppliers}
+        onClose={() => setPaying(false)}
+        paySupplier={async (id, amount, paidAt) => {
+          const supplier = all.find((item) => item.id === id);
+          const paid = amount ?? Math.max(supplier?.balance || 0, 0);
+          await accApi.paySupplier(id, { amount: paid, method: "CASH", paidAt });
+          return { data: { paid, outstanding: Math.max(Math.round(((supplier?.balance || 0) - paid) * 100) / 100, 0) } };
+        }}
+        onPaid={(message) => {
+          setPaying(false);
+          toast(message, { tone: "success" });
+          accApi
+            .suppliers()
+            .then(({ data }) => setList(data))
+            .catch((err) => toast(errorText(err), { tone: "error" }));
+        }}
+      />
     </div>
   );
 }
@@ -263,7 +247,7 @@ function SupplierPdfIcon({ id, name }: { id: string; name: string }) {
 
 /**
  * New supplier details: name, mobile (checked against saved suppliers once
- * all 10 digits are in), city, address and group.
+ * all 10 digits are in), city and address.
  */
 function SupplierFields({
   value,
@@ -276,13 +260,6 @@ function SupplierFields({
   suppliers: AccSupplier[];
   onUseExisting: (supplier: AccSupplier) => void;
 }) {
-  const [groups, setGroups] = useState<AccSupplierGroup[]>([]);
-  useEffect(() => {
-    accApi
-      .supplierGroups()
-      .then(({ data }) => setGroups(data))
-      .catch(() => undefined);
-  }, []);
   const set = (patch: Partial<AccSupplierInput>) => onChange({ ...value, ...patch });
   const phone = completePhone(value.phone);
   const match = phone ? suppliers.find((x) => x.phone === phone) : undefined;
@@ -328,35 +305,6 @@ function SupplierFields({
           <input value={value.address} onChange={(e) => set({ address: e.target.value })} placeholder="Market, shop no." />
         </label>
       </div>
-      <div className="acc-field">
-        <span>Group</span>
-        <div className="acc-chips">
-          <button
-            type="button"
-            className={clsx("acc-chip", !value.groupId && !value.groupName && "is-on")}
-            onClick={() => set({ groupId: null, groupName: "" })}
-          >
-            None
-          </button>
-          {groups.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className={clsx("acc-chip", value.groupId === g.id && !value.groupName && "is-on")}
-              onClick={() => set({ groupId: g.id, groupName: "" })}
-            >
-              <i className="acc-dot" style={{ background: g.color }} />
-              {g.name}
-            </button>
-          ))}
-          <input
-            className="acc-chip-input"
-            value={value.groupName}
-            onChange={(e) => set({ groupName: e.target.value, groupId: null })}
-            placeholder="+ New group"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -385,7 +333,7 @@ function SupplierChooser({
   // Nothing is listed until something is typed; then the best few drop down.
   const shown = tokens.length
     ? suppliers
-        .filter((x) => tokens.every((t) => `${x.name} ${x.phone} ${x.city} ${x.group?.name || ""}`.toLowerCase().includes(t)))
+        .filter((x) => tokens.every((t) => `${x.name} ${x.phone} ${x.city}`.toLowerCase().includes(t)))
         .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, 8)
     : [];
@@ -417,7 +365,7 @@ function SupplierChooser({
         <div className="acc-picked-supplier">
           <span>
             <strong>{picked.name}</strong>
-            <small>{[picked.city, picked.phone, picked.group?.name].filter(Boolean).join(" · ")}</small>
+            <small>{[picked.city, picked.phone].filter(Boolean).join(" · ")}</small>
           </span>
           {picked.balance > 0 ? <b className="is-red">To pay {inr(picked.balance)}</b> : null}
           <button type="button" className="acc-link-btn" onClick={() => onPick("")}>
@@ -453,7 +401,7 @@ function SupplierChooser({
                   >
                     <span>
                       <strong>{x.name}</strong>
-                      <small>{[x.city, x.phone, x.group?.name].filter(Boolean).join(" · ")}</small>
+                      <small>{[x.city, x.phone].filter(Boolean).join(" · ")}</small>
                     </span>
                     {x.balance > 0 ? <b className="is-red">{inr(x.balance)}</b> : null}
                   </button>
@@ -673,7 +621,7 @@ export function AccStockInPage() {
     try {
       await accApi.createPurchase({
         ...(supplierMode === "NEW"
-          ? { supplier: { ...newSupplier, name: newSupplier.name.trim(), groupName: newSupplier.groupName?.trim() || undefined } }
+          ? { supplier: { ...newSupplier, name: newSupplier.name.trim() } }
           : { supplierId }),
         paidNow,
         paidMethod: method,
@@ -706,7 +654,7 @@ export function AccStockInPage() {
 
   return (
     <div className="acc-page acc-add-stock">
-      <BackLink to="/acc/stock">Stock</BackLink>
+      <BackLink to="/acc/stock" historyBack>Stock</BackLink>
       <div className="acc-stock-header">
         <div>
           <h1 className="acc-h1">Add stock</h1>
@@ -814,11 +762,22 @@ function BulkStockSheet({
   onLines: React.Dispatch<React.SetStateAction<InLine[]>>;
 }) {
   const [suggestions, setSuggestions] = useState<{ row: number; kind: "brand" | "product" } | null>(null);
+  const [categoryRow, setCategoryRow] = useState<number | null>(null);
   const [deleteLineKey, setDeleteLineKey] = useState<string | null>(null);
+  const categoryPickerRef = useRef<HTMLDivElement>(null);
   const brands = useMemo(
     () => [...new Set(["Local", ...products.map((product) => product.brand.trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
     [products],
   );
+
+  useEffect(() => {
+    if (categoryRow === null) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!categoryPickerRef.current?.contains(event.target as Node)) setCategoryRow(null);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [categoryRow]);
 
   function draftFor(line: InLine) {
     if (line.draft) return line.draft;
@@ -865,6 +824,7 @@ function BulkStockSheet({
       );
     });
     setSuggestions(null);
+    setCategoryRow(null);
     requestAnimationFrame(() => focusCell(rowIndex, 3));
   }
 
@@ -874,6 +834,7 @@ function BulkStockSheet({
       return remaining.length ? remaining : [emptyStockSheetLine()];
     });
     setSuggestions(null);
+    setCategoryRow(null);
     setDeleteLineKey(null);
   }
 
@@ -887,30 +848,13 @@ function BulkStockSheet({
     }
     requestAnimationFrame(() => {
       const target = document.querySelector<HTMLElement>(`[data-stock-cell="${nextRow}-${nextColumn}"]`);
-      if (target instanceof HTMLSelectElement && target.disabled) {
+      if ((target instanceof HTMLSelectElement || target instanceof HTMLButtonElement) && target.disabled) {
         focusCell(nextRow, nextColumn + 1);
         return;
       }
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     });
-  }
-
-  function nextButton(rowIndex: number, columnIndex: number) {
-    return (
-      <button
-        type="button"
-        className="acc-sheet-next"
-        tabIndex={-1}
-        aria-label="Go to next field"
-        onPointerDown={(event) => {
-          event.preventDefault();
-          focusCell(rowIndex, columnIndex + 1);
-        }}
-      >
-        <ChevronRight />
-      </button>
-    );
   }
 
   return (
@@ -983,7 +927,6 @@ function BulkStockSheet({
                       ))}
                     </ul>
                   ) : null}
-                  {nextButton(rowIndex, 0)}
                 </div>
                 <div className={clsx("acc-stock-sheet-cell is-product", suggestions?.row === rowIndex && suggestions.kind === "product" && "is-open")}>
                   <input
@@ -1019,23 +962,58 @@ function BulkStockSheet({
                       ))}
                     </ul>
                   ) : null}
-                  {nextButton(rowIndex, 1)}
                 </div>
-                <div className="acc-stock-sheet-cell">
-                  <select
+                <div
+                  ref={categoryRow === rowIndex ? categoryPickerRef : undefined}
+                  className={clsx("acc-stock-sheet-cell is-category", categoryRow === rowIndex && "is-open")}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) setCategoryRow(null);
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="acc-stock-category-trigger"
                     data-stock-cell={`${rowIndex}-2`}
-                    value={line.product?.categoryId || draft.categoryId}
                     disabled={Boolean(line.product)}
-                    onChange={(event) => {
-                      const category = categories.find((item) => item.id === event.target.value);
-                      changeDraft(rowIndex, { categoryId: event.target.value, categoryName: category?.name || "" });
+                    aria-expanded={categoryRow === rowIndex}
+                    aria-haspopup="listbox"
+                    onClick={() => {
+                      setSuggestions(null);
+                      setCategoryRow((current) => (current === rowIndex ? null : rowIndex));
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setCategoryRow(null);
                     }}
                     aria-label={`Row ${rowIndex + 1} category`}
                   >
-                    <option value="">Choose</option>
-                    {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                  </select>
-                  {nextButton(rowIndex, 2)}
+                    <span>{line.product?.categoryName || draft.categoryName || "Choose category"}</span>
+                    <ChevronDown aria-hidden />
+                  </button>
+                  {categoryRow === rowIndex ? (
+                    <ul className="acc-sheet-suggestions acc-stock-category-menu" role="listbox" aria-label="Categories">
+                      {categories.map((category) => {
+                        const selected = category.id === draft.categoryId;
+                        return (
+                          <li key={category.id}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              onClick={() => {
+                                changeDraft(rowIndex, { categoryId: category.id, categoryName: category.name });
+                                setCategoryRow(null);
+                                focusCell(rowIndex, 3);
+                              }}
+                            >
+                              <CategoryIcon icon={category.icon} variant="3d" size="xs" />
+                              <span>{category.name}</span>
+                              {selected ? <Check className="acc-stock-category-check" aria-hidden /> : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
                 </div>
                 {[
                   { value: line.qty, patch: "qty" as const, type: "numeric" as const, placeholder: "0" },
@@ -1061,7 +1039,6 @@ function BulkStockSheet({
                         }}
                         aria-label={`Row ${rowIndex + 1} ${field.patch}`}
                       />
-                      {nextButton(rowIndex, columnIndex)}
                     </div>
                   );
                 })}
@@ -1082,7 +1059,6 @@ function BulkStockSheet({
                     }}
                     aria-label={`Row ${rowIndex + 1} wholesale price`}
                   />
-                  {nextButton(rowIndex, 6)}
                 </div>
                 <div className="acc-stock-sheet-action">
                   <b>{lineAmount(line) ? inr(lineAmount(line)) : `#${rowIndex + 1}`}</b>

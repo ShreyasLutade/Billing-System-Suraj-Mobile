@@ -107,7 +107,7 @@ accSalesRouter.post("/sales", async (req, res, next) => {
     const parsed = saleSchema.safeParse(req.body);
     if (!parsed.success) {
       const flat = parsed.error.flatten();
-      res.status(400).json({ error: Object.values(flat.fieldErrors).flat()[0] || flat.formErrors[0] || "Check the bill" });
+      res.status(400).json({ error: Object.values(flat.fieldErrors).flat()[0] || flat.formErrors[0] || "Check the sale" });
       return;
     }
     const input = parsed.data;
@@ -126,7 +126,7 @@ accSalesRouter.post("/sales", async (req, res, next) => {
 
     const lines = input.items.map((item) => {
       const product = item.productId ? byId.get(item.productId) : undefined;
-      if (item.productId && !product) throw new SaleError("A product on this bill was removed. Refresh and try again.");
+      if (item.productId && !product) throw new SaleError("A product on this sale was removed. Refresh and try again.");
       const model = product ? item.model?.replace(/\s+/g, " ").trim() || "" : "";
       const base = product?.name || item.name;
       if (!base) throw new SaleError("Every item needs a name");
@@ -152,7 +152,7 @@ accSalesRouter.post("/sales", async (req, res, next) => {
     if (input.kind === "RETAIL") {
       if (cash + online === 0) cash = total;
       if (Math.abs(cash + online - total) > 0.01) {
-        throw new SaleError(`Cash + online must equal the bill total ${money(total)}`);
+        throw new SaleError(`Cash + online must equal the sale total ${money(total)}`);
       }
     } else {
       if (cash + online > total + 0.01) throw new SaleError("Paid amount is more than the bill total");
@@ -268,7 +268,22 @@ function salesWhere(query: Record<string, unknown>) {
   const range = accRange(query, "today");
   const kind = query.kind === "RETAIL" || query.kind === "WHOLESALE" ? query.kind : undefined;
   const q = typeof query.q === "string" ? query.q.trim() : "";
+  const scope = query.scope === "customer" || query.scope === "product" || query.scope === "bill" ? query.scope : "all";
   const showVoid = query.void === "1";
+  const customerSearch: Prisma.AccSaleWhereInput[] = [
+    { customerName: { contains: q } },
+    { customerPhone: { contains: q } },
+    { customer: { name: { contains: q } } },
+    { customer: { phone: { contains: q } } },
+  ];
+  const search =
+    scope === "customer"
+      ? customerSearch
+      : scope === "product"
+        ? [{ items: { some: { name: { contains: q } } } }]
+        : scope === "bill"
+          ? [{ number: { contains: q.toUpperCase() } }]
+          : [{ number: { contains: q.toUpperCase() } }, ...customerSearch, { items: { some: { name: { contains: q } } } }];
   const where: Prisma.AccSaleWhereInput = {
     ...(range.filter ? { saleDate: range.filter } : {}),
     ...(kind ? { kind } : {}),
@@ -276,14 +291,7 @@ function salesWhere(query: Record<string, unknown>) {
     ...(typeof query.customerId === "string" ? { customerId: query.customerId } : {}),
     ...(q
       ? {
-          OR: [
-            { number: { contains: q.toUpperCase() } },
-            { customerName: { contains: q } },
-            { customerPhone: { contains: q } },
-            { customer: { name: { contains: q } } },
-            { customer: { phone: { contains: q } } },
-            { items: { some: { name: { contains: q } } } },
-          ],
+          OR: search,
         }
       : {}),
   };
@@ -345,7 +353,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           kind: "group",
           cells: {
             a: pdfDay(sale.saleDate),
-            b: `${daySales.length} bills`,
+            b: `${daySales.length} ${kind === "RETAIL" ? "sales" : kind === "WHOLESALE" ? "bills" : "entries"}`,
             c: rs(round2(daySales.reduce((a, x) => a + x.total - x.transportCharge, 0))),
           },
         });
@@ -353,7 +361,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
       const itemsText = sale.items.map((i) => `${i.qty}× ${i.name}`).join(", ");
       rows.push({
         cells: {
-          number: sale.number,
+          number: sale.kind === "WHOLESALE" ? sale.number : "Counter",
           time: sale.saleDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }),
           party: sale.customer?.name || sale.customerName || (sale.kind === "RETAIL" ? "Walk-in" : ""),
           items: detailed ? itemsText : `${sale.items.reduce((a, i) => a + i.qty, 0)} pcs`,
@@ -364,7 +372,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           due: sale.dueAmount ? money(sale.dueAmount) : "",
         },
         sub: {
-          number: sale.kind === "RETAIL" ? "Retail" : "Wholesale",
+          number: sale.kind === "RETAIL" ? "Sale" : "Wholesale",
           party: sale.customer?.group?.name || sale.customer?.shopName || "",
           items: detailed ? "" : itemsText,
         },
@@ -376,7 +384,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
       subtitle: range.label,
       landscape: true,
       summary: [
-        { label: "Bills", value: String(s.count) },
+        { label: kind === "RETAIL" ? "Sales" : kind === "WHOLESALE" ? "Bills" : "Entries", value: String(s.count) },
         { label: "Total sales", value: rs(s.total), tone: "blue" },
         { label: "Retail", value: `${rs(s.retailTotal)} (${s.retailCount})` },
         { label: "Wholesale", value: `${rs(s.wholesaleTotal)} (${s.wholesaleCount})` },
@@ -391,7 +399,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
       sections: [
         {
           columns: [
-            { key: "number", label: "Bill", width: 9 },
+            { key: "number", label: "Type / bill", width: 9 },
             { key: "time", label: "Time", width: 7 },
             { key: "party", label: "Customer", width: 17 },
             { key: "items", label: "Items", width: 25 },
@@ -403,7 +411,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           ],
           rows,
           total: {
-            number: `${s.count} bills`,
+            number: `${s.count} ${kind === "RETAIL" ? "sales" : kind === "WHOLESALE" ? "bills" : "entries"}`,
             transport: money(s.transport),
             total: money(round2(s.total + s.transport)),
             cash: money(s.cash),
@@ -413,7 +421,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
           empty: "No sales in this period.",
         },
       ],
-      footNote: "Voided bills are not included.",
+      footNote: "Cancelled entries are not included.",
     });
     sendPdf(res, pdf, `accessories-sales-${range.period}-${istDateString()}.pdf`);
   } catch (error) {
