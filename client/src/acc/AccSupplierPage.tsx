@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { ChevronDown, Loader2, PackagePlus, Phone, Search, Wallet } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, PackagePlus, Phone, Search, Wallet } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccSupplier, type AccSupplierDetail } from "./accApi";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
@@ -116,44 +116,36 @@ export function AccSupplierPage() {
 
       {tab === "statement" ? (
         data.statement.length ? (
-          <div className="acc-table-wrap">
-            <table className="acc-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Particulars</th>
-                  <th className="is-num">Amount</th>
-                  <th className="is-num">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.statement.map((e) => (
-                  <tr key={`${e.kind}-${e.id}`}>
-                    <td className="is-nowrap">{shortDate(e.date)}</td>
-                    <td>
-                      <strong>{e.kind === "PURCHASE" ? "Purchase" : "Payment"}</strong>
-                      <small>
-                        {e.detail}
-                        {e.reference ? ` · Ref ${e.reference}` : ""}
-                      </small>
-                    </td>
-                    <td className={clsx("is-num", e.credit > 0 && "is-green")}>{e.debit ? inr(e.debit) : `−${inr(e.credit)}`}</td>
-                    <td className={clsx("is-num", e.balance > 0 && "is-red")}>
-                      <b>{inr(e.balance)}</b>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td />
-                  <td>Closing balance</td>
-                  <td />
-                  <td className="is-num">{inr(data.balance)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <section className="acc-bv-card">
+            <ul className="acc-tl">
+              {data.statement.map((e) => (
+                <li key={`${e.kind}-${e.id}`} className={e.kind === "PURCHASE" ? "is-in" : "is-out"}>
+                  <span className="acc-tl-icon">{e.kind === "PURCHASE" ? <PackagePlus /> : <Wallet />}</span>
+                  <span className="acc-tl-text">
+                    <strong>{e.kind === "PURCHASE" ? "Stock bought" : "Payment made"}</strong>
+                    <small>
+                      {shortDate(e.date)}
+                      {e.detail ? ` · ${e.detail}` : ""}
+                      {e.reference ? ` · Ref ${e.reference}` : ""}
+                    </small>
+                  </span>
+                  <span className="acc-tl-amt">
+                    <b>{e.debit ? `+${inr(e.debit)}` : `−${inr(e.credit)}`}</b>
+                    <small>
+                      {e.balance < 0 ? "Advance" : "To pay"} {inr(Math.abs(e.balance))}
+                    </small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className={clsx("acc-bv-result", data.balance > 0 ? "is-due" : "is-paid")}>
+              <span>
+                {data.balance > 0 ? <AlertCircle /> : <CheckCircle2 />}
+                <strong>{data.balance > 0 ? "Still to pay this supplier" : data.balance < 0 ? "Paid in advance" : "All settled"}</strong>
+              </span>
+              {data.balance !== 0 ? <b>{inr(Math.abs(data.balance))}</b> : null}
+            </div>
+          </section>
         ) : (
           <Empty title="Nothing bought or paid yet" />
         )
@@ -177,26 +169,19 @@ export function AccSupplierPage() {
                     <ChevronDown aria-hidden />
                   </button>
                   {expanded ? (
-                    <table className="acc-table is-inner">
-                      <thead>
-                        <tr>
-                          <th>Item</th>
-                          <th className="is-num">Qty</th>
-                          <th className="is-num">Cost</th>
-                          <th className="is-num">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {p.items.map((i, n) => (
-                          <tr key={n}>
-                            <td>{i.name}</td>
-                            <td className="is-num">{i.qty}</td>
-                            <td className="is-num">{inr(i.unitCost, true)}</td>
-                            <td className="is-num">{inr(i.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <ul className="acc-bv-items is-inner">
+                      {p.items.map((i, n) => (
+                        <li key={n}>
+                          <span className="acc-bv-item-text">
+                            <strong>{i.name}</strong>
+                            <small>
+                              <b>{i.qty}</b> pcs × {inr(i.unitCost, true)}
+                            </small>
+                          </span>
+                          <b className="acc-bv-amount">{inr(i.amount)}</b>
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                 </li>
               );
@@ -206,33 +191,28 @@ export function AccSupplierPage() {
           <Empty title="No purchases yet" />
         )
       ) : data.payments.length ? (
-        <div className="acc-table-wrap">
-          <table className="acc-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Mode</th>
-                <th>Reference</th>
-                <th className="is-num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.payments.map((p) => (
-                <tr key={p.id}>
-                  <td className="is-nowrap">{shortDate(p.paidAt)}</td>
-                  <td>
-                    {METHOD_LABEL[p.method] || p.method}
-                    {p.note ? <small>{p.note}</small> : null}
-                  </td>
-                  <td className="is-mono">{p.reference || "—"}</td>
-                  <td className="is-num is-green">
-                    <b>{inr(p.amount)}</b>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <section className="acc-bv-card">
+          <ul className="acc-tl">
+            {data.payments.map((p) => (
+              <li key={p.id} className="is-out">
+                <span className="acc-tl-icon">
+                  <Wallet />
+                </span>
+                <span className="acc-tl-text">
+                  <strong>{METHOD_LABEL[p.method] || p.method}</strong>
+                  <small>
+                    {shortDate(p.paidAt)}
+                    {p.reference ? ` · Ref ${p.reference}` : ""}
+                    {p.note ? ` · ${p.note}` : ""}
+                  </small>
+                </span>
+                <span className="acc-tl-amt">
+                  <b>{inr(p.amount)}</b>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : (
         <Empty title="No payments yet" />
       )}

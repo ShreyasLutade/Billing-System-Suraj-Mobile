@@ -1,10 +1,28 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
-import { Ban, Loader2, MessageCircle, Phone, UserRound } from "lucide-react";
+import {
+  AlertCircle,
+  BadgePercent,
+  Ban,
+  Banknote,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Loader2,
+  MessageCircle,
+  Package,
+  Phone,
+  Smartphone,
+  StickyNote,
+  Truck,
+  UserRound,
+  Wallet,
+} from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccCustomerDetail, type AccSale } from "./accApi";
-import { Empty, PdfButton, dateTime, errorText, inr, plural, refreshCatalog, shortDate, toast } from "./shared";
+import { CategoryIcon, Empty, PdfButton, dateTime, errorText, inr, plural, refreshCatalog, shortDate, toast, useAccCatalog } from "./shared";
 
 /**
  * One wholesale bill on its own page: who bought, what, how it was paid and
@@ -17,6 +35,9 @@ export function AccSaleDetailPage() {
   const [customer, setCustomer] = useState<AccCustomerDetail | null>(null);
   const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { catalog } = useAccCatalog();
+  const iconFor = (categoryName: string) =>
+    catalog?.categories.find((c) => c.name === categoryName)?.icon || "package";
 
   const load = async () => {
     if (!id) return;
@@ -139,148 +160,215 @@ export function AccSaleDetailPage() {
         </div>
       </div>
 
-      <article className="acc-bill-document">
-        <header className="acc-bill-head">
-          <div>
-            <small>{wholesale ? "Wholesale bill" : "Counter sale"}</small>
-            <h1 className="acc-h1">{wholesale ? sale.number : "Sale details"}</h1>
-            <span className="acc-bill-meta">
-              {dateTime(sale.saleDate)}
-              {sale.createdByName ? ` · by ${sale.createdByName}` : ""}
-            </span>
-          </div>
+      {sale.voidedAt ? (
+        <div className="acc-bv-void">
+          <Ban />
+          <span>
+            <strong>This {wholesale ? "bill" : "sale"} was cancelled</strong>
+            <small>
+              {shortDate(sale.voidedAt)}
+              {sale.voidReason ? ` · ${sale.voidReason}` : ""} · stock was put back
+            </small>
+          </span>
+        </div>
+      ) : null}
+
+      {/* Summary: what the bill is, how much, and how much of it is paid. */}
+      <section className={clsx("acc-bv-hero", sale.voidedAt && "is-void")}>
+        <div className="acc-bv-hero-top">
+          <span className="acc-bv-kind">{wholesale ? "Wholesale bill" : "Retail"}</span>
           <span className={clsx("acc-status", status.tone)}>{status.label}</span>
-        </header>
-
-        {sale.voidReason ? <p className="acc-warn-text acc-bill-cancel-note">Cancelled: {sale.voidReason}</p> : null}
-
-        {sale.customerName ? (
-          <section className="acc-bill-section acc-bill-customer-section">
-            <span className="acc-bill-section-label">Customer</span>
-            <div className="acc-bill-customer">
-              <span>
-                <strong>
-                  {sale.customerId ? <Link to={`/acc/dues/${sale.customerId}`}>{sale.customerName}</Link> : sale.customerName}
-                </strong>
-                <small>{[sale.customerShop, customer?.city, phone, sale.groupName].filter(Boolean).join(" · ")}</small>
-              </span>
-              {customer ? (
-                <span className="acc-bill-balance">
-                  <small>{customer.balance < 0 ? "Advance with us" : "Total balance due"}</small>
-                  <b className={clsx(customer.balance > 0 ? "is-red" : customer.balance < 0 && "is-green")}>
-                    {inr(Math.abs(customer.balance))}
-                  </b>
-                </span>
-              ) : null}
+        </div>
+        <div className="acc-bv-hero-main">
+          <div>
+            <h1>{wholesale ? sale.number : "Counter sale"}</h1>
+            <p>
+              <CalendarDays /> {dateTime(sale.saleDate)}
+              {sale.createdByName ? ` · ${sale.createdByName}` : ""}
+            </p>
+          </div>
+          <div className="acc-bv-total">
+            <small>{sale.transportCharge > 0 ? "Amount payable" : "Bill total"}</small>
+            <b>{inr(sale.total, true)}</b>
+          </div>
+        </div>
+        {wholesale && !sale.voidedAt && sale.total > 0 ? (
+          <div className="acc-bv-progress">
+            <div className="acc-bv-bar" role="img" aria-label={`Paid ${inr(sale.total - stillDue)} of ${inr(sale.total)}`}>
+              <span style={{ width: `${Math.min(100, ((sale.total - stillDue) / sale.total) * 100)}%` }} />
             </div>
-          </section>
+            <div className="acc-bv-progress-text">
+              <span className="is-green">
+                <CheckCircle2 /> Paid {inr(sale.total - stillDue, true)}
+              </span>
+              {stillDue > 0 ? (
+                <span className="is-red">Due {inr(stillDue, true)}</span>
+              ) : (
+                <span className="is-green">Fully paid</span>
+              )}
+            </div>
+          </div>
         ) : null}
+      </section>
 
-        <section className="acc-bill-section acc-bill-items-section">
-          <div className="acc-bill-section-heading">
-            <span className="acc-bill-section-label">Items</span>
-            <small>{plural(sale.items.length, "item")} · {pieces} pcs</small>
-          </div>
-          <div className="acc-table-wrap acc-bill-items-table">
-          <table className="acc-table">
-            <thead>
-              <tr>
-                <th className="is-num">#</th>
-                <th>Item</th>
-                <th className="is-num">Qty</th>
-                <th className="is-num">Rate</th>
-                <th className="is-num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sale.items.map((item, i) => (
-                <tr key={item.id}>
-                  <td className="is-num is-muted">{i + 1}</td>
-                  <td>
-                    <strong>{item.name}</strong>
-                    {item.categoryName ? <small>{item.categoryName}</small> : null}
-                  </td>
-                  <td className="is-num">{item.qty}</td>
-                  <td className="is-num">{inr(item.rate, true)}</td>
-                  <td className="is-num">
-                    <b>{inr(item.amount, true)}</b>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td />
-                <td>Total</td>
-                <td className="is-num">{pieces}</td>
-                <td />
-                <td className="is-num">{inr(sale.subtotal, true)}</td>
-              </tr>
-            </tfoot>
-          </table>
-          </div>
-        </section>
+      {sale.customerName ? (
+        <Link
+          to={sale.customerId ? `/acc/dues/${sale.customerId}` : "#"}
+          className={clsx("acc-bv-card acc-bv-customer", !sale.customerId && "is-static")}
+          onClick={(e) => {
+            if (!sale.customerId) e.preventDefault();
+          }}
+        >
+          <span className="acc-avatar is-big" style={{ ["--g" as string]: "#5d73b6" }}>
+            {sale.customerName.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="acc-bv-customer-text">
+            <small>Customer</small>
+            <strong>{sale.customerName}</strong>
+            <span>{[sale.customerShop, customer?.city, phone].filter(Boolean).join(" · ")}</span>
+            {sale.groupName ? <em className="acc-bv-group">{sale.groupName}</em> : null}
+          </span>
+          {customer ? (
+            <span className={clsx("acc-bv-balance", customer.balance > 0 ? "is-due" : customer.balance < 0 ? "is-adv" : "is-clear")}>
+              <small>{customer.balance > 0 ? "Owes in total" : customer.balance < 0 ? "Advance" : "Account"}</small>
+              <b>{customer.balance === 0 ? "Clear" : inr(Math.abs(customer.balance))}</b>
+            </span>
+          ) : null}
+          {sale.customerId ? <ChevronRight className="acc-bv-chevron" /> : null}
+        </Link>
+      ) : null}
 
-        <section className="acc-bill-section acc-bill-payment-section">
-          <span className="acc-bill-section-label">Payment summary</span>
-          <div className="acc-kv acc-bill-payment-kv">
+      <section className="acc-bv-card">
+        <header className="acc-bv-card-head">
+          <h2>
+            <Package /> Items
+          </h2>
+          <span>
+            {plural(sale.items.length, "item")} · {pieces} pcs
+          </span>
+        </header>
+        <ul className="acc-bv-items">
+          {sale.items.map((item) => (
+            <li key={item.id}>
+              <CategoryIcon icon={iconFor(item.categoryName)} variant="3d" size="sm" />
+              <span className="acc-bv-item-text">
+                <strong>{item.name}</strong>
+                <small>
+                  <b>{item.qty}</b> {item.qty === 1 ? "pc" : "pcs"} × {inr(item.rate, true)}
+                  {item.categoryName ? ` · ${item.categoryName}` : ""}
+                </small>
+              </span>
+              <b className="acc-bv-amount">{inr(item.amount, true)}</b>
+            </li>
+          ))}
+        </ul>
+        <div className="acc-bv-subtotal">
+          <span>Items total</span>
+          <b>{inr(sale.subtotal, true)}</b>
+        </div>
+      </section>
+
+      <section className="acc-bv-card">
+        <header className="acc-bv-card-head">
+          <h2>
+            <Wallet /> Payment
+          </h2>
+        </header>
+        <ul className="acc-bv-pay">
+          {sale.discount || sale.transportCharge > 0 ? (
+            <li>
+              <span>Items total</span>
+              <b>{inr(sale.subtotal, true)}</b>
+            </li>
+          ) : null}
           {sale.discount ? (
-            <>
-              <span>Discount</span>
-              <b>−{inr(sale.discount, true)}</b>
-            </>
+            <li>
+              <span>
+                <BadgePercent /> Discount
+              </span>
+              <b className="is-green">−{inr(sale.discount, true)}</b>
+            </li>
           ) : null}
           {sale.transportCharge > 0 ? (
-            <>
-              <span>Items after discount</span>
-              <b>{inr(sale.total - sale.transportCharge, true)}</b>
-              <span>Transport charges</span>
-              <b>{inr(sale.transportCharge, true)}</b>
-            </>
+            <li>
+              <span>
+                <Truck /> Transport charges
+              </span>
+              <b>+{inr(sale.transportCharge, true)}</b>
+            </li>
           ) : null}
-          <span>{sale.transportCharge > 0 ? "Amount payable" : "Bill total"}</span>
-          <b>{inr(sale.total, true)}</b>
+          <li className="is-total">
+            <span>{sale.transportCharge > 0 ? "Amount payable" : "Bill total"}</span>
+            <b>{inr(sale.total, true)}</b>
+          </li>
           {sale.cashAmount ? (
-            <>
-              <span>Paid in cash</span>
-              <b className="is-green">{inr(sale.cashAmount, true)}</b>
-            </>
+            <li className="is-paid">
+              <span>
+                <Banknote /> Paid in cash
+              </span>
+              <b>{inr(sale.cashAmount, true)}</b>
+            </li>
           ) : null}
           {sale.onlineAmount ? (
-            <>
-              <span>Paid by UPI / online</span>
-              <b className="is-green">{inr(sale.onlineAmount, true)}</b>
-            </>
+            <li className="is-paid">
+              <span>
+                <Smartphone /> Paid by UPI / online
+              </span>
+              <b>{inr(sale.onlineAmount, true)}</b>
+            </li>
           ) : null}
-          {wholesale ? (
-            <>
-              <span>Due when billed</span>
+          {wholesale && sale.dueAmount > 0 ? (
+            <li>
+              <span>
+                <Clock /> Left on credit when billed
+              </span>
               <b>{inr(sale.dueAmount, true)}</b>
-            </>
+            </li>
           ) : null}
           {sale.dueDate && sale.dueAmount > 0 ? (
-            <>
-              <span>Pay by</span>
-              <b className={clsx(open && open.daysOverdue > 0 && "is-red")}>
+            <li className={clsx(open && open.daysOverdue > 0 && "is-late")}>
+              <span>
+                <CalendarDays /> Promised by
+              </span>
+              <b>
                 {shortDate(sale.dueDate)}
                 {open && open.daysOverdue > 0 ? ` · ${plural(open.daysOverdue, "day")} late` : ""}
               </b>
-            </>
+            </li>
           ) : null}
-          </div>
-          {wholesale && !sale.voidedAt ? (
-            stillDue > 0 ? (
-              <div className="acc-due-line">
-                <span>Still due on this bill</span>
-                <b>{inr(stillDue, true)}</b>
-              </div>
-            ) : (
-              <p className="acc-paid-line">This bill is fully paid</p>
-            )
-          ) : null}
-          {sale.note ? <p className="acc-hint acc-bill-note">Note: {sale.note}</p> : null}
+        </ul>
+        {wholesale && !sale.voidedAt ? (
+          stillDue > 0 ? (
+            <div className="acc-bv-result is-due">
+              <span>
+                <AlertCircle />
+                <span>
+                  <strong>Still due on this bill</strong>
+                  <small>Later payments clear the oldest bills first</small>
+                </span>
+              </span>
+              <b>{inr(stillDue, true)}</b>
+            </div>
+          ) : (
+            <div className="acc-bv-result is-paid">
+              <span>
+                <CheckCircle2 />
+                <strong>This bill is fully paid</strong>
+              </span>
+            </div>
+          )
+        ) : null}
+      </section>
+
+      {sale.note ? (
+        <section className="acc-bv-card acc-bv-note">
+          <StickyNote />
+          <span>
+            <small>Note</small>
+            {sale.note}
+          </span>
         </section>
-      </article>
+      ) : null}
     </div>
   );
 }

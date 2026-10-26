@@ -679,11 +679,11 @@ export function AccCustomerPage() {
                       </span>
                     </span>
                     <span className="acc-ledger-money is-debit">
-                      <small>Debit</small>
+                      <small>Bill added</small>
                       <b>{line.debit ? inr(line.debit) : "—"}</b>
                     </span>
                     <span className={clsx("acc-ledger-money is-credit", line.credit > 0 && "has-value")}>
-                      <small>Credit</small>
+                      <small>Payment received</small>
                       <b>{line.credit ? inr(line.credit) : "—"}</b>
                     </span>
                     <span className="acc-ledger-money is-balance">

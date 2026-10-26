@@ -8439,3 +8439,722 @@ html.dark .acc-sell-pay button.is-on {
     font-size: 13.5px !important;
   }
 }
+
+/* ---------- Bill page (AccSaleDetailPage): app cards, not a printout ---------- */
+
+.acc-bill-page {
+  max-width: 720px;
+}
+
+.acc-bv-void {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--a-red) 35%, var(--a-line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--a-red) 8%, var(--a-card));
+  color: var(--a-red);
+}
+
+.acc-bv-void svg {
+  width: 22px;
+  height: 22px;
+}
+
+.acc-bv-void span {
+  display: flex;
+  flex-direction: column;
+}
+
+.acc-bv-void small {
+  color: var(--a-muted);
+}
+
+.acc-bv-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--a-accent) 22%, var(--a-line));
+  border-radius: 22px;
+  background:
+    radial-gradient(420px 180px at 100% 0%, color-mix(in srgb, var(--p1) 16%, transparent), transparent 70%),
+    linear-gradient(160deg, color-mix(in srgb, var(--a-accent) 9%, var(--a-card)), var(--a-card) 65%);
+  box-shadow: 0 16px 34px -26px rgba(var(--accent-rgb), 0.8);
+}
+
+.acc-bv-hero.is-void {
+  opacity: 0.75;
+  filter: grayscale(0.6);
+}
+
+.acc-bv-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.acc-bv-kind {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-accent) 13%, var(--a-card));
+  color: var(--a-accent);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.acc-bv-hero-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.acc .acc-bv-hero h1 {
+  margin: 0;
+  font: 800 26px/1.1 "Sora", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.acc-bv-hero p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0 0;
+  color: var(--a-muted);
+  font-size: 13px;
+}
+
+.acc-bv-hero p svg {
+  width: 14px;
+  height: 14px;
+}
+
+.acc-bv-total {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.acc-bv-total small {
+  color: var(--a-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.acc-bv-total b {
+  font: 800 26px/1.1 "Sora", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.acc-bv-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.acc-bv-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-red) 18%, var(--a-field));
+}
+
+.acc-bv-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, var(--a-green));
+}
+
+.acc-bv-progress-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.acc-bv-progress-text span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.acc-bv-progress-text svg {
+  width: 15px;
+  height: 15px;
+}
+
+.acc-bv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--a-line);
+  border-radius: 20px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  text-decoration: none;
+}
+
+.acc-bv-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+
+.acc .acc-bv-card-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 800 15px "Sora", sans-serif;
+}
+
+.acc-bv-card-head h2 svg {
+  width: 18px;
+  height: 18px;
+  color: var(--a-accent);
+}
+
+.acc-bv-card-head > span {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--a-field);
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Customer */
+.acc-bv-customer {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.15s ease;
+}
+
+.acc-bv-customer:not(.is-static):hover {
+  border-color: var(--a-accent);
+}
+
+.acc-bv-customer.is-static {
+  cursor: default;
+}
+
+.acc-bv-customer-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.acc-bv-customer-text small {
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.acc-bv-customer-text strong {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-bv-customer-text > span {
+  overflow: hidden;
+  color: var(--a-muted);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-bv-group {
+  width: max-content;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+  color: var(--a-accent);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.acc-bv-balance {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: var(--a-field);
+}
+
+.acc-bv-balance small {
+  color: var(--a-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.acc-bv-balance b {
+  font: 800 15px "Sora", sans-serif;
+}
+
+.acc-bv-balance.is-due {
+  background: color-mix(in srgb, var(--a-red) 9%, var(--a-card));
+  color: var(--a-red);
+}
+
+.acc-bv-balance.is-adv,
+.acc-bv-balance.is-clear {
+  background: color-mix(in srgb, var(--a-green) 10%, var(--a-card));
+  color: var(--a-green);
+}
+
+.acc-bv-chevron {
+  color: var(--a-muted);
+}
+
+/* Items */
+.acc-bv-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-bv-items li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px dashed var(--a-line);
+}
+
+.acc-bv-items li:first-child {
+  border-top: 0;
+}
+
+.acc-bv-item-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acc-bv-item-text strong {
+  font-size: 14.5px;
+  line-height: 1.25;
+}
+
+.acc-bv-item-text small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc-bv-item-text small b {
+  color: var(--a-ink);
+}
+
+.acc-bv-amount {
+  flex: none;
+  font: 800 15px "Sora", sans-serif;
+}
+
+.acc-bv-subtotal {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--a-field);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.acc-bv-subtotal b {
+  font-family: "Sora", sans-serif;
+}
+
+/* Payment */
+.acc-bv-pay {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-bv-pay li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 2px;
+  font-size: 14px;
+}
+
+.acc-bv-pay li + li {
+  border-top: 1px solid color-mix(in srgb, var(--a-line) 70%, transparent);
+}
+
+.acc-bv-pay li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--a-muted);
+}
+
+.acc-bv-pay li svg {
+  width: 17px;
+  height: 17px;
+}
+
+.acc-bv-pay li > b {
+  white-space: nowrap;
+}
+
+.acc-bv-pay li.is-total > span {
+  color: var(--a-ink);
+  font-weight: 800;
+}
+
+.acc-bv-pay li.is-total > b {
+  font: 800 17px "Sora", sans-serif;
+}
+
+.acc-bv-pay li.is-paid > span svg,
+.acc-bv-pay li.is-paid > b {
+  color: var(--a-green);
+}
+
+.acc-bv-pay li.is-late > b,
+.acc-bv-pay li.is-late > span svg {
+  color: var(--a-red);
+}
+
+.acc-bv-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.acc-bv-result > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.acc-bv-result > span > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.acc-bv-result svg {
+  width: 22px;
+  height: 22px;
+}
+
+.acc-bv-result small {
+  color: var(--a-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.acc-bv-result b {
+  font: 800 20px "Sora", sans-serif;
+}
+
+.acc-bv-result.is-due {
+  background: color-mix(in srgb, var(--a-red) 9%, var(--a-card));
+  color: var(--a-red);
+}
+
+.acc-bv-result.is-paid {
+  background: color-mix(in srgb, var(--a-green) 10%, var(--a-card));
+  color: var(--a-green);
+}
+
+.acc-bv-note {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.acc-bv-note > svg {
+  color: var(--a-amber);
+}
+
+.acc-bv-note span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acc-bv-note small {
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 420px) {
+  .acc .acc-bv-hero h1,
+  .acc-bv-total b {
+    font-size: 22px;
+  }
+}
+
+/* Timeline rows (supplier statement & payments): icon, what happened, amount. */
+.acc-tl {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-tl li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px dashed var(--a-line);
+}
+
+.acc-tl li:first-child {
+  border-top: 0;
+}
+
+.acc-tl-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 13px;
+}
+
+.acc-tl-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.acc-tl li.is-in .acc-tl-icon {
+  background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+  color: var(--a-accent);
+}
+
+.acc-tl li.is-out .acc-tl-icon {
+  background: color-mix(in srgb, var(--a-green) 12%, var(--a-card));
+  color: var(--a-green);
+}
+
+.acc-tl-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acc-tl-text strong {
+  font-size: 14.5px;
+}
+
+.acc-tl-text small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.acc-tl-amt {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.acc-tl-amt b {
+  font: 800 15px "Sora", sans-serif;
+}
+
+.acc-tl li.is-out .acc-tl-amt b {
+  color: var(--a-green);
+}
+
+.acc-tl-amt small {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--a-field);
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Purchase items opened inside the purchases list. */
+.acc-bv-items.is-inner {
+  margin: 0 12px 10px;
+  padding: 2px 12px;
+  border-radius: 12px;
+  background: var(--a-field);
+}
+
+.acc-bv-items.is-inner li {
+  padding: 8px 0;
+}
+
+/* Customer ledger on phones: show only the side that has money, as one
+   clear line ("Bill amount +₹165" / "Received −₹300"), then the balance. */
+@media (max-width: 760px) {
+  .acc-ledger-statement li.is-bill .acc-ledger-money.is-credit,
+  .acc-ledger-statement li.is-pay .acc-ledger-money.is-debit {
+    display: none;
+  }
+
+  .acc-ledger-statement li.is-bill .acc-ledger-money.is-debit,
+  .acc-ledger-statement li.is-pay .acc-ledger-money.is-credit {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .acc-ledger-statement .acc-ledger-money small {
+    margin: 0;
+  }
+
+  .acc-ledger-statement .acc-ledger-money.is-credit,
+  .acc-ledger-statement .acc-ledger-money.is-credit small {
+    text-align: left;
+  }
+
+  .acc-ledger-statement .acc-ledger-money b {
+    font: 800 15px "Sora", sans-serif;
+  }
+
+  .acc-ledger-statement .acc-ledger-money.is-balance {
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px dashed var(--a-line);
+  }
+
+  .acc-ledger-statement .acc-ledger-money.is-balance b {
+    font-size: 13.5px;
+  }
+}
+
+/* Bills list: one day's counter sales as an item list with payment chips. */
+.acc-cd-pay {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 4px;
+}
+
+.acc-cd-pay span {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 11px;
+  background: var(--a-field);
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.acc-cd-pay svg {
+  width: 16px;
+  height: 16px;
+}
+
+.acc-cd-pay b {
+  margin-left: auto;
+  color: var(--a-ink);
+}
+
+.acc-cd-pay .is-cash svg {
+  color: var(--a-green);
+}
+
+.acc-cd-pay .is-upi svg {
+  color: var(--a-accent);
+}
+
+.acc-cd-items {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 12px 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-cd-items li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--a-line);
+  font-size: 13.5px;
+}
+
+.acc-cd-items li:first-child {
+  border-top: 0;
+}
+
+.acc-cd-items span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-cd-items em {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-accent) 11%, var(--a-card));
+  color: var(--a-accent);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.acc-cd-items b {
+  flex: none;
+  min-width: 64px;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  /* Rows say "Bill added" / "Payment received" themselves on phones. */
+  .acc-ledger-guide {
+    display: none;
+  }
+}

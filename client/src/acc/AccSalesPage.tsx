@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Ban, ChevronDown, Filter, Loader2, Search } from "lucide-react";
+import { Ban, Banknote, ChevronDown, Filter, Loader2, Search, Smartphone } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { accApi, type AccSale, type AccSaleKind, type AccSaleSearchScope, type PeriodQuery } from "./accApi";
 import { Empty, PdfButton, PeriodChips, Segmented, Sheet, dateTime, errorText, inr, plural, refreshCatalog, toast } from "./shared";
@@ -255,22 +255,28 @@ function CounterDay({ sales, onOpen }: { sales: AccSale[]; onOpen: (sale: AccSal
         <span>
           <strong>Counter sales</strong>
           <small>
-            {plural(live.length, "sale")} · {rows.reduce((a, r) => a + r.qty, 0)} pcs · Cash {inr(cash)} · UPI {inr(online)}
+            {plural(live.length, "sale")} · {rows.reduce((a, r) => a + r.qty, 0)} pcs
           </small>
         </span>
         <b>{inr(total)}</b>
       </div>
-      <table className="acc-table is-inner">
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name}>
-              <td>{r.name}</td>
-              <td className="is-num is-nowrap">× {r.qty}</td>
-              <td className="is-num">{inr(r.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="acc-cd-pay">
+        <span className="is-cash">
+          <Banknote /> Cash <b>{inr(cash)}</b>
+        </span>
+        <span className="is-upi">
+          <Smartphone /> UPI <b>{inr(online)}</b>
+        </span>
+      </div>
+      <ul className="acc-cd-items">
+        {rows.map((r) => (
+          <li key={r.name}>
+            <span>{r.name}</span>
+            <em>{r.qty === 1 ? "1 pc" : `${r.qty} pcs`}</em>
+            <b>{inr(r.amount)}</b>
+          </li>
+        ))}
+      </ul>
       <button type="button" className={clsx("acc-counter-day-toggle", showSales && "is-open")} onClick={() => setShowSales(!showSales)}>
         {showSales ? "Hide" : "Show"} the {plural(sales.length, "sale")} <ChevronDown aria-hidden />
       </button>
