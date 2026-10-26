@@ -118,7 +118,7 @@ export function AccSaleDetailPage() {
           ) : null}
           {sale.customerId ? (
             <button type="button" className="acc-btn is-ghost" onClick={() => navigate(`/acc/dues/${sale.customerId}`)}>
-              <UserRound /> Customer account
+              <UserRound /> Customer
             </button>
           ) : null}
           {phone ? (
@@ -166,8 +166,10 @@ export function AccSaleDetailPage() {
               </span>
               {customer ? (
                 <span className="acc-bill-balance">
-                  <small>Total balance</small>
-                  <b className={clsx(customer.balance > 0 && "is-red")}>{inr(customer.balance)}</b>
+                  <small>{customer.balance < 0 ? "Advance with us" : "Total balance due"}</small>
+                  <b className={clsx(customer.balance > 0 ? "is-red" : customer.balance < 0 && "is-green")}>
+                    {inr(Math.abs(customer.balance))}
+                  </b>
                 </span>
               ) : null}
             </div>

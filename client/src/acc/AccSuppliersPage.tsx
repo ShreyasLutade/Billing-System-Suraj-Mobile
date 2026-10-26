@@ -140,7 +140,33 @@ export function AccSuppliersPage() {
           <Loader2 className="acc-spin" />
         </div>
       ) : rows.length ? (
-        <div className="acc-table-wrap is-sheet">
+        <>
+        {/* Phones: one card per supplier, money on the right. */}
+        <ul className="acc-list acc-supplier-cards">
+          {rows.map((s) => (
+            <li key={s.id} className="acc-row">
+              <Link to={`/acc/suppliers/${s.id}`} className="acc-row-main">
+                <span className="acc-avatar" style={{ ["--g" as string]: "#5d73b6" }}>
+                  {s.name.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="acc-row-text">
+                  <strong>{s.name}</strong>
+                  <small>
+                    {[s.city, s.phone].filter(Boolean).join(" · ") || "—"}
+                    {s.lastPurchaseAt ? ` · last ${shortDate(s.lastPurchaseAt)}` : ""}
+                  </small>
+                </span>
+                <span className="acc-row-amt">
+                  <b className={clsx(s.balance > 0 ? "is-red" : "is-green")}>
+                    {s.balance > 0 ? inr(s.balance) : "Paid up"}
+                  </b>
+                  <small>bought {inr(s.purchased)}</small>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="acc-table-wrap is-sheet acc-supplier-table">
           <table className="acc-table is-clickable">
             <thead>
               <tr>
@@ -192,6 +218,7 @@ export function AccSuppliersPage() {
             </tfoot>
           </table>
         </div>
+        </>
       ) : (
         <Empty title={all.length ? "No supplier matches" : "No suppliers yet"}>
           {all.length ? null : "Suppliers are added on Add stock, with their first purchase."}
@@ -734,10 +761,12 @@ export function AccStockInPage() {
                 onAmount={setPaid}
               />
             </div>
-            <div className={clsx("acc-payment-result", total - paidNow > 0 ? "is-due" : "is-paid")}>
-              <span>{total - paidNow > 0 ? "Amount due to supplier" : "Fully paid"}</span>
-              <b>{inr(Math.max(total - paidNow, 0))}</b>
-            </div>
+            {total > 0 ? (
+              <div className={clsx("acc-payment-result", total - paidNow > 0 ? "is-due" : "is-paid")}>
+                <span>{total - paidNow > 0 ? "Amount due to supplier" : "Fully paid"}</span>
+                <b>{inr(Math.max(total - paidNow, 0))}</b>
+              </div>
+            ) : null}
             <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || !enteredLines.length}>
               {busy ? <Loader2 className="acc-spin" /> : <Check />} Save stock · {inr(total)}
             </button>

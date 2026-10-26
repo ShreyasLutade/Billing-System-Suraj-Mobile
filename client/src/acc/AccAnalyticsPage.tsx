@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { AlertTriangle, Loader2, TrendingDown, TrendingUp } from "lucide-react";
 import { accApi, type AccAnalytics, type PeriodQuery } from "./accApi";
 import { AgingBar } from "./AccDuesPage";
-import { Empty, PdfButton, PeriodChips, inr, errorText, toast } from "./shared";
+import { Empty, PdfButton, PeriodChips, inr, errorText, plural, toast } from "./shared";
 
 /** Accessories business at a glance: sales, profit, what sells, who owes. */
 export function AccAnalyticsPage() {
@@ -50,7 +50,7 @@ export function AccAnalyticsPage() {
                     {Math.abs(Math.round(growth))}% vs previous
                   </span>
                 ) : (
-                  `${t.bills} bills`
+                  plural(t.bills, "bill")
                 )}
               </em>
             </div>
@@ -87,10 +87,10 @@ export function AccAnalyticsPage() {
             <SplitBar retail={t.retail} wholesale={t.wholesale} />
             <div className="acc-split-legend">
               <span>
-                <i className="acc-sw is-retail" /> Retail <b>{inr(t.retail)}</b> · {t.retailBills} bills · profit {inr(t.retailProfit)}
+                <i className="acc-sw is-retail" /> Retail <b>{inr(t.retail)}</b> · {plural(t.retailBills, "bill")} · profit {inr(t.retailProfit)}
               </span>
               <span>
-                <i className="acc-sw is-wholesale" /> Wholesale <b>{inr(t.wholesale)}</b> · {t.wholesaleBills} bills · profit{" "}
+                <i className="acc-sw is-wholesale" /> Wholesale <b>{inr(t.wholesale)}</b> · {plural(t.wholesaleBills, "bill")} · profit{" "}
                 {inr(t.wholesaleProfit)}
               </span>
             </div>
@@ -163,7 +163,7 @@ export function AccAnalyticsPage() {
               <h3 className="acc-card-title">Wholesale by group</h3>
               {data.groups.length ? (
                 <HBars
-                  rows={data.groups.map((g) => ({ key: g.id, label: g.name, value: g.revenue, note: `${g.bills} bills · credit ${inr(g.credit)}` }))}
+                  rows={data.groups.map((g) => ({ key: g.id, label: g.name, value: g.revenue, note: `${plural(g.bills, "bill")} · credit ${inr(g.credit)}` }))}
                 />
               ) : (
                 <Empty title="No wholesale bills" />
@@ -183,7 +183,7 @@ export function AccAnalyticsPage() {
                           <strong>{c.name}</strong>
                           <small>
                             {c.shopName ? `${c.shopName} · ` : ""}
-                            {c.bills} bills · {c.pieces} pcs
+                            {plural(c.bills, "bill")} · {c.pieces} pcs
                           </small>
                         </span>
                         <b>{inr(c.revenue)}</b>
@@ -254,7 +254,7 @@ export function AccAnalyticsPage() {
           {data.staff.length > 1 ? (
             <section className="acc-card">
               <h3 className="acc-card-title">By staff</h3>
-              <HBars rows={data.staff.map((s) => ({ key: s.name, label: s.name, value: s.revenue, note: `${s.bills} bills` }))} />
+              <HBars rows={data.staff.map((s) => ({ key: s.name, label: s.name, value: s.revenue, note: plural(s.bills, "bill") }))} />
             </section>
           ) : null}
         </div>
@@ -375,11 +375,11 @@ function HourChart({ hours }: { hours: AccAnalytics["hours"] }) {
       <p className="acc-trend-tip">
         {shown ? (
           <>
-            <b>{fmt(shown.hour)}</b> · {shown.bills} bills · {inr(shown.revenue)}
+            <b>{fmt(shown.hour)}</b> · {plural(shown.bills, "bill")} · {inr(shown.revenue)}
           </>
         ) : (
           <>
-            Busiest at <b>{fmt(peak.hour)}</b> ({peak.bills} bills)
+            Busiest at <b>{fmt(peak.hour)}</b> ({plural(peak.bills, "bill")})
           </>
         )}
       </p>

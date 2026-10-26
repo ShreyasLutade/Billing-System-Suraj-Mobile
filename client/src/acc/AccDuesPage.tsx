@@ -608,10 +608,10 @@ export function AccCustomerPage() {
           >
             <MessageCircle /> WhatsApp
           </a>
-          <button type="button" className="acc-btn is-primary" onClick={() => setPaying(true)}>
+          <button type="button" className="acc-btn is-primary acc-act-main" onClick={() => setPaying(true)}>
             <Wallet /> Receive
           </button>
-          <button type="button" className="acc-btn" onClick={() => navigate("/acc/wholesale", { state: { customerId: data.id } })}>
+          <button type="button" className="acc-btn acc-act-main" onClick={() => navigate("/acc/wholesale", { state: { customerId: data.id } })}>
             <FilePlus2 /> New bill
           </button>
         </div>
@@ -687,8 +687,8 @@ export function AccCustomerPage() {
                       <b>{line.credit ? inr(line.credit) : "—"}</b>
                     </span>
                     <span className="acc-ledger-money is-balance">
-                      <small>Balance</small>
-                      <b className={clsx(line.balance > 0 ? "is-red" : "is-green")}>{inr(line.balance)}</b>
+                      <small>{line.balance < 0 ? "Advance" : "Balance"}</small>
+                      <b className={clsx(line.balance > 0 ? "is-red" : "is-green")}>{inr(Math.abs(line.balance))}</b>
                     </span>
                   </button>
                   {isAdmin && line.kind === "PAYMENT" && !line.saleId ? (

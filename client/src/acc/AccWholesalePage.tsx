@@ -623,10 +623,12 @@ export function AccWholesalePage() {
             onAmount={(onlinePaid) => set({ pay: "PAY", onlinePaid })}
           />
         </div>
-        <div className={clsx("acc-payment-result", due > 0 ? "is-due" : "is-paid")}>
-          <span>{due > 0 ? (draft.pay === "CREDIT" ? "Full amount on credit" : "Remaining due") : "Fully paid"}</span>
-          <b>{inr(due > 0 ? due : paid)}</b>
-        </div>
+        {total > 0 ? (
+          <div className={clsx("acc-payment-result", due > 0 ? "is-due" : "is-paid")}>
+            <span>{due > 0 ? (draft.pay === "CREDIT" ? "Full amount on credit" : "Remaining due") : "Fully paid"}</span>
+            <b>{inr(due > 0 ? due : paid)}</b>
+          </div>
+        ) : null}
         {needsDueDate ? (
           <>
             <DueDatePicker value={draft.dueDate} onChange={(dueDate) => set({ dueDate })} />

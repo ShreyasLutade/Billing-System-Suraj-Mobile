@@ -37,14 +37,16 @@ import "./acc.css";
    bottom sheet, toasts, period chips, money format, PDF button. */
 
 export function inr(amount: number, decimals = false) {
-  return `₹${new Intl.NumberFormat("en-IN", {
+  const value = Math.round((amount || 0) * 100) / 100;
+  // "−₹135", not "₹-135".
+  return `${value < 0 ? "−" : ""}₹${new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: decimals ? 2 : 0,
     minimumFractionDigits: 0,
-  }).format(Math.round((amount || 0) * 100) / 100)}`;
+  }).format(Math.abs(value))}`;
 }
 
 /** "1 item" / "3 items". */
-export function plural(count: number, word: string, many = `${word}s`) {
+export function plural(count: number, word: string, many = /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`) {
   return `${count} ${count === 1 ? word : many}`;
 }
 

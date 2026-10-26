@@ -376,9 +376,11 @@ export function AccCounterPage() {
 }
 
 function ProductTile({ product, onTap }: { product: AccProduct; onTap: () => void }) {
+  // Skip parts the name already says ("9D Glass · Oppo A78" + "Oppo A78").
+  const name = product.name.toLowerCase();
   const sub = product.models.length
     ? plural(product.models.length, "phone brand")
-    : [product.color, product.model].filter(Boolean).join(" · ");
+    : [product.color, product.model].filter((part) => part && !name.includes(part.toLowerCase())).join(" · ");
   return (
     <button
       type="button"
