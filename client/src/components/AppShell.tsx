@@ -15,7 +15,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Ellipsis,
   FilePlus2,
   History,
   LogOut,
@@ -49,8 +48,6 @@ type NavItem = {
   end?: boolean;
   /** Sidebar only; left out of the phone bottom bar (reached from a page). */
   desktopOnly?: boolean;
-  /** Phone bottom bar: under "More" instead of its own tab. */
-  inMore?: boolean;
 };
 
 /**
@@ -74,7 +71,6 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Sidebar account menu: close on outside click or Escape.
@@ -173,9 +169,9 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
         { to: "/acc/wholesale", label: "Wholesale", icon: ShoppingBag },
         { to: "/acc/sales", label: "Bills", icon: ReceiptText },
         { to: "/acc/stock", label: "Stock", icon: Package },
+        { to: "/acc/suppliers", label: "Suppliers", icon: Truck },
         { to: "/acc/dues", label: "Dues", icon: Wallet },
-        { to: "/acc/suppliers", label: "Suppliers", icon: Truck, inMore: true },
-        ...(isAdmin ? [{ to: "/acc/analytics", label: "Analytics", icon: BarChart3, inMore: true }] : []),
+        ...(isAdmin ? [{ to: "/acc/analytics", label: "Analytics", icon: BarChart3 }] : []),
       ]
     : isRepair
     ? [
@@ -194,9 +190,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
         ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
       ];
 
-  const mobileLinks = links.filter((link) => !link.desktopOnly && !link.inMore);
-  const moreLinks = links.filter((link) => link.inMore);
-  const moreActive = moreLinks.some((link) => location.pathname.startsWith(link.to));
+  const mobileLinks = links.filter((link) => !link.desktopOnly);
 
   function onMainNavClick() {
     // Header / bottom nav = fresh list. Detail → back keeps search via session.
@@ -498,9 +492,9 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
       </main>
 
       <nav
-        className={clsx("babu-mobile-nav", mobileLinks.length + (moreLinks.length ? 1 : 0) > 6 && "is-crowded")}
+        className={clsx("babu-mobile-nav", mobileLinks.length > 6 && "is-crowded")}
         aria-label="Mobile navigation"
-        style={{ gridTemplateColumns: `repeat(${mobileLinks.length + (moreLinks.length ? 1 : 0)}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))` }}
       >
         {mobileLinks.map((link) => (
           <NavLink
@@ -517,43 +511,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
             {link.label}
           </NavLink>
         ))}
-        {moreLinks.length ? (
-          <button
-            type="button"
-            className={clsx("babu-mobile-link babu-mobile-more", (moreActive || moreOpen) && "is-active")}
-            aria-expanded={moreOpen}
-            aria-haspopup="menu"
-            onClick={() => setMoreOpen((open) => !open)}
-          >
-            <span className="babu-mobile-icon-wrap">
-              <Ellipsis />
-            </span>
-            More
-          </button>
-        ) : null}
       </nav>
-
-      {moreOpen ? (
-        <div className="babu-more-backdrop" onClick={() => setMoreOpen(false)}>
-          <div className="babu-more-menu" role="menu" onClick={(event) => event.stopPropagation()}>
-            {moreLinks.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                role="menuitem"
-                onClick={() => {
-                  onMainNavClick();
-                  setMoreOpen(false);
-                }}
-                className={({ isActive }) => clsx("babu-more-item", isActive && "is-active")}
-              >
-                <link.icon />
-                <span>{link.label}</span>
-              </NavLink>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       <AnimatePresence>
         {/* Accessories pages have their own bottom bars and buttons there. */}
