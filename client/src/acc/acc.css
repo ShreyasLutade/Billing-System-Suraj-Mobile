@@ -9179,8 +9179,7 @@ html.dark .acc-sell-pay button.is-on {
   overflow-wrap: anywhere;
 }
 
-/* Counter: Back to the previous tile level, above the title (same bar as
-   the Back on other pages). */
+/* Counter: Back to the previous tile level, above the title. */
 .acc-counter-back {
   margin-bottom: 2px;
 }

@@ -1108,6 +1108,10 @@ body {
     position: relative;
     isolation: isolate;
     display: inline-flex;
+    /* Only as wide as its label, even inside column layouts that stretch. */
+    align-self: flex-start;
+    width: fit-content;
+    max-width: 100%;
     align-items: center;
     gap: 8px;
     padding: 8px 14px 8px 11px;
