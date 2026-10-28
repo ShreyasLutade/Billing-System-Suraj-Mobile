@@ -77,13 +77,54 @@ async function ensureCategories() {
     await prisma.accCategory.createMany({
       data: DEFAULT_ACC_CATEGORIES.map((c, i) => ({ ...c, sortOrder: i })),
     });
+    await prisma.accCounter.upsert({ where: { key: NECKBAND_SWAP_KEY }, create: { key: NECKBAND_SWAP_KEY, value: 1 }, update: {} });
     return;
   }
+  await swapMemoryCardForNeckband();
   await Promise.all(
     DEFAULT_ACC_CATEGORIES.map((c, i) =>
       prisma.accCategory.updateMany({ where: { name: c.name }, data: { drillBy: c.drillBy, icon: c.icon, sortOrder: i } }),
     ),
   );
+}
+
+/**
+ * One-time change to the starter tiles: Memory card out, Neckband in.
+ * Runs once per database (marked in AccCounter), so a shop that later adds
+ * Memory card back, or removes Neckband, keeps its choice. Memory card is
+ * only removed when nothing in stock or on a bill uses it.
+ */
+const NECKBAND_SWAP_KEY = "MIGRATION_NECKBAND_FOR_MEMORY_CARD";
+
+async function swapMemoryCardForNeckband() {
+  const done = await prisma.accCounter.findUnique({ where: { key: NECKBAND_SWAP_KEY } });
+  if (done) return;
+  try {
+    await runNeckbandSwap();
+  } catch (error) {
+    // Another request ran it at the same moment (unique name / key clash).
+    if ((error as { code?: string }).code !== "P2002") throw error;
+  }
+}
+
+async function runNeckbandSwap() {
+  await prisma.$transaction(async (tx) => {
+    const neckband = await tx.accCategory.findUnique({ where: { name: "Neckband" } });
+    if (!neckband) {
+      await tx.accCategory.create({ data: { name: "Neckband", drillBy: "BRAND", icon: "neckband", sortOrder: 0 } });
+    }
+    const memory = await tx.accCategory.findUnique({ where: { name: "Memory card" } });
+    if (memory) {
+      const used = await tx.accProduct.count({
+        where: { categoryId: memory.id, OR: [{ active: true }, { saleItems: { some: {} } }, { purchaseItems: { some: {} } }] },
+      });
+      if (!used) {
+        await tx.accProduct.deleteMany({ where: { categoryId: memory.id } });
+        await tx.accCategory.delete({ where: { id: memory.id } });
+      }
+    }
+    await tx.accCounter.create({ data: { key: NECKBAND_SWAP_KEY, value: 1 } });
+  });
 }
 
 /* ---------------- categories ---------------- */

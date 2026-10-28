@@ -99,6 +99,40 @@ const ART: Record<string, Draw> = {
     </>
   ),
 
+  /* Neckband: flexible horseshoe band, battery pods, cables to the buds */
+  neckband: (u) => (
+    <>
+      <defs>
+        <linearGradient id={u("band")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#4b5563" />
+          <stop offset="1" stopColor="#0f172a" />
+        </linearGradient>
+        <linearGradient id={u("pod")} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#374151" />
+          <stop offset="1" stopColor="#030712" />
+        </linearGradient>
+      </defs>
+      {ground}
+      <path d="M13 13 C9 46 55 46 51 13" fill="none" stroke={`url(#${u("band")})`} strokeWidth="5.5" strokeLinecap="round" />
+      <path d="M15.5 30 C21 40 43 40 48.5 30" fill="none" stroke="#fff" strokeOpacity="0.18" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M13.5 9 C18 22 22 36 23.5 46" fill="none" stroke="#1f2937" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M50.5 9 C46 22 42 36 40.5 46" fill="none" stroke="#1f2937" strokeWidth="1.3" strokeLinecap="round" />
+      <g transform="rotate(-6 13 17)">
+        <rect x="8.5" y="6" width="9" height="20" rx="4.5" fill={`url(#${u("pod")})`} />
+        <rect x="9.6" y="8" width="2" height="12" rx="1" fill="#fff" opacity="0.25" />
+        <rect x="11.5" y="21" width="3" height="1.6" rx="0.8" fill="#14b8a6" />
+      </g>
+      <g transform="rotate(6 51 17)">
+        <rect x="46.5" y="6" width="9" height="20" rx="4.5" fill={`url(#${u("pod")})`} />
+        <rect x="47.6" y="8" width="2" height="12" rx="1" fill="#fff" opacity="0.25" />
+      </g>
+      <circle cx="23.5" cy="50" r="4.6" fill="#111827" />
+      <circle cx="22.2" cy="48.7" r="1.6" fill="#14b8a6" opacity="0.9" />
+      <circle cx="40.5" cy="50" r="4.6" fill="#111827" />
+      <circle cx="39.2" cy="48.7" r="1.6" fill="#14b8a6" opacity="0.9" />
+    </>
+  ),
+
   /* Earbuds: charging case + two buds */
   ear: (u) => (
     <>

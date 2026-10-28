@@ -124,11 +124,11 @@ export const DEFAULT_ACC_CATEGORIES: Array<{ name: string; drillBy: "TYPE" | "BR
   { name: "Cover", drillBy: "TYPE", icon: "smartphone" },
   { name: "Glass", drillBy: "TYPE", icon: "shield" },
   { name: "Headphone", drillBy: "BRAND", icon: "headphones" },
+  { name: "Neckband", drillBy: "BRAND", icon: "neckband" },
   { name: "Earbuds", drillBy: "BRAND", icon: "ear" },
   { name: "Charger", drillBy: "BRAND", icon: "plug" },
   { name: "Cable", drillBy: "BRAND", icon: "cable" },
   { name: "Speaker", drillBy: "BRAND", icon: "speaker" },
   { name: "Power bank", drillBy: "BRAND", icon: "battery" },
   { name: "Smart watch", drillBy: "BRAND", icon: "watch" },
-  { name: "Memory card", drillBy: "BRAND", icon: "memory" },
 ];

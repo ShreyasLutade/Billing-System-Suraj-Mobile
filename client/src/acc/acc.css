@@ -9158,3 +9158,23 @@ html.dark .acc-sell-pay button.is-on {
     display: none;
   }
 }
+
+/* Category picker: picture above the name, so long names ("Neckband",
+   "Headphone", "Smart watch") fit on a phone instead of being cut off. */
+.acc-cat-pick {
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.acc-cat-chip {
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 84px;
+  padding: 10px 6px 8px;
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
