@@ -48,6 +48,8 @@ type NavItem = {
   end?: boolean;
   /** Sidebar only; left out of the phone bottom bar (reached from a page). */
   desktopOnly?: boolean;
+  /** A bill-entry page: tapping its tab again must not wipe what's typed. */
+  keepsInput?: boolean;
 };
 
 /**
@@ -166,7 +168,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
   const links: NavItem[] = isAcc
     ? [
         { to: "/acc", label: "Counter", icon: LayoutGrid, end: true },
-        { to: "/acc/wholesale", label: "Wholesale", icon: ShoppingBag },
+        { to: "/acc/wholesale", label: "Wholesale", icon: ShoppingBag, keepsInput: true },
         { to: "/acc/sales", label: "Bills", icon: ReceiptText },
         { to: "/acc/stock", label: "Stock", icon: Package },
         { to: "/acc/suppliers", label: "Suppliers", icon: Truck },
@@ -175,14 +177,14 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
       ]
     : isRepair
     ? [
-        { to: "/repair", label: "New Repair", icon: Wrench, end: true },
+        { to: "/repair", label: "New Repair", icon: Wrench, end: true, keepsInput: true },
         { to: "/repair/history", label: "Tracker", icon: History },
         ...(isAdmin
           ? [{ to: "/repair/analytics", label: "Analytics", icon: BarChart3 }]
           : []),
       ]
     : [
-        { to: "/", label: "New Bill", icon: FilePlus2, end: true },
+        { to: "/", label: "New Bill", icon: FilePlus2, end: true, keepsInput: true },
         { to: "/bills", label: "Bills", icon: ReceiptText },
         { to: "/dues", label: "Dues", icon: Wallet },
         { to: "/stock", label: "Stock", icon: Package },
@@ -195,6 +197,24 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
   function onMainNavClick() {
     // Header / bottom nav = fresh list. Detail → back keeps search via session.
     clearListUiSession();
+  }
+
+  /** Bumped to remount the page: a fresh start of the section's main page. */
+  const [pageResetKey, setPageResetKey] = useState(0);
+
+  /**
+   * Tab tapped. From a page inside the section (a bill, a product…) the link
+   * itself goes back to the section's main page. Tapped again while already
+   * on that main page: start it fresh (search, filters, drill-downs cleared)
+   * and scroll to the top. Bill-entry pages only scroll, so a half-typed
+   * bill isn't lost.
+   */
+  function onTabClick(event: React.MouseEvent, link: NavItem) {
+    onMainNavClick();
+    if (location.pathname !== link.to) return;
+    event.preventDefault();
+    if (!link.keepsInput) setPageResetKey((key) => key + 1);
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function confirmLogout() {
@@ -230,7 +250,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
               key={link.to}
               to={link.to}
               end={link.end}
-              onClick={onMainNavClick}
+              onClick={(event) => onTabClick(event, link)}
               className={({ isActive }) => clsx("babu-nav-link", isActive && "is-active")}
             >
               <link.icon />
@@ -486,7 +506,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
         <BackendIssueNotice />
         {/* CSS animation (not a transform left in place) so popups inside pages
             aren't trapped below the header and bottom nav. */}
-        <div className="babu-page-enter">
+        <div className="babu-page-enter" key={pageResetKey}>
           <Outlet />
         </div>
       </main>
@@ -501,7 +521,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
             key={link.to}
             to={link.to}
             end={link.end}
-            onClick={onMainNavClick}
+            onClick={(event) => onTabClick(event, link)}
             className={({ isActive }) => clsx("babu-mobile-link", isActive && "is-active")}
           >
             <span className="babu-mobile-icon-wrap">
