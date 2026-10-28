@@ -5,6 +5,7 @@ import {
   NavLink,
   Outlet,
   useLocation,
+  useNavigate,
   useNavigationType,
 } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -155,6 +156,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
   // .babu-main is the scroll container, so the browser won't reset it between
   // routes. Start new pages at the top; keep the position on Back (POP).
   const location = useLocation();
+  const navigate = useNavigate();
   const navigationType = useNavigationType();
   useEffect(() => {
     if (navigationType === "POP") return;
@@ -213,6 +215,10 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
     onMainNavClick();
     if (location.pathname !== link.to) return;
     event.preventDefault();
+    // Pages that keep drill-down levels in history (Counter tiles): step
+    // back out of them so the phone's Back doesn't return into them.
+    const depth = (location.state as { drillDepth?: number } | null)?.drillDepth ?? 0;
+    if (depth > 0) navigate(-depth);
     if (!link.keepsInput) setPageResetKey((key) => key + 1);
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }

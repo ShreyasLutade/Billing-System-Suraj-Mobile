@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ChevronRight, Loader2, Minus, Plus, Search, ShoppingCart, Star, Trash2, X } from "lucide-react";
-import { SearchClearButton } from "../components/ui";
+import { BackButton, SearchClearButton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { accApi, type AccProduct, type AccSalesSummary } from "./accApi";
 import {
@@ -26,6 +26,9 @@ import {
  * price, Sell. The phone brand is optional and only keeps the stock
  * breakdown in step. Several items can go in a cart for one customer.
  */
+
+/** Counter tiles position, kept in history state (see AccCounterPage). */
+type CounterDrillState = { accCat: string | null; accDrill: string | null; drillDepth: number };
 
 type PayMode = "CASH" | "ONLINE";
 type CartLine = {
@@ -82,9 +85,14 @@ export function AccCounterPage() {
   const { catalog, error } = useAccCatalog();
   const [showAll, setShowAll] = useState(() => readLocal(SHOW_ALL_KEY, false));
   const [payMode, setPayMode] = useState<PayMode>(() => readLocal(PAY_KEY, "CASH"));
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Where you are in the tiles lives in the page history, so the phone's
+  // Back (and the Back button) step up one level instead of leaving.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const drillState = (location.state as CounterDrillState | null) ?? null;
+  const categoryId = drillState?.accCat ?? null;
   /** Raw type/brand key within the open category ("" = Local / General). */
-  const [drillKey, setDrillKey] = useState<string | null>(null);
+  const drillKey = drillState?.accDrill ?? null;
   const [query, setQuery] = useState("");
   const [selling, setSelling] = useState<AccProduct | null>(null);
   const [cart, setCart] = useState<CartLine[]>(() => readLocal(CART_KEY, [], sessionStorage));
@@ -157,22 +165,30 @@ export function AccCounterPage() {
       .sort((a, b) => collator.compare(a.name, b.name));
   }, [inCategory, category, drillKey, drillBy]);
 
+  /** Levels opened above the tiles home: 0 home, 1 category, 2 type/brand. */
+  const depth = drillState?.drillDepth ?? 0;
+
   function openCategory(id: string) {
-    setCategoryId(id);
-    setDrillKey(null);
+    const next: CounterDrillState = { accCat: id, accDrill: null, drillDepth: depth + 1 };
+    navigate(location.pathname, { state: next });
   }
 
   function openDrill(raw: string) {
-    setDrillKey(raw);
+    const next: CounterDrillState = { accCat: categoryId, accDrill: raw, drillDepth: depth + 1 };
+    navigate(location.pathname, { state: next });
+  }
+
+  /** Step back through the levels opened, like the phone's Back. */
+  function backLevels(levels: number) {
+    if (levels > 0) navigate(-levels);
   }
 
   function goHome() {
-    setCategoryId(null);
-    setDrillKey(null);
+    backLevels(depth);
   }
 
   function goCategory() {
-    setDrillKey(null);
+    if (drillKey !== null) backLevels(1);
   }
 
   const cartTotal = cart.reduce((a, l) => a + l.qty * l.rate, 0);
@@ -195,6 +211,11 @@ export function AccCounterPage() {
   return (
     <div className="acc-page acc-counter">
       <header className="acc-counter-head">
+        {category && !showingSearch ? (
+          <BackButton onClick={() => backLevels(1)} className="acc-counter-back">
+            {drillKey !== null ? category.name : showAll ? "All stock" : "Favourites"}
+          </BackButton>
+        ) : null}
         <div className="acc-title-row">
           <h1>Counter</h1>
           <span className="acc-today" title="Today's retail sales">
