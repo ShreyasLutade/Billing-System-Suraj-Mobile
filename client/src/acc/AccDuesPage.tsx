@@ -362,7 +362,6 @@ export function PaymentSheet({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("CASH");
   const [date, setDate] = useState(todayInput());
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -370,7 +369,6 @@ export function PaymentSheet({
       setAmount("");
       setMethod("CASH");
       setDate(todayInput());
-      setNote("");
     }
   }, [customer]);
 
@@ -381,7 +379,7 @@ export function PaymentSheet({
     if (!(n > 0) || busy) return;
     setBusy(true);
     try {
-      const { data } = await accApi.receivePayment(customer!.id, { amount: n, method, paidAt: date, note });
+      const { data } = await accApi.receivePayment(customer!.id, { amount: n, method, paidAt: date });
       toast(`Received ${inr(n)} · balance ${inr(data.balance)}`);
       onSaved();
     } catch (err) {
@@ -399,7 +397,7 @@ export function PaymentSheet({
       subtitle={`Balance ${inr(customer.balance)}`}
       footer={
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || !(n > 0)}>
-          {busy ? <Loader2 className="acc-spin" /> : <Wallet />} {method === "DISCOUNT" ? "Write off" : "Receive"} {inr(n)}
+          {busy ? <Loader2 className="acc-spin" /> : <Wallet />} Receive {inr(n)}
         </button>
       }
     >
@@ -425,20 +423,12 @@ export function PaymentSheet({
         options={[
           { value: "CASH", label: "Cash" },
           { value: "UPI", label: "UPI" },
-          { value: "CHEQUE", label: "Cheque" },
-          { value: "DISCOUNT", label: "Write off" },
         ]}
       />
-      <div className="acc-form-grid">
-        <label className="acc-field">
-          <span>Date</span>
-          <input type="date" value={date} max={todayInput()} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label className="acc-field">
-          <span>Note</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="UTR, cheque no…" />
-        </label>
-      </div>
+      <label className="acc-field">
+        <span>Date</span>
+        <input type="date" value={date} max={todayInput()} onChange={(e) => setDate(e.target.value)} />
+      </label>
       {n > 0 ? <p className="acc-hint">Balance after: {inr(customer.balance - n)}</p> : null}
     </Sheet>
   );

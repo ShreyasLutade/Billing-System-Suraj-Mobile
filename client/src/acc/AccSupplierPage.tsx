@@ -8,7 +8,7 @@ import { accApi, type AccSupplier, type AccSupplierDetail } from "./accApi";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
 
 type Tab = "statement" | "purchases" | "payments";
-type Method = "CASH" | "UPI" | "CHEQUE";
+type Method = "CASH" | "UPI";
 
 const METHOD_LABEL: Record<string, string> = { CASH: "Cash", UPI: "UPI", BANK: "Bank transfer", CHEQUE: "Cheque" };
 
@@ -231,7 +231,7 @@ export function AccSupplierPage() {
   );
 }
 
-/** Pay the whole outstanding or part of it; the reference ties it to the bank statement. */
+/** Pay the whole outstanding or part of it, by UPI or cash. */
 type PayableSupplier = Pick<AccSupplier, "id" | "name" | "phone" | "balance">;
 
 export function PaySupplierSheet({
@@ -254,7 +254,6 @@ export function PaySupplierSheet({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<Method>("UPI");
   const [paidAt, setPaidAt] = useState(todayInput());
-  const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -285,7 +284,6 @@ export function PaySupplierSheet({
     setAmount("");
     setMethod("UPI");
     setPaidAt(todayInput());
-    setReference("");
     setNote("");
     setBusy(false);
   }, [open, fixedSupplierId, fixedSupplierName, hasFixedSupplier, fixedOutstanding, payable.length]);
@@ -355,7 +353,7 @@ export function PaySupplierSheet({
     if (value > outstanding && !window.confirm(`That is ${inr(value - outstanding)} more than you owe. Save as an advance?`)) return;
     setBusy(true);
     try {
-      await accApi.paySupplier(supplier.id, { amount: value, method, paidAt, reference: reference.trim(), note: note.trim() });
+      await accApi.paySupplier(supplier.id, { amount: value, method, paidAt, note: note.trim() });
       toast(`Paid ${inr(value)} to ${supplier.name}`);
       onPaid();
     } catch (err) {
@@ -444,23 +442,14 @@ export function PaySupplierSheet({
           onChange={setMethod}
           options={[
             { value: "UPI", label: "UPI" },
-            { value: "CHEQUE", label: "Cheque" },
             { value: "CASH", label: "Cash" },
           ]}
         />
       </div>
-      <div className="acc-form-grid">
-        <label className="acc-field">
-          <span>Date</span>
-          <input type="date" value={paidAt} max={todayInput()} onChange={(e) => setPaidAt(e.target.value)} />
-        </label>
-        {method !== "CASH" ? (
-          <label className="acc-field">
-            <span>{method === "CHEQUE" ? "Cheque no." : "UTR / reference no."}</span>
-            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="As on the bank statement" />
-          </label>
-        ) : null}
-      </div>
+      <label className="acc-field">
+        <span>Date</span>
+        <input type="date" value={paidAt} max={todayInput()} onChange={(e) => setPaidAt(e.target.value)} />
+      </label>
       <label className="acc-field">
         <span>Note</span>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
