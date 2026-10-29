@@ -9183,33 +9183,3 @@ html.dark .acc-sell-pay button.is-on {
 .acc-counter-back {
   margin-bottom: 2px;
 }
-
-/* Clear accessories data (admin). */
-.acc-reset-page {
-  max-width: 560px;
-}
-
-.acc-reset-warn {
-  flex-direction: row;
-  gap: 12px;
-  border-color: color-mix(in srgb, var(--a-red) 35%, var(--a-line));
-  background: color-mix(in srgb, var(--a-red) 7%, var(--a-card));
-}
-
-.acc-reset-warn > svg {
-  width: 24px;
-  height: 24px;
-  flex: none;
-  color: var(--a-red);
-}
-
-.acc-reset-warn strong {
-  color: var(--a-red);
-}
-
-.acc-reset-warn p {
-  margin: 4px 0 0;
-  color: var(--a-muted);
-  font-size: 13.5px;
-  line-height: 1.45;
-}

@@ -16,7 +16,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Eraser,
   FilePlus2,
   History,
   LogOut,
@@ -338,19 +337,6 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                     <Trash2 /> Recycle bin
                   </Link>
                 ) : null}
-                {isAdmin && isAcc ? (
-                  <Link
-                    to="/acc/reset"
-                    role="menuitem"
-                    className="babu-user-menu-item is-red"
-                    onClick={() => {
-                      onMainNavClick();
-                      setUserMenuOpen(false);
-                    }}
-                  >
-                    <Eraser /> Clear accessories data
-                  </Link>
-                ) : null}
                 <button
                   type="button"
                   role="menuitem"
@@ -501,18 +487,6 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                     className="babu-utility-button is-red"
                   >
                     <Trash2 /> Recycle bin
-                  </Link>
-                ) : null}
-                {isAdmin && isAcc ? (
-                  <Link
-                    to="/acc/reset"
-                    onClick={() => {
-                      onMainNavClick();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="babu-utility-button is-red"
-                  >
-                    <Eraser /> Clear accessories data
                   </Link>
                 ) : null}
                 <button

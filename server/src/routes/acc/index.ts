@@ -5,7 +5,6 @@ import { accSalesRouter } from "./sales";
 import { accCustomersRouter } from "./customers";
 import { accSuppliersRouter } from "./suppliers";
 import { accAnalyticsRouter } from "./analytics";
-import { accResetRouter } from "./reset";
 
 /** Accessories shop API (/api/acc). Mounted behind requireAccessories. */
 export const accRouter = Router();
@@ -16,4 +15,3 @@ accRouter.use(accCustomersRouter);
 accRouter.use(accSuppliersRouter);
 accRouter.use("/analytics", requireAdmin);
 accRouter.use(accAnalyticsRouter);
-accRouter.use(accResetRouter);

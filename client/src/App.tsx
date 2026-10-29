@@ -41,7 +41,6 @@ import { AccSuppliersPage, AccStockInPage } from "./acc/AccSuppliersPage";
 import { AccSalesPage } from "./acc/AccSalesPage";
 import { AccDuesPage, AccCustomerPage } from "./acc/AccDuesPage";
 import { AccAnalyticsPage } from "./acc/AccAnalyticsPage";
-import { AccResetPage } from "./acc/AccResetPage";
 
 export default function App() {
   return (
@@ -87,7 +86,6 @@ export default function App() {
                       <Route path="dues/:id" element={<AccCustomerPage />} />
                       <Route element={<RequireAdmin />}>
                         <Route path="analytics" element={<AccAnalyticsPage />} />
-                        <Route path="reset" element={<AccResetPage />} />
                       </Route>
                       <Route path="*" element={<Navigate to="/acc" replace />} />
                     </Route>
