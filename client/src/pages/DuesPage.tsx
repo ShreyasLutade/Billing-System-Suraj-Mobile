@@ -128,9 +128,8 @@ function dueReminderHindi(due: DueItem) {
     "",
     `${BRAND_NAME_TEXT} की ओर से विनम्र अनुस्मारक:`,
     `आपके ${mobile ? `मोबाइल *${mobile}*` : "मोबाइल"} (बिल नं. ${due.invoiceNumber}) का *${amount}* भुगतान अभी बाकी है।`,
-    due.dueDate ? `भुगतान की तिथि: ${format(new Date(due.dueDate), "dd MMM yyyy")}` : "",
     "",
-    "कृपया जल्द से जल्द भुगतान करने की कृपा करें। यदि आप भुगतान कर चुके हैं तो कृपया इस संदेश को अनदेखा करें।",
+    "कृपया जल्द से जल्द भुगतान करने की कृपा करें।",
     "",
     "धन्यवाद,",
     BRAND_NAME_TEXT,
@@ -580,28 +579,25 @@ export function DuesPage() {
                         Partial
                       </span>
                     ) : null}
-                    <span
-                      className={clsx(
-                        "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        dueWhen?.overdue
-                          ? "bg-[#E5484D]/10 text-[#E5484D]"
-                          : dueWhen
-                            ? "bg-[#B76E00]/10 text-[#B76E00]"
-                            : "bg-ink-50 text-ink-400 dark:bg-white/5",
-                      )}
-                    >
-                      {dueWhen?.label || "No due date"}
-                    </span>
                     <span className="ml-auto shrink-0 font-display text-[17px] font-semibold tabular-nums text-ember-500">
                       {formatINR(due.dueAmount)}
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
-                      <span className="tabular-nums">{due.customerPhone}</span>
-                      <span className="text-ink-300"> · </span>
-                      <span className="font-mono text-tide-600">{due.invoiceNumber}</span>
-                    </p>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={clsx(
+                          "inline-block max-w-full truncate rounded-full px-2 py-0.5 align-middle text-[11px] font-semibold",
+                          dueWhen?.overdue
+                            ? "bg-[#E5484D]/10 text-[#E5484D]"
+                            : dueWhen
+                              ? "bg-[#B76E00]/10 text-[#B76E00]"
+                              : "bg-ink-50 text-ink-400 dark:bg-white/5",
+                        )}
+                      >
+                        {dueWhen?.label || "No due date"}
+                      </span>
+                    </span>
                     {due.customerPhone ? (
                       <a
                         href={`tel:${due.customerPhone.replace(/[^\d+]/g, "")}`}
@@ -797,25 +793,21 @@ export function DuesPage() {
                             due.financeReceived2 ? null : due.financeCompanyName2,
                           ) || "Finance company"}
                     </h3>
-                    <span
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tide-100 px-2 py-0.5 text-[11px] font-semibold text-tide-600 dark:bg-tide-400/15 dark:text-tide-400"
-                      title="Date the finance bill was made"
-                    >
-                      <CalendarDays className="h-3 w-3" />
-                      {format(new Date(due.billDate), "dd MMM yyyy")}
-                    </span>
                     <span className="ml-auto shrink-0 font-display text-[17px] font-semibold tabular-nums text-ember-500">
                       {formatINR(financeAmountForCompany(due, financeCompanyFilter))}
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
-                      {due.customerName}
-                      <span className="text-ink-300"> · </span>
-                      <span className="tabular-nums">{due.customerPhone}</span>
-                      <span className="text-ink-300"> · </span>
-                      <span className="font-mono text-tide-600">{due.invoiceNumber}</span>
-                    </p>
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="min-w-0 truncate text-xs text-ink-500">{due.customerName}</span>
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tide-100 px-2 py-0.5 text-[11px] font-semibold text-tide-600 dark:bg-tide-400/15 dark:text-tide-400"
+                        title="Date the finance bill was made"
+                      >
+                        <CalendarDays className="h-3 w-3" />
+                        {format(new Date(due.billDate), "dd MMM yyyy")}
+                      </span>
+                    </span>
                     {isAdmin ? (
                       <button
                         type="button"
