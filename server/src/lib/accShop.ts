@@ -132,3 +132,23 @@ export const DEFAULT_ACC_CATEGORIES: Array<{ name: string; drillBy: "TYPE" | "BR
   { name: "Power bank", drillBy: "BRAND", icon: "battery" },
   { name: "Smart watch", drillBy: "BRAND", icon: "watch" },
 ];
+
+/**
+ * Take `qty` pieces off a product (not below zero). Pieces sorted by phone
+ * brand can't add up to more than the stock, so the brand split is trimmed
+ * too, largest brand first. Returns how many pieces actually came off.
+ */
+export async function takeStockOff(tx: Prisma.TransactionClient, productId: string, qty: number) {
+  const product = await tx.accProduct.findUnique({ where: { id: productId }, include: { models: true } });
+  if (!product || qty <= 0) return 0;
+  const next = Math.max(0, product.stockQty - qty);
+  await tx.accProduct.update({ where: { id: productId }, data: { stockQty: next } });
+  let over = product.models.reduce((a, m) => a + m.qty, 0) - next;
+  for (const m of [...product.models].sort((a, b) => b.qty - a.qty)) {
+    if (over <= 0) break;
+    const cut = Math.min(m.qty, over);
+    await tx.accProductModel.update({ where: { id: m.id }, data: { qty: m.qty - cut } });
+    over -= cut;
+  }
+  return product.stockQty - next;
+}

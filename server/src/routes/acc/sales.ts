@@ -545,3 +545,70 @@ accSalesRouter.post("/sales/:id/void", async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Delete a bill (Cancel bill on the bill page). The customer chooses:
+ *  - returnStock: the pieces go back in stock (as if never sold);
+ *  - otherwise the bill goes but the stock stays reduced (goods are gone).
+ * Either way it leaves sales, analytics and the customer's dues. Staff can
+ * delete their own bills on the same day; admins any bill.
+ */
+accSalesRouter.post("/sales/:id/delete", async (req, res, next) => {
+  try {
+    const returnStock = req.body?.returnStock !== false;
+    const sale = await prisma.accSale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+    if (!sale) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    const isAdmin = req.user?.role === "ADMIN";
+    const sameDay = sale.saleDate >= startOfDayIST();
+    if (!isAdmin && !(sameDay && sale.createdByUserId === req.user?.id)) {
+      res.status(403).json({ error: "Only an admin can delete this bill" });
+      return;
+    }
+    const by = req.user?.name || null;
+    const label = sale.kind === "WHOLESALE" ? `Bill ${sale.number}` : "Counter sale";
+    // A cancelled (void) bill already gave its stock back.
+    const giveBack = returnStock && !sale.voidedAt;
+    await prisma.$transaction(async (tx) => {
+      for (const item of sale.items) {
+        if (!item.productId) continue;
+        const exists = await tx.accProduct.findUnique({ where: { id: item.productId }, select: { id: true } });
+        if (!exists) continue;
+        if (giveBack) {
+          await tx.accProduct.update({ where: { id: item.productId }, data: { stockQty: { increment: item.qty } } });
+          if (item.model) {
+            await tx.accProductModel.updateMany({
+              where: { productId: item.productId, model: item.model },
+              data: { qty: { increment: item.qty } },
+            });
+          }
+          await tx.accStockMove.create({
+            data: {
+              productId: item.productId,
+              kind: "VOID",
+              qty: item.qty,
+              unitCost: item.unitCost,
+              note: `${label} deleted · stock returned`,
+              createdByName: by,
+            },
+          });
+        }
+      }
+      // Keep the product history readable once the bill is gone.
+      await tx.accStockMove.updateMany({
+        where: { refId: sale.id },
+        data: {
+          refId: null,
+          note: giveBack ? `${label} deleted` : `${label} deleted · stock not returned`,
+        },
+      });
+      await tx.accSale.delete({ where: { id: sale.id } });
+    });
+    console.log(`[acc] ${label} deleted by ${by} (${giveBack ? "stock returned" : "stock kept out"})`);
+    res.json({ data: { deleted: true, stockReturned: giveBack } });
+  } catch (error) {
+    next(error);
+  }
+});

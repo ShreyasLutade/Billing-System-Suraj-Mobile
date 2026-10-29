@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, PackagePlus, Phone, Search, Wallet } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, PackagePlus, Phone, Search, Trash2, Wallet } from "lucide-react";
 import { BackLink } from "../components/ui";
+import { DangerConfirmModal } from "../components/RemoveConfirmModals";
+import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccSupplier, type AccSupplierDetail } from "./accApi";
-import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
+import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, refreshCatalog, shortDate, toast, todayInput } from "./shared";
 
 type Tab = "statement" | "purchases" | "payments";
 type Method = "CASH" | "UPI";
@@ -23,6 +26,26 @@ export function AccSupplierPage() {
   const [tab, setTab] = useState<Tab>("statement");
   const [paying, setPaying] = useState(false);
   const [openPurchase, setOpenPurchase] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function deleteSupplier() {
+    if (!data || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const { data: result } = await accApi.deleteSupplier(data.id);
+      toast(`${data.name} deleted${result.piecesRemoved ? ` · ${result.piecesRemoved} pcs off stock` : ""}`);
+      void refreshCatalog();
+      navigate("/acc/suppliers", { replace: true });
+    } catch (err) {
+      setDeleteError(errorText(err));
+      setDeleting(false);
+    }
+  }
 
   const load = () =>
     id
@@ -227,6 +250,33 @@ export function AccSupplierPage() {
           void load();
         }}
       />
+
+      {isAdmin ? (
+        <button type="button" className="acc-btn is-danger is-block acc-supplier-delete" onClick={() => setConfirmDelete(true)}>
+          <Trash2 /> Delete supplier
+        </button>
+      ) : null}
+
+      <AnimatePresence>
+        {confirmDelete ? (
+          <DangerConfirmModal
+            title="Delete supplier?"
+            subtitle={data.name}
+            points={[
+              `All ${plural(data.purchases.length, "purchase")} and ${plural(data.payments.length, "payment")} from this supplier are removed.`,
+              ...(data.pieces > 0
+                ? [`The ${data.pieces} pcs bought from them come off stock. Products bought only from them are removed.`]
+                : []),
+              "Products already sold on bills stay on those bills.",
+            ]}
+            cancelLabel="Keep supplier"
+            working={deleting}
+            error={deleteError}
+            onCancel={() => !deleting && setConfirmDelete(false)}
+            onConfirm={() => void deleteSupplier()}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

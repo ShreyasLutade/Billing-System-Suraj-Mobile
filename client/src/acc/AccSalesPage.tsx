@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Ban, Banknote, ChevronDown, Filter, Loader2, Search, Smartphone } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
+import { CancelBillSheet } from "./CancelBillSheet";
 import { accApi, type AccSale, type AccSaleKind, type AccSaleSearchScope, type PeriodQuery } from "./accApi";
-import { Empty, PdfButton, PeriodChips, Segmented, Sheet, dateTime, errorText, inr, plural, refreshCatalog, toast } from "./shared";
+import { Empty, PdfButton, PeriodChips, Segmented, Sheet, dateTime, errorText, inr, plural, toast } from "./shared";
 
 /**
  * Wholesale bills and counter sales by day. Wholesale bills open their own
@@ -217,12 +218,12 @@ export function AccSalesPage() {
       )}
 
       <SaleSheet
+        key={open?.id || "none"}
         sale={open}
         onClose={() => setOpen(null)}
-        onChanged={(updated) => {
-          setOpen(updated);
+        onDeleted={() => {
+          setOpen(null);
           void load();
-          void refreshCatalog();
         }}
       />
     </div>
@@ -305,31 +306,16 @@ function CounterDay({ sales, onOpen }: { sales: AccSale[]; onOpen: (sale: AccSal
 export function SaleSheet({
   sale,
   onClose,
-  onChanged,
+  onDeleted,
 }: {
   sale: AccSale | null;
   onClose: () => void;
-  onChanged: (sale: AccSale) => void;
+  onDeleted: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   if (!sale) return null;
-
-  async function cancelBill() {
-    const reason = window.prompt(
-      sale!.kind === "WHOLESALE" ? `Cancel ${sale!.number}? Stock goes back. Reason:` : "Cancel this counter sale? Stock goes back. Reason:",
-      "",
-    );
-    if (reason === null) return;
-    setBusy(true);
-    try {
-      const { data } = await accApi.voidSale(sale!.id, reason);
-      toast(data.kind === "WHOLESALE" ? `${data.number} cancelled` : "Counter sale cancelled");
-      onChanged(data);
-    } catch (err) {
-      toast(errorText(err), { tone: "error" });
-    } finally {
-      setBusy(false);
-    }
+  if (cancelling) {
+    return <CancelBillSheet sale={sale} onClose={() => setCancelling(false)} onDeleted={onDeleted} />;
   }
 
   return (
@@ -343,11 +329,9 @@ export function SaleSheet({
           {sale.kind === "WHOLESALE" ? (
             <PdfButton label="Bill" onDownload={() => accApi.pdf.bill(sale.id)} onShare={() => accApi.sharePdf.bill(sale.id)} />
           ) : null}
-          {!sale.voidedAt ? (
-            <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
-              <Ban /> Cancel {sale.kind === "WHOLESALE" ? "bill" : "sale"}
-            </button>
-          ) : null}
+          <button type="button" className="acc-btn is-danger" onClick={() => setCancelling(true)}>
+            <Ban /> {sale.voidedAt ? "Delete" : "Cancel"} {sale.kind === "WHOLESALE" ? "bill" : "sale"}
+          </button>
         </div>
       }
     >

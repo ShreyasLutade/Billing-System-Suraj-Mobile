@@ -22,7 +22,8 @@ import {
 } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccCustomerDetail, type AccSale } from "./accApi";
-import { CategoryIcon, Empty, PdfButton, dateTime, errorText, inr, plural, refreshCatalog, shortDate, toast, useAccCatalog } from "./shared";
+import { CancelBillSheet } from "./CancelBillSheet";
+import { CategoryIcon, Empty, PdfButton, dateTime, inr, plural, shortDate, useAccCatalog } from "./shared";
 
 /**
  * One wholesale bill on its own page: who bought, what, how it was paid and
@@ -34,7 +35,7 @@ export function AccSaleDetailPage() {
   const [sale, setSale] = useState<AccSale | null>(null);
   const [customer, setCustomer] = useState<AccCustomerDetail | null>(null);
   const [missing, setMissing] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const { catalog } = useAccCatalog();
   const iconFor = (categoryName: string) =>
     catalog?.categories.find((c) => c.name === categoryName)?.icon || "package";
@@ -105,25 +106,6 @@ export function AccSaleDetailPage() {
     .filter(Boolean)
     .join("\n");
 
-  async function cancelBill() {
-    const reason = window.prompt(
-      sale!.kind === "WHOLESALE" ? `Cancel ${sale!.number}? Stock goes back. Reason:` : "Cancel this counter sale? Stock goes back. Reason:",
-      "",
-    );
-    if (reason === null) return;
-    setBusy(true);
-    try {
-      const { data } = await accApi.voidSale(sale!.id, reason);
-      toast(data.kind === "WHOLESALE" ? `${data.number} cancelled` : "Counter sale cancelled");
-      void refreshCatalog();
-      await load();
-    } catch (err) {
-      toast(errorText(err), { tone: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="acc-page acc-bill-page">
       <div className="acc-bill-topbar">
@@ -152,11 +134,9 @@ export function AccSaleDetailPage() {
               </a>
             </>
           ) : null}
-          {!sale.voidedAt ? (
-            <button type="button" className="acc-btn is-danger" onClick={() => void cancelBill()} disabled={busy}>
-              {busy ? <Loader2 className="acc-spin" /> : <Ban />} Cancel {wholesale ? "bill" : "sale"}
-            </button>
-          ) : null}
+          <button type="button" className="acc-btn is-danger" onClick={() => setCancelling(true)}>
+            <Ban /> {sale.voidedAt ? "Delete" : "Cancel"} {wholesale ? "bill" : "sale"}
+          </button>
         </div>
       </div>
 
@@ -368,6 +348,9 @@ export function AccSaleDetailPage() {
             {sale.note}
           </span>
         </section>
+      ) : null}
+      {cancelling ? (
+        <CancelBillSheet sale={sale} onClose={() => setCancelling(false)} onDeleted={() => navigate("/acc/sales", { replace: true })} />
       ) : null}
     </div>
   );

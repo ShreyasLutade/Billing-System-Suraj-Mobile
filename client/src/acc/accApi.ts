@@ -370,6 +370,9 @@ export const accApi = {
     apiRequest<{ data: { sales: AccSale[]; summary: AccSalesSummary; label: string } }>(`/acc/sales${qs(q)}`),
   getSale: (id: string) => apiRequest<{ data: AccSale }>(`/acc/sales/${id}`),
   voidSale: (id: string, reason: string) => post<AccSale>(`/acc/sales/${id}/void`, { reason }),
+  /** Delete a bill; returnStock puts its pieces back in stock. */
+  deleteSale: (id: string, returnStock: boolean) =>
+    post<{ deleted: boolean; stockReturned: boolean }>(`/acc/sales/${id}/delete`, { returnStock }),
 
   groups: () => apiRequest<{ data: AccGroup[] }>("/acc/groups"),
   createGroup: (body: { name: string; color: string }) => post<AccGroup>("/acc/groups", body),
@@ -388,6 +391,11 @@ export const accApi = {
     apiRequest<{ data: AccDues }>(`/acc/dues${qs(q)}`),
 
   suppliers: () => apiRequest<{ data: AccSupplier[] }>("/acc/suppliers"),
+  /** Admin: supplier, their purchases & payments, and the stock bought from them. */
+  deleteSupplier: (id: string) =>
+    apiRequest<{ data: { piecesRemoved: number; productsRemoved: number; purchases: number } }>(`/acc/suppliers/${id}`, {
+      method: "DELETE",
+    }),
   supplier: (id: string) => apiRequest<{ data: AccSupplierDetail }>(`/acc/suppliers/${id}`),
   createSupplier: (body: AccSupplierInput) => post<{ id: string }>("/acc/suppliers", body),
   updateSupplier: (id: string, body: AccSupplierInput) => put<{ id: string }>(`/acc/suppliers/${id}`, body),

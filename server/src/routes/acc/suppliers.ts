@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { accRange, round2 } from "../../lib/accShop";
+import { accRange, round2, takeStockOff } from "../../lib/accShop";
+import { requireAdmin } from "../../middleware/auth";
 import { istDateString } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfSection } from "../../services/accPdf";
 import { money } from "../../services/pdf";
@@ -516,6 +517,53 @@ accSuppliersRouter.get("/purchases", async (req, res, next) => {
         createdByName: p.createdByName,
       })),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Delete a supplier (admin): their purchases and payments go, and the
+ * pieces bought from them come off stock. A product left with no stock, no
+ * other supplier's purchases and no sales is removed entirely; one with
+ * sales history stays (with its lower stock) so old bills keep their item.
+ */
+accSuppliersRouter.delete("/suppliers/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const supplier = await prisma.accSupplier.findUnique({
+      where: { id: req.params.id },
+      include: { purchases: { include: { items: true } } },
+    });
+    if (!supplier) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+    const bought = new Map<string, number>();
+    for (const p of supplier.purchases) for (const i of p.items) bought.set(i.productId, (bought.get(i.productId) || 0) + i.qty);
+    const by = req.user?.name || null;
+    const result = await prisma.$transaction(async (tx) => {
+      let piecesRemoved = 0;
+      for (const [productId, qty] of bought) {
+        const removed = await takeStockOff(tx, productId, qty);
+        piecesRemoved += removed;
+        if (removed > 0) {
+          await tx.accStockMove.create({
+            data: { productId, kind: "ADJUST", qty: -removed, note: `Supplier ${supplier.name} deleted`, createdByName: by },
+          });
+        }
+      }
+      const purchaseIds = supplier.purchases.map((p) => p.id);
+      await tx.accPurchase.deleteMany({ where: { id: { in: purchaseIds } } });
+      await tx.accSupplier.delete({ where: { id: supplier.id } });
+      const gone = await tx.accProduct.findMany({
+        where: { id: { in: [...bought.keys()] }, stockQty: { lte: 0 }, saleItems: { none: {} }, purchaseItems: { none: {} } },
+        select: { id: true },
+      });
+      await tx.accProduct.deleteMany({ where: { id: { in: gone.map((p) => p.id) } } });
+      return { piecesRemoved, productsRemoved: gone.length, purchases: purchaseIds.length };
+    });
+    console.log(`[acc] Supplier ${supplier.name} deleted by ${by}: ${JSON.stringify(result)}`);
+    res.json({ data: result });
   } catch (error) {
     next(error);
   }

@@ -9183,3 +9183,96 @@ html.dark .acc-sell-pay button.is-on {
 .acc-counter-back {
   margin-bottom: 2px;
 }
+
+/* Cancel bill: two big, clearly different choices. */
+.acc-cancel-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acc-cancel-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1.5px solid var(--a-line);
+  border-radius: 18px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.acc-cancel-option:active {
+  transform: scale(0.98);
+}
+
+.acc-cancel-option:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.acc-cancel-option > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.acc-cancel-option strong {
+  font: 800 16px "Sora", sans-serif;
+}
+
+.acc-cancel-option small {
+  color: var(--a-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.acc-cancel-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 14px;
+}
+
+.acc-cancel-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.acc-cancel-option.is-return {
+  border-color: color-mix(in srgb, var(--a-green) 40%, var(--a-line));
+  background: color-mix(in srgb, var(--a-green) 6%, var(--a-card));
+}
+
+.acc-cancel-option.is-return .acc-cancel-icon {
+  background: color-mix(in srgb, var(--a-green) 15%, var(--a-card));
+  color: var(--a-green);
+}
+
+.acc-cancel-option.is-return strong {
+  color: var(--a-green);
+}
+
+.acc-cancel-option.is-delete {
+  border-color: color-mix(in srgb, var(--a-red) 40%, var(--a-line));
+  background: color-mix(in srgb, var(--a-red) 6%, var(--a-card));
+}
+
+.acc-cancel-option.is-delete .acc-cancel-icon {
+  background: color-mix(in srgb, var(--a-red) 14%, var(--a-card));
+  color: var(--a-red);
+}
+
+.acc-cancel-option.is-delete strong {
+  color: var(--a-red);
+}
+
+.acc-supplier-delete {
+  margin-top: 8px;
+}
