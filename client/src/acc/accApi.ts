@@ -341,8 +341,23 @@ const post = <T>(path: string, body: unknown) =>
 const put = <T>(path: string, body: unknown) =>
   apiRequest<{ data: T }>(path, { method: "PUT", body: JSON.stringify(body) });
 
+export type AccResetCounts = {
+  products: number;
+  sales: number;
+  customers: number;
+  payments: number;
+  suppliers: number;
+  purchases: number;
+};
+
 export const accApi = {
   catalog: () => apiRequest<{ data: AccCatalog }>("/acc/catalog"),
+  resetSummary: () => apiRequest<{ data: AccResetCounts & { confirmWord: string } }>("/acc/admin/reset-summary"),
+  resetAll: (confirm: string) =>
+    apiRequest<{ data: { cleared: AccResetCounts; snapshotSaved: boolean } }>("/acc/admin/reset", {
+      method: "POST",
+      body: JSON.stringify({ confirm }),
+    }),
   createCategory: (body: { name: string; drillBy: "TYPE" | "BRAND"; icon: string }) =>
     post<AccCategory>("/acc/categories", body),
   updateCategory: (id: string, body: { name: string; drillBy: "TYPE" | "BRAND"; icon: string }) =>
