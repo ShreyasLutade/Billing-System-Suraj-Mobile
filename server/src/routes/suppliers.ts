@@ -7,7 +7,7 @@ import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
 import { buildSupplierMobilesPdf } from "../services/supplierStockPdf";
 import type { SupplierMobileExportCondition } from "../services/supplierStockExport";
 import { intakeKindFromNote } from "../services/stockSync";
-import { buildSupplierStatement } from "../services/supplierStatement";
+import { buildSupplierStatement, supplierStatementData } from "../services/supplierStatement";
 import {
   applyPendingReturnCredits,
   settlePendingReturnCredits,
@@ -494,6 +494,8 @@ suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
 const paySupplierSchema = z.object({
   /** Omit to clear everything outstanding; otherwise a part payment. */
   amount: z.number().positive().finite().optional(),
+  /** How it was paid; older app versions send nothing ("na"). */
+  method: z.enum(["cash", "online"]).optional(),
   paidAt: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -509,6 +511,27 @@ const paySupplierSchema = z.object({
  * to unpaid purchases oldest first (same fields as a per-purchase mark-paid),
  * and can never be more than what is outstanding.
  */
+/** Admin only: the same statement as data, for the in-app statement page. */
+suppliersRouter.get("/:id/statement/view", requireAdmin, async (req, res, next) => {
+  try {
+    const data = await supplierStatementData(req.params.id);
+    if (!data) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+    const { entries: _entries, ...rest } = data;
+    res.json({
+      data: {
+        ...rest,
+        generatedAt: new Date().toISOString(),
+        rows: rest.rows.map((r) => ({ ...r, date: r.date.toISOString() })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /** Admin only: supplier statement PDF (purchases as credit, payments as debit). */
 suppliersRouter.get("/:id/statement", requireAdmin, async (req, res, next) => {
   try {
@@ -612,7 +635,7 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
         data: {
           supplierId: supplier.id,
           amount: paidPaise / 100,
-          method: "na",
+          method: parsed.data.method ?? "na",
           paidAt,
           note: `Against purchase${againstDates.length === 1 ? "" : "s"} of ${[...new Set(againstDates)].join(", ")}`,
         },

@@ -28,6 +28,7 @@ import { RepairHistoryPage } from "./pages/RepairHistoryPage";
 import { RepairHomePage } from "./pages/RepairHomePage";
 import { RepairJobPage } from "./pages/RepairJobPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
+import { SupplierStatementPage } from "./pages/SupplierStatementPage";
 import { AccLayout } from "./acc/shared";
 import { AccCounterPage } from "./acc/AccCounterPage";
 import { AccWholesalePage } from "./acc/AccWholesalePage";
@@ -114,6 +115,7 @@ export default function App() {
                   />
                   <Route path="suppliers/:id" element={<SupplierDetailPage />} />
                   <Route element={<RequireAdmin />}>
+                    <Route path="suppliers/:id/statement" element={<SupplierStatementPage />} />
                     <Route path="bills/replace" element={<ReplaceProductPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route

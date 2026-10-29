@@ -5,6 +5,7 @@ import {
   ArrowDownUp,
   ChevronDown,
   Download,
+  Eye,
   IndianRupee,
   Loader2,
   Phone,
@@ -631,6 +632,19 @@ export function SuppliersPage() {
                             {formatINR(s.outstanding)}
                           </td>
                           <td className="text-center">
+                            <span className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="inline-grid h-7 w-7 place-items-center rounded-lg text-ink-500 transition hover:bg-tide-100 hover:text-tide-600"
+                              aria-label={`View statement for ${s.name}`}
+                              title="View statement"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate(`/suppliers/${s.id}/statement`, { state: fromState(location) });
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
                             <button
                               type="button"
                               className="inline-grid h-7 w-7 place-items-center rounded-lg text-ink-500 transition hover:bg-tide-100 hover:text-tide-600 disabled:opacity-50"
@@ -648,6 +662,7 @@ export function SuppliersPage() {
                                 <Download className="h-4 w-4" />
                               )}
                             </button>
+                            </span>
                           </td>
                         </>
                       ) : null}

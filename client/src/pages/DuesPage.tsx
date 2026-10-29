@@ -10,7 +10,6 @@ import {
   MessageCircle,
   Phone,
   Search,
-  Smartphone,
   UserRound,
 } from "lucide-react";
 import { BRAND_NAME_TEXT } from "../components/BrandName";
@@ -137,16 +136,6 @@ function dueReminderHindi(due: DueItem) {
     BRAND_NAME_TEXT,
   ];
   return lines.filter((line, i) => line !== "" || lines[i - 1] !== "").join("\n");
-}
-
-/** "Financed 21 Oct 2026 · 5 days" for the finance card. */
-function financedOn(billDate: string) {
-  const date = new Date(billDate);
-  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
-  return {
-    date: format(date, "dd MMM yyyy"),
-    age: days === 0 ? "Today" : days === 1 ? "1 day" : `${days} days`,
-  };
 }
 
 function dueDateStatus(dueDate: string | null) {
@@ -565,7 +554,7 @@ export function DuesPage() {
                   role="link"
                   tabIndex={0}
                   className={clsx(
-                    "interactive-card rounded-2xl border px-3.5 py-3 shadow-sm backdrop-blur-sm",
+                    "interactive-card rounded-2xl border px-3.5 py-2.5 shadow-sm backdrop-blur-sm",
                     dueWhen?.overdue
                       ? "interactive-card-danger border-red-500/40 bg-red-500/20"
                       : "border-ink-100/80 bg-white/90 shadow-ink-900/5",
@@ -582,61 +571,41 @@ export function DuesPage() {
                     }
                   }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <h3 className="truncate text-[15px] font-semibold text-ink-900">
-                          {due.customerName}
-                        </h3>
-                        {due.isPartialPaid ? (
-                          <span className="shrink-0 rounded-full bg-ember-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
-                            Partial
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 truncate text-xs text-ink-500">
-                        <span className="tabular-nums">{due.customerPhone}</span>
-                        <span className="text-ink-300"> · </span>
-                        <span className="font-mono text-tide-600">{due.invoiceNumber}</span>
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="font-display text-lg font-semibold leading-tight tabular-nums text-ember-500">
-                        {formatINR(due.dueAmount)}
-                      </p>
-                      <p
-                        className={clsx(
-                          "mt-0.5 text-[11.5px] font-semibold",
-                          dueWhen?.overdue
-                            ? "text-[#E5484D]"
-                            : dueWhen
-                              ? "text-[#B76E00]"
-                              : "text-ink-400",
-                        )}
-                      >
-                        {dueWhen?.label || "No due date"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    className={clsx(
-                      "mt-2.5 flex items-center gap-2 border-t border-dashed pt-2.5",
-                      dueWhen?.overdue ? "border-red-500/30" : "border-ink-100",
-                    )}
-                  >
-                    <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[12px] font-medium text-ink-600">
-                      {due.productLabels?.[0] ? (
-                        <>
-                          <Smartphone className="h-3.5 w-3.5 shrink-0 text-ink-400" />
-                          <span className="truncate">{due.productLabels[0]}</span>
-                        </>
-                      ) : null}
+                  <div className="flex items-center gap-2">
+                    <h3 className="min-w-0 truncate text-[15px] font-semibold text-ink-900">
+                      {due.customerName}
+                    </h3>
+                    {due.isPartialPaid ? (
+                      <span className="shrink-0 rounded-full bg-ember-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                        Partial
+                      </span>
+                    ) : null}
+                    <span
+                      className={clsx(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        dueWhen?.overdue
+                          ? "bg-[#E5484D]/10 text-[#E5484D]"
+                          : dueWhen
+                            ? "bg-[#B76E00]/10 text-[#B76E00]"
+                            : "bg-ink-50 text-ink-400 dark:bg-white/5",
+                      )}
+                    >
+                      {dueWhen?.label || "No due date"}
                     </span>
+                    <span className="ml-auto shrink-0 font-display text-[17px] font-semibold tabular-nums text-ember-500">
+                      {formatINR(due.dueAmount)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
+                      <span className="tabular-nums">{due.customerPhone}</span>
+                      <span className="text-ink-300"> · </span>
+                      <span className="font-mono text-tide-600">{due.invoiceNumber}</span>
+                    </p>
                     {due.customerPhone ? (
                       <a
                         href={`tel:${due.customerPhone.replace(/[^\d+]/g, "")}`}
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-tide-500/30 bg-tide-100 text-bright transition hover:border-tide-500 hover:bg-[#d3ecff] dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-tide-500/30 bg-tide-100 text-bright transition hover:border-tide-500 hover:bg-[#d3ecff] dark:border-tide-400/40 dark:bg-tide-400/15 dark:text-tide-400"
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                         aria-label={`Call ${due.customerName}`}
@@ -650,7 +619,7 @@ export function DuesPage() {
                         href={`https://wa.me/${whatsappNumber(due.customerPhone)}?text=${encodeURIComponent(dueReminderHindi(due))}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#25D366]/40 bg-[#25D366]/10 text-[#128C4A] transition hover:border-[#25D366] hover:bg-[#25D366]/20 dark:border-[#25D366]/45 dark:bg-[#25D366]/15 dark:text-[#4ADE80]"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#25D366]/40 bg-[#25D366]/10 text-[#128C4A] transition hover:border-[#25D366] hover:bg-[#25D366]/20 dark:border-[#25D366]/45 dark:bg-[#25D366]/15 dark:text-[#4ADE80]"
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                         aria-label={`WhatsApp reminder to ${due.customerName}`}
@@ -662,7 +631,7 @@ export function DuesPage() {
                     {isAdmin ? (
                       <button
                         type="button"
-                        className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-ink-900 px-3.5 text-xs font-semibold text-white transition hover:bg-ink-800 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
+                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedDue(due);
@@ -806,7 +775,7 @@ export function DuesPage() {
                   key={due.id}
                   role="link"
                   tabIndex={0}
-                  className="interactive-card rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-sm shadow-ink-900/5 backdrop-blur-sm"
+                  className="interactive-card rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-2.5 shadow-sm shadow-ink-900/5 backdrop-blur-sm"
                   onClick={() =>
                     navigate(`/bills/${due.id}`, { state: fromState(location) })
                   }
@@ -819,81 +788,51 @@ export function DuesPage() {
                     }
                   }}
                 >
-                  {(() => {
-                    const financed = financedOn(due.billDate);
-                    const mobile = due.productLabels?.[0];
-                    return (
-                      <>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h3 className="truncate text-[15px] font-semibold text-ink-900">
-                              {financeCompanyFilter
-                                ? financeCompanyFilter
-                                : formatFinanceCompanies(
-                                    due.financeReceived ? null : due.financeCompanyName,
-                                    due.financeReceived2 ? null : due.financeCompanyName2,
-                                  ) || "Finance company"}
-                            </h3>
-                            <p className="mt-0.5 truncate text-xs text-ink-500">
-                              {due.customerName}
-                              {due.customerPhone ? (
-                                <>
-                                  <span className="text-ink-300"> · </span>
-                                  <span className="tabular-nums">{due.customerPhone}</span>
-                                </>
-                              ) : null}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="font-display text-lg font-semibold leading-tight tabular-nums text-ember-500">
-                              {formatINR(financeAmountForCompany(due, financeCompanyFilter))}
-                            </p>
-                            <p className="mt-0.5 text-[11px] font-medium text-ink-400">to receive</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-dashed border-ink-100 pt-2.5">
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full bg-tide-100 px-2 py-0.5 text-[11.5px] font-semibold text-tide-600 dark:bg-tide-400/15 dark:text-tide-400"
-                            title="Date the finance bill was made"
-                          >
-                            <CalendarDays className="h-3.5 w-3.5" />
-                            Financed {financed.date}
-                            <span className="font-medium opacity-75">· {financed.age}</span>
-                          </span>
-                          <span className="rounded-full bg-ink-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-ink-600 dark:bg-white/5">
-                            {due.invoiceNumber}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[12px] font-medium text-ink-600">
-                            {mobile ? (
-                              <>
-                                <Smartphone className="h-3.5 w-3.5 shrink-0 text-ink-400" />
-                                <span className="truncate">{mobile}</span>
-                              </>
-                            ) : null}
-                          </span>
-                          {isAdmin ? (
-                            <button
-                              type="button"
-                              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-ink-900 px-3.5 text-xs font-semibold text-white transition hover:bg-ink-800 disabled:opacity-50 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
-                              disabled={receivingId === due.id}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setError(null);
-                                setSelectedFinanceDue(due);
-                              }}
-                              aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              {receivingId === due.id ? "…" : "Received"}
-                            </button>
-                          ) : null}
-                        </div>
-                      </>
-                    );
-                  })()}
+                  <div className="flex items-center gap-2">
+                    <h3 className="min-w-0 truncate text-[15px] font-semibold text-ink-900">
+                      {financeCompanyFilter
+                        ? financeCompanyFilter
+                        : formatFinanceCompanies(
+                            due.financeReceived ? null : due.financeCompanyName,
+                            due.financeReceived2 ? null : due.financeCompanyName2,
+                          ) || "Finance company"}
+                    </h3>
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tide-100 px-2 py-0.5 text-[11px] font-semibold text-tide-600 dark:bg-tide-400/15 dark:text-tide-400"
+                      title="Date the finance bill was made"
+                    >
+                      <CalendarDays className="h-3 w-3" />
+                      {format(new Date(due.billDate), "dd MMM yyyy")}
+                    </span>
+                    <span className="ml-auto shrink-0 font-display text-[17px] font-semibold tabular-nums text-ember-500">
+                      {formatINR(financeAmountForCompany(due, financeCompanyFilter))}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
+                      {due.customerName}
+                      <span className="text-ink-300"> · </span>
+                      <span className="tabular-nums">{due.customerPhone}</span>
+                      <span className="text-ink-300"> · </span>
+                      <span className="font-mono text-tide-600">{due.invoiceNumber}</span>
+                    </p>
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 disabled:opacity-50 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
+                        disabled={receivingId === due.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setError(null);
+                          setSelectedFinanceDue(due);
+                        }}
+                        aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {receivingId === due.id ? "…" : "Received"}
+                      </button>
+                    ) : null}
+                  </div>
                 </article>
               ))}
               <LoadMoreSentinel

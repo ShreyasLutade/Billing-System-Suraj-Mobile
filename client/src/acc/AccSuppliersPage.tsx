@@ -228,10 +228,10 @@ export function AccSuppliersPage() {
         open={paying}
         suppliers={paymentSuppliers}
         onClose={() => setPaying(false)}
-        paySupplier={async (id, amount, paidAt) => {
+        paySupplier={async (id, amount, paidAt, method) => {
           const supplier = all.find((item) => item.id === id);
           const paid = amount ?? Math.max(supplier?.balance || 0, 0);
-          await accApi.paySupplier(id, { amount: paid, method: "CASH", paidAt });
+          await accApi.paySupplier(id, { amount: paid, method: method === "online" ? "UPI" : "CASH", paidAt });
           return { data: { paid, outstanding: Math.max(Math.round(((supplier?.balance || 0) - paid) * 100) / 100, 0) } };
         }}
         onPaid={(message) => {

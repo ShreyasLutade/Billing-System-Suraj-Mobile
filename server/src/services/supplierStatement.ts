@@ -89,7 +89,12 @@ function itemsSummary(
     .join(", ");
 }
 
-export async function buildSupplierStatement(supplierId: string) {
+/**
+ * The statement's rows and totals, oldest first, with the running balance
+ * (what we still owe after each row). Used by the PDF and by the in-app
+ * statement page so both always show the same numbers.
+ */
+export async function supplierStatementData(supplierId: string) {
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
     include: {
@@ -141,7 +146,13 @@ export async function buildSupplierStatement(supplierId: string) {
     entries.push({
       date: pay.paidAt,
       kind: "payment",
-      particulars: atPurchase ? "Paid at purchase" : "Payment",
+      particulars: atPurchase
+        ? "Paid at purchase"
+        : pay.method === "cash"
+          ? "Payment · Cash"
+          : pay.method === "online"
+            ? "Payment · UPI"
+            : "Payment",
       detail: atPurchase
         ? (pay.note || "").replace(/ at purchase$/, "")
         : pay.note || "",
@@ -246,15 +257,29 @@ export async function buildSupplierStatement(supplierId: string) {
 
   const totalCredit = round2(entries.reduce((s, e) => s + e.credit, 0));
   const totalDebit = round2(entries.reduce((s, e) => s + e.debit, 0));
-  const pdf = await renderStatement({
+  let running = 0;
+  const rows = entries.map((e) => {
+    running = round2(running + e.credit - e.debit);
+    return { ...e, balance: running };
+  });
+  return {
+    id: supplier.id,
     name: supplier.name,
     phone: supplier.phone,
     entries,
+    rows,
     totalCredit,
     totalDebit,
     totalReturned: round2(totalReturned),
-  });
-  const safeName = supplier.name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "supplier";
+    balance: round2(totalCredit - totalDebit),
+  };
+}
+
+export async function buildSupplierStatement(supplierId: string) {
+  const data = await supplierStatementData(supplierId);
+  if (!data) return null;
+  const pdf = await renderStatement(data);
+  const safeName = data.name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "supplier";
   return {
     pdf,
     filename: `Statement-${safeName}-${format(new Date(), "yyyy-MM-dd")}.pdf`,

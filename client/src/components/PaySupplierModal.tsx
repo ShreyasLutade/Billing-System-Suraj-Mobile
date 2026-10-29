@@ -36,6 +36,9 @@ function parseAmount(raw: string): { paise: number } | { error: string } {
   return { paise };
 }
 
+/** cash | online (UPI). */
+export type PayMethod = "cash" | "online";
+
 export function PaySupplierModal({
   open,
   suppliers,
@@ -50,7 +53,7 @@ export function PaySupplierModal({
   /** Called after a successful payment so the page can reload totals. */
   onPaid: (message: string) => void;
   /** Allows another shop section to reuse this exact payment experience. */
-  paySupplier?: (id: string, amount?: number, paidAt?: string) => PaySupplierResponse;
+  paySupplier?: (id: string, amount?: number, paidAt?: string, method?: PayMethod) => PaySupplierResponse;
 }) {
   const [query, setQuery] = useState("");
   const [listOpen, setListOpen] = useState(false);
@@ -58,6 +61,7 @@ export function PaySupplierModal({
   const [mode, setMode] = useState<"full" | "custom">("full");
   const [customAmount, setCustomAmount] = useState("");
   const [paidAt, setPaidAt] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [method, setMethod] = useState<PayMethod>("cash");
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +93,7 @@ export function PaySupplierModal({
     setMode("full");
     setCustomAmount("");
     setPaidAt(format(new Date(), "yyyy-MM-dd"));
+    setMethod("cash");
     setError(null);
     setPaying(false);
   }, [open]);
@@ -161,6 +166,7 @@ export function PaySupplierModal({
         selected.id,
         mode === "full" ? undefined : payPaise / 100,
         paidAt,
+        method,
       );
       onPaid(
         data.outstanding > 0
@@ -378,6 +384,37 @@ export function PaySupplierModal({
                       ) : null}
                     </label>
                   ) : null}
+
+                  <div>
+                    <span className="mb-1 block text-xs font-semibold text-ink-500">
+                      Paid by
+                    </span>
+                    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Paid by">
+                      {(
+                        [
+                          { value: "cash", label: "Cash" },
+                          { value: "online", label: "UPI" },
+                        ] as const
+                      ).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={method === option.value}
+                          className={clsx(
+                            "rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                            method === option.value
+                              ? "border-tide-500 bg-tide-100/80 text-bright dark:border-tide-400 dark:bg-tide-400/15 dark:text-tide-400"
+                              : "border-ink-100 text-ink-600 hover:bg-ink-50",
+                          )}
+                          onClick={() => setMethod(option.value)}
+                          disabled={paying}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <label className="block">
                     <span className="mb-1 block text-xs font-semibold text-ink-500">

@@ -30,6 +30,30 @@ import type {
   SupplierMobile,
 } from "../types";
 
+/** Supplier statement rows (same as the PDF), oldest first. */
+export type SupplierStatementView = {
+  id: string;
+  name: string;
+  phone: string | null;
+  generatedAt: string;
+  totalCredit: number;
+  totalDebit: number;
+  totalReturned: number;
+  balance: number;
+  rows: Array<{
+    date: string;
+    kind: "purchase" | "payment" | "return";
+    particulars: string;
+    detail: string;
+    qty: number | null;
+    credit: number;
+    debit: number;
+    paidNote?: string;
+    purchaseId?: string;
+    balance: number;
+  }>;
+};
+
 /** Something deleted that can still be undone (kept a few days). */
 export type RecycleBinEntry = {
   id: string;
@@ -720,6 +744,11 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   /** Download the supplier statement PDF (purchases Cr / payments Dr). */
+  /** Admin: the supplier statement as data, for the on-screen statement. */
+  viewSupplierStatement: (supplierId: string) =>
+    request<{ data: SupplierStatementView }>(
+      `/suppliers/${encodeURIComponent(supplierId)}/statement/view`,
+    ),
   downloadSupplierStatement: async (supplierId: string) => {
     const token = getAuthToken();
     const response = await fetchBackend(
@@ -795,7 +824,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
-  paySupplier: (id: string, amount?: number, paidAt?: string) =>
+  paySupplier: (id: string, amount?: number, paidAt?: string, method?: "cash" | "online") =>
     request<{
       data: { paid: number; purchasesCleared: number; outstanding: number };
     }>(`/suppliers/${id}/pay`, {
@@ -803,6 +832,7 @@ export const api = {
       body: JSON.stringify({
         ...(amount === undefined ? {} : { amount }),
         ...(paidAt ? { paidAt } : {}),
+        ...(method ? { method } : {}),
       }),
     }),
   markPurchasePaid: (id: string, amount?: number) =>
