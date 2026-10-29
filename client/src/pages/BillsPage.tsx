@@ -752,8 +752,8 @@ export function BillsPage() {
                 "interactive-card relative grid items-center gap-x-3 overflow-hidden rounded-[14px] border border-ink-100/80 bg-white/90 py-3 pl-[18px] pr-3.5 shadow-soft sm:gap-x-4 sm:pr-4",
                 "grid-cols-1 max-[420px]:gap-y-2.5 sm:grid-cols-[minmax(160px,1.25fr)_minmax(120px,1.35fr)_148px_74px]",
                 soldLabel
-                  ? "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2 max-sm:[grid-template-areas:'who_money'_'product_product'_'pays_pays'_'actions_actions']"
-                  : "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2.5 max-sm:[grid-template-areas:'who_money'_'pays_pays'_'actions_actions']",
+                  ? "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2 max-sm:[grid-template-areas:'who_money'_'product_product'_'pays_actions']"
+                  : "max-sm:grid-cols-[minmax(0,1fr)_minmax(0,auto)] max-sm:items-start max-sm:gap-y-2.5 max-sm:[grid-template-areas:'who_money'_'pays_actions']",
               )}
               style={{ animationDelay: `${0.02 + index * 0.03}s` }}
               onClick={() =>
@@ -893,7 +893,7 @@ export function BillsPage() {
                 )}
               </div>
 
-              <div className="flex justify-start gap-1 max-sm:[grid-area:actions] max-sm:justify-end sm:justify-end">
+              <div className="flex justify-start gap-1 max-sm:[grid-area:actions] max-sm:self-end max-sm:justify-end sm:justify-end">
                 <button
                   type="button"
                   className="grid h-8 w-8 place-items-center rounded-[9px] border border-ink-100 bg-white text-ink-500 outline-none transition hover:border-ink-300 hover:bg-[#F7F8FA] hover:text-ink-900 focus:outline-none focus-visible:shadow-soft disabled:opacity-50 dark:border-ink-100 dark:bg-surface-elevated dark:hover:bg-surface-muted"
