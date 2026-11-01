@@ -9276,3 +9276,24 @@ html.dark .acc-sell-pay button.is-on {
 .acc-supplier-delete {
   margin-top: 8px;
 }
+
+/* iPhone Safari gives date boxes a fixed built-in width that ignores the
+   layout, so they spill out of half-width cells. Let them size normally. */
+.acc input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+}
+
+.acc input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.acc .acc-field {
+  min-width: 0;
+}
