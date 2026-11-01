@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import clsx from "clsx";
 import { Check, ChevronDown, ChevronRight, FolderTree, Loader2, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { accApi, type AccGroup } from "./accApi";
-import { Sheet, errorText, inr, plural, toast } from "./shared";
+import { Sheet, errorText, plural, toast } from "./shared";
 
 /*
  * Customer groups as a two-level tree: main groups, each with sub groups.
@@ -81,14 +81,12 @@ function GroupRows({
   needle,
   isOn,
   onPick,
-  amounts,
   check,
 }: {
   tree: GroupNode[];
   needle: string;
   isOn: (id: string) => boolean;
   onPick: (id: string) => void;
-  amounts?: Record<string, number>;
   check?: boolean;
 }) {
   const shown = tree
@@ -98,7 +96,6 @@ function GroupRows({
       return mainHit || subs.length ? { ...m, subs } : null;
     })
     .filter(Boolean) as GroupNode[];
-  const amountOf = (m: GroupNode) => (amounts?.[m.id] || 0) + m.subs.reduce((a, s) => a + (amounts?.[s.id] || 0), 0);
   const mark = <b className={clsx("acc-gp-radio", check && "is-check")} aria-hidden />;
   return (
     <>
@@ -112,7 +109,7 @@ function GroupRows({
           >
             <i className="acc-dot" />
             <span>{m.name}</span>
-            {amounts ? <strong className="acc-gp-amt">{inr(amountOf(m))}</strong> : m.subs.length ? <em>{m.subs.length} sub</em> : null}
+            {m.subs.length ? <em>{m.subs.length} sub</em> : null}
             {mark}
           </button>
           {m.subs.length ? (
@@ -121,7 +118,6 @@ function GroupRows({
                 <li key={s.id}>
                   <button type="button" className={clsx(isOn(s.id) && "is-on")} onClick={() => onPick(s.id)}>
                     <span>{s.name}</span>
-                    {amounts ? <strong className="acc-gp-amt">{inr(amounts[s.id] || 0)}</strong> : null}
                     {mark}
                   </button>
                 </li>
@@ -138,21 +134,16 @@ function GroupRows({
 /**
  * Searchable group dropdown: main groups in capitals, sub groups under
  * them. "pick" (forms): No group + any group. "filter" (lists): All groups,
- * any group, No group ("none"); amounts show beside each group.
+ * any group, No group ("none").
  */
 export function GroupPicker({
   value,
   onChange,
   mode = "pick",
-  amounts,
-  totalLabel,
 }: {
   value: string | null | undefined;
   onChange: (id: string | null) => void;
   mode?: "pick" | "filter";
-  amounts?: Record<string, number>;
-  /** Filter mode: amount shown on "All groups". */
-  totalLabel?: string;
 }) {
   const groups = useGroups();
   const [open, setOpen] = useState(false);
@@ -195,17 +186,15 @@ export function GroupPicker({
             <li>
               <button type="button" className={clsx("acc-gp-none", !value && "is-on")} onClick={() => pick(null)}>
                 <span>{filter ? "All groups" : "No group"}</span>
-                {filter && totalLabel ? <strong className="acc-gp-amt">{totalLabel}</strong> : null}
                 <b className="acc-gp-radio" aria-hidden />
               </button>
             </li>
           ) : null}
-          <GroupRows tree={tree} needle={needle} isOn={(id) => value === id} onPick={pick} amounts={amounts} />
+          <GroupRows tree={tree} needle={needle} isOn={(id) => value === id} onPick={pick} />
           {filter && !needle ? (
             <li>
               <button type="button" className={clsx("acc-gp-none", value === "none" && "is-on")} onClick={() => pick("none")}>
                 <span>No group</span>
-                {amounts ? <strong className="acc-gp-amt">{inr(amounts.none || 0)}</strong> : null}
                 <b className="acc-gp-radio" aria-hidden />
               </button>
             </li>
@@ -223,11 +212,9 @@ export function GroupPicker({
 export function GroupChecklist({
   values,
   onChange,
-  amounts,
 }: {
   values: string[];
   onChange: (ids: string[]) => void;
-  amounts?: Record<string, number>;
 }) {
   const groups = useGroups();
   const tree = useMemo(() => groupTree(groups), [groups]);
@@ -248,12 +235,11 @@ export function GroupChecklist({
             <b className="acc-gp-radio is-check" aria-hidden />
           </button>
         </li>
-        <GroupRows tree={tree} needle={q.trim().toLowerCase()} isOn={(id) => values.includes(id)} onPick={toggle} amounts={amounts} check />
+        <GroupRows tree={tree} needle={q.trim().toLowerCase()} isOn={(id) => values.includes(id)} onPick={toggle} check />
         {!q.trim() ? (
           <li>
             <button type="button" className={clsx("acc-gp-none", values.includes("none") && "is-on")} onClick={() => toggle("none")}>
               <span>No group</span>
-              {amounts ? <strong className="acc-gp-amt">{inr(amounts.none || 0)}</strong> : null}
               <b className="acc-gp-radio is-check" aria-hidden />
             </button>
           </li>

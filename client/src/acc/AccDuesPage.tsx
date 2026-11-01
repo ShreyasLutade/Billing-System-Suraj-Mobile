@@ -91,7 +91,6 @@ export function AccDuesPage() {
   }, [groupId, status, sort, q]);
 
   const t = data?.totals;
-  const groupAmounts = Object.fromEntries((data?.groups || []).map((g) => [g.id, g.balance]));
 
   return (
     <div className="acc-page">
@@ -126,8 +125,6 @@ export function AccDuesPage() {
           mode="filter"
           value={groupId || null}
           onChange={(id) => setGroupId(id || "")}
-          amounts={groupAmounts}
-          totalLabel={t ? inr(t.outstanding) : undefined}
         />
         <button type="button" className="acc-icon-btn" onClick={() => navigate("/acc/settings")} aria-label="Manage groups" title="Manage groups">
           <Settings2 />
@@ -247,7 +244,7 @@ export function AccDuesPage() {
       </Sheet>
 
 
-      <DuesPdfSheet open={pdfOpen} onClose={() => setPdfOpen(false)} groups={data?.groups || []} initialGroup={groupId} initialStatus={status} sort={sort} />
+      <DuesPdfSheet open={pdfOpen} onClose={() => setPdfOpen(false)} initialGroup={groupId} initialStatus={status} sort={sort} />
     </div>
   );
 }
@@ -283,14 +280,12 @@ export function AgingBar({ aging }: { aging: AccAging }) {
 function DuesPdfSheet({
   open,
   onClose,
-  groups,
   initialGroup,
   initialStatus,
   sort,
 }: {
   open: boolean;
   onClose: () => void;
-  groups: AccDues["groups"];
   initialGroup: string;
   initialStatus: Status;
   sort: Sort;
@@ -306,7 +301,7 @@ function DuesPdfSheet({
     <Sheet open={open} onClose={onClose} title="Dues PDF" subtitle="Create a clear collection list for staff">
       <div className="acc-field">
         <span>Which groups?</span>
-        <GroupChecklist values={groupIds} onChange={setGroupIds} amounts={Object.fromEntries(groups.map((g) => [g.id, g.balance]))} />
+        <GroupChecklist values={groupIds} onChange={setGroupIds} />
       </div>
       <p className="acc-hint">The PDF is grouped automatically and shows each customer’s total paid and pending due.</p>
       <PdfButton
