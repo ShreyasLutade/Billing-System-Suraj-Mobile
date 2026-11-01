@@ -190,7 +190,6 @@ export function GroupPicker({
               </button>
             </li>
           ) : null}
-          <GroupRows tree={tree} needle={needle} isOn={(id) => value === id} onPick={pick} />
           {filter && !needle ? (
             <li>
               <button type="button" className={clsx("acc-gp-none", value === "none" && "is-on")} onClick={() => pick("none")}>
@@ -199,6 +198,7 @@ export function GroupPicker({
               </button>
             </li>
           ) : null}
+          <GroupRows tree={tree} needle={needle} isOn={(id) => value === id} onPick={pick} />
         </ul>
         <Link to="/acc/settings" className="acc-link-btn" onClick={() => setOpen(false)}>
           <Plus /> Add or edit groups in Settings
@@ -235,7 +235,6 @@ export function GroupChecklist({
             <b className="acc-gp-radio is-check" aria-hidden />
           </button>
         </li>
-        <GroupRows tree={tree} needle={q.trim().toLowerCase()} isOn={(id) => values.includes(id)} onPick={toggle} check />
         {!q.trim() ? (
           <li>
             <button type="button" className={clsx("acc-gp-none", values.includes("none") && "is-on")} onClick={() => toggle("none")}>
@@ -244,6 +243,7 @@ export function GroupChecklist({
             </button>
           </li>
         ) : null}
+        <GroupRows tree={tree} needle={q.trim().toLowerCase()} isOn={(id) => values.includes(id)} onPick={toggle} check />
       </ul>
     </div>
   );
