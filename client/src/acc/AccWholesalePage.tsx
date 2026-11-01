@@ -236,14 +236,17 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
   const tokens = itemQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const results = useMemo(() => {
     if (!tokens.length) return [];
+    // Pieces already on an edited bill count as in stock for it.
+    const held = (id: string) => original?.items.filter((i) => i.productId === id).reduce((a, i) => a + i.qty, 0) || 0;
     return products
+      .filter((p) => p.stockQty + held(p.id) > 0)
       .filter((p) => {
         const hay = `${p.name} ${p.type} ${p.brand} ${p.model} ${p.categoryName} ${p.barcode || ""}`.toLowerCase();
         return tokens.every((t) => hay.includes(t));
       })
       .slice(0, 12);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, itemQuery]);
+  }, [products, itemQuery, original]);
 
   function addProduct(p: AccProduct) {
     const existingLine = draft.lines.find((line) => line.productId === p.id);
@@ -271,15 +274,6 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         ],
       };
     });
-    setItemQuery("");
-  }
-
-  function addCustom() {
-    const name = itemQuery.trim();
-    if (!name) return;
-    const lineKey = newRef();
-    pendingLineFocus.current = lineKey;
-    set({ lines: [...draft.lines, { key: lineKey, productId: null, name, qty: 1, rate: 0, stockQty: null }] });
     setItemQuery("");
   }
 
@@ -522,7 +516,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         <div className="acc-wholesale-items-head">
           <span>
             <h2>Add items</h2>
-            <p>Search your stock or add a custom item.</p>
+            <p>Search items in stock.</p>
           </span>
           {draft.lines.length ? <b>{plural(draft.lines.length, "item")} · {pieces} pcs</b> : null}
         </div>
@@ -556,11 +550,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
                   </button>
                 </li>
               ))}
-              <li>
-                <button type="button" className="is-custom" onClick={addCustom}>
-                  <Plus /> Add “{itemQuery.trim()}” as a custom item
-                </button>
-              </li>
+              {!results.length ? <li className="acc-hint acc-no-results">No item in stock matches “{itemQuery.trim()}”.</li> : null}
             </ul>
           ) : null}
         </div>

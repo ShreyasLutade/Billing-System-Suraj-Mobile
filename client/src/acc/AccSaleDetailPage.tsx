@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Clock,
   Loader2,
-  MessageCircle,
   Package,
   PencilLine,
   Phone,
@@ -105,16 +104,6 @@ export function AccSaleDetailPage() {
     !sale.isOpening &&
     (isAdmin || (sale.createdByUserId === user?.id && istDay(sale.saleDate) === istDay(new Date())));
   const phone = customer?.phone || sale.customerPhone;
-  const message = [
-    wholesale ? `Bill ${sale.number} · ${shortDate(sale.saleDate)}` : `Counter sale · ${shortDate(sale.saleDate)}`,
-    ...sale.items.map((i) => `${i.qty} × ${i.name} @ ${i.rate}`),
-    sale.transportCharge > 0 ? `Transport charges: ₹${sale.transportCharge}` : "",
-    `Total: ₹${sale.total}`,
-    `Paid: ₹${paid}`,
-    stillDue > 0 ? `Due: ₹${stillDue}${sale.dueDate ? ` by ${shortDate(sale.dueDate)}` : ""}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
 
   return (
     <div className="acc-page acc-bill-page">
@@ -135,14 +124,9 @@ export function AccSaleDetailPage() {
             </button>
           ) : null}
           {phone ? (
-            <>
-              <a className="acc-btn is-ghost" href={`tel:${phone}`}>
-                <Phone /> Call
-              </a>
-              <a className="acc-btn is-ghost" target="_blank" rel="noreferrer" href={`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`}>
-                <MessageCircle /> WhatsApp
-              </a>
-            </>
+            <a className="acc-btn is-ghost" href={`tel:${phone}`}>
+              <Phone /> Call
+            </a>
           ) : null}
           {canEdit ? (
             <button type="button" className="acc-btn is-ghost" onClick={() => navigate(`/acc/sales/${sale.id}/edit`)}>

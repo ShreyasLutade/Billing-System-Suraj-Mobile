@@ -9965,3 +9965,8 @@ html.dark .acc-sell-pay button.is-on {
   font-size: 12px;
   font-weight: 700;
 }
+
+/* Wholesale item search: nothing in stock matches */
+.acc-item-results .acc-no-results {
+  padding: 12px 14px;
+}
