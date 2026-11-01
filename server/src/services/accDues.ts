@@ -160,6 +160,17 @@ export type DueFilter = {
 /** Customers with their balances, filtered and sorted for the Dues page and PDF. */
 export async function duesList(filter: DueFilter) {
   const q = filter.q?.trim();
+  // A main group stands for itself and all its sub groups.
+  const expand = async (ids: string[]) => {
+    const real = ids.filter((id) => id !== "none");
+    if (!real.length) return ids;
+    const subs = await prisma.accCustomerGroup.findMany({ where: { parentId: { in: real } }, select: { id: true } });
+    return [...new Set([...ids, ...subs.map((g) => g.id)])];
+  };
+  if (filter.groupIds?.length) filter = { ...filter, groupIds: await expand(filter.groupIds) };
+  else if (filter.groupId && filter.groupId !== "none") {
+    filter = { ...filter, groupId: undefined, groupIds: await expand([filter.groupId]) };
+  }
   const groupWhere: Prisma.AccCustomerWhereInput = filter.groupIds?.length
     ? filter.groupIds.includes("none")
       ? { OR: [{ groupId: null }, { groupId: { in: filter.groupIds.filter((id) => id !== "none") } }] }

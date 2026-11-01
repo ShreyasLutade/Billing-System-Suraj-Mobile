@@ -25,9 +25,8 @@ import {
   type AccCustomerDetail,
   type AccCustomerRow,
   type AccDues,
-  type AccGroup,
 } from "./accApi";
-import { CustomerForm, GROUP_COLORS } from "./AccWholesalePage";
+import { CustomerForm } from "./AccWholesalePage";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
 
 /** Wholesale dues: who owes what, by group, ageing, and collecting payments. */
@@ -75,7 +74,6 @@ export function AccDuesPage() {
   const [data, setData] = useState<AccDues | null>(null);
   const [paying, setPaying] = useState<AccCustomerRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [groupsOpen, setGroupsOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -140,7 +138,7 @@ export function AccDuesPage() {
             <b>{inr(g.balance)}</b>
           </button>
         ))}
-        <button type="button" className="acc-group-card is-manage" onClick={() => setGroupsOpen(true)} aria-label="Manage groups">
+        <button type="button" className="acc-group-card is-manage" onClick={() => navigate("/acc/settings")} aria-label="Manage groups">
           <Settings2 />
           <small>Groups</small>
         </button>
@@ -258,7 +256,6 @@ export function AccDuesPage() {
         />
       </Sheet>
 
-      <GroupsSheet open={groupsOpen} onClose={() => setGroupsOpen(false)} onChanged={load} />
 
       <DuesPdfSheet open={pdfOpen} onClose={() => setPdfOpen(false)} groups={data?.groups || []} initialGroup={groupId} initialStatus={status} sort={sort} />
     </div>
@@ -436,98 +433,6 @@ export function PaymentSheet({
   );
 }
 
-function GroupsSheet({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: () => void }) {
-  const [groups, setGroups] = useState<AccGroup[]>([]);
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(GROUP_COLORS[1]);
-  const [editing, setEditing] = useState<AccGroup | null>(null);
-
-  const load = () =>
-    accApi
-      .groups()
-      .then(({ data }) => setGroups(data))
-      .catch(() => undefined);
-  useEffect(() => {
-    if (open) void load();
-  }, [open]);
-
-  async function save() {
-    if (!name.trim()) return;
-    try {
-      if (editing) await accApi.updateGroup(editing.id, { name: name.trim(), color });
-      else await accApi.createGroup({ name: name.trim(), color });
-      setName("");
-      setEditing(null);
-      await load();
-      onChanged();
-    } catch (err) {
-      toast(errorText(err), { tone: "error" });
-    }
-  }
-
-  return (
-    <Sheet open={open} onClose={onClose} title="Customer groups" subtitle="e.g. City shops, Village route, Gondia">
-      <ul className="acc-moves">
-        {groups.map((g) => (
-          <li key={g.id}>
-            <span>
-              <strong>
-                <i className="acc-dot" style={{ background: g.color }} /> {g.name}
-              </strong>
-              <small>{g.customerCount} customers</small>
-            </span>
-            <span className="acc-inline-actions">
-              <button
-                type="button"
-                className="acc-icon-btn is-small"
-                onClick={() => {
-                  setEditing(g);
-                  setName(g.name);
-                  setColor(g.color);
-                }}
-                aria-label="Edit"
-              >
-                <Pencil />
-              </button>
-              <button
-                type="button"
-                className="acc-icon-btn is-small"
-                onClick={async () => {
-                  if (!window.confirm(`Delete group ${g.name}? Customers stay, without a group.`)) return;
-                  await accApi.deleteGroup(g.id).catch((e) => toast(errorText(e), { tone: "error" }));
-                  await load();
-                  onChanged();
-                }}
-                aria-label="Delete"
-              >
-                <Trash2 />
-              </button>
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className="acc-field">
-        <span>{editing ? `Edit ${editing.name}` : "Add group"}</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name" />
-      </div>
-      <div className="acc-color-pick">
-        {GROUP_COLORS.map((c) => (
-          <button key={c} type="button" className={clsx(color === c && "is-on")} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />
-        ))}
-      </div>
-      <div className="acc-btn-row">
-        {editing ? (
-          <button type="button" className="acc-btn is-ghost" onClick={() => { setEditing(null); setName(""); }}>
-            Cancel
-          </button>
-        ) : null}
-        <button type="button" className="acc-btn is-primary" onClick={() => void save()} disabled={!name.trim()}>
-          {editing ? "Save group" : "Add group"}
-        </button>
-      </div>
-    </Sheet>
-  );
-}
 
 /* ---------------- customer detail ---------------- */
 

@@ -69,7 +69,13 @@ accCustomersRouter.get("/groups", async (_req, res, next) => {
       include: { _count: { select: { customers: true } } },
     });
     res.json({
-      data: groups.map((g) => ({ id: g.id, name: g.name, color: g.color, customerCount: g._count.customers })),
+      data: groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        color: g.color,
+        parentId: g.parentId,
+        customerCount: g._count.customers,
+      })),
     });
   } catch (error) {
     next(error);
@@ -82,13 +88,33 @@ const groupSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default("#5d73b6"),
+  /** Main group for a sub group; null / missing = a main group. */
+  parentId: z.string().optional().nullable(),
 });
+
+/** Sub groups go one level under a main group, never deeper. */
+async function checkParent(parentId: string | null | undefined, selfId?: string) {
+  if (!parentId) return null;
+  if (parentId === selfId) return "A group can't be inside itself";
+  const parent = await prisma.accCustomerGroup.findUnique({ where: { id: parentId } });
+  if (!parent) return "Main group not found";
+  if (parent.parentId) return "Sub groups can only be added under a main group";
+  if (selfId && (await prisma.accCustomerGroup.count({ where: { parentId: selfId } }))) {
+    return "This group has its own sub groups, so it must stay a main group";
+  }
+  return null;
+}
 
 accCustomersRouter.post("/groups", async (req, res, next) => {
   try {
     const parsed = groupSchema.safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
-    const group = await prisma.accCustomerGroup.create({ data: parsed.data });
+    const problem = await checkParent(parsed.data.parentId);
+    if (problem) {
+      res.status(400).json({ error: problem });
+      return;
+    }
+    const group = await prisma.accCustomerGroup.create({ data: { ...parsed.data, parentId: parsed.data.parentId || null } });
     res.status(201).json({ data: { ...group, customerCount: 0 } });
   } catch (error) {
     if ((error as { code?: string }).code === "P2002") {
@@ -103,7 +129,19 @@ accCustomersRouter.put("/groups/:id", async (req, res, next) => {
   try {
     const parsed = groupSchema.safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
-    const group = await prisma.accCustomerGroup.update({ where: { id: req.params.id }, data: parsed.data });
+    const problem = await checkParent(parsed.data.parentId, req.params.id);
+    if (problem) {
+      res.status(400).json({ error: problem });
+      return;
+    }
+    const group = await prisma.accCustomerGroup.update({
+      where: { id: req.params.id },
+      data: {
+        name: parsed.data.name,
+        color: parsed.data.color,
+        ...(parsed.data.parentId !== undefined ? { parentId: parsed.data.parentId || null } : {}),
+      },
+    });
     res.json({ data: group });
   } catch (error) {
     if ((error as { code?: string }).code === "P2002") {
@@ -114,7 +152,7 @@ accCustomersRouter.put("/groups/:id", async (req, res, next) => {
   }
 });
 
-/** Customers in it stay, just without a group. */
+/** Customers in it stay, just without a group; a main group takes its sub groups with it. */
 accCustomersRouter.delete("/groups/:id", async (req, res, next) => {
   try {
     await prisma.accCustomerGroup.delete({ where: { id: req.params.id } });
@@ -592,6 +630,9 @@ accCustomersRouter.post("/customers/opening-due", async (req, res, next) => {
           .transform((v) => v.replace(/\D/g, "").slice(-10))
           .pipe(z.string().length(10, "Enter a valid 10-digit mobile number")),
         amount: z.coerce.number().positive("Enter the due amount").max(100_000_000),
+        shopName: z.string().trim().max(100).default(""),
+        address: z.string().trim().max(250).default(""),
+        groupId: z.string().optional().nullable(),
         dueDate: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -600,11 +641,24 @@ accCustomersRouter.post("/customers/opening-due", async (req, res, next) => {
       })
       .safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
-    const { name, phone, amount, dueDate } = parsed.data;
+    const { name, phone, amount, dueDate, shopName, address } = parsed.data;
+    const groupId = parsed.data.groupId || null;
+    if (groupId && !(await prisma.accCustomerGroup.findUnique({ where: { id: groupId } }))) {
+      res.status(400).json({ error: "Group not found" });
+      return;
+    }
     const total = round2(amount);
     const sale = await prisma.$transaction(async (tx) => {
       let customer = await tx.accCustomer.findUnique({ where: { phone } });
-      if (!customer) customer = await tx.accCustomer.create({ data: { name, phone } });
+      if (!customer) {
+        customer = await tx.accCustomer.create({ data: { name, phone, shopName, address, groupId } });
+      } else if (shopName || address || groupId) {
+        // Fill in what was typed; leave the rest of an existing customer as it is.
+        customer = await tx.accCustomer.update({
+          where: { id: customer.id },
+          data: { ...(shopName ? { shopName } : {}), ...(address ? { address } : {}), ...(groupId ? { groupId } : {}) },
+        });
+      }
       const row = await tx.accCounter.upsert({
         where: { key: "OPENING" },
         create: { key: "OPENING", value: 1 },

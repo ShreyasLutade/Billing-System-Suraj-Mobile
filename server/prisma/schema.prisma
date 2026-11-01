@@ -575,8 +575,15 @@ model AccCustomerGroup {
   id        String   @id @default(cuid())
   name      String   @unique
   color     String   @default("#5d73b6")
+  /// Set on a sub group: its main group (two levels only). Deleting a
+  /// main group deletes its sub groups; customers keep no group.
+  parentId  String?
   createdAt DateTime @default(now())
+  parent    AccCustomerGroup?  @relation("GroupTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  AccCustomerGroup[] @relation("GroupTree")
   customers AccCustomer[]
+
+  @@index([parentId])
 }
 
 /// Wholesale buyer (a shop that takes stock on credit).

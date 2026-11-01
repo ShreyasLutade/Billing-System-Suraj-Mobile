@@ -23,6 +23,7 @@ import {
   Moon,
   Package,
   ReceiptText,
+  Settings,
   Sun,
   Trash2,
   Truck,
@@ -298,6 +299,19 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
+                {isAcc ? (
+                  <Link
+                    to="/acc/settings"
+                    role="menuitem"
+                    className="babu-user-menu-item"
+                    onClick={() => {
+                      onMainNavClick();
+                      setUserMenuOpen(false);
+                    }}
+                  >
+                    <Settings /> Settings
+                  </Link>
+                ) : null}
                 {isAdmin && !repairOnly ? (
                   <Link
                     to="/users"
@@ -453,6 +467,18 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                   {theme === "dark" ? <Sun /> : <Moon />}
                   {theme === "dark" ? "Light mode" : "Dark mode"}
                 </button>
+                {isAcc ? (
+                  <Link
+                    to="/acc/settings"
+                    onClick={() => {
+                      onMainNavClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="babu-utility-button"
+                  >
+                    <Settings /> Settings
+                  </Link>
+                ) : null}
                 {isAdmin && !repairOnly ? (
                   <Link
                     to="/users"

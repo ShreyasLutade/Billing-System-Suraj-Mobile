@@ -99,7 +99,8 @@ export type AccSalesSummary = {
   items: number;
 };
 
-export type AccGroup = { id: string; name: string; color: string; customerCount: number };
+/** Customer group; a sub group has parentId (its main group). */
+export type AccGroup = { id: string; name: string; color: string; parentId: string | null; customerCount: number };
 
 export type AccAging = { d0_30: number; d31_60: number; d61_90: number; d90p: number };
 
@@ -346,7 +347,15 @@ export const accApi = {
   deleteCustomer: (id: string) =>
     apiRequest<{ data: { deleted: boolean; bills: number } }>(`/acc/customers/${id}`, { method: "DELETE" }),
   /** Old due carried over from Tally (just the pending amount). */
-  addOldDue: (body: { name: string; phone: string; amount: number; dueDate?: string }) =>
+  addOldDue: (body: {
+    name: string;
+    phone: string;
+    amount: number;
+    dueDate?: string;
+    shopName?: string;
+    address?: string;
+    groupId?: string | null;
+  }) =>
     apiRequest<{ data: { id: string; number: string; customerId: string } }>("/acc/customers/opening-due", {
       method: "POST",
       body: JSON.stringify(body),
@@ -384,8 +393,9 @@ export const accApi = {
     post<{ deleted: boolean; stockReturned: boolean }>(`/acc/sales/${id}/delete`, { returnStock }),
 
   groups: () => apiRequest<{ data: AccGroup[] }>("/acc/groups"),
-  createGroup: (body: { name: string; color: string }) => post<AccGroup>("/acc/groups", body),
-  updateGroup: (id: string, body: { name: string; color: string }) => put<AccGroup>(`/acc/groups/${id}`, body),
+  createGroup: (body: { name: string; color: string; parentId?: string | null }) => post<AccGroup>("/acc/groups", body),
+  updateGroup: (id: string, body: { name: string; color: string; parentId?: string | null }) =>
+    put<AccGroup>(`/acc/groups/${id}`, body),
   deleteGroup: (id: string) => apiRequest(`/acc/groups/${id}`, { method: "DELETE" }),
 
   customers: (q: { q?: string; groupId?: string; sort?: "name" | "recent"; limit?: number } = {}) =>

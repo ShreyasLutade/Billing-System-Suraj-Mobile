@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Check, Loader2 } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi } from "./accApi";
+import { GroupPicker } from "./AccGroups";
 import { errorText, inr, toast } from "./shared";
 
 /**
@@ -15,6 +16,9 @@ export function AccOldDuePage() {
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [shopName, setShopName] = useState("");
+  const [address, setAddress] = useState("");
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<Array<{ id: string; customerId: string; name: string; amount: number }>>([]);
 
@@ -24,13 +28,24 @@ export function AccOldDuePage() {
     setBusy(true);
     try {
       const value = Number(amount);
-      const { data } = await accApi.addOldDue({ name: name.trim(), phone, amount: value, dueDate: dueDate || undefined });
+      const { data } = await accApi.addOldDue({
+        name: name.trim(),
+        phone,
+        amount: value,
+        dueDate: dueDate || undefined,
+        shopName: shopName.trim(),
+        address: address.trim(),
+        groupId,
+      });
       toast(`Saved ${inr(value)} due for ${name.trim()}`);
       setAdded((list) => [{ id: data.id, customerId: data.customerId, name: name.trim(), amount: value }, ...list]);
       setName("");
       setPhone("");
       setAmount("");
       setDueDate("");
+      setShopName("");
+      setAddress("");
+      // Group stays picked: old dues are usually typed in one area at a time.
     } catch (err) {
       toast(errorText(err), { tone: "error" });
     } finally {
@@ -57,6 +72,18 @@ export function AccOldDuePage() {
           <span>Mobile number *</span>
           <input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={13} required />
         </label>
+        <label className="acc-field">
+          <span>Shop name</span>
+          <input value={shopName} onChange={(e) => setShopName(e.target.value)} />
+        </label>
+        <label className="acc-field">
+          <span>Address</span>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} />
+        </label>
+        <div className="acc-field">
+          <span>Group</span>
+          <GroupPicker value={groupId} onChange={setGroupId} />
+        </div>
         <div className="acc-form-grid">
           <label className="acc-field">
             <span>Total due ₹ *</span>

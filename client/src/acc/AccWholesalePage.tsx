@@ -8,10 +8,10 @@ import {
   accApi,
   type AccCustomerInput,
   type AccCustomerRow,
-  type AccGroup,
   type AccProduct,
   type AccSale,
 } from "./accApi";
+import { GroupPicker } from "./AccGroups";
 import { Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refreshCatalog, shortDate, toast, todayInput, useAccCatalog } from "./shared";
 
 /**
@@ -910,16 +910,7 @@ export function CustomerForm({
     ...initial,
   });
   const form = value ?? internalForm;
-  const [groups, setGroups] = useState<AccGroup[]>([]);
-  const [newGroup, setNewGroup] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    accApi
-      .groups()
-      .then(({ data }) => setGroups(data))
-      .catch(() => undefined);
-  }, []);
 
   const set = (patch: Partial<AccCustomerInput>) => {
     if (value && onChange) onChange({ ...value, ...patch });
@@ -961,7 +952,7 @@ export function CustomerForm({
     if (busy) return;
     setBusy(true);
     try {
-      const body = { ...form, groupName: newGroup.trim() || undefined };
+      const body = { ...form, groupName: undefined };
       const { data } = id ? await accApi.updateCustomer(id, body) : await accApi.createCustomer(body);
       toast(id ? "Customer updated" : "Customer added");
       await onSaved?.(data.id);
@@ -1008,34 +999,7 @@ export function CustomerForm({
       ) : null}
       <div className="acc-field">
         <span>Group</span>
-        <div className="acc-chips">
-          <button type="button" className={clsx("acc-chip", !form.groupId && !newGroup && "is-on")} onClick={() => { set({ groupId: null, groupName: "" }); setNewGroup(""); }}>
-            None
-          </button>
-          {groups.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className={clsx("acc-chip", form.groupId === g.id && !newGroup && "is-on")}
-              onClick={() => {
-                set({ groupId: g.id, groupName: "" });
-                setNewGroup("");
-              }}
-            >
-              <i className="acc-dot" style={{ background: g.color }} />
-              {g.name}
-            </button>
-          ))}
-          <input
-            className="acc-chip-input"
-            value={newGroup}
-            onChange={(e) => {
-              setNewGroup(e.target.value);
-              set({ groupId: null, groupName: e.target.value });
-            }}
-            placeholder="+ New group"
-          />
-        </div>
+        <GroupPicker value={form.groupId} onChange={(groupId) => set({ groupId, groupName: "" })} />
       </div>
       {!hideActions ? <div className="acc-btn-row">
         {onCancel ? (
