@@ -12,7 +12,7 @@ import {
   Search,
   Settings2,
   Trash2,
-  UserPlus,
+  History,
   Wallet,
 } from "lucide-react";
 import { BackLink, SearchClearButton } from "../components/ui";
@@ -99,8 +99,8 @@ export function AccDuesPage() {
           <button type="button" className="acc-icon-btn" onClick={() => setPdfOpen(true)} aria-label="Download or share dues" title="Download or share">
             <FileDown />
           </button>
-          <button type="button" className="acc-btn is-primary" onClick={() => setAdding(true)}>
-            <UserPlus /> Customer
+          <button type="button" className="acc-btn is-primary" onClick={() => navigate("/acc/dues/old")}>
+            <History /> Old dues
           </button>
         </div>
       </div>

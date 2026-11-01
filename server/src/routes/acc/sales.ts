@@ -288,6 +288,8 @@ function salesWhere(query: Record<string, unknown>) {
     ...(range.filter ? { saleDate: range.filter } : {}),
     ...(kind ? { kind } : {}),
     ...(showVoid ? {} : { voidedAt: null }),
+    // Old dues from Tally live in Dues only, not in the bills list.
+    isOpening: false,
     ...(typeof query.customerId === "string" ? { customerId: query.customerId } : {}),
     ...(q
       ? {

@@ -18,7 +18,7 @@ function istHour(date: Date) {
 
 async function salesIn(filter: { gte?: Date; lte?: Date } | undefined) {
   return prisma.accSale.findMany({
-    where: { voidedAt: null, ...(filter ? { saleDate: filter } : {}) },
+    where: { voidedAt: null, isOpening: false, ...(filter ? { saleDate: filter } : {}) },
     select: {
       id: true,
       kind: true,

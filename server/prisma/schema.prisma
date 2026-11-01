@@ -604,6 +604,9 @@ model AccCustomer {
 
 model AccSale {
   id          String   @id @default(cuid())
+  /// Old due carried over from Tally (no items bought here): counts in
+  /// dues and the ledger, never in sales or analytics.
+  isOpening   Boolean  @default(false)
   /// AR-0001 (retail) / AW-0001 (wholesale)
   number      String   @unique
   /// RETAIL | WHOLESALE

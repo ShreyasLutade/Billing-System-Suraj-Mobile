@@ -254,7 +254,7 @@ accCustomersRouter.get("/customers/:id", async (req, res, next) => {
       customerLedger(customer.id),
       prisma.accSaleItem.groupBy({
         by: ["name"],
-        where: { sale: { customerId: customer.id, voidedAt: null } },
+        where: { sale: { customerId: customer.id, voidedAt: null, isOpening: false } },
         _sum: { qty: true, amount: true },
         orderBy: { _sum: { qty: "desc" } },
         take: 8,
@@ -571,6 +571,63 @@ accCustomersRouter.get("/customers/:id/statement", async (req, res, next) => {
       notes: ["Please clear the balance at the earliest. Thank you!"],
     });
     sendPdf(res, pdf, `statement-${customer.name.replace(/[^a-z0-9]+/gi, "-")}-${istDateString()}.pdf`);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Old due from Tally: the customer (found or added by mobile number) gets
+ * an opening-balance entry for the pending amount. No items, no stock;
+ * it shows in Dues and the ledger like a bill and is cleared by payments.
+ */
+accCustomersRouter.post("/customers/opening-due", async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({
+        name: z.string().trim().min(2, "Enter the name").max(100),
+        phone: z
+          .string()
+          .transform((v) => v.replace(/\D/g, "").slice(-10))
+          .pipe(z.string().length(10, "Enter a valid 10-digit mobile number")),
+        amount: z.coerce.number().positive("Enter the due amount").max(100_000_000),
+        dueDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .or(z.literal("").transform(() => undefined)),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const { name, phone, amount, dueDate } = parsed.data;
+    const total = round2(amount);
+    const sale = await prisma.$transaction(async (tx) => {
+      let customer = await tx.accCustomer.findUnique({ where: { phone } });
+      if (!customer) customer = await tx.accCustomer.create({ data: { name, phone } });
+      const row = await tx.accCounter.upsert({
+        where: { key: "OPENING" },
+        create: { key: "OPENING", value: 1 },
+        update: { value: { increment: 1 } },
+      });
+      return tx.accSale.create({
+        data: {
+          number: `OD-${String(row.value).padStart(4, "0")}`,
+          kind: "WHOLESALE",
+          isOpening: true,
+          customerId: customer.id,
+          subtotal: total,
+          total,
+          costTotal: total,
+          dueAmount: total,
+          dueDate: dueDate ? new Date(`${dueDate}T18:00:00+05:30`) : null,
+          note: "Old due from Tally",
+          createdByUserId: req.user?.id || null,
+          createdByName: req.user?.name || null,
+          items: { create: [{ name: "Old due (from Tally)", qty: 1, rate: total, amount: total }] },
+        },
+      });
+    });
+    res.status(201).json({ data: { id: sale.id, number: sale.number, customerId: sale.customerId } });
   } catch (error) {
     next(error);
   }
