@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
+import { AnimatePresence } from "framer-motion";
+import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import {
   FileDown,
   FilePlus2,
@@ -538,6 +540,24 @@ export function AccCustomerPage() {
   const [paying, setPaying] = useState(false);
   const [editing, setEditing] = useState(false);
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function deleteCustomer() {
+    if (!data || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await accApi.deleteCustomer(data.id);
+      toast(`${data.name} deleted`);
+      navigate("/acc/dues", { replace: true });
+    } catch (err) {
+      setDeleteError(errorText(err));
+      setDeleting(false);
+    }
+  }
+
   const load = () =>
     accApi
       .customer(id!)
@@ -601,9 +621,15 @@ export function AccCustomerPage() {
           <button type="button" className="acc-btn is-primary acc-act-main" onClick={() => setPaying(true)}>
             <Wallet /> Receive
           </button>
-          <button type="button" className="acc-btn acc-act-main" onClick={() => navigate("/acc/wholesale", { state: { customerId: data.id } })}>
-            <FilePlus2 /> New bill
-          </button>
+          {isAdmin ? (
+            <button type="button" className="acc-btn is-danger acc-act-main" onClick={() => setConfirmDelete(true)}>
+              <Trash2 /> Delete
+            </button>
+          ) : (
+            <button type="button" className="acc-btn acc-act-main" onClick={() => navigate("/acc/wholesale", { state: { customerId: data.id } })}>
+              <FilePlus2 /> New bill
+            </button>
+          )}
         </div>
       </header>
 
@@ -809,6 +835,25 @@ export function AccCustomerPage() {
         />
       </Sheet>
 
+
+      <AnimatePresence>
+        {confirmDelete ? (
+          <DangerConfirmModal
+            title="Delete customer?"
+            subtitle={data.name}
+            points={[
+              `${plural(data.billCount, "bill")} (including old dues) and all payments of this customer are removed.`,
+              ...(data.balance > 0 ? [`Their pending due of ${inr(data.balance)} is removed from Dues.`] : []),
+              "Stock is not added back.",
+            ]}
+            cancelLabel="Keep customer"
+            working={deleting}
+            error={deleteError}
+            onCancel={() => !deleting && setConfirmDelete(false)}
+            onConfirm={() => void deleteCustomer()}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

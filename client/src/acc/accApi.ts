@@ -342,6 +342,9 @@ const put = <T>(path: string, body: unknown) =>
   apiRequest<{ data: T }>(path, { method: "PUT", body: JSON.stringify(body) });
 
 export const accApi = {
+  /** Admin: customer with their bills, old dues and payments. */
+  deleteCustomer: (id: string) =>
+    apiRequest<{ data: { deleted: boolean; bills: number } }>(`/acc/customers/${id}`, { method: "DELETE" }),
   /** Old due carried over from Tally (just the pending amount). */
   addOldDue: (body: { name: string; phone: string; amount: number; dueDate?: string }) =>
     apiRequest<{ data: { id: string; number: string; customerId: string } }>("/acc/customers/opening-due", {

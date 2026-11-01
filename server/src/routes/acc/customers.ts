@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { round2 } from "../../lib/accShop";
+import { requireAdmin } from "../../middleware/auth";
 import { istDateString } from "../../lib/ist";
 import { customerBalances, duesList, serializeDueRow, type DueFilter } from "../../services/accDues";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfCol, type PdfRow } from "../../services/accPdf";
@@ -628,6 +629,35 @@ accCustomersRouter.post("/customers/opening-due", async (req, res, next) => {
       });
     });
     res.status(201).json({ data: { id: sale.id, number: sale.number, customerId: sale.customerId } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Delete a customer (admin): their bills, old dues and payments go with
+ * them, so they leave Dues. Stock is not put back (the goods were given);
+ * product history keeps the sale lines, marked as deleted.
+ */
+accCustomersRouter.delete("/customers/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const customer = await prisma.accCustomer.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+    if (!customer) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    const sales = await prisma.accSale.findMany({ where: { customerId: customer.id }, select: { id: true } });
+    const saleIds = sales.map((s) => s.id);
+    await prisma.$transaction([
+      prisma.accStockMove.updateMany({
+        where: { refId: { in: saleIds } },
+        data: { refId: null, note: `Bill deleted with customer ${customer.name}` },
+      }),
+      prisma.accSale.deleteMany({ where: { id: { in: saleIds } } }),
+      prisma.accCustomer.delete({ where: { id: customer.id } }),
+    ]);
+    console.log(`[acc] Customer ${customer.name} deleted by ${req.user?.name} (${saleIds.length} bills)`);
+    res.json({ data: { deleted: true, bills: saleIds.length } });
   } catch (error) {
     next(error);
   }
