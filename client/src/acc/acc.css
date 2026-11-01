@@ -9957,3 +9957,11 @@ html.dark .acc-sell-pay button.is-on {
   max-height: 46vh;
   overflow-y: auto;
 }
+
+/* Bill page: "Edited …" under the date */
+.acc-bv-hero p.acc-bv-edited {
+  margin-top: 3px;
+  color: var(--a-accent);
+  font-size: 12px;
+  font-weight: 700;
+}

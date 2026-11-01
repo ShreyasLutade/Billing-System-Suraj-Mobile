@@ -40,15 +40,20 @@ export function serializeSale(sale: SaleWithItems) {
     dueAmount: sale.dueAmount,
     dueDate: sale.dueDate,
     note: sale.note,
+    isOpening: sale.isOpening,
     voidedAt: sale.voidedAt,
     voidReason: sale.voidReason,
+    createdByUserId: sale.createdByUserId,
     createdByName: sale.createdByName,
     createdAt: sale.createdAt,
+    editedAt: sale.editedAt,
+    editedByName: sale.editedByName,
     items: sale.items.map((item) => ({
       id: item.id,
       productId: item.productId,
       name: item.name,
       categoryName: item.categoryName,
+      model: item.model,
       qty: item.qty,
       rate: item.rate,
       amount: item.amount,
@@ -102,6 +107,60 @@ class SaleError extends Error {
   }
 }
 
+type SaleInput = z.infer<typeof saleSchema>;
+
+/**
+ * Bill lines from the request. `keepCost` holds the cost price already on an
+ * edited bill, so editing a rate or quantity does not change its profit.
+ */
+async function buildLines(input: SaleInput, keepCost?: Map<string, number>) {
+  const productIds = [...new Set(input.items.map((i) => i.productId).filter(Boolean) as string[])];
+  const products = await prisma.accProduct.findMany({ where: { id: { in: productIds } }, include: { category: true } });
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const lines = input.items.map((item) => {
+    const product = item.productId ? byId.get(item.productId) : undefined;
+    if (item.productId && !product) throw new SaleError("A product on this sale was removed. Refresh and try again.");
+    const model = product ? item.model?.replace(/\s+/g, " ").trim() || "" : "";
+    const base = product?.name || item.name;
+    if (!base) throw new SaleError("Every item needs a name");
+    return {
+      productId: product?.id ?? null,
+      name: model ? `${base} · ${model}` : base,
+      model,
+      categoryName: product?.category.name ?? "",
+      qty: item.qty,
+      rate: round2(item.rate),
+      amount: round2(item.qty * item.rate),
+      unitCost: (product && keepCost?.get(product.id)) ?? product?.purchasePrice ?? 0,
+    };
+  });
+  return { lines, byId };
+}
+
+type BillLine = Awaited<ReturnType<typeof buildLines>>["lines"][number];
+
+function billTotals(input: SaleInput, lines: BillLine[]) {
+  const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
+  const discount = round2(Math.min(input.discount, subtotal));
+  const transportCharge = input.kind === "WHOLESALE" ? round2(input.transportCharge) : 0;
+  const total = round2(subtotal - discount + transportCharge);
+  let cash = round2(input.cashAmount);
+  const online = round2(input.onlineAmount);
+
+  if (input.kind === "RETAIL") {
+    if (cash + online === 0) cash = total;
+    if (Math.abs(cash + online - total) > 0.01) {
+      throw new SaleError(`Cash + online must equal the sale total ${money(total)}`);
+    }
+  } else {
+    if (cash + online > total + 0.01) throw new SaleError("Paid amount is more than the bill total");
+    if (!input.customerId && !input.customer) throw new SaleError("Choose or add the wholesale customer");
+  }
+  const due = input.kind === "WHOLESALE" ? round2(total - cash - online) : 0;
+  const costTotal = round2(lines.reduce((s, l) => s + l.qty * l.unitCost, 0));
+  return { subtotal, discount, transportCharge, total, cash, online, due, costTotal };
+}
+
 accSalesRouter.post("/sales", async (req, res, next) => {
   try {
     const parsed = saleSchema.safeParse(req.body);
@@ -120,46 +179,8 @@ accSalesRouter.post("/sales", async (req, res, next) => {
       }
     }
 
-    const productIds = [...new Set(input.items.map((i) => i.productId).filter(Boolean) as string[])];
-    const products = await prisma.accProduct.findMany({ where: { id: { in: productIds } }, include: { category: true } });
-    const byId = new Map(products.map((p) => [p.id, p]));
-
-    const lines = input.items.map((item) => {
-      const product = item.productId ? byId.get(item.productId) : undefined;
-      if (item.productId && !product) throw new SaleError("A product on this sale was removed. Refresh and try again.");
-      const model = product ? item.model?.replace(/\s+/g, " ").trim() || "" : "";
-      const base = product?.name || item.name;
-      if (!base) throw new SaleError("Every item needs a name");
-      return {
-        productId: product?.id ?? null,
-        name: model ? `${base} · ${model}` : base,
-        model,
-        categoryName: product?.category.name ?? "",
-        qty: item.qty,
-        rate: round2(item.rate),
-        amount: round2(item.qty * item.rate),
-        unitCost: product?.purchasePrice ?? 0,
-      };
-    });
-
-    const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
-    const discount = round2(Math.min(input.discount, subtotal));
-    const transportCharge = input.kind === "WHOLESALE" ? round2(input.transportCharge) : 0;
-    const total = round2(subtotal - discount + transportCharge);
-    let cash = round2(input.cashAmount);
-    let online = round2(input.onlineAmount);
-
-    if (input.kind === "RETAIL") {
-      if (cash + online === 0) cash = total;
-      if (Math.abs(cash + online - total) > 0.01) {
-        throw new SaleError(`Cash + online must equal the sale total ${money(total)}`);
-      }
-    } else {
-      if (cash + online > total + 0.01) throw new SaleError("Paid amount is more than the bill total");
-      if (!input.customerId && !input.customer) throw new SaleError("Choose or add the wholesale customer");
-    }
-    const due = input.kind === "WHOLESALE" ? round2(total - cash - online) : 0;
-    const costTotal = round2(lines.reduce((s, l) => s + l.qty * l.unitCost, 0));
+    const { lines, byId } = await buildLines(input);
+    const { subtotal, discount, transportCharge, total, cash, online, due, costTotal } = billTotals(input, lines);
     const by = req.user?.name || null;
 
     const sale = await prisma.$transaction(async (tx) => {
@@ -544,6 +565,144 @@ accSalesRouter.post("/sales/:id/void", async (req, res, next) => {
     });
     res.json({ data: serializeSale(updated) });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Edit a bill: items, rates, payment, due date, note and (wholesale) the
+ * customer. The bill keeps its number and date. Stock moves by the
+ * difference only, and dues follow automatically because balances are
+ * worked out from the bills. Same rule as cancelling: staff can edit their
+ * own bills on the same day; admins any bill.
+ */
+accSalesRouter.put("/sales/:id", async (req, res, next) => {
+  try {
+    const parsed = saleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const flat = parsed.error.flatten();
+      res.status(400).json({ error: Object.values(flat.fieldErrors).flat()[0] || flat.formErrors[0] || "Check the bill" });
+      return;
+    }
+    const input = parsed.data;
+    const sale = await prisma.accSale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+    if (!sale) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    if (sale.voidedAt) throw new SaleError("A cancelled bill can't be edited");
+    if (sale.isOpening) throw new SaleError("Old dues can't be edited as a bill");
+    if (input.kind !== sale.kind) throw new SaleError("A bill can't change between counter and wholesale");
+    const isAdmin = req.user?.role === "ADMIN";
+    const sameDay = sale.saleDate >= startOfDayIST();
+    if (!isAdmin && !(sameDay && sale.createdByUserId === req.user?.id)) {
+      throw new SaleError("Only an admin can edit this bill", 403);
+    }
+
+    const keepCost = new Map<string, number>();
+    for (const item of sale.items) if (item.productId && !keepCost.has(item.productId)) keepCost.set(item.productId, item.unitCost);
+    const { lines, byId } = await buildLines(input, keepCost);
+    const { subtotal, discount, transportCharge, total, cash, online, due, costTotal } = billTotals(input, lines);
+    const by = req.user?.name || null;
+    const note = `Bill ${sale.number} edited`;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      let customerId: string | null = null;
+      if (input.kind === "WHOLESALE") {
+        customerId = input.customerId || (await upsertCustomer(tx, input.customer!)).id;
+        const customer = await tx.accCustomer.findUnique({ where: { id: customerId } });
+        if (!customer) throw new SaleError("Customer not found");
+      }
+
+      // Stock moves only by what changed on the bill.
+      const oldQty = new Map<string, number>();
+      for (const item of sale.items) if (item.productId) oldQty.set(item.productId, (oldQty.get(item.productId) || 0) + item.qty);
+      const newQty = new Map<string, number>();
+      for (const line of lines) if (line.productId) newQty.set(line.productId, (newQty.get(line.productId) || 0) + line.qty);
+      const short: Array<{ name: string; inStock: number; qty: number }> = [];
+      for (const productId of new Set([...oldQty.keys(), ...newQty.keys()])) {
+        const delta = (newQty.get(productId) || 0) - (oldQty.get(productId) || 0);
+        if (!delta) continue;
+        const exists = await tx.accProduct.findUnique({ where: { id: productId }, select: { stockQty: true } });
+        if (!exists) continue;
+        if (delta > 0) {
+          const where = input.allowOutOfStock ? { id: productId } : { id: productId, stockQty: { gte: delta } };
+          const done = await tx.accProduct.updateMany({ where, data: { stockQty: { decrement: delta } } });
+          if (!done.count) {
+            short.push({ name: byId.get(productId)?.name || "An item", inStock: exists.stockQty, qty: delta });
+            continue;
+          }
+        } else {
+          await tx.accProduct.update({ where: { id: productId }, data: { stockQty: { increment: -delta } } });
+        }
+        await tx.accStockMove.create({
+          data: {
+            productId,
+            kind: delta > 0 ? "SALE" : "VOID",
+            qty: -delta,
+            unitCost: keepCost.get(productId) ?? byId.get(productId)?.purchasePrice ?? 0,
+            refId: sale.id,
+            note,
+            createdByName: by,
+          },
+        });
+      }
+      if (short.length) {
+        throw new SaleError(
+          short.length === 1
+            ? `Only ${short[0].inStock} more of ${short[0].name} in stock`
+            : `${short.length} items don't have enough stock`,
+          409,
+          { code: "OUT_OF_STOCK", short },
+        );
+      }
+      // Phone-model breakdown: put the old pieces back, take the new ones.
+      for (const item of sale.items) {
+        if (!item.productId || !item.model) continue;
+        await tx.accProductModel.updateMany({
+          where: { productId: item.productId, model: item.model },
+          data: { qty: { increment: item.qty } },
+        });
+      }
+      for (const line of lines) {
+        if (!line.productId || !line.model) continue;
+        const row = await tx.accProductModel.findUnique({
+          where: { productId_model: { productId: line.productId, model: line.model } },
+        });
+        if (row) await tx.accProductModel.update({ where: { id: row.id }, data: { qty: Math.max(0, row.qty - line.qty) } });
+      }
+
+      await tx.accSaleItem.deleteMany({ where: { saleId: sale.id } });
+      return tx.accSale.update({
+        where: { id: sale.id },
+        data: {
+          customerId,
+          customerName: input.kind === "RETAIL" ? input.customerName : "",
+          customerPhone: input.kind === "RETAIL" ? input.customerPhone.replace(/\D/g, "") : "",
+          subtotal,
+          discount,
+          total,
+          transportCharge,
+          costTotal,
+          cashAmount: cash,
+          onlineAmount: online,
+          dueAmount: due,
+          dueDate: due > 0 && input.dueDate ? new Date(`${input.dueDate}T18:00:00+05:30`) : null,
+          note: input.note,
+          editedAt: new Date(),
+          editedByName: by,
+          items: { create: lines },
+        },
+        include: saleInclude,
+      });
+    });
+    console.log(`[acc] Bill ${sale.number} edited by ${by}`);
+    res.json({ data: serializeSale(updated) });
+  } catch (error) {
+    if (error instanceof SaleError) {
+      res.status(error.status).json({ error: error.message, ...error.extra });
+      return;
+    }
     next(error);
   }
 });

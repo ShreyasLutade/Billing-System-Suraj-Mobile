@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { CalendarDays, Check, ClipboardCheck, Clock3, Eye, FileDown, Info, Loader2, Minus, Plus, ReceiptText, Search, Share2, Trash2, WalletCards, X } from "lucide-react";
-import { SearchClearButton } from "../components/ui";
+import { BackLink, SearchClearButton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import {
   accApi,
@@ -21,7 +21,16 @@ import { Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refre
  * customer details always start blank when the page is opened again.
  */
 
-type Line = { key: string; productId: string | null; name: string; qty: number; rate: number; stockQty: number | null };
+type Line = {
+  key: string;
+  productId: string | null;
+  name: string;
+  qty: number;
+  rate: number;
+  stockQty: number | null;
+  /** Phone model already on an edited bill (part of the name). */
+  model?: string;
+};
 
 type PayMode = "CREDIT" | "PAY";
 
@@ -88,11 +97,26 @@ function loadDraft(): Draft {
   }
 }
 
-export function AccWholesalePage() {
+/** Wholesale bill date as yyyy-mm-dd in India time. */
+function istDay(iso: string) {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
+/** Edit an existing bill on the same screen (route /acc/sales/:id/edit). */
+export function AccSaleEditPage() {
+  const { id } = useParams();
+  return id ? <AccWholesalePage key={id} editId={id} /> : null;
+}
+
+export function AccWholesalePage({ editId }: { editId?: string } = {}) {
   const { catalog } = useAccCatalog();
   const location = useLocation();
   const navigate = useNavigate();
-  const [draft, setDraft] = useState<Draft>(loadDraft);
+  const editing = Boolean(editId);
+  const [draft, setDraft] = useState<Draft>(() => (editId ? EMPTY : loadDraft()));
+  /** The bill being edited, as it was saved. */
+  const [original, setOriginal] = useState<AccSale | null>(null);
+  const [editError, setEditError] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<AccSale | null>(null);
   const [savedAction, setSavedAction] = useState<"download" | null>(null);
@@ -104,6 +128,7 @@ export function AccWholesalePage() {
   const pendingLineFocus = useRef<string | null>(null);
 
   useEffect(() => {
+    if (editId) return;
     try {
       sessionStorage.setItem(
         DRAFT_KEY,
@@ -112,7 +137,66 @@ export function AccWholesalePage() {
     } catch {
       /* ignore */
     }
-  }, [draft]);
+  }, [draft, editId]);
+
+  // Edit: fill the screen from the saved bill once the stock list is in.
+  useEffect(() => {
+    if (!editId || !catalog || original) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { data: sale } = await accApi.getSale(editId);
+        const { data: customer } = sale.customerId ? await accApi.customer(sale.customerId) : { data: null };
+        if (!alive) return;
+        if (sale.voidedAt || sale.isOpening || sale.kind !== "WHOLESALE") {
+          setEditError(sale.voidedAt ? "A cancelled bill can't be edited." : "This bill can't be edited here.");
+          return;
+        }
+        const stockOf = new Map(catalog.products.map((p) => [p.id, p.stockQty]));
+        const paidNow = sale.cashAmount + sale.onlineAmount;
+        setOriginal(sale);
+        setDraft({
+          customer,
+          customerInput: customer
+            ? {
+                name: customer.name,
+                phone: customer.phone,
+                shopName: customer.shopName,
+                city: customer.city,
+                address: customer.address,
+                gstin: customer.gstin,
+                groupId: customer.groupId,
+                creditLimit: customer.creditLimit,
+                note: customer.note,
+              }
+            : EMPTY_CUSTOMER,
+          lines: sale.items.map((item) => ({
+            key: newRef(),
+            productId: item.productId,
+            name: item.name,
+            model: item.model || undefined,
+            qty: item.qty,
+            rate: item.rate,
+            // Pieces on this bill are already out of stock: they count as available here.
+            stockQty: item.productId && stockOf.has(item.productId) ? (stockOf.get(item.productId) || 0) + item.qty : null,
+          })),
+          pay: paidNow > 0 ? "PAY" : "CREDIT",
+          useCash: sale.cashAmount > 0,
+          useOnline: sale.onlineAmount > 0,
+          cashPaid: sale.cashAmount ? String(sale.cashAmount) : "",
+          onlinePaid: sale.onlineAmount ? String(sale.onlineAmount) : "",
+          transportCharge: sale.transportCharge ? String(sale.transportCharge) : "",
+          dueDate: sale.dueDate ? istDay(sale.dueDate) : "",
+          note: sale.note,
+        });
+      } catch (error) {
+        if (alive) setEditError(errorText(error));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [editId, catalog, original]);
 
   useEffect(() => {
     const key = pendingLineFocus.current;
@@ -134,7 +218,7 @@ export function AccWholesalePage() {
   // "New bill" from a customer page preselects them.
   useEffect(() => {
     const id = (location.state as { customerId?: string } | null)?.customerId;
-    if (!id) return;
+    if (!id || editId) return;
     accApi
       .customers({ limit: 1000 })
       .then(({ data }) => {
@@ -180,7 +264,9 @@ export function AccWholesalePage() {
             name: p.name,
             qty: 1,
             rate: p.wholesalePrice || p.sellingPrice,
-            stockQty: p.stockQty,
+            // On an edited bill, pieces it already holds count as available.
+            stockQty:
+              p.stockQty + (original?.items.filter((i) => i.productId === p.id).reduce((a, i) => a + i.qty, 0) || 0),
           },
         ],
       };
@@ -203,14 +289,17 @@ export function AccWholesalePage() {
 
   const itemsTotal = Math.round(draft.lines.reduce((a, l) => a + l.qty * l.rate, 0) * 100) / 100;
   const transportCharge = Math.max(Math.round((Number(draft.transportCharge) || 0) * 100) / 100, 0);
-  const total = Math.round((itemsTotal + transportCharge) * 100) / 100;
+  // Older bills may carry a discount; editing keeps it.
+  const discount = Math.min(original?.discount || 0, itemsTotal);
+  const total = Math.round((itemsTotal - discount + transportCharge) * 100) / 100;
   const cashPaid = draft.pay === "PAY" && draft.useCash ? Math.max(Number(draft.cashPaid) || 0, 0) : 0;
   const onlinePaid = draft.pay === "PAY" && draft.useOnline ? Math.max(Number(draft.onlinePaid) || 0, 0) : 0;
   const paid = Math.min(cashPaid + onlinePaid, total);
   const due = Math.round((total - paid) * 100) / 100;
   const needsDueDate = due > 0;
   const pieces = draft.lines.reduce((a, l) => a + l.qty, 0);
-  const newBalance = (draft.customer?.balance || 0) + due;
+  const sameCustomer = Boolean(original && draft.customer && draft.customer.id === original.customerId);
+  const newBalance = (draft.customer?.balance || 0) + due - (sameCustomer ? original!.dueAmount : 0);
   const overLimit = draft.customer && draft.customer.creditLimit > 0 && newBalance > draft.customer.creditLimit;
 
   const useExistingCustomer = useCallback(async (customer: AccCustomerRow | null) => {
@@ -311,18 +400,28 @@ export function AccWholesalePage() {
     }
     setBusy(true);
     try {
-      const { data } = await accApi.createSale({
-        kind: "WHOLESALE",
-        clientRef: refId.current,
+      const body = {
+        kind: "WHOLESALE" as const,
         customer: draft.customerInput,
-        items: draft.lines.map((l) => (l.productId ? { productId: l.productId, qty: l.qty, rate: l.rate } : { name: l.name, qty: l.qty, rate: l.rate })),
+        items: draft.lines.map((l) =>
+          l.productId ? { productId: l.productId, model: l.model, qty: l.qty, rate: l.rate } : { name: l.name, qty: l.qty, rate: l.rate },
+        ),
+        discount,
         transportCharge,
         cashAmount: cashPaid,
         onlineAmount: onlinePaid,
         dueDate: due > 0 ? draft.dueDate : undefined,
         note: draft.note,
         allowOutOfStock,
-      });
+      };
+      if (editId) {
+        await accApi.updateSale(editId, body);
+        toast("Bill updated", { tone: "success" });
+        void refreshCatalog();
+        navigate(`/acc/sales/${editId}`, { replace: true });
+        return;
+      }
+      const { data } = await accApi.createSale({ ...body, clientRef: refId.current });
       setSaved(data);
       setDraft(EMPTY);
       refId.current = newRef();
@@ -373,11 +472,27 @@ export function AccWholesalePage() {
     }
   }
 
+  if (editId && !original) {
+    return (
+      <div className="acc-page">
+        <BackLink to={`/acc/sales/${editId}`} historyBack>Bill</BackLink>
+        {editError ? (
+          <p className="acc-hint is-red">{editError}</p>
+        ) : (
+          <div className="acc-loading">
+            <Loader2 className="acc-spin" /> Loading bill…
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="acc-page">
+      {editing ? <BackLink to={`/acc/sales/${editId}`} historyBack>Bill</BackLink> : null}
       <div className="acc-title-row">
-        <h1>Wholesale bill</h1>
-        {draft.lines.length || draft.customer || draft.customerInput.phone ? (
+        <h1>{editing ? `Edit bill ${original?.number || ""}` : "Wholesale bill"}</h1>
+        {!editing && (draft.lines.length || draft.customer || draft.customerInput.phone) ? (
           <button
             type="button"
             className="acc-link-btn"
@@ -394,7 +509,10 @@ export function AccWholesalePage() {
       <CustomerChooser
         inputRef={customerInput}
         value={draft.customerInput}
-        existing={draft.customer}
+        existing={
+          // Editing: the old balance shown should not count this same bill.
+          sameCustomer && draft.customer ? { ...draft.customer, balance: draft.customer.balance - original!.dueAmount } : draft.customer
+        }
         onChange={(customerInput) => set({ customerInput })}
         onExistingFound={useExistingCustomer}
       />
@@ -585,6 +703,12 @@ export function AccWholesalePage() {
             <span>Items total</span>
             <b>{inr(itemsTotal)}</b>
           </div>
+          {discount > 0 ? (
+            <div className="acc-sum-row">
+              <span>Discount</span>
+              <b>−{inr(discount)}</b>
+            </div>
+          ) : null}
           {transportCharge > 0 ? (
             <div className="acc-sum-row">
               <span>Transport charges</span>
@@ -646,7 +770,7 @@ export function AccWholesalePage() {
         </label>
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
           {busy ? <Loader2 className="acc-spin" /> : <Check />}
-          Save bill {inr(total)}
+          {editing ? "Update bill" : "Save bill"} {inr(total)}
         </button>
       </div>
 

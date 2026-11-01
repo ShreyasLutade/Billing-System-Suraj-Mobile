@@ -50,6 +50,8 @@ export type AccSaleItem = {
   productId: string | null;
   name: string;
   categoryName: string;
+  /** Phone model picked at sale time, if any (already part of the name). */
+  model: string;
   qty: number;
   rate: number;
   amount: number;
@@ -76,10 +78,14 @@ export type AccSale = {
   dueAmount: number;
   dueDate: string | null;
   note: string;
+  isOpening: boolean;
   voidedAt: string | null;
   voidReason: string | null;
+  createdByUserId: string | null;
   createdByName: string | null;
   createdAt: string;
+  editedAt: string | null;
+  editedByName: string | null;
   items: AccSaleItem[];
 };
 
@@ -387,6 +393,8 @@ export const accApi = {
   listSales: (q: PeriodQuery & { kind?: AccSaleKind | ""; q?: string; scope?: AccSaleSearchScope; customerId?: string; void?: boolean }) =>
     apiRequest<{ data: { sales: AccSale[]; summary: AccSalesSummary; label: string } }>(`/acc/sales${qs(q)}`),
   getSale: (id: string) => apiRequest<{ data: AccSale }>(`/acc/sales/${id}`),
+  /** Same body as a new bill; the bill keeps its number and date. */
+  updateSale: (id: string, body: Omit<SaleInput, "clientRef">) => put<AccSale>(`/acc/sales/${id}`, body),
   voidSale: (id: string, reason: string) => post<AccSale>(`/acc/sales/${id}/void`, { reason }),
   /** Delete a bill; returnStock puts its pieces back in stock. */
   deleteSale: (id: string, returnStock: boolean) =>

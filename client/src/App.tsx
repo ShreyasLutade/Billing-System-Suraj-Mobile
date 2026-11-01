@@ -31,7 +31,7 @@ import { SuppliersPage } from "./pages/SuppliersPage";
 import { SupplierStatementPage } from "./pages/SupplierStatementPage";
 import { AccLayout } from "./acc/shared";
 import { AccCounterPage } from "./acc/AccCounterPage";
-import { AccWholesalePage } from "./acc/AccWholesalePage";
+import { AccSaleEditPage, AccWholesalePage } from "./acc/AccWholesalePage";
 import { AccStockPage } from "./acc/AccStockPage";
 import { AccProductPage } from "./acc/AccProductPage";
 import { AccStockCheckPage } from "./acc/AccStockCheckPage";
@@ -76,6 +76,7 @@ export default function App() {
                       <Route path="wholesale" element={<AccWholesalePage />} />
                       <Route path="sales" element={<AccSalesPage />} />
                       <Route path="sales/:id" element={<AccSaleDetailPage />} />
+                      <Route path="sales/:id/edit" element={<AccSaleEditPage />} />
                       <Route path="stock" element={<AccStockPage />} />
                       {/* New products are added with their stock on Add stock. */}
                       <Route path="stock/new" element={<Navigate to="/acc/stock/in" replace />} />

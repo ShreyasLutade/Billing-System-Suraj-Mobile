@@ -13,6 +13,7 @@ import {
   Loader2,
   MessageCircle,
   Package,
+  PencilLine,
   Phone,
   Smartphone,
   StickyNote,
@@ -21,6 +22,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { BackLink } from "../components/ui";
+import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCustomerDetail, type AccSale } from "./accApi";
 import { CancelBillSheet } from "./CancelBillSheet";
 import { CategoryIcon, Empty, PdfButton, dateTime, inr, plural, shortDate, useAccCatalog } from "./shared";
@@ -37,6 +39,7 @@ export function AccSaleDetailPage() {
   const [missing, setMissing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const { catalog } = useAccCatalog();
+  const { user, isAdmin } = useAuth();
   const iconFor = (categoryName: string) =>
     catalog?.categories.find((c) => c.name === categoryName)?.icon || "package";
 
@@ -94,6 +97,13 @@ export function AccSaleDetailPage() {
         ? { label: "Partly paid", tone: "is-amber" }
         : { label: "On credit", tone: "is-red" };
   const pieces = sale.items.reduce((a, i) => a + i.qty, 0);
+  // Same rule as the server: admins any bill; staff their own, same day.
+  const istDay = (d: string | Date) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const canEdit =
+    wholesale &&
+    !sale.voidedAt &&
+    !sale.isOpening &&
+    (isAdmin || (sale.createdByUserId === user?.id && istDay(sale.saleDate) === istDay(new Date())));
   const phone = customer?.phone || sale.customerPhone;
   const message = [
     wholesale ? `Bill ${sale.number} · ${shortDate(sale.saleDate)}` : `Counter sale · ${shortDate(sale.saleDate)}`,
@@ -134,6 +144,11 @@ export function AccSaleDetailPage() {
               </a>
             </>
           ) : null}
+          {canEdit ? (
+            <button type="button" className="acc-btn is-ghost" onClick={() => navigate(`/acc/sales/${sale.id}/edit`)}>
+              <PencilLine /> Edit bill
+            </button>
+          ) : null}
           <button type="button" className="acc-btn is-danger" onClick={() => setCancelling(true)}>
             <Ban /> {sale.voidedAt ? "Delete" : "Cancel"} {wholesale ? "bill" : "sale"}
           </button>
@@ -166,6 +181,12 @@ export function AccSaleDetailPage() {
               <CalendarDays /> {dateTime(sale.saleDate)}
               {sale.createdByName ? ` · ${sale.createdByName}` : ""}
             </p>
+            {sale.editedAt ? (
+              <p className="acc-bv-edited">
+                <PencilLine /> Edited {dateTime(sale.editedAt)}
+                {sale.editedByName ? ` · ${sale.editedByName}` : ""}
+              </p>
+            ) : null}
           </div>
           <div className="acc-bv-total">
             <small>{sale.transportCharge > 0 ? "Amount payable" : "Bill total"}</small>

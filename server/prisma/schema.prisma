@@ -643,6 +643,9 @@ model AccSale {
   createdByUserId String?
   createdByName   String?
   createdAt   DateTime @default(now())
+  /// Last time the bill was edited (items, payment or customer changed)
+  editedAt     DateTime?
+  editedByName String?
   customer    AccCustomer? @relation(fields: [customerId], references: [id])
   items       AccSaleItem[]
 
