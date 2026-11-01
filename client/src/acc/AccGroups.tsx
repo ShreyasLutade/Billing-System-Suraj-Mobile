@@ -48,6 +48,14 @@ export function useGroups() {
 
 export type GroupNode = AccGroup & { subs: AccGroup[] };
 
+/** Colour for a new main group: the palette colour used least so far. */
+function nextColor(mains: AccGroup[]) {
+  const used = (c: string) => mains.filter((m) => m.color.toLowerCase() === c.toLowerCase()).length;
+  const least = Math.min(...GROUP_COLORS.map(used));
+  const options = GROUP_COLORS.filter((c) => used(c) === least);
+  return options[Math.floor(Math.random() * options.length)];
+}
+
 const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
 
 /** Main groups A→Z, each with its sub groups A→Z. */
@@ -103,11 +111,13 @@ export function GroupPicker({ value, onChange }: { value: string | null | undefi
           <Search aria-hidden />
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search groups…" autoFocus />
         </label>
+        <p className="acc-gp-hint">Pick a main group, or one of its sub groups.</p>
         <ul className="acc-gp-list">
           {!needle ? (
             <li>
               <button type="button" className={clsx("acc-gp-none", !value && "is-on")} onClick={() => pick(null)}>
-                No group {!value ? <Check /> : null}
+                <span>No group</span>
+                <b className="acc-gp-radio" aria-hidden />
               </button>
             </li>
           ) : null}
@@ -121,8 +131,8 @@ export function GroupPicker({ value, onChange }: { value: string | null | undefi
               >
                 <i className="acc-dot" />
                 <span>{m.name}</span>
-                {m.subs.length ? <em>{plural(m.subs.length, "sub group")}</em> : null}
-                {value === m.id ? <Check /> : null}
+                {m.subs.length ? <em>{m.subs.length} sub</em> : null}
+                <b className="acc-gp-radio" aria-hidden />
               </button>
               {m.subs.length ? (
                 <ul className="acc-gp-subs" style={{ ["--g" as string]: m.color }}>
@@ -130,7 +140,7 @@ export function GroupPicker({ value, onChange }: { value: string | null | undefi
                     <li key={s.id}>
                       <button type="button" className={clsx(value === s.id && "is-on")} onClick={() => pick(s.id)}>
                         <span>{s.name}</span>
-                        {value === s.id ? <Check /> : null}
+                        <b className="acc-gp-radio" aria-hidden />
                       </button>
                     </li>
                   ))}
@@ -154,7 +164,6 @@ export function GroupTreeManager() {
   const tree = useMemo(() => groupTree(groups), [groups]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [newMain, setNewMain] = useState("");
-  const [newColor, setNewColor] = useState(GROUP_COLORS[1]);
   const [subDraft, setSubDraft] = useState("");
   const [editing, setEditing] = useState<AccGroup | null>(null);
   const [busy, setBusy] = useState(false);
@@ -184,7 +193,7 @@ export function GroupTreeManager() {
     if (!name) return;
     let id = "";
     const ok = await run(async () => {
-      id = (await accApi.createGroup({ name, color: newColor })).data.id;
+      id = (await accApi.createGroup({ name, color: nextColor(tree) })).data.id;
     }, `Main group “${name}” added`);
     if (ok) {
       setNewMain("");
@@ -218,17 +227,12 @@ export function GroupTreeManager() {
           void addMain();
         }}
       >
-        <span className="acc-gt-new-dot" style={{ background: newColor }} />
+        <Plus className="acc-gt-new-icon" />
         <input className="bg-transparent" value={newMain} onChange={(e) => setNewMain(e.target.value)} placeholder="New main group, e.g. Balaghat city" />
         <button type="submit" className="acc-btn is-primary" disabled={busy || !newMain.trim()}>
           <Plus /> Add
         </button>
       </form>
-      <div className="acc-color-pick">
-        {GROUP_COLORS.map((c) => (
-          <button key={c} type="button" className={clsx(newColor === c && "is-on")} style={{ background: c }} onClick={() => setNewColor(c)} aria-label={c} />
-        ))}
-      </div>
 
       {tree.length ? (
         <ul className="acc-gt-mains">
@@ -281,7 +285,7 @@ export function GroupTreeManager() {
                     </ul>
                     <div className="acc-gt-actions">
                       <button type="button" className="acc-link-btn" onClick={() => setEditing(m)}>
-                        <Pencil /> Rename / colour
+                        <Pencil /> Rename
                       </button>
                       <button type="button" className="acc-link-btn is-red" onClick={() => void remove(m, m.subs.length)}>
                         <Trash2 /> Delete main group
@@ -304,12 +308,10 @@ export function GroupTreeManager() {
 
 function GroupEditSheet({ group, onClose, onSaved }: { group: AccGroup | null; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState("");
-  const [color, setColor] = useState(GROUP_COLORS[0]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (group) {
       setName(group.name);
-      setColor(group.color);
     }
   }, [group]);
   if (!group) return null;
@@ -318,7 +320,7 @@ function GroupEditSheet({ group, onClose, onSaved }: { group: AccGroup | null; o
     if (!name.trim() || busy) return;
     setBusy(true);
     try {
-      await accApi.updateGroup(group!.id, { name: name.trim(), color });
+      await accApi.updateGroup(group!.id, { name: name.trim(), color: group!.color });
       await refreshGroups();
       toast("Group saved");
       onSaved();
@@ -333,7 +335,7 @@ function GroupEditSheet({ group, onClose, onSaved }: { group: AccGroup | null; o
     <Sheet
       open
       onClose={onClose}
-      title={group.parentId ? "Rename sub group" : "Edit main group"}
+      title={group.parentId ? "Rename sub group" : "Rename main group"}
       footer={
         <div className="acc-btn-row">
           <button type="button" className="acc-btn is-ghost" onClick={onClose}>
@@ -349,16 +351,6 @@ function GroupEditSheet({ group, onClose, onSaved }: { group: AccGroup | null; o
         <span>Name</span>
         <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </label>
-      {!group.parentId ? (
-        <div className="acc-field">
-          <span>Colour</span>
-          <div className="acc-color-pick">
-            {GROUP_COLORS.map((c) => (
-              <button key={c} type="button" className={clsx(color === c && "is-on")} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />
-            ))}
-          </div>
-        </div>
-      ) : null}
     </Sheet>
   );
 }
