@@ -64,22 +64,24 @@ export function AccOldDuePage() {
       </p>
 
       <form className="acc-card acc-form" onSubmit={save}>
-        <label className="acc-field">
-          <span>Name *</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-        </label>
-        <label className="acc-field">
-          <span>Mobile number *</span>
-          <input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={13} required />
-        </label>
-        <label className="acc-field">
-          <span>Shop name</span>
-          <input value={shopName} onChange={(e) => setShopName(e.target.value)} />
-        </label>
-        <label className="acc-field">
-          <span>Address</span>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} />
-        </label>
+        <div className="acc-form-grid">
+          <label className="acc-field">
+            <span>Name *</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          </label>
+          <label className="acc-field">
+            <span>Mobile number *</span>
+            <input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={13} required />
+          </label>
+          <label className="acc-field">
+            <span>Shop name</span>
+            <input value={shopName} onChange={(e) => setShopName(e.target.value)} />
+          </label>
+          <label className="acc-field">
+            <span>Address</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} />
+          </label>
+        </div>
         <div className="acc-field">
           <span>Group</span>
           <GroupPicker value={groupId} onChange={setGroupId} />

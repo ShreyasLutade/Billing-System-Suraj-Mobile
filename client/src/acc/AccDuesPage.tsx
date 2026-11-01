@@ -27,6 +27,7 @@ import {
   type AccDues,
 } from "./accApi";
 import { CustomerForm } from "./AccWholesalePage";
+import { GroupChecklist, GroupPicker } from "./AccGroups";
 import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, toast, todayInput } from "./shared";
 
 /** Wholesale dues: who owes what, by group, ageing, and collecting payments. */
@@ -90,6 +91,7 @@ export function AccDuesPage() {
   }, [groupId, status, sort, q]);
 
   const t = data?.totals;
+  const groupAmounts = Object.fromEntries((data?.groups || []).map((g) => [g.id, g.balance]));
 
   return (
     <div className="acc-page">
@@ -119,28 +121,16 @@ export function AccDuesPage() {
       </div>
       {t ? <AgingBar aging={t.aging} /> : null}
 
-      <div className="acc-group-cards">
-        <button type="button" className={clsx("acc-group-card", !groupId && "is-on")} onClick={() => setGroupId("")}>
-          <small>All groups</small>
-          <b>{t ? inr(t.outstanding) : "…"}</b>
-        </button>
-        {(data?.groups || []).map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            className={clsx("acc-group-card", groupId === g.id && "is-on")}
-            style={{ ["--g" as string]: g.color }}
-            onClick={() => setGroupId(groupId === g.id ? "" : g.id)}
-          >
-            <small>
-              <i className="acc-dot" /> {g.name} · {g.count}
-            </small>
-            <b>{inr(g.balance)}</b>
-          </button>
-        ))}
-        <button type="button" className="acc-group-card is-manage" onClick={() => navigate("/acc/settings")} aria-label="Manage groups">
+      <div className="acc-group-filter">
+        <GroupPicker
+          mode="filter"
+          value={groupId || null}
+          onChange={(id) => setGroupId(id || "")}
+          amounts={groupAmounts}
+          totalLabel={t ? inr(t.outstanding) : undefined}
+        />
+        <button type="button" className="acc-icon-btn" onClick={() => navigate("/acc/settings")} aria-label="Manage groups" title="Manage groups">
           <Settings2 />
-          <small>Groups</small>
         </button>
       </div>
 
@@ -306,37 +296,17 @@ function DuesPdfSheet({
   sort: Sort;
 }) {
   const [groupIds, setGroupIds] = useState<string[]>(initialGroup ? [initialGroup] : []);
-  const [showAllGroups, setShowAllGroups] = useState(false);
   useEffect(() => {
     if (open) {
       setGroupIds(initialGroup ? [initialGroup] : []);
-      setShowAllGroups(false);
     }
   }, [open, initialGroup, initialStatus, sort]);
-  const visibleGroups = showAllGroups ? groups : groups.slice(0, 3);
-  const hiddenSelected = groups.slice(3).filter((group) => groupIds.includes(group.id)).length;
   const pdfQuery = { groupIds: groupIds.join(","), status: initialStatus, sort };
-  const toggleGroup = (id: string) =>
-    setGroupIds((current) => (current.includes(id) ? current.filter((groupId) => groupId !== id) : [...current, id]));
   return (
     <Sheet open={open} onClose={onClose} title="Dues PDF" subtitle="Create a clear collection list for staff">
       <div className="acc-field">
         <span>Which groups?</span>
-        <div className="acc-chips">
-          <button type="button" className={clsx("acc-chip", !groupIds.length && "is-on")} onClick={() => setGroupIds([])}>
-            All groups
-          </button>
-          {visibleGroups.map((g) => (
-            <button key={g.id} type="button" className={clsx("acc-chip", groupIds.includes(g.id) && "is-on")} onClick={() => toggleGroup(g.id)}>
-              <i className="acc-dot" style={{ background: g.color }} /> {g.name}
-            </button>
-          ))}
-          {groups.length > 3 ? (
-            <button type="button" className="acc-chip" onClick={() => setShowAllGroups((value) => !value)}>
-              {showAllGroups ? "Show less" : `Show ${groups.length - 3} more${hiddenSelected ? ` · ${hiddenSelected} selected` : ""}`}
-            </button>
-          ) : null}
-        </div>
+        <GroupChecklist values={groupIds} onChange={setGroupIds} amounts={Object.fromEntries(groups.map((g) => [g.id, g.balance]))} />
       </div>
       <p className="acc-hint">The PDF is grouped automatically and shows each customer’s total paid and pending due.</p>
       <PdfButton

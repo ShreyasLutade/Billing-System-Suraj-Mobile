@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import clsx from "clsx";
 import { Check, ChevronDown, ChevronRight, FolderTree, Loader2, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { accApi, type AccGroup } from "./accApi";
-import { Sheet, errorText, plural, toast } from "./shared";
+import { Sheet, errorText, inr, plural, toast } from "./shared";
 
 /*
  * Customer groups as a two-level tree: main groups, each with sub groups.
@@ -75,16 +75,22 @@ export function groupLabel(groups: AccGroup[], id: string | null | undefined) {
   return parent ? `${parent.name} › ${g.name}` : g.name;
 }
 
-/** Searchable group dropdown: main groups in capitals, sub groups under them. */
-export function GroupPicker({ value, onChange }: { value: string | null | undefined; onChange: (id: string | null) => void }) {
-  const groups = useGroups();
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const tree = useMemo(() => groupTree(groups), [groups]);
-  const selected = groups.find((g) => g.id === value) || null;
-  const color = selected ? (selected.parentId ? groups.find((g) => g.id === selected.parentId)?.color : selected.color) : undefined;
-
-  const needle = q.trim().toLowerCase();
+/** Tree rows shared by the dropdown and the PDF checklist. */
+function GroupRows({
+  tree,
+  needle,
+  isOn,
+  onPick,
+  amounts,
+  check,
+}: {
+  tree: GroupNode[];
+  needle: string;
+  isOn: (id: string) => boolean;
+  onPick: (id: string) => void;
+  amounts?: Record<string, number>;
+  check?: boolean;
+}) {
   const shown = tree
     .map((m) => {
       const mainHit = m.name.toLowerCase().includes(needle);
@@ -92,6 +98,70 @@ export function GroupPicker({ value, onChange }: { value: string | null | undefi
       return mainHit || subs.length ? { ...m, subs } : null;
     })
     .filter(Boolean) as GroupNode[];
+  const amountOf = (m: GroupNode) => (amounts?.[m.id] || 0) + m.subs.reduce((a, s) => a + (amounts?.[s.id] || 0), 0);
+  const mark = <b className={clsx("acc-gp-radio", check && "is-check")} aria-hidden />;
+  return (
+    <>
+      {shown.map((m) => (
+        <li key={m.id}>
+          <button
+            type="button"
+            className={clsx("acc-gp-main", isOn(m.id) && "is-on")}
+            style={{ ["--g" as string]: m.color }}
+            onClick={() => onPick(m.id)}
+          >
+            <i className="acc-dot" />
+            <span>{m.name}</span>
+            {amounts ? <strong className="acc-gp-amt">{inr(amountOf(m))}</strong> : m.subs.length ? <em>{m.subs.length} sub</em> : null}
+            {mark}
+          </button>
+          {m.subs.length ? (
+            <ul className="acc-gp-subs" style={{ ["--g" as string]: m.color }}>
+              {m.subs.map((s) => (
+                <li key={s.id}>
+                  <button type="button" className={clsx(isOn(s.id) && "is-on")} onClick={() => onPick(s.id)}>
+                    <span>{s.name}</span>
+                    {amounts ? <strong className="acc-gp-amt">{inr(amounts[s.id] || 0)}</strong> : null}
+                    {mark}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </li>
+      ))}
+      {!shown.length ? <li className="acc-hint">No group matches.</li> : null}
+    </>
+  );
+}
+
+/**
+ * Searchable group dropdown: main groups in capitals, sub groups under
+ * them. "pick" (forms): No group + any group. "filter" (lists): All groups,
+ * any group, No group ("none"); amounts show beside each group.
+ */
+export function GroupPicker({
+  value,
+  onChange,
+  mode = "pick",
+  amounts,
+  totalLabel,
+}: {
+  value: string | null | undefined;
+  onChange: (id: string | null) => void;
+  mode?: "pick" | "filter";
+  amounts?: Record<string, number>;
+  /** Filter mode: amount shown on "All groups". */
+  totalLabel?: string;
+}) {
+  const groups = useGroups();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const tree = useMemo(() => groupTree(groups), [groups]);
+  const selected = value && value !== "none" ? groups.find((g) => g.id === value) || null : null;
+  const color = selected ? (selected.parentId ? groups.find((g) => g.id === selected.parentId)?.color : selected.color) : undefined;
+  const needle = q.trim().toLowerCase();
+  const filter = mode === "filter";
 
   function pick(id: string | null) {
     onChange(id);
@@ -99,14 +169,22 @@ export function GroupPicker({ value, onChange }: { value: string | null | undefi
     setQ("");
   }
 
+  const label = selected
+    ? groupLabel(groups, selected.id)
+    : value === "none"
+      ? "No group"
+      : filter
+        ? "All groups"
+        : "Choose group";
+
   return (
     <>
-      <button type="button" className={clsx("acc-gp-trigger", selected && "has-value")} onClick={() => setOpen(true)}>
+      <button type="button" className={clsx("acc-gp-trigger", (selected || value === "none" || filter) && "has-value")} onClick={() => setOpen(true)}>
         {selected ? <i className="acc-dot" style={{ background: color }} /> : <FolderTree />}
-        <span>{selected ? groupLabel(groups, selected.id) : "Choose group"}</span>
+        <span>{label}</span>
         <ChevronDown />
       </button>
-      <Sheet open={open} onClose={() => setOpen(false)} title="Choose group">
+      <Sheet open={open} onClose={() => setOpen(false)} title={filter ? "Show group" : "Choose group"}>
         <label className="acc-search is-in-card">
           <Search aria-hidden />
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search groups…" autoFocus />
@@ -116,45 +194,72 @@ export function GroupPicker({ value, onChange }: { value: string | null | undefi
           {!needle ? (
             <li>
               <button type="button" className={clsx("acc-gp-none", !value && "is-on")} onClick={() => pick(null)}>
-                <span>No group</span>
+                <span>{filter ? "All groups" : "No group"}</span>
+                {filter && totalLabel ? <strong className="acc-gp-amt">{totalLabel}</strong> : null}
                 <b className="acc-gp-radio" aria-hidden />
               </button>
             </li>
           ) : null}
-          {shown.map((m) => (
-            <li key={m.id}>
-              <button
-                type="button"
-                className={clsx("acc-gp-main", value === m.id && "is-on")}
-                style={{ ["--g" as string]: m.color }}
-                onClick={() => pick(m.id)}
-              >
-                <i className="acc-dot" />
-                <span>{m.name}</span>
-                {m.subs.length ? <em>{m.subs.length} sub</em> : null}
+          <GroupRows tree={tree} needle={needle} isOn={(id) => value === id} onPick={pick} amounts={amounts} />
+          {filter && !needle ? (
+            <li>
+              <button type="button" className={clsx("acc-gp-none", value === "none" && "is-on")} onClick={() => pick("none")}>
+                <span>No group</span>
+                {amounts ? <strong className="acc-gp-amt">{inr(amounts.none || 0)}</strong> : null}
                 <b className="acc-gp-radio" aria-hidden />
               </button>
-              {m.subs.length ? (
-                <ul className="acc-gp-subs" style={{ ["--g" as string]: m.color }}>
-                  {m.subs.map((s) => (
-                    <li key={s.id}>
-                      <button type="button" className={clsx(value === s.id && "is-on")} onClick={() => pick(s.id)}>
-                        <span>{s.name}</span>
-                        <b className="acc-gp-radio" aria-hidden />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </li>
-          ))}
-          {!shown.length ? <li className="acc-hint">No group matches “{q}”.</li> : null}
+          ) : null}
         </ul>
         <Link to="/acc/settings" className="acc-link-btn" onClick={() => setOpen(false)}>
           <Plus /> Add or edit groups in Settings
         </Link>
       </Sheet>
     </>
+  );
+}
+
+/** Tick several groups (PDF of dues); none ticked = all groups. */
+export function GroupChecklist({
+  values,
+  onChange,
+  amounts,
+}: {
+  values: string[];
+  onChange: (ids: string[]) => void;
+  amounts?: Record<string, number>;
+}) {
+  const groups = useGroups();
+  const tree = useMemo(() => groupTree(groups), [groups]);
+  const [q, setQ] = useState("");
+  const toggle = (id: string) => onChange(values.includes(id) ? values.filter((x) => x !== id) : [...values, id]);
+  return (
+    <div className="acc-gp-checklist">
+      {groups.length > 6 ? (
+        <label className="acc-search is-in-card">
+          <Search aria-hidden />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search groups…" />
+        </label>
+      ) : null}
+      <ul className="acc-gp-list">
+        <li>
+          <button type="button" className={clsx("acc-gp-none", !values.length && "is-on")} onClick={() => onChange([])}>
+            <span>All groups</span>
+            <b className="acc-gp-radio is-check" aria-hidden />
+          </button>
+        </li>
+        <GroupRows tree={tree} needle={q.trim().toLowerCase()} isOn={(id) => values.includes(id)} onPick={toggle} amounts={amounts} check />
+        {!q.trim() ? (
+          <li>
+            <button type="button" className={clsx("acc-gp-none", values.includes("none") && "is-on")} onClick={() => toggle("none")}>
+              <span>No group</span>
+              {amounts ? <strong className="acc-gp-amt">{inr(amounts.none || 0)}</strong> : null}
+              <b className="acc-gp-radio is-check" aria-hidden />
+            </button>
+          </li>
+        ) : null}
+      </ul>
+    </div>
   );
 }
 
