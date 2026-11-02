@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
-import { Download, Trash2 } from "lucide-react";
+import { Download, PencilLine, Trash2 } from "lucide-react";
+import { EditSupplierModal } from "../components/EditSupplierModal";
 import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
@@ -43,6 +44,7 @@ export function SupplierDetailPage() {
     ["purchases", "stock"] as const,
     "purchases",
   );
+  const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -122,7 +124,7 @@ export function SupplierDetailPage() {
       </BackLink>
 
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="w-full sm:w-auto">
           <h1 className="font-display text-2xl font-semibold text-ink-900">
             <span className="inline-flex flex-wrap items-center gap-2">
               {data.name}
@@ -159,11 +161,12 @@ export function SupplierDetailPage() {
               </span>
             </p>
           ) : null}
-          {isAdmin ? (
-            <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex w-full gap-1.5 sm:w-auto sm:gap-2">
+            {isAdmin ? (
+              <>
               <button
                 type="button"
-                className="btn-secondary flex-1 !gap-1.5 !px-2 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
+                className="btn-secondary min-w-0 flex-auto !gap-1 !px-1.5 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
                 disabled={exporting !== null}
                 onClick={() => void exportMobilesPdf("NEW")}
               >
@@ -172,24 +175,35 @@ export function SupplierDetailPage() {
               </button>
               <button
                 type="button"
-                className="btn-secondary flex-1 !gap-1.5 !px-2 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
+                className="btn-secondary min-w-0 flex-auto !gap-1 !px-1.5 !py-2.5 text-xs whitespace-nowrap sm:!gap-2 sm:!px-4 sm:text-sm"
                 disabled={exporting !== null}
                 onClick={() => void exportMobilesPdf("USED")}
               >
                 <Download className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                 {exporting === "USED" ? "Exporting…" : "Export old"}
               </button>
-              {/* Phones: delete sits in this row, aligned with the exports. */}
+              </>
+            ) : null}
+            <button
+              type="button"
+              className="btn-secondary min-w-0 flex-auto !gap-1 !px-1.5 !py-2.5 text-xs whitespace-nowrap sm:flex-none sm:!gap-2 sm:!px-4 sm:text-sm"
+              onClick={() => setEditing(true)}
+            >
+              <PencilLine className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+              Edit
+            </button>
+            {isAdmin ? (
+              /* Phones: delete sits in this row, aligned with the exports. */
               <button
                 type="button"
-                className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border border-rose-200 bg-rose-50 px-2 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 sm:hidden"
+                className="inline-flex min-w-0 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-[11px] border border-rose-200 bg-rose-50 px-1.5 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25 sm:hidden"
                 onClick={openDeleteSupplier}
               >
                 <Trash2 className="h-3.5 w-3.5 shrink-0" />
                 Delete
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
         {isAdmin ? (
           <button
@@ -202,6 +216,16 @@ export function SupplierDetailPage() {
           </button>
         ) : null}
       </div>
+
+      <EditSupplierModal
+        open={editing}
+        supplier={data}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          void load();
+        }}
+      />
 
       {error ? (
         <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
