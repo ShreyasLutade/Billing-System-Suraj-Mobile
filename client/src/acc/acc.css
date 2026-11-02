@@ -9984,3 +9984,16 @@ html.dark .acc-sell-pay button.is-on {
   height: 15px;
   flex: none;
 }
+
+/* Supplier page: Pay supplier · Call · Edit on one line */
+.acc-btn-row.acc-supplier-actions {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  gap: 8px;
+}
+
+.acc-btn-row.acc-supplier-actions > * {
+  min-width: 0;
+  padding-inline: 8px;
+  white-space: nowrap;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Loader2, PackagePlus, PencilLine, Phone, Search, Trash2, Wallet } from "lucide-react";
@@ -114,13 +114,10 @@ export function AccSupplierPage() {
         </div>
       </div>
 
-      <div className="acc-btn-row is-stretch">
+      <div className="acc-btn-row is-stretch acc-supplier-actions">
         <button type="button" className="acc-btn is-primary is-big" onClick={() => setPaying(true)}>
           <Wallet /> Pay supplier
         </button>
-        <Link className="acc-btn is-big" to="/acc/stock/in" state={{ supplierId: data.id }}>
-          <PackagePlus /> Add stock
-        </Link>
         {data.phone ? (
           <a className="acc-btn is-big" href={`tel:${data.phone}`}>
             <Phone /> Call
