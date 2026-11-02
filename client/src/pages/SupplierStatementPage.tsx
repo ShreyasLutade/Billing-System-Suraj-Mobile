@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
-  ChevronRight,
   Download,
   Loader2,
   PackagePlus,
@@ -34,11 +33,6 @@ function day(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
-}
-
-/** "jio bharat v4" → "Jio Bharat V4"; words with capitals inside (iPhone) stay. */
-function niceWords(text: string) {
-  return text.replace(/\b([a-z])([a-z0-9]*)\b/g, (_m, first: string, rest: string) => first.toUpperCase() + rest);
 }
 
 function signed(amount: number) {
@@ -270,13 +264,13 @@ export function SupplierStatementPage() {
                   <span aria-hidden className={clsx("absolute inset-y-3 left-0 w-[3px] rounded-r-full opacity-70", kind.rail)} />
                   <div
                     className={clsx(
-                      "flex items-start gap-3 py-3 pl-4 pr-3 sm:pr-4",
+                      "flex items-start gap-3 py-2.5 pl-4 pr-3 sm:pr-4",
                       open && "cursor-pointer transition hover:bg-tide-100/40 dark:hover:bg-white/5",
                     )}
                     onClick={() => (open ? navigate(`/suppliers/${data.id}/purchases/${row.purchaseId}`) : undefined)}
                   >
-                    <span className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", kind.tone)}>
-                      <Icon className="h-[18px] w-[18px]" />
+                    <span className={clsx("grid h-9 w-9 shrink-0 place-items-center rounded-xl", kind.tone)}>
+                      <Icon className="h-4 w-4" />
                     </span>
 
                     <div className="min-w-0 flex-1">
@@ -292,19 +286,18 @@ export function SupplierStatementPage() {
                         {day(row.date)}
                         {row.qty ? ` · ${row.qty} pc${row.qty === 1 ? "" : "s"}` : ""}
                       </p>
-                      {row.detail ? (
-                        <p className="mt-1 whitespace-pre-line text-[12.5px] leading-snug text-ink-600">
-                          {row.kind === "purchase" ? niceWords(row.detail) : row.detail}
-                        </p>
+                      {/* Item names are left out of purchases to keep the list compact (tap to see them). */}
+                      {row.detail && row.kind !== "purchase" ? (
+                        <p className="mt-0.5 truncate text-[12px] leading-snug text-ink-600">{row.detail}</p>
                       ) : null}
                       {row.paidNote ? (
-                        <p className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> {row.paidNote}
+                        <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{row.paidNote}</span>
                         </p>
                       ) : null}
                     </div>
 
-                    <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                    <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
                       {row.credit > 0 ? (
                         <p className="text-[15px] font-bold tabular-nums text-ink-900">+{formatINR(row.credit)}</p>
                       ) : null}
@@ -341,8 +334,6 @@ export function SupplierStatementPage() {
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Delete
                         </button>
-                      ) : open ? (
-                        <ChevronRight className="mt-1 h-4 w-4 text-ink-300" aria-hidden />
                       ) : null}
                     </div>
                   </div>
