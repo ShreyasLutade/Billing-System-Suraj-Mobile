@@ -69,6 +69,14 @@ const PAD = 5;
 const ROW_H = 26;
 const FOOTER_H = 30;
 
+/**
+ * Every word starts with a capital letter in the PDFs ("raj mobile, main
+ * road" → "Raj Mobile, Main Road"). Letters already in capitals stay.
+ */
+export function titleCase(text: string) {
+  return text.replace(/(^|[\s(/·,&+])(\p{Ll})/gu, (_m, before: string, letter: string) => before + letter.toUpperCase());
+}
+
 export function rs(amount: number) {
   return `Rs. ${money(amount)}`;
 }
@@ -205,7 +213,7 @@ function drawInfo(doc: PDFKit.PDFDocument, y: number, info: Array<{ label: strin
       lineBreak: false,
       characterSpacing: 0.4,
     });
-    doc.font(FONT.semibold).fontSize(9).fillColor(COLORS.ink).text(item.value || "—", cx, cy + 10, {
+    doc.font(FONT.semibold).fontSize(9).fillColor(COLORS.ink).text(titleCase(item.value) || "—", cx, cy + 10, {
       width: cw - 20,
       lineBreak: false,
       ellipsis: true,
@@ -257,7 +265,7 @@ function drawRow(doc: PDFKit.PDFDocument, y: number, row: PdfRow, cols: PdfCol[]
   if (row.kind === "group") {
     const h = 22;
     doc.rect(M, y, W, h).fill(COLORS.accentSoft);
-    const text = Object.values(row.cells).filter(Boolean).join("   ·   ");
+    const text = titleCase(Object.values(row.cells).filter(Boolean).join("   ·   "));
     doc.font(FONT.bold).fontSize(8.5).fillColor(COLORS.slate).text(text, M + PAD, y + 7, {
       width: W - PAD * 2,
       lineBreak: false,
@@ -273,7 +281,7 @@ function drawRow(doc: PDFKit.PDFDocument, y: number, row: PdfRow, cols: PdfCol[]
   let x = M;
   for (const col of cols) {
     const w = col.width - PAD * 2;
-    const text = row.cells[col.key] ?? "";
+    const text = titleCase(row.cells[col.key] ?? "");
     doc
       .font(col === cols[0] || col.key === "name" ? FONT.semibold : FONT.regular)
       .fontSize(8)
@@ -281,7 +289,7 @@ function drawRow(doc: PDFKit.PDFDocument, y: number, row: PdfRow, cols: PdfCol[]
       .text(text || "—", x + PAD, y + 6, { width: w, align: col.align || "left", lineBreak: false, ellipsis: true });
     const sub = row.sub?.[col.key];
     if (sub) {
-      doc.font(FONT.regular).fontSize(6.8).fillColor(COLORS.muted).text(sub, x + PAD, y + 16, {
+      doc.font(FONT.regular).fontSize(6.8).fillColor(COLORS.muted).text(titleCase(sub), x + PAD, y + 16, {
         width: w,
         align: col.align || "left",
         lineBreak: false,

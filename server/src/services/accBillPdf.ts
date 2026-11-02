@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { titleCase } from "./accPdf";
 import type PDFKit from "pdfkit";
 import { format } from "date-fns";
 import {
@@ -258,14 +259,15 @@ function drawParties(doc: PDFKit.PDFDocument, y: number, bill: AccBillPdfInput) 
     .font(FONT.bold)
     .fontSize(13.5)
     .fillColor(COLORS.ink)
-    .text(c.name || "Walk-in customer", M, y + 18, {
+    // Shop name in bold; the person's name on the line under it.
+    .text(c.shopName || c.name || "Walk-in customer", M, y + 18, {
       width: leftW,
       lineBreak: false,
       ellipsis: true,
     });
   let cy = y + 39;
   const customerLines = [
-    c.shopName && c.shopName !== c.name ? c.shopName : "",
+    c.shopName && c.shopName !== c.name ? c.name : "",
     place,
     c.phone ? `+91 ${c.phone.replace(/^\+?91/, "")}` : "",
     c.gstin ? `GSTIN: ${c.gstin}` : "",
@@ -671,7 +673,21 @@ function drawFooters(doc: PDFKit.PDFDocument) {
   }
 }
 
-export function renderAccBillPdf(bill: AccBillPdfInput): Promise<Buffer> {
+export function renderAccBillPdf(input: AccBillPdfInput): Promise<Buffer> {
+  // Every word of names, addresses, items and the note starts with a capital.
+  const t = (text?: string | null) => (text ? titleCase(text) : text ?? undefined);
+  const bill: AccBillPdfInput = {
+    ...input,
+    customer: {
+      ...input.customer,
+      name: t(input.customer.name) || "",
+      shopName: t(input.customer.shopName),
+      address: t(input.customer.address),
+      city: t(input.customer.city),
+    },
+    items: input.items.map((item) => ({ ...item, name: titleCase(item.name), categoryName: t(item.categoryName) })),
+    note: t(input.note) || "",
+  };
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: [PAGE.width, PAGE.height],

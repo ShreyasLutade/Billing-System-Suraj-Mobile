@@ -385,8 +385,9 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
       rows.push({
         cells: {
           number: sale.kind === "WHOLESALE" ? sale.number : "Counter",
-          time: sale.saleDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }),
-          party: sale.customer?.name || sale.customerName || (sale.kind === "RETAIL" ? "Walk-in" : ""),
+          time: sale.saleDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }).toUpperCase(),
+          // Shop name in bold, the person's name under it.
+          party: sale.customer?.shopName || sale.customer?.name || sale.customerName || (sale.kind === "RETAIL" ? "Walk-in" : ""),
           items: detailed ? itemsText : `${sale.items.reduce((a, i) => a + i.qty, 0)} pcs`,
           transport: sale.transportCharge ? money(sale.transportCharge) : "",
           total: money(sale.total),
@@ -396,7 +397,7 @@ accSalesRouter.get("/sales/pdf", async (req, res, next) => {
         },
         sub: {
           number: sale.kind === "RETAIL" ? "Sale" : "Wholesale",
-          party: sale.customer?.group?.name || sale.customer?.shopName || "",
+          party: [sale.customer?.shopName ? sale.customer.name : "", sale.customer?.group?.name].filter(Boolean).join(" · "),
           items: detailed ? "" : itemsText,
         },
         color: sale.dueAmount ? { due: PDF_TONE.red } : undefined,

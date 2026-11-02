@@ -462,13 +462,16 @@ accCustomersRouter.get("/dues/pdf", async (req, res, next) => {
       pdfRows.push({
         cells: {
           serial: String(serial),
-          name: customer.name,
+          // Shop name in bold, the person's name under it.
+          name: (showShop && customer.shopName) || customer.name,
           phone: showPhone ? customer.phone : "",
           paid: money(paid),
           balance: money(bal.balance),
           overdue: showOverdue && bal.overdue ? money(bal.overdue) : "",
         },
-        sub: showShop ? { name: [customer.shopName, customer.address, customer.city].filter(Boolean).join(" · ") } : undefined,
+        sub: showShop
+          ? { name: [customer.shopName ? customer.name : "", customer.address, customer.city].filter(Boolean).join(" · ") }
+          : undefined,
         color: {
           balance: bal.balance > 0 ? PDF_TONE.red : PDF_TONE.green,
           overdue: PDF_TONE.amber,
@@ -494,7 +497,7 @@ accCustomersRouter.get("/dues/pdf", async (req, res, next) => {
     ];
     const columns: PdfCol[] = [
       { key: "serial", label: "S.No.", width: 7, align: "center" },
-      { key: "name", label: "Customer", width: showPhone ? 32 : 44 },
+      { key: "name", label: showShop ? "Shop · customer" : "Customer", width: showPhone ? 32 : 44 },
     ];
     if (showPhone) columns.push({ key: "phone", label: "Phone", width: 17 });
     columns.push({ key: "paid", label: "Total paid", width: 16, align: "right" });
@@ -540,9 +543,9 @@ accCustomersRouter.get("/customers/:id/statement", async (req, res, next) => {
       title: "Account statement",
       subtitle: `As of ${pdfDay(new Date())}`,
       info: [
+        { label: "Shop", value: customer.shopName || customer.name },
         { label: "Customer", value: customer.name },
         { label: "Phone", value: customer.phone },
-        { label: "Shop", value: customer.shopName },
         { label: "Address", value: [customer.address, customer.city].filter(Boolean).join(", ") },
         { label: "Group", value: customer.group?.name || "" },
         { label: "GSTIN", value: customer.gstin },
