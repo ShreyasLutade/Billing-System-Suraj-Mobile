@@ -406,8 +406,53 @@ function ToastHost() {
   );
 }
 
+/**
+ * Every text the user types in the shop (names, shop, address, groups,
+ * products, notes…) starts with a capital letter. Search boxes, numbers,
+ * phone numbers and fields marked data-keep-case are left as typed.
+ */
+const TEXT_TYPES = new Set(["", "text"]);
+const SKIP_MODES = new Set(["numeric", "decimal", "tel", "email", "url", "search"]);
+const nativeValue = {
+  input: Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!,
+  textarea: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!,
+};
+
+function capitalizeFirst(event: Event) {
+  const el = event.target;
+  const isInput = el instanceof HTMLInputElement;
+  if (!isInput && !(el instanceof HTMLTextAreaElement)) return;
+  // Android keyboards type whole words as a "composition": changing the
+  // text mid-word breaks it, so wait for compositionend.
+  if (event.type === "input" && (event as InputEvent).isComposing) return;
+  if (isInput && !TEXT_TYPES.has(el.getAttribute("type")?.toLowerCase() || "")) return;
+  if (SKIP_MODES.has(el.inputMode) || el.dataset.keepCase !== undefined || !el.closest(".acc")) return;
+  const value = el.value;
+  const at = value.search(/\S/);
+  if (at < 0) return;
+  const first = value[at];
+  const upper = first.toUpperCase();
+  if (first === upper) return;
+  const { selectionStart, selectionEnd } = el;
+  // The native setter keeps React's change tracking working: onChange
+  // still fires, with the capitalised value.
+  (isInput ? nativeValue.input : nativeValue.textarea).call(el, value.slice(0, at) + upper + value.slice(at + 1));
+  if (selectionStart !== null) el.setSelectionRange(selectionStart, selectionEnd);
+  // After a composition React has already read the value: tell it again.
+  if (event.type === "compositionend") el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 /** Wraps every /acc page: styles, toasts. */
 export function AccLayout() {
+  useEffect(() => {
+    // Capture phase on window runs before React reads the input's value.
+    window.addEventListener("input", capitalizeFirst, true);
+    window.addEventListener("compositionend", capitalizeFirst, true);
+    return () => {
+      window.removeEventListener("input", capitalizeFirst, true);
+      window.removeEventListener("compositionend", capitalizeFirst, true);
+    };
+  }, []);
   return (
     <div className="acc">
       <Outlet />

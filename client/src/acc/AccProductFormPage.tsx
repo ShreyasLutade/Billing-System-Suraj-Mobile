@@ -352,7 +352,7 @@ export function AccProductFormPage() {
               </label>
               <label className="acc-field">
                 <span>Barcode (optional)</span>
-                <input value={form.barcode || ""} onChange={(e) => set({ barcode: e.target.value })} />
+                <input data-keep-case value={form.barcode || ""} onChange={(e) => set({ barcode: e.target.value })} />
               </label>
             </div>
           </section>
