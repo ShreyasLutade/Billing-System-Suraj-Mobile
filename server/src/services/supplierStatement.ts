@@ -35,6 +35,10 @@ type Entry = {
   paidFor?: string;
   /** Purchase rows: "Paid at purchase · …" when paid while entering it. */
   paidNote?: string;
+  /** Recorded payment rows: the SupplierPayment id (lets it be deleted). */
+  paymentId?: string;
+  /** Older payment kept only on a purchase (no payment record): that purchase. */
+  legacyPurchaseId?: string;
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -160,6 +164,7 @@ export async function supplierStatementData(supplierId: string) {
       credit: 0,
       debit: pay.amount,
       paidFor: pay.purchaseId ?? undefined,
+      paymentId: pay.id,
     });
   }
 
@@ -226,6 +231,7 @@ export async function supplierStatementData(supplierId: string) {
         qty: null,
         credit: 0,
         debit: amount,
+        legacyPurchaseId: p.id,
       });
     }
   }

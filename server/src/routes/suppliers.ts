@@ -552,6 +552,90 @@ suppliersRouter.get("/:id/statement", requireAdmin, async (req, res, next) => {
   }
 });
 
+/**
+ * Admin only: delete a payment made to a supplier. What it paid comes off
+ * the purchases again (the one it was made with first, then the latest
+ * paid purchases, the reverse of how payments are applied), so the
+ * supplier's balance due goes back up by the same amount.
+ * Body: { paymentId } for a recorded payment, or { purchaseId, amount } for
+ * an older payment that only exists on a purchase.
+ */
+suppliersRouter.post("/:id/payments/delete", requireAdmin, async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        paymentId: z.string().min(1).optional(),
+        purchaseId: z.string().min(1).optional(),
+        amount: z.coerce.number().positive().optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!body.success || (!body.data.paymentId && !(body.data.purchaseId && body.data.amount))) {
+      res.status(400).json({ error: "Choose the payment to delete" });
+      return;
+    }
+    const supplierId = req.params.id;
+    const result = await prisma.$transaction(async (tx) => {
+      let amountPaise: number;
+      let firstPurchaseId: string | null = null;
+      let label: string;
+      if (body.data.paymentId) {
+        const payment = await tx.supplierPayment.findFirst({
+          where: { id: body.data.paymentId, supplierId },
+        });
+        if (!payment) return { status: 404, error: "Payment not found" } as const;
+        amountPaise = Math.round(payment.amount * 100);
+        firstPurchaseId = payment.purchaseId;
+        label = `${payment.amount} paid ${format(payment.paidAt, "dd MMM yyyy")}`;
+        await tx.supplierPayment.delete({ where: { id: payment.id } });
+      } else {
+        // An older payment shown on the statement from the purchase itself.
+        const purchase = await tx.purchase.findFirst({
+          where: { id: body.data.purchaseId, supplierId },
+          select: { id: true },
+        });
+        if (!purchase) return { status: 404, error: "Payment not found" } as const;
+        amountPaise = Math.round(body.data.amount! * 100);
+        firstPurchaseId = purchase.id;
+        label = `${body.data.amount} (older payment)`;
+      }
+
+      const paidPurchases = await tx.purchase.findMany({
+        where: { supplierId, OR: [{ paidAt: { not: null } }, { paidAmount: { gt: 0 } }] },
+        select: { id: true, totalAmount: true, paidAmount: true, paidAt: true },
+        orderBy: [{ purchaseDate: "desc" }, { createdAt: "desc" }],
+      });
+      const ordered = [
+        ...paidPurchases.filter((p) => p.id === firstPurchaseId),
+        ...paidPurchases.filter((p) => p.id !== firstPurchaseId),
+      ];
+      // An older payment comes off its own purchase only.
+      const pool = body.data.paymentId ? ordered : ordered.slice(0, 1);
+      let left = amountPaise;
+      for (const p of pool) {
+        if (left <= 0) break;
+        const totalPaise = Math.round((p.totalAmount || 0) * 100);
+        const paidPaise = p.paidAt ? totalPaise : Math.min(Math.round((p.paidAmount || 0) * 100), totalPaise);
+        const take = Math.min(left, paidPaise);
+        if (take <= 0) continue;
+        left -= take;
+        await tx.purchase.update({
+          where: { id: p.id },
+          data: { paidAt: null, paidAmount: (paidPaise - take) / 100 },
+        });
+      }
+      return { status: 200, removed: (amountPaise - left) / 100, label } as const;
+    });
+    if (result.status !== 200) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    console.log(`[suppliers] payment deleted for ${supplierId}: ${result.label} by ${req.user?.name || "?"}`);
+    res.json({ data: { removed: result.removed, ...(await supplierLedgerStats(supplierId)) } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
   try {
     const parsed = paySupplierSchema.safeParse(req.body ?? {});

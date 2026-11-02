@@ -50,6 +50,10 @@ export type SupplierStatementView = {
     debit: number;
     paidNote?: string;
     purchaseId?: string;
+    /** Recorded payment: its id (can be deleted). */
+    paymentId?: string;
+    /** Older payment kept only on a purchase: that purchase (can be deleted). */
+    legacyPurchaseId?: string;
     balance: number;
   }>;
 };
@@ -748,6 +752,15 @@ export const api = {
   viewSupplierStatement: (supplierId: string) =>
     request<{ data: SupplierStatementView }>(
       `/suppliers/${encodeURIComponent(supplierId)}/statement/view`,
+    ),
+  /** Delete a supplier payment; the balance due goes back up by its amount. */
+  deleteSupplierPayment: (
+    supplierId: string,
+    payment: { paymentId: string } | { purchaseId: string; amount: number },
+  ) =>
+    request<{ data: { removed: number; outstanding: number } }>(
+      `/suppliers/${encodeURIComponent(supplierId)}/payments/delete`,
+      { method: "POST", body: JSON.stringify(payment) },
     ),
   downloadSupplierStatement: async (supplierId: string) => {
     const token = getAuthToken();
