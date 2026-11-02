@@ -9970,3 +9970,17 @@ html.dark .acc-sell-pay button.is-on {
 .acc-item-results .acc-no-results {
   padding: 12px 14px;
 }
+
+/* Form errors: icon beside the message */
+.acc .acc-hint.is-red[role="alert"] {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+}
+
+.acc .acc-hint.is-red[role="alert"] svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}

@@ -3,12 +3,12 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, PackagePlus, Phone, Search, Trash2, Wallet } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, Loader2, PackagePlus, PencilLine, Phone, Search, Trash2, Wallet } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccSupplier, type AccSupplierDetail } from "./accApi";
-import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, refreshCatalog, shortDate, toast, todayInput } from "./shared";
+import { Empty, PdfButton, Segmented, Sheet, completePhone, errorText, inr, plural, refreshCatalog, shortDate, toast, todayInput } from "./shared";
 
 type Tab = "statement" | "purchases" | "payments";
 type Method = "CASH" | "UPI";
@@ -25,6 +25,7 @@ export function AccSupplierPage() {
   const [missing, setMissing] = useState(false);
   const [tab, setTab] = useState<Tab>("statement");
   const [paying, setPaying] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [openPurchase, setOpenPurchase] = useState<string | null>(null);
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
@@ -125,6 +126,9 @@ export function AccSupplierPage() {
             <Phone /> Call
           </a>
         ) : null}
+        <button type="button" className="acc-btn is-big" onClick={() => setEditing(true)}>
+          <PencilLine /> Edit
+        </button>
       </div>
 
       <Segmented
@@ -251,6 +255,17 @@ export function AccSupplierPage() {
         }}
       />
 
+      {editing ? (
+        <EditSupplierSheet
+          supplier={data}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            void load();
+          }}
+        />
+      ) : null}
+
       {isAdmin ? (
         <button type="button" className="acc-btn is-danger is-block acc-supplier-delete" onClick={() => setConfirmDelete(true)}>
           <Trash2 /> Delete supplier
@@ -278,6 +293,92 @@ export function AccSupplierPage() {
         ) : null}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** Change a supplier's name, mobile, city or address; purchases and payments stay with them. */
+function EditSupplierSheet({
+  supplier,
+  onClose,
+  onSaved,
+}: {
+  supplier: AccSupplierDetail;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: supplier.name,
+    phone: supplier.phone,
+    city: supplier.city || "",
+    address: supplier.address || "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (patch: Partial<typeof form>) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setError("");
+  };
+
+  async function save() {
+    if (busy) return;
+    if (form.name.trim().length < 2) return setError("Enter the supplier name");
+    if (!completePhone(form.phone)) return setError("Enter the supplier's 10-digit mobile number");
+    setBusy(true);
+    try {
+      await accApi.updateSupplier(supplier.id, { ...form, name: form.name.trim(), phone: completePhone(form.phone) });
+      toast("Supplier updated", { tone: "success" });
+      onSaved();
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={() => !busy && onClose()}
+      title="Edit supplier"
+      subtitle={supplier.name}
+      footer={
+        <button type="button" className="acc-btn is-primary is-big is-block" disabled={busy} onClick={() => void save()}>
+          {busy ? <Loader2 className="acc-spin" /> : <Check />} Save changes
+        </button>
+      }
+    >
+      <form
+        className="acc-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <div className="acc-form-grid">
+          <label className="acc-field">
+            <span>Supplier name *</span>
+            <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Business / dealer name" />
+          </label>
+          <label className="acc-field">
+            <span>Mobile *</span>
+            <input inputMode="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} maxLength={14} placeholder="10-digit mobile" />
+          </label>
+          <label className="acc-field">
+            <span>City / area</span>
+            <input value={form.city} onChange={(e) => set({ city: e.target.value })} placeholder="e.g. Delhi, Nagpur" />
+          </label>
+          <label className="acc-field">
+            <span>Address</span>
+            <input value={form.address} onChange={(e) => set({ address: e.target.value })} placeholder="Market, shop no." />
+          </label>
+        </div>
+        {error ? (
+          <p className="acc-hint is-red" role="alert">
+            <AlertCircle /> {error}
+          </p>
+        ) : null}
+        <button type="submit" hidden />
+      </form>
+    </Sheet>
   );
 }
 
