@@ -1264,28 +1264,23 @@ export function CreateBillPage() {
   }
 
   /**
-   * When the document & key charges change, the payment that balances the
-   * bill moves with them: finance with a finance bill (the down payment is
-   * what is left after the charges), otherwise the cash / online / card
-   * amount (the charges are paid on top). A due bill follows by itself.
+   * Document & key charges come out of the cash / online / card typed above
+   * (those amounts never change); what is left of it is the down payment.
+   * With finance, finance moves so it still covers the rest of the phone
+   * price. With a due, the due follows by itself (charges not covered by
+   * the money paid now are added on top of the due).
    */
   useEffect(() => {
     const previous = lastChargesRef.current;
     lastChargesRef.current = totals.charges;
     const delta = round2(totals.charges - previous);
-    if (!delta || hasDue) return;
-    if (useFinance) {
-      setFinanceEntries((prev) => {
-        const last = prev[prev.length - 1];
-        if (!last) return prev;
-        const amount = round2(Math.max((last.amount || 0) + delta, 0));
-        return [...prev.slice(0, -1), { ...last, amount }];
-      });
-      return;
-    }
-    if (useCash) setCashAmount((value) => round2(Math.max(value + delta, 0)));
-    else if (useOnline) setOnlineAmount((value) => round2(Math.max(value + delta, 0)));
-    else if (useCard) setCardAmount((value) => round2(Math.max(value + delta, 0)));
+    if (!delta || hasDue || !useFinance) return;
+    setFinanceEntries((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last) return prev;
+      const amount = round2(Math.max((last.amount || 0) + delta, 0));
+      return [...prev.slice(0, -1), { ...last, amount }];
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totals.charges]);
 
@@ -3180,17 +3175,24 @@ export function CreateBillPage() {
                         label="Document & key"
                         value={`+ ${formatINR(totals.charges)}`}
                       />
-                      <SummaryRow
-                        label={totals.finance > 0 ? "Down payment" : "Customer pays"}
-                        value={formatINR(
-                          totals.finance > 0 ? totals.downPayment : totals.toCollect,
-                        )}
-                        strong
-                      />
+                      {totals.upfront > 0 ? (
+                        <SummaryRow
+                          label={totals.finance > 0 ? "Down payment" : "Paid for the phone"}
+                          value={formatINR(totals.downPayment)}
+                          strong
+                        />
+                      ) : null}
                       {totals.finance > 0 ? (
                         <SummaryRow
                           label="Finance"
                           value={formatINR(totals.finance)}
+                          strong
+                        />
+                      ) : null}
+                      {totals.dueAmount > 0 ? (
+                        <SummaryRow
+                          label="Due"
+                          value={formatINR(totals.dueAmount)}
                           strong
                         />
                       ) : null}
@@ -3399,7 +3401,7 @@ export function CreateBillPage() {
                       upfront={totals.upfront}
                       downPayment={totals.downPayment}
                       finance={totals.finance}
-                      toCollect={totals.toCollect}
+                      due={totals.dueAmount}
                     />
                     {hasDue ? (
                       <PaymentToggle
@@ -4039,7 +4041,7 @@ function ChargesCard({
   upfront,
   downPayment,
   finance,
-  toCollect,
+  due,
 }: {
   on: boolean;
   onToggle: (on: boolean) => void;
@@ -4051,9 +4053,11 @@ function ChargesCard({
   upfront: number;
   downPayment: number;
   finance: number;
-  toCollect: number;
+  due: number;
 }) {
   const short = finance > 0 && upfront < charges;
+  /** Part of the charges not covered by the money paid now: added to the due. */
+  const chargesOnDue = round2(Math.max(charges - upfront, 0));
   const amountField = (
     id: string,
     label: string,
@@ -4148,12 +4152,18 @@ function ChargesCard({
                       <span className="font-semibold text-ink-800">Finance</span>
                       <span className="font-display text-sm font-bold tabular-nums text-ink-900">{formatINR(finance)}</span>
                     </div>
-                  ) : (
-                    <p className="mt-2 text-[11px] leading-snug text-ink-500">
-                      Added on top of the phone price — customer pays{" "}
-                      <span className="font-semibold text-ink-800">{formatINR(toCollect)}</span> in total.
+                  ) : null}
+                  {due > 0 ? (
+                    <div className="mt-1.5 flex items-center justify-between gap-2 text-amber-700 dark:text-amber-300">
+                      <span className="font-semibold">Due</span>
+                      <span className="font-display text-sm font-bold tabular-nums">{formatINR(due)}</span>
+                    </div>
+                  ) : null}
+                  {due > 0 && chargesOnDue > 0 ? (
+                    <p className="mt-1 text-[11px] leading-snug text-ink-500">
+                      Includes {formatINR(chargesOnDue)} document &amp; key, added on top of the due.
                     </p>
-                  )}
+                  ) : null}
                   {short ? (
                     <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium leading-snug text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
                       Collect at least {formatINR(charges)} in cash / online / card — finance doesn&apos;t pay these charges.

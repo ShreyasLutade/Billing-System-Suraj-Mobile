@@ -820,7 +820,7 @@ export function BillDetailPage() {
                         Out of cash / online / card
                       </p>
                       {rows
-                        .filter(([, value, strong]) => strong || value > 0)
+                        .filter(([, value, strong]) => (strong ? upfront > 0 : value > 0))
                         .map(([label, value, strong]) => (
                           <div key={label} className="flex items-center justify-between gap-3 py-0.5">
                             <span className={strong ? "font-semibold text-ink-800" : "text-ink-600"}>{label}</span>
