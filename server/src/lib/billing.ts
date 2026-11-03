@@ -139,6 +139,13 @@ export const createBillSchema = z
       .optional()
       .default([]),
     exchangeCashReturn: z.number().nonnegative().default(0),
+    /**
+     * Document and key charges: collected on top of the payable amount, out
+     * of the cash / online / card the customer pays. With finance, the rest
+     * of that payment is the down payment and finance covers the balance.
+     */
+    documentCharge: z.number().nonnegative().max(1_000_000).default(0),
+    keyCharge: z.number().nonnegative().max(1_000_000).default(0),
     dueDate: z.string().optional().nullable(),
     companyDiscount: z.number().nonnegative().default(0),
   })
@@ -338,12 +345,15 @@ export const createBillSchema = z
     const exchangeDeduction = money(exchangeDeductionAmount(data));
 
     const payableAmount = Decimal.max(grandTotal.minus(exchangeDeduction), 0);
+    const charges = data.withGst ? money(0) : extraChargesOf(data);
     const paid = cash.plus(online).plus(card).plus(finance);
 
-    if (paid.gt(payableAmount)) {
+    if (paid.gt(payableAmount.plus(charges))) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Paid amount cannot exceed payable amount",
+        message: charges.gt(0)
+          ? "Paid amount cannot exceed payable amount plus document & key charges"
+          : "Paid amount cannot exceed payable amount",
         path: ["cashAmount"],
       });
     }
@@ -351,7 +361,16 @@ export const createBillSchema = z
     // GST bills are submission-only — payments/dues are not recorded
     if (data.withGst) return;
 
-    const due = payableAmount.minus(paid);
+    // Finance never pays the charges: they come out of the down payment.
+    if (charges.gt(0) && finance.gt(0) && cash.plus(online).plus(card).lt(charges)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Collect the document & key charges (Rs. ${charges.toFixed(2)}) in cash, online or card`,
+        path: ["documentCharge"],
+      });
+    }
+
+    const due = payableAmount.plus(charges).minus(paid);
     if (due.gt(0) && !data.dueDate?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -400,7 +419,13 @@ export function computeBillTotals(input: CreateBillInput) {
       : money(0);
   const financeTotal = financeAmount1.plus(financeAmount2);
   const paid = cashAmount.plus(onlineAmount).plus(cardAmount).plus(financeTotal);
-  const dueAmount = Decimal.max(payableAmount.minus(paid), 0);
+  const documentCharge = input.withGst ? money(0) : money(input.documentCharge || 0);
+  const keyCharge = input.withGst ? money(0) : money(input.keyCharge || 0);
+  // Charges are collected on top of the payable amount.
+  const dueAmount = Decimal.max(
+    payableAmount.plus(documentCharge).plus(keyCharge).minus(paid),
+    0,
+  );
 
   return {
     items,
@@ -417,5 +442,12 @@ export function computeBillTotals(input: CreateBillInput) {
     /** Second company amount only — stored on Bill.financeAmount2 */
     financeAmount2: financeAmount2.toNumber(),
     dueAmount: dueAmount.toNumber(),
+    documentCharge: documentCharge.toNumber(),
+    keyCharge: keyCharge.toNumber(),
   };
+}
+
+/** Document + key charges on a bill input. */
+function extraChargesOf(data: { documentCharge?: number; keyCharge?: number }) {
+  return money(data.documentCharge || 0).plus(money(data.keyCharge || 0));
 }

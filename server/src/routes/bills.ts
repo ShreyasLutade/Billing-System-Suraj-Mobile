@@ -85,6 +85,8 @@ function totalsForPersist(
     financeAmount: 0,
     financeAmount2: 0,
     dueAmount: 0,
+    documentCharge: 0,
+    keyCharge: 0,
     items: totals.items.map((item) => ({
       ...item,
       stockItemId: null,
@@ -937,6 +939,8 @@ billsRouter.post("/", async (req, res, next) => {
           cardAmount: totals.cardAmount,
           financeAmount: totals.financeAmount,
           financeAmount2: totals.financeAmount2,
+          documentCharge: totals.documentCharge,
+          keyCharge: totals.keyCharge,
           // Use relation connect — avoids Prisma validation errors when the
           // generated client is briefly out of sync with scalar FK fields.
           ...(financeCompanyId
@@ -1209,6 +1213,8 @@ billsRouter.put("/:id", async (req, res, next) => {
           cardAmount: totals.cardAmount,
           financeAmount: totals.financeAmount,
           financeAmount2: totals.financeAmount2,
+          documentCharge: totals.documentCharge,
+          keyCharge: totals.keyCharge,
           ...(financeCompanyId
             ? {
                 financeCompany: { connect: { id: financeCompanyId } },

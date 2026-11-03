@@ -19,6 +19,10 @@ export type SaveBillSummary = {
   exchangeValue?: number | null;
   exchangeCashReturn?: number;
   companyDiscount?: number;
+  documentCharge?: number;
+  keyCharge?: number;
+  /** Cash / online / card left for the phone after the charges. */
+  downPayment?: number;
 };
 
 export function SaveBillConfirmModal({
@@ -122,6 +126,19 @@ export function SaveBillConfirmModal({
             ) : (
               <Row label="Collected" value="Nothing paid yet" />
             )}
+            {(summary.documentCharge || 0) + (summary.keyCharge || 0) > 0 ? (
+              <>
+                <Row
+                  label="Document & key"
+                  value={`${formatINR((summary.documentCharge || 0) + (summary.keyCharge || 0))} · Doc ${formatINR(
+                    summary.documentCharge || 0,
+                  )} + Key ${formatINR(summary.keyCharge || 0)}`}
+                />
+                {summary.financeAmount > 0 ? (
+                  <Row label="Down payment" value={formatINR(summary.downPayment || 0)} strong />
+                ) : null}
+              </>
+            ) : null}
             {summary.isExchange && summary.exchangeValue != null ? (
               <Row
                 label="Exchange value"

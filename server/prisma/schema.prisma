@@ -97,6 +97,10 @@ model Bill {
   /// JSON array of extra exchange phones [{ model, platform, color, storage, ram, imei1, value, notes? }]
   exchangeItemsJson  String?
   dueAmount          Float            @default(0)
+  /// Finance file / document charge collected with the down payment
+  documentCharge     Float            @default(0)
+  /// EMI lock key charge collected with the down payment
+  keyCharge          Float            @default(0)
   dueDate           DateTime?
   dueSettled        Boolean          @default(false)
   dueSettledMethod  String?

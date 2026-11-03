@@ -6,7 +6,9 @@ import clsx from "clsx";
 import {
   Check,
   Download,
+  FileText,
   Info,
+  KeyRound,
   ListOrdered,
   Loader2,
   Plus,
@@ -420,6 +422,12 @@ export function CreateBillPage() {
   const [onlineAmount, setOnlineAmount] = useState(0);
   const [cardAmount, setCardAmount] = useState(0);
   const [dueEntry, setDueEntry] = useState(0);
+  /** Document & key charges, collected on top of the payable out of cash / online / card. */
+  const [useCharges, setUseCharges] = useState(false);
+  const [documentCharge, setDocumentCharge] = useState(0);
+  const [keyCharge, setKeyCharge] = useState(0);
+  /** Charges the payments were last balanced for (see the charge sync effect). */
+  const lastChargesRef = useRef(0);
   const [financeEntries, setFinanceEntries] = useState<FinanceDraft[]>([
     blankFinanceEntry(),
   ]);
@@ -460,6 +468,7 @@ export function CreateBillPage() {
     financeLabel: string;
     dueAmount: number;
     dueDate: string | null;
+    charges: number;
   } | null>(null);
   const [sharing, setSharing] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -493,6 +502,7 @@ export function CreateBillPage() {
       dueDate: bill.dueDate
         ? bill.dueDate.slice(0, 10).split("-").reverse().join("/")
         : null,
+      charges: round2((bill.documentCharge || 0) + (bill.keyCharge || 0)),
     });
   }
 
@@ -535,6 +545,10 @@ export function CreateBillPage() {
     setOnlineAmount(0);
     setCardAmount(0);
     setDueEntry(0);
+    lastChargesRef.current = 0;
+    setUseCharges(false);
+    setDocumentCharge(0);
+    setKeyCharge(0);
     setFinanceEntries([blankFinanceEntry()]);
     setDueDate("");
     setSaving(false);
@@ -622,6 +636,13 @@ export function CreateBillPage() {
     setOnlineAmount(bill.onlineAmount);
     setCardAmount(bill.cardAmount || 0);
     setDueEntry(bill.dueAmount > 0 ? bill.dueAmount : 0);
+    // A saved bill's payments already include its charges: don't re-balance.
+    lastChargesRef.current = bill.withGst
+      ? 0
+      : round2((bill.documentCharge || 0) + (bill.keyCharge || 0));
+    setUseCharges((bill.documentCharge || 0) + (bill.keyCharge || 0) > 0);
+    setDocumentCharge(bill.documentCharge || 0);
+    setKeyCharge(bill.keyCharge || 0);
     {
       const secondAmount = bill.financeAmount2 || 0;
       const firstAmount = round2(Math.max(bill.financeAmount - secondAmount, 0));
@@ -677,8 +698,16 @@ export function CreateBillPage() {
     const cash = useCash ? cashAmount : 0;
     const online = useOnline ? onlineAmount : 0;
     const card = useCard ? cardAmount : 0;
+    // Document & key charges are paid on top of the payable amount.
+    const charges =
+      !withGst && useCharges
+        ? round2(Math.max(documentCharge || 0, 0) + Math.max(keyCharge || 0, 0))
+        : 0;
+    const toCollect = round2(payableAmount + charges);
+    const upfront = round2(cash + online + card);
+    const downPayment = round2(Math.max(upfront - charges, 0));
     const remainingAfterCashOnline = round2(
-      Math.max(payableAmount - cash - online - card, 0),
+      Math.max(toCollect - cash - online - card, 0),
     );
     const enteredDue = hasDue
       ? round2(Math.min(Math.max(dueEntry || 0, 0), remainingAfterCashOnline))
@@ -696,7 +725,7 @@ export function CreateBillPage() {
       ? dueFollowsRemaining || enteredDue <= 0
         ? remainingAfterCashOnline
         : enteredDue
-      : round2(Math.max(payableAmount - paid, 0));
+      : round2(Math.max(toCollect - paid, 0));
     const companyDiscountAmount =
       withGst || !useCompanyCashback || companyDiscount === ""
         ? 0
@@ -719,8 +748,15 @@ export function CreateBillPage() {
       online,
       card,
       finance,
+      charges,
+      toCollect,
+      upfront,
+      downPayment,
     };
   }, [
+    useCharges,
+    documentCharge,
+    keyCharge,
     items,
     isExchange,
     exchangeItems,
@@ -857,7 +893,7 @@ export function CreateBillPage() {
     if (!hasDue) return;
     const remaining = round2(
       Math.max(
-        totals.payableAmount -
+        totals.toCollect -
           (useCash ? cashAmount : 0) -
           (useOnline ? onlineAmount : 0) -
           (useCard ? cardAmount : 0),
@@ -873,7 +909,7 @@ export function CreateBillPage() {
     hasDue,
     dueFollowsRemaining,
     dueEntry,
-    totals.payableAmount,
+    totals.toCollect,
     useCash,
     cashAmount,
     useOnline,
@@ -1088,7 +1124,7 @@ export function CreateBillPage() {
       ? dueFollowsRemaining || dueEntry <= 0
         ? round2(
             Math.max(
-              totals.payableAmount -
+              totals.toCollect -
                 (useCash ? cashAmount : 0) -
                 (useOnline ? onlineAmount : 0) -
                 (useCard ? cardAmount : 0),
@@ -1099,7 +1135,7 @@ export function CreateBillPage() {
       : 0;
     return round2(
       Math.max(
-        totals.payableAmount -
+        totals.toCollect -
           (useCash ? cashAmount : 0) -
           (useOnline ? onlineAmount : 0) -
           (useCard ? cardAmount : 0) -
@@ -1141,7 +1177,7 @@ export function CreateBillPage() {
           : 0;
     return round2(
       Math.max(
-        totals.payableAmount - cash - online - card - dueSlice - finance,
+        totals.toCollect - cash - online - card - dueSlice - finance,
         0,
       ),
     );
@@ -1153,7 +1189,7 @@ export function CreateBillPage() {
     if (on) {
       const remaining = round2(
         Math.max(
-          totals.payableAmount -
+          totals.toCollect -
             (useCash ? cashAmount : 0) -
             (useOnline ? onlineAmount : 0) -
             (useCard ? cardAmount : 0),
@@ -1226,6 +1262,32 @@ export function CreateBillPage() {
       }
     }
   }
+
+  /**
+   * When the document & key charges change, the payment that balances the
+   * bill moves with them: finance with a finance bill (the down payment is
+   * what is left after the charges), otherwise the cash / online / card
+   * amount (the charges are paid on top). A due bill follows by itself.
+   */
+  useEffect(() => {
+    const previous = lastChargesRef.current;
+    lastChargesRef.current = totals.charges;
+    const delta = round2(totals.charges - previous);
+    if (!delta || hasDue) return;
+    if (useFinance) {
+      setFinanceEntries((prev) => {
+        const last = prev[prev.length - 1];
+        if (!last) return prev;
+        const amount = round2(Math.max((last.amount || 0) + delta, 0));
+        return [...prev.slice(0, -1), { ...last, amount }];
+      });
+      return;
+    }
+    if (useCash) setCashAmount((value) => round2(Math.max(value + delta, 0)));
+    else if (useOnline) setOnlineAmount((value) => round2(Math.max(value + delta, 0)));
+    else if (useCard) setCardAmount((value) => round2(Math.max(value + delta, 0)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totals.charges]);
 
   useEffect(() => {
     const imeis = items
@@ -1611,6 +1673,8 @@ export function CreateBillPage() {
         exchangeNotes: null,
         dueDate: null,
         companyDiscount: 0,
+        documentCharge: 0,
+        keyCharge: 0,
         items: items.map((item) => ({
           productName: item.productName,
           mobileCatalogId:
@@ -1754,6 +1818,8 @@ export function CreateBillPage() {
         : null,
       dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
       companyDiscount: totals.companyDiscountAmount,
+      documentCharge: totals.charges > 0 ? round2(Math.max(documentCharge || 0, 0)) : 0,
+      keyCharge: totals.charges > 0 ? round2(Math.max(keyCharge || 0, 0)) : 0,
       items: items.map((item) => ({
         productName: item.productName,
         mobileCatalogId:
@@ -1866,6 +1932,19 @@ export function CreateBillPage() {
       return;
     }
 
+    if (
+      !withGst &&
+      totals.charges > 0 &&
+      totals.finance > 0 &&
+      totals.upfront < totals.charges
+    ) {
+      setError(
+        `Document & key charges are ${formatINR(totals.charges)}. Collect at least this much in cash, online or card — finance does not pay them.`,
+      );
+      document.getElementById("documentCharge")?.focus();
+      return;
+    }
+
     if (!withGst && !hasDue && totals.dueAmount > 0) {
       setError(
         `Payment is short by ${formatINR(totals.dueAmount)}. Complete the payment split or turn on "This bill has due".`,
@@ -1951,6 +2030,9 @@ export function CreateBillPage() {
         exchangeValue: payload.exchangeValue,
         exchangeCashReturn: payload.exchangeCashReturn || 0,
         companyDiscount: totals.companyDiscountAmount,
+        documentCharge: payload.documentCharge || 0,
+        keyCharge: payload.keyCharge || 0,
+        downPayment: totals.downPayment,
       });
       setShowSaveConfirm(true);
       setSaving(false);
@@ -2147,6 +2229,14 @@ export function CreateBillPage() {
                     <dt className="text-ink-500">Card</dt>
                     <dd className="font-medium text-ink-800">
                       {formatINR(successPayment.cardAmount)}
+                    </dd>
+                  </div>
+                ) : null}
+                {successPayment.charges > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-500">Document &amp; key</dt>
+                    <dd className="font-medium text-violet-700 dark:text-violet-300">
+                      {formatINR(successPayment.charges)}
                     </dd>
                   </div>
                 ) : null}
@@ -3084,6 +3174,28 @@ export function CreateBillPage() {
                       strong
                     />
                   </div>
+                  {!withGst && totals.charges > 0 ? (
+                    <div className="space-y-2 rounded-xl bg-violet-50/70 px-3 py-2.5 dark:bg-violet-500/10">
+                      <SummaryRow
+                        label="Document & key"
+                        value={`+ ${formatINR(totals.charges)}`}
+                      />
+                      <SummaryRow
+                        label={totals.finance > 0 ? "Down payment" : "Customer pays"}
+                        value={formatINR(
+                          totals.finance > 0 ? totals.downPayment : totals.toCollect,
+                        )}
+                        strong
+                      />
+                      {totals.finance > 0 ? (
+                        <SummaryRow
+                          label="Finance"
+                          value={formatINR(totals.finance)}
+                          strong
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
                   {!withGst && totals.companyDiscountAmount > 0 ? (
                     <>
                       <SummaryRow
@@ -3270,6 +3382,25 @@ export function CreateBillPage() {
                       onChecked={(checked) => togglePayment("card", checked)}
                       onAmount={setCardAmount}
                     />
+                    <ChargesCard
+                      on={useCharges}
+                      onToggle={(on) => {
+                        setUseCharges(on);
+                        if (!on) {
+                          setDocumentCharge(0);
+                          setKeyCharge(0);
+                        }
+                      }}
+                      documentCharge={documentCharge}
+                      keyCharge={keyCharge}
+                      onDocumentCharge={setDocumentCharge}
+                      onKeyCharge={setKeyCharge}
+                      charges={totals.charges}
+                      upfront={totals.upfront}
+                      downPayment={totals.downPayment}
+                      finance={totals.finance}
+                      toCollect={totals.toCollect}
+                    />
                     {hasDue ? (
                       <PaymentToggle
                         label="Due"
@@ -3299,7 +3430,7 @@ export function CreateBillPage() {
                               onChange={(e) => {
                                 const maxDue = round2(
                                   Math.max(
-                                    totals.payableAmount -
+                                    totals.toCollect -
                                       (useCash ? cashAmount : 0) -
                                       (useOnline ? onlineAmount : 0) -
                                       (useCard ? cardAmount : 0),
@@ -3884,6 +4015,154 @@ function PaymentToggle({
                 </div>
               ) : null}
               {children}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Document & key charges: one switch, two amounts, and a live breakdown of
+ * what the money paid now is for (charges first, the rest is the down
+ * payment) and what finance covers.
+ */
+function ChargesCard({
+  on,
+  onToggle,
+  documentCharge,
+  keyCharge,
+  onDocumentCharge,
+  onKeyCharge,
+  charges,
+  upfront,
+  downPayment,
+  finance,
+  toCollect,
+}: {
+  on: boolean;
+  onToggle: (on: boolean) => void;
+  documentCharge: number;
+  keyCharge: number;
+  onDocumentCharge: (value: number) => void;
+  onKeyCharge: (value: number) => void;
+  charges: number;
+  upfront: number;
+  downPayment: number;
+  finance: number;
+  toCollect: number;
+}) {
+  const short = finance > 0 && upfront < charges;
+  const amountField = (
+    id: string,
+    label: string,
+    Icon: typeof FileText,
+    value: number,
+    onValue: (value: number) => void,
+  ) => (
+    <label htmlFor={id} className="block">
+      <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+        <Icon className="h-3.5 w-3.5 text-violet-500" aria-hidden />
+        {label}
+      </span>
+      <span className="relative block">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink-400">
+          ₹
+        </span>
+        <input
+          id={id}
+          className="field !pl-7 tabular-nums"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          value={value || ""}
+          onChange={(event) => onValue(Math.max(Number(event.target.value) || 0, 0))}
+          onFocus={(event) => event.target.select()}
+          placeholder="0"
+        />
+      </span>
+    </label>
+  );
+
+  return (
+    <div
+      className={clsx(
+        "overflow-hidden rounded-xl border transition",
+        on
+          ? "border-violet-300/80 bg-gradient-to-br from-violet-50 via-white to-white shadow-[0_10px_28px_-18px_rgba(124,58,237,0.55)] dark:border-violet-400/35 dark:from-violet-500/15 dark:via-transparent dark:to-transparent"
+          : "border-ink-100 bg-white dark:bg-surface-elevated",
+      )}
+      style={{ borderLeftWidth: 3, borderLeftColor: "#8b5cf6" }}
+    >
+      <label htmlFor="useCharges" className="flex cursor-pointer items-center gap-3 px-3 py-2.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
+          <FileText className="h-[18px] w-[18px]" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-semibold text-ink-800">Document &amp; key charges</span>
+          <span className="mt-0.5 block text-[11px] leading-snug text-ink-500">
+            Taken from the cash / online / card paid now
+          </span>
+        </span>
+        {on && charges > 0 ? (
+          <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white">
+            {formatINR(charges)}
+          </span>
+        ) : null}
+        <Switch id="useCharges" checked={on} aria-label="Document and key charges" onChange={onToggle} />
+      </label>
+
+      <AnimatePresence initial={false}>
+        {on ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-3 border-t border-violet-200/60 px-3 pb-3 pt-3 dark:border-violet-400/20">
+              <div className="grid grid-cols-2 gap-2.5">
+                {amountField("documentCharge", "Document", FileText, documentCharge, onDocumentCharge)}
+                {amountField("keyCharge", "Key", KeyRound, keyCharge, onKeyCharge)}
+              </div>
+
+              {charges > 0 ? (
+                <div className="rounded-xl border border-violet-200/70 bg-white/85 p-3 text-xs dark:border-violet-400/25 dark:bg-white/5">
+                  <div className="flex items-center justify-between gap-2 text-ink-600">
+                    <span>Paid now · cash / online / card</span>
+                    <span className="font-semibold tabular-nums text-ink-900">{formatINR(upfront)}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2 text-violet-700 dark:text-violet-300">
+                    <span>Document &amp; key</span>
+                    <span className="font-semibold tabular-nums">− {formatINR(Math.min(charges, upfront))}</span>
+                  </div>
+                  <div className="my-2 h-px bg-ink-100" />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-ink-800">{finance > 0 ? "Down payment" : "For the phone"}</span>
+                    <span className="font-display text-sm font-bold tabular-nums text-ink-900">{formatINR(downPayment)}</span>
+                  </div>
+                  {finance > 0 ? (
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span className="font-semibold text-ink-800">Finance</span>
+                      <span className="font-display text-sm font-bold tabular-nums text-ink-900">{formatINR(finance)}</span>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] leading-snug text-ink-500">
+                      Added on top of the phone price — customer pays{" "}
+                      <span className="font-semibold text-ink-800">{formatINR(toCollect)}</span> in total.
+                    </p>
+                  )}
+                  {short ? (
+                    <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium leading-snug text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                      Collect at least {formatINR(charges)} in cash / online / card — finance doesn&apos;t pay these charges.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-[11px] text-ink-500">Type the document charge and key amount.</p>
+              )}
             </div>
           </motion.div>
         ) : null}

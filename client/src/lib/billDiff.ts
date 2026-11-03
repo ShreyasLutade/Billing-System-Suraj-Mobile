@@ -48,6 +48,8 @@ export type BillSnapshot = {
   dueAmount: number;
   payableAmount: number;
   companyDiscount: number;
+  documentCharge: number;
+  keyCharge: number;
   grandTotal: number;
   items: Array<{
     productName: string;
@@ -178,6 +180,8 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     dueAmount: bill.dueAmount,
     payableAmount: bill.payableAmount ?? bill.grandTotal,
     companyDiscount: bill.companyDiscount || 0,
+    documentCharge: bill.documentCharge || 0,
+    keyCharge: bill.keyCharge || 0,
     grandTotal: bill.grandTotal,
     items: bill.items.map((item) => ({
       productName: item.productName,
@@ -241,6 +245,8 @@ export function payloadToSnapshot(
     dueAmount: totals.dueAmount,
     payableAmount: totals.payableAmount,
     companyDiscount: payload.companyDiscount || 0,
+    documentCharge: payload.documentCharge || 0,
+    keyCharge: payload.keyCharge || 0,
     grandTotal: totals.grandTotal,
     items: payload.items.map((item, index) => ({
       productName: item.productName,
@@ -293,6 +299,8 @@ export function diffBillSnapshots(
     money(before.companyDiscount),
     money(after.companyDiscount),
   );
+  pushChange(lines, "Document charge", money(before.documentCharge), money(after.documentCharge));
+  pushChange(lines, "Key", money(before.keyCharge), money(after.keyCharge));
 
   pushChange(lines, "Cash", money(before.cashAmount), money(after.cashAmount));
   pushChange(lines, "Online", money(before.onlineAmount), money(after.onlineAmount));

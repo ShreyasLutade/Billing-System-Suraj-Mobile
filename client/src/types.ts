@@ -145,6 +145,9 @@ export type Bill = {
   /** Products on this bill sent back to the supplier (replaced / returned). */
   productReturns?: BillProductReturn[];
   dueAmount: number;
+  /** Document & key charges paid on top of the payable (not part of the sale). */
+  documentCharge?: number;
+  keyCharge?: number;
   dueDate?: string | null;
   dueSettled: boolean;
   dueSettledMethod?: string | null;
@@ -599,6 +602,10 @@ export type CreateBillPayload = {
   exchangeCashReturn?: number;
   dueDate?: string | null;
   companyDiscount?: number;
+  /** Finance document charge, paid on top of the payable out of cash / online / card. */
+  documentCharge?: number;
+  /** EMI lock key charge, paid the same way. */
+  keyCharge?: number;
 };
 
 export type AuthUser = {

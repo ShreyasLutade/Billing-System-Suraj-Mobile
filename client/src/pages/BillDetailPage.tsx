@@ -805,6 +805,34 @@ export function BillDetailPage() {
                 value={formatINR(bill.cardAmount || 0)}
                 zero={!((bill.cardAmount || 0) > 0)}
               />
+              {(bill.documentCharge || 0) + (bill.keyCharge || 0) > 0 ? (
+                (() => {
+                  const charges = round2((bill.documentCharge || 0) + (bill.keyCharge || 0));
+                  const upfront = round2(bill.cashAmount + bill.onlineAmount + (bill.cardAmount || 0));
+                  const rows: Array<[string, number, boolean?]> = [
+                    ["Document charge", bill.documentCharge || 0],
+                    ["Key", bill.keyCharge || 0],
+                    [bill.financeAmount > 0 ? "Down payment" : "For the phone", round2(Math.max(upfront - charges, 0)), true],
+                  ];
+                  return (
+                    <div className="my-2 rounded-xl border border-violet-200/70 bg-violet-50/70 px-3 py-2 text-[12.5px] dark:border-violet-400/25 dark:bg-violet-500/10">
+                      <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                        Out of cash / online / card
+                      </p>
+                      {rows
+                        .filter(([, value, strong]) => strong || value > 0)
+                        .map(([label, value, strong]) => (
+                          <div key={label} className="flex items-center justify-between gap-3 py-0.5">
+                            <span className={strong ? "font-semibold text-ink-800" : "text-ink-600"}>{label}</span>
+                            <span className={clsx("tabular-nums", strong ? "font-bold text-ink-900" : "font-medium text-ink-700")}>
+                              {formatINR(value)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  );
+                })()
+              ) : null}
               {bill.financeAmount2 && bill.financeAmount2 > 0 ? (
                 <>
                   <PayLine
