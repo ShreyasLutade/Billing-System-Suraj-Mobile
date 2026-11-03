@@ -635,7 +635,13 @@ export function CreateBillPage() {
     setCashAmount(bill.cashAmount);
     setOnlineAmount(bill.onlineAmount);
     setCardAmount(bill.cardAmount || 0);
-    setDueEntry(bill.dueAmount > 0 ? bill.dueAmount : 0);
+    {
+      // The Due box holds the phone part; unpaid charges sit on top of it.
+      const charges = bill.withGst ? 0 : (bill.documentCharge || 0) + (bill.keyCharge || 0);
+      const upfront = bill.cashAmount + bill.onlineAmount + (bill.cardAmount || 0);
+      const chargesOnDue = Math.max(charges - Math.min(upfront, charges), 0);
+      setDueEntry(bill.dueAmount > 0 ? round2(Math.max(bill.dueAmount - chargesOnDue, 0)) : 0);
+    }
     // A saved bill's payments already include its charges: don't re-balance.
     lastChargesRef.current = bill.withGst
       ? 0
@@ -705,12 +711,15 @@ export function CreateBillPage() {
         : 0;
     const toCollect = round2(payableAmount + charges);
     const upfront = round2(cash + online + card);
-    const downPayment = round2(Math.max(upfront - charges, 0));
-    const remainingAfterCashOnline = round2(
-      Math.max(toCollect - cash - online - card, 0),
-    );
+    // Money paid now pays the charges first; the rest is the down payment.
+    // Charges it doesn't cover are added on top of the due (never finance).
+    const chargesPaid = round2(Math.min(upfront, charges));
+    const chargesOnDue = round2(charges - chargesPaid);
+    const downPayment = round2(upfront - chargesPaid);
+    /** Phone price still open after the down payment: finance and / or due. */
+    const phoneRemaining = round2(Math.max(payableAmount - downPayment, 0));
     const enteredDue = hasDue
-      ? round2(Math.min(Math.max(dueEntry || 0, 0), remainingAfterCashOnline))
+      ? round2(Math.min(Math.max(dueEntry || 0, 0), phoneRemaining))
       : 0;
     const financeFromEntries = useFinance
       ? round2(financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0))
@@ -718,13 +727,17 @@ export function CreateBillPage() {
     const finance = hasDue
       ? dueFollowsRemaining || enteredDue <= 0
         ? 0
-        : round2(Math.max(remainingAfterCashOnline - enteredDue, 0))
+        : round2(Math.max(phoneRemaining - enteredDue, 0))
       : financeFromEntries;
     const paid = round2(cash + online + card + finance);
-    const dueAmount = hasDue
+    /** Due on the phone price only (what the Due box shows). */
+    const phoneDue = hasDue
       ? dueFollowsRemaining || enteredDue <= 0
-        ? remainingAfterCashOnline
+        ? phoneRemaining
         : enteredDue
+      : round2(Math.max(phoneRemaining - finance, 0));
+    const dueAmount = hasDue
+      ? round2(phoneDue + chargesOnDue)
       : round2(Math.max(toCollect - paid, 0));
     const companyDiscountAmount =
       withGst || !useCompanyCashback || companyDiscount === ""
@@ -752,6 +765,9 @@ export function CreateBillPage() {
       toCollect,
       upfront,
       downPayment,
+      chargesOnDue,
+      phoneRemaining,
+      phoneDue,
     };
   }, [
     useCharges,
@@ -891,15 +907,7 @@ export function CreateBillPage() {
 
   useEffect(() => {
     if (!hasDue) return;
-    const remaining = round2(
-      Math.max(
-        totals.toCollect -
-          (useCash ? cashAmount : 0) -
-          (useOnline ? onlineAmount : 0) -
-          (useCard ? cardAmount : 0),
-        0,
-      ),
-    );
+    const remaining = totals.phoneRemaining;
     if (dueFollowsRemaining) {
       if (dueEntry !== remaining) setDueEntry(remaining);
       return;
@@ -909,7 +917,7 @@ export function CreateBillPage() {
     hasDue,
     dueFollowsRemaining,
     dueEntry,
-    totals.toCollect,
+    totals.phoneRemaining,
     useCash,
     cashAmount,
     useOnline,
@@ -1119,31 +1127,14 @@ export function CreateBillPage() {
     }
   }
 
+  /** Phone price finance can still take (charges never go to finance). */
   function remainingAfterPayments(financeSoFar = 0) {
     const dueSlice = hasDue
       ? dueFollowsRemaining || dueEntry <= 0
-        ? round2(
-            Math.max(
-              totals.toCollect -
-                (useCash ? cashAmount : 0) -
-                (useOnline ? onlineAmount : 0) -
-                (useCard ? cardAmount : 0),
-              0,
-            ),
-          )
+        ? totals.phoneRemaining
         : dueEntry
       : 0;
-    return round2(
-      Math.max(
-        totals.toCollect -
-          (useCash ? cashAmount : 0) -
-          (useOnline ? onlineAmount : 0) -
-          (useCard ? cardAmount : 0) -
-          dueSlice -
-          financeSoFar,
-        0,
-      ),
-    );
+    return round2(Math.max(totals.phoneRemaining - dueSlice - financeSoFar, 0));
   }
 
   function addFinanceEntry() {
@@ -1175,6 +1166,12 @@ export function CreateBillPage() {
         : useFinance
           ? financeEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
           : 0;
+    if (mode === "finance") {
+      // Finance covers only the phone price left after the down payment.
+      const upfront = cash + online + card;
+      const down = Math.max(upfront - Math.min(upfront, totals.charges), 0);
+      return round2(Math.max(totals.payableAmount - down - dueSlice, 0));
+    }
     return round2(
       Math.max(
         totals.toCollect - cash - online - card - dueSlice - finance,
@@ -1187,16 +1184,7 @@ export function CreateBillPage() {
     setHasDue(on);
     setDueFollowsRemaining(true);
     if (on) {
-      const remaining = round2(
-        Math.max(
-          totals.toCollect -
-            (useCash ? cashAmount : 0) -
-            (useOnline ? onlineAmount : 0) -
-            (useCard ? cardAmount : 0),
-          0,
-        ),
-      );
-      setDueEntry(remaining);
+      setDueEntry(totals.phoneRemaining);
       setUseFinance(false);
       resetFinanceEntries();
     } else {
@@ -1273,12 +1261,13 @@ export function CreateBillPage() {
   useEffect(() => {
     const previous = lastChargesRef.current;
     lastChargesRef.current = totals.charges;
-    const delta = round2(totals.charges - previous);
-    if (!delta || hasDue || !useFinance) return;
+    if (round2(totals.charges - previous) === 0 || hasDue || !useFinance) return;
+    // Finance takes the phone price left after the down payment.
     setFinanceEntries((prev) => {
       const last = prev[prev.length - 1];
       if (!last) return prev;
-      const amount = round2(Math.max((last.amount || 0) + delta, 0));
+      const others = prev.slice(0, -1).reduce((sum, entry) => sum + (entry.amount || 0), 0);
+      const amount = round2(Math.max(totals.phoneRemaining - others, 0));
       return [...prev.slice(0, -1), { ...last, amount }];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1924,19 +1913,6 @@ export function CreateBillPage() {
     ) {
       setError("Enter the fixed return amount to the customer, or turn the toggle off.");
       document.getElementById("fixedReturnAmount")?.focus();
-      return;
-    }
-
-    if (
-      !withGst &&
-      totals.charges > 0 &&
-      totals.finance > 0 &&
-      totals.upfront < totals.charges
-    ) {
-      setError(
-        `Document & key charges are ${formatINR(totals.charges)}. Collect at least this much in cash, online or card — finance does not pay them.`,
-      );
-      document.getElementById("documentCharge")?.focus();
       return;
     }
 
@@ -3190,11 +3166,19 @@ export function CreateBillPage() {
                         />
                       ) : null}
                       {totals.dueAmount > 0 ? (
-                        <SummaryRow
-                          label="Due"
-                          value={formatINR(totals.dueAmount)}
-                          strong
-                        />
+                        <>
+                          <SummaryRow
+                            label="Due"
+                            value={formatINR(totals.dueAmount)}
+                            strong
+                          />
+                          {totals.chargesOnDue > 0 && totals.dueAmount > totals.chargesOnDue ? (
+                            <p className="text-right text-[11px] text-ink-500">
+                              Phone {formatINR(round2(totals.dueAmount - totals.chargesOnDue))} + document &amp; key{" "}
+                              {formatINR(totals.chargesOnDue)}
+                            </p>
+                          ) : null}
+                        </>
                       ) : null}
                     </div>
                   ) : null}
@@ -3402,6 +3386,7 @@ export function CreateBillPage() {
                       downPayment={totals.downPayment}
                       finance={totals.finance}
                       due={totals.dueAmount}
+                      chargesOnDue={totals.chargesOnDue}
                     />
                     {hasDue ? (
                       <PaymentToggle
@@ -3426,19 +3411,11 @@ export function CreateBillPage() {
                               step="0.01"
                               value={
                                 (dueFollowsRemaining
-                                  ? totals.dueAmount
+                                  ? totals.phoneDue
                                   : dueEntry) || ""
                               }
                               onChange={(e) => {
-                                const maxDue = round2(
-                                  Math.max(
-                                    totals.toCollect -
-                                      (useCash ? cashAmount : 0) -
-                                      (useOnline ? onlineAmount : 0) -
-                                      (useCard ? cardAmount : 0),
-                                    0,
-                                  ),
-                                );
+                                const maxDue = totals.phoneRemaining;
                                 const next = round2(
                                   Math.min(
                                     Math.max(Number(e.target.value) || 0, 0),
@@ -3451,6 +3428,12 @@ export function CreateBillPage() {
                               placeholder="Amount pending from customer"
                               required
                             />
+                            {totals.chargesOnDue > 0 ? (
+                              <p className="mt-1.5 text-[11.5px] font-medium text-violet-700 dark:text-violet-300">
+                                + {formatINR(totals.chargesOnDue)} document &amp; key · total due{" "}
+                                <span className="font-bold">{formatINR(totals.dueAmount)}</span>
+                              </p>
+                            ) : null}
                           </div>
                           <div>
                             <label className="label required" htmlFor="dueDate">
@@ -4042,6 +4025,7 @@ function ChargesCard({
   downPayment,
   finance,
   due,
+  chargesOnDue,
 }: {
   on: boolean;
   onToggle: (on: boolean) => void;
@@ -4054,10 +4038,9 @@ function ChargesCard({
   downPayment: number;
   finance: number;
   due: number;
-}) {
-  const short = finance > 0 && upfront < charges;
   /** Part of the charges not covered by the money paid now: added to the due. */
-  const chargesOnDue = round2(Math.max(charges - upfront, 0));
+  chargesOnDue: number;
+}) {
   const amountField = (
     id: string,
     label: string,
@@ -4159,14 +4142,11 @@ function ChargesCard({
                       <span className="font-display text-sm font-bold tabular-nums">{formatINR(due)}</span>
                     </div>
                   ) : null}
-                  {due > 0 && chargesOnDue > 0 ? (
+                  {chargesOnDue > 0 ? (
                     <p className="mt-1 text-[11px] leading-snug text-ink-500">
-                      Includes {formatINR(chargesOnDue)} document &amp; key, added on top of the due.
-                    </p>
-                  ) : null}
-                  {short ? (
-                    <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium leading-snug text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-                      Collect at least {formatINR(charges)} in cash / online / card — finance doesn&apos;t pay these charges.
+                      {due > 0
+                        ? `Includes ${formatINR(chargesOnDue)} document & key, added on top of the due.`
+                        : `${formatINR(chargesOnDue)} document & key is not paid yet — turn on "This bill has due" to add it to the due.`}
                     </p>
                   ) : null}
                 </div>

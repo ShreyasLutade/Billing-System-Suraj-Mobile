@@ -361,13 +361,20 @@ export const createBillSchema = z
     // GST bills are submission-only — payments/dues are not recorded
     if (data.withGst) return;
 
-    // Finance never pays the charges: they come out of the down payment.
-    if (charges.gt(0) && finance.gt(0) && cash.plus(online).plus(card).lt(charges)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Collect the document & key charges (Rs. ${charges.toFixed(2)}) in cash, online or card`,
-        path: ["documentCharge"],
-      });
+    // Money paid now covers the charges first (the rest is the down
+    // payment); charges it doesn't cover go on the due. Finance only ever
+    // pays the phone price left after the down payment.
+    if (charges.gt(0)) {
+      const upfront = cash.plus(online).plus(card);
+      const downPayment = Decimal.max(upfront.minus(charges), 0);
+      const financeRoom = Decimal.max(payableAmount.minus(downPayment), 0);
+      if (finance.gt(financeRoom)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Finance can be at most Rs. ${financeRoom.toFixed(2)}: document & key charges are paid in cash, online or card, or added to the due`,
+          path: ["financeAmount"],
+        });
+      }
     }
 
     const due = payableAmount.plus(charges).minus(paid);
