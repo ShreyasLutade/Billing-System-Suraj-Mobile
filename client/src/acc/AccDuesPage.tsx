@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import {
   FileDown,
+  CalendarDays,
   FilePlus2,
   Loader2,
   MapPin,
@@ -35,6 +36,54 @@ import { Empty, PdfButton, Segmented, Sheet, errorText, inr, plural, shortDate, 
 /** WhatsApp reminder text, same on the list and the customer page. */
 function dueReminder(c: { name: string; balance: number }) {
   return `Namaste ${c.name} ji,\nAapka Babu Mobile Accessories me ₹${c.balance.toLocaleString("en-IN")} baaki hai.\nKripya jaldi bhugtan karein. Dhanyavaad!`;
+}
+
+/** New promised date for all of a customer's unpaid bills. */
+function DueDateSheet({ customer, onClose, onSaved }: { customer: AccCustomerRow; onClose: () => void; onSaved: () => void }) {
+  const current = customer.oldestOpen?.dueDate ? new Date(customer.oldestOpen.dueDate).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : "";
+  const [date, setDate] = useState(current || todayInput(7));
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (!date || busy) return;
+    setBusy(true);
+    try {
+      const { data } = await accApi.setDueDate(customer.id, date);
+      toast(`Due date set to ${shortDate(date)} · ${plural(data.bills, "bill")}`);
+      onSaved();
+    } catch (err) {
+      toast(errorText(err), { tone: "error" });
+      setBusy(false);
+    }
+  }
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Change due date"
+      subtitle={`${customer.shopName || customer.name} · ${inr(customer.balance)} due`}
+      footer={
+        <button type="button" className="acc-btn is-primary is-big is-block" disabled={busy || !date} onClick={() => void save()}>
+          {busy ? <Loader2 className="acc-spin" /> : <CalendarDays />} Save · {date ? shortDate(date) : "pick a date"}
+        </button>
+      }
+    >
+      <p className="acc-hint">
+        Now: <b>{current ? shortDate(current) : "no date set"}</b>. The new date applies to all unpaid bills.
+      </p>
+      <div className="acc-due-quick">
+        {[7, 15, 30].map((d) => (
+          <button key={d} type="button" className={clsx(date === todayInput(d) && "is-on")} onClick={() => setDate(todayInput(d))}>
+            +{d} days
+            <small>{shortDate(todayInput(d))}</small>
+          </button>
+        ))}
+      </div>
+      <label className="acc-field">
+        <span>Or pick a date</span>
+        <input type="date" value={date} min={todayInput()} onChange={(e) => setDate(e.target.value)} />
+      </label>
+    </Sheet>
+  );
 }
 
 /** One chip that says where this customer stands: overdue, promised or how old. */
@@ -74,6 +123,7 @@ export function AccDuesPage() {
   const [q, setQ] = useState("");
   const [data, setData] = useState<AccDues | null>(null);
   const [paying, setPaying] = useState<AccCustomerRow | null>(null);
+  const [dating, setDating] = useState<AccCustomerRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const navigate = useNavigate();
@@ -186,7 +236,14 @@ export function AccDuesPage() {
                   </span>
                 </button>
                 <div className="acc-due-status">
-                  <DueStatus c={c} />
+                  {c.balance > 0 ? (
+                    <button type="button" className="acc-due-chip-btn" onClick={() => setDating(c)} title="Change due date">
+                      <DueStatus c={c} />
+                      <CalendarDays aria-hidden />
+                    </button>
+                  ) : (
+                    <DueStatus c={c} />
+                  )}
                   {c.group ? (
                     <span className="acc-due-group" style={{ ["--g" as string]: c.group.color }}>
                       <i className="acc-dot" /> {c.group.name}
@@ -234,6 +291,17 @@ export function AccDuesPage() {
           void load();
         }}
       />
+
+      {dating ? (
+        <DueDateSheet
+          customer={dating}
+          onClose={() => setDating(null)}
+          onSaved={() => {
+            setDating(null);
+            void load();
+          }}
+        />
+      ) : null}
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="New customer">
         <CustomerForm

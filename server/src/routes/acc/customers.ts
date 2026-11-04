@@ -326,6 +326,30 @@ const paymentSchema = z.object({
   note: z.string().trim().max(200).default(""),
 });
 
+/** Move the promised date of all of a customer's unpaid bills. */
+accCustomersRouter.post("/customers/:id/due-date", async (req, res, next) => {
+  try {
+    const dueDate = String(req.body?.dueDate || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      res.status(400).json({ error: "Choose the new due date" });
+      return;
+    }
+    const bal = (await customerBalances([req.params.id])).get(req.params.id);
+    const ids = bal?.openBills.map((b) => b.saleId) || [];
+    if (!ids.length) {
+      res.status(400).json({ error: "This customer has no unpaid bills" });
+      return;
+    }
+    await prisma.accSale.updateMany({
+      where: { id: { in: ids } },
+      data: { dueDate: new Date(`${dueDate}T18:00:00+05:30`) },
+    });
+    res.json({ data: { bills: ids.length } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 accCustomersRouter.post("/customers/:id/payments", async (req, res, next) => {
   try {
     const parsed = paymentSchema.safeParse(req.body);

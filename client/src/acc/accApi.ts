@@ -392,6 +392,9 @@ export const accApi = {
   createSale: (body: SaleInput) => post<AccSale>("/acc/sales", body),
   listSales: (q: PeriodQuery & { kind?: AccSaleKind | ""; q?: string; scope?: AccSaleSearchScope; customerId?: string; void?: boolean }) =>
     apiRequest<{ data: { sales: AccSale[]; summary: AccSalesSummary; label: string } }>(`/acc/sales${qs(q)}`),
+  /** New promised date (yyyy-mm-dd) for all of a customer's unpaid bills. */
+  setDueDate: (customerId: string, dueDate: string) =>
+    post<{ bills: number }>(`/acc/customers/${customerId}/due-date`, { dueDate }),
   getSale: (id: string) => apiRequest<{ data: AccSale }>(`/acc/sales/${id}`),
   /** Same body as a new bill; the bill keeps its number and date. */
   updateSale: (id: string, body: Omit<SaleInput, "clientRef">) => put<AccSale>(`/acc/sales/${id}`, body),

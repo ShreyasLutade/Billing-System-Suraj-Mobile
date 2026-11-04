@@ -10143,3 +10143,49 @@ html.dark .acc-sell-pay button.is-on {
   border-color: color-mix(in srgb, var(--a-red) 35%, var(--a-line));
   background: color-mix(in srgb, var(--a-red) 7%, var(--a-card));
 }
+
+/* Dues card: tap the date chip to change the due date */
+.acc .acc-due-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.acc .acc-due-chip-btn > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--a-muted);
+}
+
+.acc-due-quick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.acc .acc-due-quick button {
+  display: grid;
+  gap: 2px;
+  padding: 10px 6px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.acc .acc-due-quick button small {
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acc .acc-due-quick button.is-on {
+  border-color: var(--a-accent);
+  background: color-mix(in srgb, var(--a-accent) 10%, var(--a-card));
+}
