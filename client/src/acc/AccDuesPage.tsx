@@ -69,7 +69,7 @@ type Sort = "balance" | "oldest" | "name" | "recent";
 
 export function AccDuesPage() {
   const [groupId, setGroupId] = useState("");
-  const [status, setStatus] = useState<Status>("due");
+  const [status, setStatus] = useState<Status>("all");
   const [sort, setSort] = useState<Sort>("balance");
   const [q, setQ] = useState("");
   const [data, setData] = useState<AccDues | null>(null);
@@ -141,9 +141,9 @@ export function AccDuesPage() {
           value={status}
           onChange={setStatus}
           options={[
+            { value: "all", label: "All" },
             { value: "due", label: "Due" },
             { value: "overdue", label: "Overdue" },
-            { value: "all", label: "All" },
           ]}
         />
         <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort">
@@ -160,7 +160,8 @@ export function AccDuesPage() {
         </div>
       ) : data.customers.length ? (
         <ul className="acc-due-list">
-          {data.customers.map((c) => {
+          {/* Overdue customers first, then the rest (sort order kept within each). */}
+          {[...data.customers].sort((a, b) => Number(b.overdue > 0) - Number(a.overdue > 0)).map((c) => {
             const limitPct = c.creditLimit > 0 ? Math.round((Math.max(c.balance, 0) / c.creditLimit) * 100) : 0;
             return (
               <li key={c.id} className={clsx("acc-due-card", c.overdue > 0 && "is-overdue")}>

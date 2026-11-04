@@ -10137,3 +10137,9 @@ html.dark .acc-sell-pay button.is-on {
   border-color: var(--a-red);
   background: color-mix(in srgb, var(--a-red) 8%, var(--a-card));
 }
+
+/* Overdue customer: red card, like the mobile shop's dues */
+.acc .acc-due-card.is-overdue {
+  border-color: color-mix(in srgb, var(--a-red) 35%, var(--a-line));
+  background: color-mix(in srgb, var(--a-red) 7%, var(--a-card));
+}
