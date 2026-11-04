@@ -103,7 +103,7 @@ function DueStatus({ c }: { c: AccCustomerRow }) {
     const days = Math.ceil((new Date(open.dueDate).getTime() - Date.now()) / 86400000);
     return (
       <span className={clsx("acc-due-chip", days <= 1 ? "is-amber" : "is-blue")}>
-        {days <= 0 ? "Promised today" : days === 1 ? "Promised tomorrow" : `Promised ${shortDate(open.dueDate)}`}
+        {days <= 0 ? "Due today" : days === 1 ? "Due tomorrow" : `Due on ${shortDate(open.dueDate)}`}
       </span>
     );
   }

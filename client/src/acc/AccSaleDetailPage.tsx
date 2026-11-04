@@ -313,7 +313,7 @@ export function AccSaleDetailPage() {
           {sale.dueDate && sale.dueAmount > 0 ? (
             <li className={clsx(open && open.daysOverdue > 0 && "is-late")}>
               <span>
-                <CalendarDays /> Promised by
+                <CalendarDays /> Due on
               </span>
               <b>
                 {shortDate(sale.dueDate)}

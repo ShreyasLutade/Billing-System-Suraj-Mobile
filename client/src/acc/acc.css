@@ -10189,3 +10189,25 @@ html.dark .acc-sell-pay button.is-on {
   border-color: var(--a-accent);
   background: color-mix(in srgb, var(--a-accent) 10%, var(--a-card));
 }
+
+/* Dues card: status chip and group stay on one line; the group name shortens */
+.acc .acc-due-status {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.acc .acc-due-status > * {
+  flex: none;
+}
+
+.acc .acc-due-status > .acc-due-group {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc .acc-due-status .acc-due-chip {
+  white-space: nowrap;
+}
