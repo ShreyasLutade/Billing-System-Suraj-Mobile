@@ -166,11 +166,12 @@ export function AccDuesPage() {
               <li key={c.id} className={clsx("acc-due-card", c.overdue > 0 && "is-overdue")}>
                 <button type="button" className="acc-due-main" onClick={() => navigate(`/acc/dues/${c.id}`)}>
                   <span className="acc-avatar" style={{ ["--g" as string]: c.group?.color || "#94a3b8" }}>
-                    {c.name.slice(0, 1).toUpperCase()}
+                    {(c.shopName || c.name).slice(0, 1).toUpperCase()}
                   </span>
-                  <span className="acc-row-text">
-                    <strong>{c.name}</strong>
-                    <small>{[c.shopName, c.city].filter(Boolean).join(" · ") || c.phone}</small>
+                  {/* Shop name big and bold; the person's name small under it. */}
+                  <span className="acc-row-text acc-due-who">
+                    <strong>{c.shopName || c.name}</strong>
+                    <small>{[c.shopName ? c.name : "", c.city].filter(Boolean).join(" · ") || c.phone}</small>
                   </span>
                   <span className="acc-row-amt">
                     <b className={clsx(c.balance > 0 ? "is-red" : c.balance < 0 && "is-green")}>

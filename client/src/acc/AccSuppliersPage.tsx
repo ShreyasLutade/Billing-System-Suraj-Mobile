@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, ChevronDown, FileDown, Info, Loader2, Plus, Search, Share2, Trash2, Wallet } from "lucide-react";
+import { Archive, Check, ChevronDown, FileDown, Info, Loader2, Plus, Search, Share2, Trash2, Wallet } from "lucide-react";
 import { BackLink, SearchClearButton } from "../components/ui";
 import { PaySupplierModal } from "../components/PaySupplierModal";
 import {
@@ -530,6 +530,8 @@ export function AccStockInPage() {
   const [paid, setPaid] = useState("");
   const [method, setMethod] = useState<"CASH" | "UPI">("CASH");
   const [busy, setBusy] = useState(false);
+  /** Old stock already in the shop: no supplier and nothing to pay. */
+  const [oldStock, setOldStock] = useState(false);
 
   useEffect(() => {
     accApi
@@ -591,8 +593,13 @@ export function AccStockInPage() {
 
   async function save() {
     if (busy) return;
-    const problem =
-      supplierMode === "NEW" ? supplierProblem(newSupplier, suppliers) : supplierId ? "" : "Choose the supplier this stock came from";
+    const problem = oldStock
+      ? ""
+      : supplierMode === "NEW"
+        ? supplierProblem(newSupplier, suppliers)
+        : supplierId
+          ? ""
+          : "Choose the supplier this stock came from";
     if (problem) {
       const selector =
         supplierMode === "NEW"
@@ -640,17 +647,21 @@ export function AccStockInPage() {
       toast("The same existing product is entered more than once", { tone: "error" });
       return;
     }
-    if ((Number(paid) || 0) > total) {
+    if (!oldStock && (Number(paid) || 0) > total) {
       toast("Paid amount cannot be more than the purchase total", { tone: "error" });
       return;
     }
     setBusy(true);
     try {
       await accApi.createPurchase({
-        ...(supplierMode === "NEW"
-          ? { supplier: { ...newSupplier, name: newSupplier.name.trim() } }
-          : { supplierId }),
-        paidNow,
+        ...(oldStock
+          ? { opening: true, paidNow: 0 }
+          : {
+              ...(supplierMode === "NEW"
+                ? { supplier: { ...newSupplier, name: newSupplier.name.trim() } }
+                : { supplierId }),
+              paidNow,
+            }),
         paidMethod: method,
         items: linesForSave.map(({ line: l }) => ({
           ...(l.product
@@ -669,7 +680,7 @@ export function AccStockInPage() {
           ...(l.product && Number(l.wholesale) > 0 ? { wholesalePrice: Number(l.wholesale) } : {}),
         })),
       });
-      toast(`Stock added: ${plural(pieces, "piece")}`);
+      toast(`${oldStock ? "Old stock added" : "Stock added"}: ${plural(pieces, "piece")}`);
       void refreshCatalog();
       navigate("/acc/stock");
     } catch (err) {
@@ -685,10 +696,14 @@ export function AccStockInPage() {
       <div className="acc-stock-header">
         <div>
           <h1 className="acc-h1">Add stock</h1>
-          <p>Choose a supplier, add products, and record the payment.</p>
+          <p>
+            {oldStock
+              ? "Old stock already in your shop: add products, no supplier or payment."
+              : "Choose a supplier, add products, and record the payment."}
+          </p>
         </div>
         <div className="acc-stock-header-total">
-          <span>Purchase total</span>
+          <span>{oldStock ? "Stock value" : "Purchase total"}</span>
           <b>{inr(total)}</b>
           <small>{plural(pieces, "piece")}</small>
         </div>
@@ -696,28 +711,58 @@ export function AccStockInPage() {
 
       <div className="acc-stock-workspace">
         <div className="acc-stock-main">
-          <section className="acc-card acc-stock-step">
-            <StepTitle n={1} done={hasSupplier} title="Supplier" hint="Who did this stock come from?" />
-            <SupplierChooser
-              suppliers={suppliers}
-              mode={supplierMode}
-              onMode={setSupplierMode}
-              supplierId={supplierId}
-              onPick={setSupplierId}
-              draft={newSupplier}
-              onDraft={setNewSupplier}
-            />
-          </section>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={oldStock}
+            className={clsx("acc-card acc-old-stock", oldStock && "is-on")}
+            onClick={() => setOldStock((on) => !on)}
+          >
+            <span className="acc-old-stock-icon" aria-hidden>
+              <Archive />
+            </span>
+            <span className="acc-old-stock-text">
+              <strong>Old stock (no supplier)</strong>
+              <small>
+                {oldStock
+                  ? "Saved as opening stock: no supplier, nothing to pay"
+                  : "Turn on for stock already in your shop"}
+              </small>
+            </span>
+            <span className={clsx("acc-toggle", oldStock && "is-on")} aria-hidden>
+              <i />
+            </span>
+          </button>
+
+          {!oldStock ? (
+            <section className="acc-card acc-stock-step">
+              <StepTitle n={1} done={hasSupplier} title="Supplier" hint="Who did this stock come from?" />
+              <SupplierChooser
+                suppliers={suppliers}
+                mode={supplierMode}
+                onMode={setSupplierMode}
+                supplierId={supplierId}
+                onPick={setSupplierId}
+                draft={newSupplier}
+                onDraft={setNewSupplier}
+              />
+            </section>
+          ) : null}
 
           <section className="acc-card acc-stock-step">
-            <StepTitle n={2} done={enteredLines.length > 0} title="Products" hint="Enter stock quickly, one row at a time" />
+            <StepTitle n={oldStock ? 1 : 2} done={enteredLines.length > 0} title="Products" hint="Enter stock quickly, one row at a time" />
             <BulkStockSheet products={products} categories={categories} lines={lines} onLines={setLines} />
           </section>
         </div>
 
         <aside className="acc-stock-payment">
           <section className="acc-card acc-pay-card">
-            <StepTitle n={3} done={total > 0} title="Payment" hint="Record what you paid the supplier" />
+            <StepTitle
+              n={oldStock ? 2 : 3}
+              done={total > 0}
+              title={oldStock ? "Summary" : "Payment"}
+              hint={oldStock ? "Old stock: nothing to pay" : "Record what you paid the supplier"}
+            />
             <div className="acc-stock-summary">
               <span>
                 <small>Items</small>
@@ -732,6 +777,7 @@ export function AccStockInPage() {
                 <b>{inr(total)}</b>
               </span>
             </div>
+            {!oldStock ? (
             <div className="acc-payment-options is-stock">
               <StockPaymentOption
                 label="Pay later"
@@ -761,7 +807,10 @@ export function AccStockInPage() {
                 onAmount={setPaid}
               />
             </div>
-            {total > 0 ? (
+            ) : null}
+            {oldStock ? (
+              <p className="acc-hint">Not added to any supplier's balance. Stock value counts it.</p>
+            ) : total > 0 ? (
               <div className={clsx("acc-payment-result", total - paidNow > 0 ? "is-due" : "is-paid")}>
                 <span>{total - paidNow > 0 ? "Amount due to supplier" : "Fully paid"}</span>
                 <b>{inr(Math.max(total - paidNow, 0))}</b>

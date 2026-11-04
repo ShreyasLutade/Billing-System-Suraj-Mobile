@@ -429,6 +429,8 @@ export const accApi = {
   paySupplier: (id: string, body: { amount: number; method: string; reference?: string; paidAt?: string; note?: string }) =>
     post(`/acc/suppliers/${id}/payments`, body),
   createPurchase: (body: {
+    /** Old stock already in the shop: no supplier, nothing to pay. */
+    opening?: boolean;
     supplierId?: string | null;
     /** A new supplier, saved with the purchase. */
     supplier?: AccSupplierInput;

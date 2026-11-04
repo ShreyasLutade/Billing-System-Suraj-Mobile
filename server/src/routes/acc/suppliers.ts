@@ -362,6 +362,8 @@ accSuppliersRouter.post("/suppliers/:id/payments", async (req, res, next) => {
 /* ---------------- stock in (purchase) ---------------- */
 
 const purchaseSchema = z.object({
+  /** Old stock already in the shop: no supplier, nothing to pay. */
+  opening: z.boolean().default(false),
   supplierId: z.string().optional().nullable(),
   /** New supplier typed on the form. */
   supplier: supplierSchema.optional(),
@@ -400,12 +402,13 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
     const parsed = purchaseSchema.safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
     const input = parsed.data;
-    // Every piece that comes in is tracked against the supplier it came from.
-    if (!input.supplierId && !input.supplier) {
+    // Every piece that comes in is tracked against the supplier it came
+    // from, except old stock that was already in the shop.
+    if (!input.opening && !input.supplierId && !input.supplier) {
       res.status(400).json({ error: "Choose the supplier this stock came from" });
       return;
     }
-    if (input.supplierId && !(await prisma.accSupplier.findUnique({ where: { id: input.supplierId } }))) {
+    if (!input.opening && input.supplierId && !(await prisma.accSupplier.findUnique({ where: { id: input.supplierId } }))) {
       res.status(400).json({ error: "Supplier not found" });
       return;
     }
@@ -416,8 +419,8 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
     }
     const by = req.user?.name || null;
     const purchase = await prisma.$transaction(async (tx) => {
-      let supplierId = input.supplierId || null;
-      if (!supplierId && input.supplier) supplierId = (await saveSupplier(tx, input.supplier)).id;
+      let supplierId = input.opening ? null : input.supplierId || null;
+      if (!input.opening && !supplierId && input.supplier) supplierId = (await saveSupplier(tx, input.supplier)).id;
       // New products start at 0; this purchase is what stocks them.
       const items: Array<{ productId: string; qty: number; unitCost: number; sellingPrice?: number; wholesalePrice?: number }> = [];
       for (const item of input.items) {
@@ -444,7 +447,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
         data: {
           supplierId,
           billNo: input.billNo,
-          note: input.note,
+          note: input.opening ? input.note || "Opening stock" : input.note,
           total,
           createdByName: by,
           items: { create: items.map((i) => ({ productId: i.productId, qty: i.qty, unitCost: i.unitCost })) },
@@ -470,7 +473,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
         await tx.accStockMove.create({
           data: {
             productId: product.id,
-            kind: "PURCHASE",
+            kind: input.opening ? "OPENING" : "PURCHASE",
             qty: item.qty,
             unitCost: item.unitCost,
             refId: created.id,

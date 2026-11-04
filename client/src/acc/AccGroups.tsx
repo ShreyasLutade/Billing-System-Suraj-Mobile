@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
+import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import { Check, ChevronDown, ChevronRight, FolderTree, Loader2, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { accApi, type AccGroup } from "./accApi";
 import { Sheet, errorText, plural, toast } from "./shared";
@@ -258,6 +260,8 @@ export function GroupTreeManager() {
   const [subDraft, setSubDraft] = useState("");
   const [editing, setEditing] = useState<AccGroup | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Group waiting for the delete confirmation (with its sub group count). */
+  const [removing, setRemoving] = useState<{ group: AccGroup; subs: number; customers: number } | null>(null);
 
   useEffect(() => {
     if (!openId && tree.length) setOpenId(tree[0].id);
@@ -299,12 +303,13 @@ export function GroupTreeManager() {
     if (ok) setSubDraft("");
   }
 
-  async function remove(g: AccGroup, subs = 0) {
-    const msg = subs
-      ? `Delete main group ${g.name} and its ${plural(subs, "sub group")}? Customers stay, without a group.`
-      : `Delete group ${g.name}? Customers stay, without a group.`;
-    if (!window.confirm(msg)) return;
-    await run(() => accApi.deleteGroup(g.id), `${g.name} deleted`);
+  async function confirmRemove() {
+    if (!removing) return;
+    const ok = await run(() => accApi.deleteGroup(removing.group.id), `${removing.group.name} deleted`);
+    if (ok) {
+      if (openId === removing.group.id) setOpenId(null);
+      setRemoving(null);
+    }
   }
 
   const customersIn = (m: GroupNode) => m.customerCount + m.subs.reduce((a, s) => a + s.customerCount, 0);
@@ -331,16 +336,32 @@ export function GroupTreeManager() {
             const open = openId === m.id;
             return (
               <li key={m.id} className={clsx("acc-gt-main", open && "is-open")} style={{ ["--g" as string]: m.color }}>
-                <button type="button" className="acc-gt-head" onClick={() => setOpenId(open ? null : m.id)} aria-expanded={open}>
-                  <span className="acc-gt-badge">{m.name.slice(0, 1).toUpperCase()}</span>
-                  <span className="acc-gt-title">
-                    <strong>{m.name}</strong>
-                    <small>
-                      {plural(m.subs.length, "sub group")} · <Users /> {customersIn(m)}
-                    </small>
+                <div className="acc-gt-row">
+                  <button type="button" className="acc-gt-head" onClick={() => setOpenId(open ? null : m.id)} aria-expanded={open}>
+                    <span className="acc-gt-badge">{m.name.slice(0, 1).toUpperCase()}</span>
+                    <span className="acc-gt-title">
+                      <strong>{m.name}</strong>
+                      <small>
+                        {plural(m.subs.length, "sub group")} · <Users /> {customersIn(m)}
+                      </small>
+                    </span>
+                    <ChevronRight className="acc-gt-chev" />
+                  </button>
+                  <span className="acc-gt-tools">
+                    <button type="button" className="acc-gt-tool" onClick={() => setEditing(m)} aria-label={`Edit ${m.name}`} title="Edit name">
+                      <Pencil />
+                    </button>
+                    <button
+                      type="button"
+                      className="acc-gt-tool is-red"
+                      onClick={() => setRemoving({ group: m, subs: m.subs.length, customers: customersIn(m) })}
+                      aria-label={`Delete ${m.name}`}
+                      title="Delete group"
+                    >
+                      <Trash2 />
+                    </button>
                   </span>
-                  <ChevronRight className="acc-gt-chev" />
-                </button>
+                </div>
 
                 {open ? (
                   <div className="acc-gt-body">
@@ -351,12 +372,20 @@ export function GroupTreeManager() {
                             <strong>{s.name}</strong>
                             <small>{plural(s.customerCount, "customer")}</small>
                           </span>
-                          <button type="button" className="acc-icon-btn is-small" onClick={() => setEditing(s)} aria-label={`Rename ${s.name}`}>
-                            <Pencil />
-                          </button>
-                          <button type="button" className="acc-icon-btn is-small" onClick={() => void remove(s)} aria-label={`Delete ${s.name}`}>
-                            <Trash2 />
-                          </button>
+                          <span className="acc-gt-tools">
+                            <button type="button" className="acc-gt-tool" onClick={() => setEditing(s)} aria-label={`Edit ${s.name}`} title="Edit name">
+                              <Pencil />
+                            </button>
+                            <button
+                              type="button"
+                              className="acc-gt-tool is-red"
+                              onClick={() => setRemoving({ group: s, subs: 0, customers: s.customerCount })}
+                              aria-label={`Delete ${s.name}`}
+                              title="Delete group"
+                            >
+                              <Trash2 />
+                            </button>
+                          </span>
                         </li>
                       ))}
                       <li className="is-add">
@@ -374,14 +403,6 @@ export function GroupTreeManager() {
                         </form>
                       </li>
                     </ul>
-                    <div className="acc-gt-actions">
-                      <button type="button" className="acc-link-btn" onClick={() => setEditing(m)}>
-                        <Pencil /> Rename
-                      </button>
-                      <button type="button" className="acc-link-btn is-red" onClick={() => void remove(m, m.subs.length)}>
-                        <Trash2 /> Delete main group
-                      </button>
-                    </div>
                   </div>
                 ) : null}
               </li>
@@ -393,6 +414,26 @@ export function GroupTreeManager() {
       )}
 
       <GroupEditSheet group={editing} onClose={() => setEditing(null)} onSaved={() => setEditing(null)} />
+
+      <AnimatePresence>
+        {removing ? (
+          <DangerConfirmModal
+            title={removing.group.parentId ? "Delete sub group?" : "Delete main group?"}
+            subtitle={removing.group.name}
+            points={[
+              ...(removing.subs ? [`Its ${plural(removing.subs, "sub group")} are deleted too.`] : []),
+              removing.customers
+                ? `${plural(removing.customers, "customer")} ${removing.customers === 1 ? "stays" : "stay"}, just without a group. Bills and dues are not touched.`
+                : "No customers are in this group.",
+            ]}
+            confirmLabel="Delete group"
+            cancelLabel="Keep group"
+            working={busy}
+            onCancel={() => !busy && setRemoving(null)}
+            onConfirm={() => void confirmRemove()}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -426,7 +467,7 @@ function GroupEditSheet({ group, onClose, onSaved }: { group: AccGroup | null; o
     <Sheet
       open
       onClose={onClose}
-      title={group.parentId ? "Rename sub group" : "Rename main group"}
+      title={group.parentId ? "Edit sub group" : "Edit main group"}
       footer={
         <div className="acc-btn-row">
           <button type="button" className="acc-btn is-ghost" onClick={onClose}>

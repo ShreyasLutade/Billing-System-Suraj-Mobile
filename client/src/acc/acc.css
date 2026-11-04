@@ -9997,3 +9997,157 @@ html.dark .acc-sell-pay button.is-on {
   padding-inline: 8px;
   white-space: nowrap;
 }
+
+/* Add stock: "Old stock (no supplier)" switch card */
+.acc .acc-stock-main .acc-old-stock {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--a-line);
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.acc .acc-stock-main .acc-old-stock.is-on {
+  border-color: color-mix(in srgb, #8b5cf6 45%, var(--a-line));
+  background: linear-gradient(135deg, color-mix(in srgb, #8b5cf6 10%, var(--a-card)), var(--a-card) 70%);
+  box-shadow: 0 10px 26px -18px rgba(124, 58, 237, 0.6);
+}
+
+.acc-old-stock-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, #8b5cf6 14%, var(--a-card));
+  color: #7c3aed;
+}
+
+.acc-old-stock-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.acc-old-stock-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.acc-old-stock-text strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.acc-old-stock-text small {
+  color: var(--a-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Small on/off switch */
+.acc-toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--a-line);
+  transition: background 0.18s;
+}
+
+.acc-toggle i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s;
+}
+
+.acc-toggle.is-on {
+  background: #7c3aed;
+}
+
+.acc-toggle.is-on i {
+  transform: translateX(18px);
+}
+
+/* Dues list: shop name big and bold, person's name small */
+.acc .acc-due-who strong {
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.acc .acc-due-who small {
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+/* Settings groups: edit / delete buttons on every row */
+.acc .acc-gt-row {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--g) 12%, var(--a-card)), var(--a-card) 70%);
+}
+
+.acc .acc-gt-row .acc-gt-head {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+
+.acc-gt-tools {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  padding-right: 10px;
+}
+
+.acc-gt-tree .acc-gt-tools {
+  padding-right: 0;
+}
+
+.acc .acc-gt-tool {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--a-line);
+  border-radius: 9px;
+  background: var(--a-card);
+  color: var(--a-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.acc .acc-gt-tool svg {
+  width: 14px;
+  height: 14px;
+}
+
+.acc .acc-gt-tool:hover {
+  border-color: var(--a-accent);
+  color: var(--a-accent);
+}
+
+.acc .acc-gt-tool.is-red {
+  color: var(--a-red);
+}
+
+.acc .acc-gt-tool.is-red:hover {
+  border-color: var(--a-red);
+  background: color-mix(in srgb, var(--a-red) 8%, var(--a-card));
+}
