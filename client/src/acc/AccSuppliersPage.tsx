@@ -711,32 +711,30 @@ export function AccStockInPage() {
 
       <div className="acc-stock-workspace">
         <div className="acc-stock-main">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={oldStock}
-            className={clsx("acc-card acc-old-stock", oldStock && "is-on")}
-            onClick={() => setOldStock((on) => !on)}
-          >
-            <span className="acc-old-stock-icon" aria-hidden>
-              <Archive />
-            </span>
-            <span className="acc-old-stock-text">
-              <strong>Old stock (no supplier)</strong>
-              <small>
-                {oldStock
-                  ? "Saved as opening stock: no supplier, nothing to pay"
-                  : "Turn on for stock already in your shop"}
-              </small>
-            </span>
-            <span className={clsx("acc-toggle", oldStock && "is-on")} aria-hidden>
-              <i />
-            </span>
-          </button>
-
-          {!oldStock ? (
-            <section className="acc-card acc-stock-step">
-              <StepTitle n={1} done={hasSupplier} title="Supplier" hint="Who did this stock come from?" />
+          <section className="acc-card acc-stock-step">
+            <div className="acc-supplier-step-head">
+              <StepTitle
+                n={1}
+                done={hasSupplier || oldStock}
+                title="Supplier"
+                hint={oldStock ? "Old stock: no supplier, nothing to pay" : "Who did this stock come from?"}
+              />
+              {/* Old stock already in the shop: no supplier card at all. */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={oldStock}
+                className={clsx("acc-old-stock-switch", oldStock && "is-on")}
+                onClick={() => setOldStock((on) => !on)}
+              >
+                <Archive aria-hidden />
+                Old stock
+                <span className={clsx("acc-mini-switch", oldStock && "is-on")} aria-hidden>
+                  <i />
+                </span>
+              </button>
+            </div>
+            {!oldStock ? (
               <SupplierChooser
                 suppliers={suppliers}
                 mode={supplierMode}
@@ -746,11 +744,11 @@ export function AccStockInPage() {
                 draft={newSupplier}
                 onDraft={setNewSupplier}
               />
-            </section>
-          ) : null}
+            ) : null}
+          </section>
 
           <section className="acc-card acc-stock-step">
-            <StepTitle n={oldStock ? 1 : 2} done={enteredLines.length > 0} title="Products" hint="Enter stock quickly, one row at a time" />
+            <StepTitle n={2} done={enteredLines.length > 0} title="Products" hint="Enter stock quickly, one row at a time" />
             <BulkStockSheet products={products} categories={categories} lines={lines} onLines={setLines} />
           </section>
         </div>
@@ -758,7 +756,7 @@ export function AccStockInPage() {
         <aside className="acc-stock-payment">
           <section className="acc-card acc-pay-card">
             <StepTitle
-              n={oldStock ? 2 : 3}
+              n={3}
               done={total > 0}
               title={oldStock ? "Summary" : "Payment"}
               hint={oldStock ? "Old stock: nothing to pay" : "Record what you paid the supplier"}

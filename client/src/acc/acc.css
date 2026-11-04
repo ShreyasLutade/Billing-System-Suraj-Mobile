@@ -9998,90 +9998,76 @@ html.dark .acc-sell-pay button.is-on {
   white-space: nowrap;
 }
 
-/* Add stock: "Old stock (no supplier)" switch card */
-.acc .acc-stock-main .acc-old-stock {
+/* Add stock: "Old stock" switch on the right of the Supplier card */
+.acc-supplier-step-head {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--a-line);
-  color: var(--a-ink);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.acc .acc-stock-main .acc-old-stock.is-on {
-  border-color: color-mix(in srgb, #8b5cf6 45%, var(--a-line));
-  background: linear-gradient(135deg, color-mix(in srgb, #8b5cf6 10%, var(--a-card)), var(--a-card) 70%);
-  box-shadow: 0 10px 26px -18px rgba(124, 58, 237, 0.6);
+.acc-supplier-step-head > .acc-step-title {
+  min-width: 0;
 }
 
-.acc-old-stock-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
+.acc .acc-old-stock-switch {
+  display: inline-flex;
   flex: none;
-  place-items: center;
-  border-radius: 12px;
-  background: color-mix(in srgb, #8b5cf6 14%, var(--a-card));
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  background: var(--a-card);
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.acc .acc-old-stock-switch svg {
+  width: 14px;
+  height: 14px;
+}
+
+.acc .acc-old-stock-switch.is-on {
+  border-color: color-mix(in srgb, #8b5cf6 45%, var(--a-line));
+  background: color-mix(in srgb, #8b5cf6 10%, var(--a-card));
   color: #7c3aed;
 }
 
-.acc-old-stock-icon svg {
-  width: 19px;
-  height: 19px;
-}
-
-.acc-old-stock-text {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-  gap: 2px;
-}
-
-.acc-old-stock-text strong {
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.acc-old-stock-text small {
-  color: var(--a-muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-/* Small on/off switch */
-.acc-toggle {
+/* Small on/off switch (Old stock) */
+.acc-mini-switch {
   position: relative;
-  width: 44px;
-  height: 26px;
+  display: block;
+  width: 32px;
+  height: 19px;
   flex: none;
   border-radius: 999px;
   background: var(--a-line);
   transition: background 0.18s;
 }
 
-.acc-toggle i {
+.acc-mini-switch i {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   transition: transform 0.18s;
 }
 
-.acc-toggle.is-on {
+.acc-mini-switch.is-on {
   background: #7c3aed;
 }
 
-.acc-toggle.is-on i {
-  transform: translateX(18px);
+.acc-mini-switch.is-on i {
+  transform: translateX(13px);
 }
 
 /* Dues list: shop name big and bold, person's name small */
