@@ -161,7 +161,11 @@ export function AccDuesPage() {
       ) : data.customers.length ? (
         <ul className="acc-due-list">
           {/* Overdue customers first, then the rest (sort order kept within each). */}
-          {[...data.customers].sort((a, b) => Number(b.overdue > 0) - Number(a.overdue > 0)).map((c) => {
+          {[...data.customers]
+            // "Due" = has a balance but not yet overdue; overdue ones are under "Overdue".
+            .filter((c) => status !== "due" || c.overdue <= 0)
+            .sort((a, b) => Number(b.overdue > 0) - Number(a.overdue > 0))
+            .map((c) => {
             const limitPct = c.creditLimit > 0 ? Math.round((Math.max(c.balance, 0) / c.creditLimit) * 100) : 0;
             return (
               <li key={c.id} className={clsx("acc-due-card", c.overdue > 0 && "is-overdue")}>
