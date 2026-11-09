@@ -19,6 +19,10 @@ import {
   type PeriodRange,
 } from "../lib/period";
 import { EXCHANGE_NOTE_PREFIX, RETURN_NOTE_PREFIX } from "../services/stockSync";
+import {
+  buildCustomerPayoutsPdf,
+  loadCustomerPayouts,
+} from "../services/customerPayouts";
 
 export const analyticsRouter = Router();
 
@@ -828,6 +832,9 @@ analyticsRouter.get("/summary", async (req, res, next) => {
     const purchaseHistory = await loadPurchaseHistory(
       period === "all" ? undefined : billDateFilter,
     );
+    const customerPayouts = await loadCustomerPayouts(
+      period === "all" ? undefined : billDateFilter,
+    );
 
     res.json({
       data: {
@@ -881,6 +888,10 @@ analyticsRouter.get("/summary", async (req, res, next) => {
         purchaseHistory: {
           count: purchaseHistory.count,
           value: purchaseHistory.totalValue,
+        },
+        customerPayouts: {
+          count: customerPayouts.count,
+          value: customerPayouts.totalAmount,
         },
         periodBills,
         paymentSources,
@@ -966,6 +977,64 @@ analyticsRouter.get("/purchases", async (req, res, next) => {
         items: history.items,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Period from ?period= or ?from=&to=, as the other analytics lists read it. */
+function readPeriodQuery(query: Record<string, unknown>) {
+  const customFrom = parseDayParam(query.from, false);
+  const customTo = parseDayParam(query.to, true);
+  const hasCustomRange = Boolean(customFrom || customTo);
+  const period: ActivityPeriod | "custom" = hasCustomRange
+    ? "custom"
+    : isActivityPeriod(query.period)
+      ? query.period
+      : "all";
+  const range: PeriodRange = hasCustomRange
+    ? { from: customFrom, to: customTo }
+    : getPeriodRange(period === "custom" ? "all" : period);
+  return {
+    period,
+    range,
+    dateFilter: period === "all" ? undefined : toDateFilter(range),
+    label:
+      period === "custom"
+        ? customPeriodLabel(customFrom, customTo)
+        : periodLabel(period),
+  };
+}
+
+/** Money given back to customers (exchange cash return / extra value, return refunds). */
+analyticsRouter.get("/customer-payouts", async (req, res, next) => {
+  try {
+    const { period, range, dateFilter, label } = readPeriodQuery(req.query);
+    const payouts = await loadCustomerPayouts(dateFilter);
+    res.json({
+      data: {
+        period,
+        periodLabel: label,
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+        count: payouts.count,
+        totalAmount: payouts.totalAmount,
+        items: payouts.items,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analyticsRouter.get("/customer-payouts/pdf", async (req, res, next) => {
+  try {
+    const { dateFilter, label } = readPeriodQuery(req.query);
+    const payouts = await loadCustomerPayouts(dateFilter);
+    const { pdf, filename } = await buildCustomerPayoutsPdf(payouts, label);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdf);
   } catch (error) {
     next(error);
   }
