@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -175,6 +176,46 @@ function waitingAccent(days: number) {
   if (days >= 7) return "#E5484D";
   if (days >= 3) return "#FFB020";
   return "#34D399";
+}
+
+/**
+ * Keeps its children on one line: starts at 11.5px and shrinks the text
+ * (down to 8px) until it fits, again whenever the width or `fitKey` changes.
+ */
+function OneLineFit({
+  className,
+  fitKey,
+  children,
+}: {
+  className?: string;
+  fitKey: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      let size = 11.5;
+      el.style.fontSize = `${size}px`;
+      while (el.scrollWidth > el.clientWidth && size > 8) {
+        size -= 0.5;
+        el.style.fontSize = `${size}px`;
+      }
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitKey]);
+  return (
+    <div
+      ref={ref}
+      className={clsx("overflow-hidden whitespace-nowrap", className)}
+    >
+      {children}
+    </div>
+  );
 }
 
 /** Navy summary card at the top of the Dues page. */
@@ -506,11 +547,14 @@ export function DuesPage() {
                   ) : null,
                 )}
               </div>
-              <div className="mt-1.5 flex flex-wrap justify-between gap-x-3 gap-y-1">
+              <OneLineFit
+                className="mt-1.5 flex items-center justify-between gap-2"
+                fitKey={heroSegments.map((segment) => segment.amount).join("|")}
+              >
                 {heroSegments.map((segment) => (
                   <span
                     key={segment.label}
-                    className="flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-white/70"
+                    className="flex shrink-0 items-center gap-[0.4em] font-semibold text-white/70"
                   >
                     <span
                       className="h-[7px] w-[7px] rounded-full"
@@ -522,7 +566,7 @@ export function DuesPage() {
                     </b>
                   </span>
                 ))}
-              </div>
+              </OneLineFit>
             </>
           ) : null}
         </DuesHero>
