@@ -1,16 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import { AnimatePresence } from "framer-motion";
 import {
-  BarChart3,
+  CalendarDays,
   Check,
-  ChevronRight,
-  Filter,
+  CircleAlert,
+  Clock3,
+  Landmark,
   Lock,
   Search,
+  SlidersHorizontal,
   UserRound,
-  Wallet,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -18,14 +28,14 @@ import {
   type DuePeriodValue,
 } from "../components/PeriodFilter";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
-import { BackLink, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useAuth } from "../auth/AuthContext";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { useSessionState } from "../hooks/useSessionState";
 import { fromState, readFromState, backLabel } from "../lib/navMemory";
-import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { api, formatFinanceCompanies, round2 } from "../lib/api";
 import {
   financeSlotAmounts,
   financeSlotOptions,
@@ -33,6 +43,13 @@ import {
   slotsMatchingCompany,
   type FinanceSlot,
 } from "../lib/financeSlots";
+import {
+  dueStatus,
+  formatRupees,
+  initials,
+  URGENCY_TONE,
+  type DueUrgency,
+} from "../lib/dueStatus";
 import {
   matchesDueSearch,
   type BillSearchScope,
@@ -112,14 +129,93 @@ function financeTotalsByCompany(dues: FinanceDueItem[]) {
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 }
 
-function dueDateStatus(dueDate: string | null) {
-  if (!dueDate) return null;
-  const day = dueDate.slice(0, 10);
-  const today = format(new Date(), "yyyy-MM-dd");
-  const display = format(new Date(dueDate), "dd MMM");
-  if (day < today) return { label: `Overdue · ${display}`, overdue: true };
-  if (day === today) return { label: "Due today", overdue: false };
-  return { label: `Due ${display}`, overdue: false };
+const URGENCY_ORDER: DueUrgency[] = ["overdue", "today", "upcoming", "none"];
+
+const GROUP_TITLE: Record<DueUrgency, string> = {
+  overdue: "Overdue · collect first",
+  today: "Due today",
+  upcoming: "Coming up",
+  none: "No due date",
+};
+
+const URGENCY_ICON: Record<DueUrgency, typeof Clock3> = {
+  overdue: CircleAlert,
+  today: Clock3,
+  upcoming: CalendarDays,
+  none: CalendarDays,
+};
+
+const COMPANY_AVATARS = [
+  "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+];
+
+/** Same company, same colour. */
+function companyAvatar(name: string) {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return COMPANY_AVATARS[hash % COMPANY_AVATARS.length];
+}
+
+function daysSince(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 0;
+  return Math.max(differenceInCalendarDays(new Date(), date), 0);
+}
+
+function waitingDays(days: number) {
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** Finance money waiting a week or more is red, a few days amber. */
+function waitingAccent(days: number) {
+  if (days >= 7) return "#E5484D";
+  if (days >= 3) return "#FFB020";
+  return "#34D399";
+}
+
+/** Navy summary card at the top of the Dues page. */
+function DuesHero({
+  label,
+  amount,
+  side,
+  children,
+}: {
+  label: string;
+  amount: number | null;
+  side?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="dues-hero mb-2.5" aria-label={label}>
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/65">
+            {label}
+          </p>
+          <p className="mt-px font-display text-[27px] font-bold leading-tight tracking-tight tabular-nums">
+            {amount === null ? (
+              "—"
+            ) : (
+              <>
+                <span className="mr-0.5 text-[#FFA800]">₹</span>
+                {formatRupees(amount).replace("₹", "")}
+              </>
+            )}
+          </p>
+        </div>
+        {side ? (
+          <p className="shrink-0 pb-1 text-right text-xs font-semibold leading-snug text-white/70">
+            {side}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 function dueMatchesFinanceCompany(due: FinanceDueItem, company: string) {
@@ -291,9 +387,41 @@ export function DuesPage() {
     );
   }, [financeCompanyFilter, financeCompanyTotals, filteredFinanceDues]);
 
+  const statusRows = filteredDues.map((due) => ({
+    due,
+    status: dueStatus(due.dueDate),
+  }));
+  // Overdue first, then today, coming up, no date (server order kept inside).
+  const groupedDues = URGENCY_ORDER.flatMap((urgency) =>
+    statusRows.filter((row) => row.status.urgency === urgency),
+  );
+  const groupTotals = Object.fromEntries(
+    URGENCY_ORDER.map((urgency) => [urgency, 0]),
+  ) as Record<DueUrgency, number>;
+  for (const row of groupedDues) {
+    groupTotals[row.status.urgency] = round2(
+      groupTotals[row.status.urgency] + row.due.dueAmount,
+    );
+  }
+  const customerTotal = round2(filteredTotal);
+  const customerCount = query.trim() || showPrivateOnly ? filteredDues.length : (data?.count ?? 0);
+  const heroSegments = [
+    { label: "Overdue", color: "#FF6B6B", amount: groupTotals.overdue },
+    { label: "Today", color: "#FFB020", amount: groupTotals.today },
+    {
+      label: "Later",
+      color: "#34D399",
+      amount: round2(groupTotals.upcoming + groupTotals.none),
+    },
+  ];
+  const oldestFinanceDays = filteredFinanceDues.reduce(
+    (max, due) => Math.max(max, daysSince(due.billDate)),
+    0,
+  );
+
   const customerReveal = useInfiniteReveal(
-    filteredDues,
-    `customer|${period}|${searchQuery}|${searchScope}|${showPrivateOnly}|${filteredDues.length}`,
+    groupedDues,
+    `customer|${period}|${searchQuery}|${searchScope}|${showPrivateOnly}|${groupedDues.length}`,
   );
   const financeReveal = useInfiniteReveal(
     filteredFinanceDues,
@@ -329,49 +457,127 @@ export function DuesPage() {
     }
   }
 
+  function openOnEnter(event: ReactKeyboardEvent<HTMLElement>, to: string) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      navigate(to, { state: fromState(location) });
+    }
+  }
+
   return (
     <div>
-      <PageHeader
-        icon={Wallet}
-        title="Dues"
-        action={
-          <BackLink to={from ?? "/"}>
-            {from ? backLabel(from) : "Home"}
-          </BackLink>
-        }
-      />
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[26px] font-bold leading-tight tracking-tight text-ink-900">
+            Dues
+          </h1>
+          <p className="mt-0.5 text-[13px] text-ink-500">
+            {tab === "customer"
+              ? "Money customers still owe you"
+              : "Money finance companies still owe you"}
+          </p>
+        </div>
+        {from ? <BackLink to={from}>{backLabel(from)}</BackLink> : null}
+      </div>
+
+      {tab === "customer" ? (
+        <DuesHero
+          label={`Total to collect${period !== "all" && data ? ` · ${data.periodLabel}` : ""}`}
+          amount={data ? customerTotal : null}
+          side={
+            data
+              ? `${customerCount} open due${customerCount === 1 ? "" : "s"}`
+              : null
+          }
+        >
+          {data && customerTotal > 0 ? (
+            <>
+              <div className="mt-2.5 flex h-1.5 gap-[3px] overflow-hidden rounded-full bg-white/10">
+                {heroSegments.map((segment) =>
+                  segment.amount > 0 ? (
+                    <span
+                      key={segment.label}
+                      className="h-full"
+                      style={{
+                        width: `${(segment.amount / customerTotal) * 100}%`,
+                        background: segment.color,
+                      }}
+                    />
+                  ) : null,
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1">
+                {heroSegments.map((segment) => (
+                  <span
+                    key={segment.label}
+                    className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-semibold text-white/70"
+                  >
+                    <span
+                      className="h-[7px] w-[7px] rounded-full"
+                      style={{ background: segment.color }}
+                    />
+                    {segment.label}
+                    <b className="font-bold tabular-nums text-white">
+                      {formatRupees(segment.amount)}
+                    </b>
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </DuesHero>
+      ) : (
+        <DuesHero
+          label={`Finance pending${financeCompanyFilter ? ` · ${financeCompanyFilter}` : ""}`}
+          amount={financeData ? round2(filteredFinanceTotal) : null}
+          side={
+            financeData ? (
+              <>
+                {filteredFinanceDues.length} settlement
+                {filteredFinanceDues.length === 1 ? "" : "s"}
+                {filteredFinanceDues.length > 0 ? (
+                  <>
+                    <br />
+                    oldest {waitingDays(oldestFinanceDays)}
+                  </>
+                ) : null}
+              </>
+            ) : null
+          }
+        />
+      )}
+
+      <div className="dues-seg mb-2.5" role="tablist" aria-label="Due type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "customer"}
+          className={clsx("dues-seg-btn", tab === "customer" && "dues-seg-on")}
+          onClick={() => setTab("customer")}
+        >
+          <UserRound className="h-4 w-4 shrink-0" />
+          Customer
+          <span className="dues-seg-cnt">
+            {data?.count ?? (tab === "customer" ? filteredDues.length : "—")}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "finance"}
+          className={clsx("dues-seg-btn", tab === "finance" && "dues-seg-on")}
+          onClick={() => setTab("finance")}
+        >
+          <Landmark className="h-4 w-4 shrink-0" />
+          Finance
+          <span className="dues-seg-cnt">
+            {financeData?.count ??
+              (tab === "finance" ? filteredFinanceDues.length : "—")}
+          </span>
+        </button>
+      </div>
 
       <div className="tb-toolbar">
-        <div className="tb-tabs" role="tablist" aria-label="Due type">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "customer"}
-            className={clsx("tb-tab", tab === "customer" && "tb-tab-on")}
-            onClick={() => setTab("customer")}
-          >
-            <UserRound className="h-4 w-4 shrink-0" />
-            Customer
-            <span className="tb-cnt">
-              {data?.count ?? (tab === "customer" ? filteredDues.length : "—")}
-            </span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "finance"}
-            className={clsx("tb-tab", tab === "finance" && "tb-tab-on")}
-            onClick={() => setTab("finance")}
-          >
-            <BarChart3 className="h-4 w-4 shrink-0" />
-            Finance
-            <span className="tb-cnt">
-              {financeData?.count ??
-                (tab === "finance" ? filteredFinanceDues.length : "—")}
-            </span>
-          </button>
-        </div>
-
         <div className="tb-searchrow">
           <div className="tb-search">
             <Search className="h-[17px] w-[17px] shrink-0 text-[#7A8699]" />
@@ -400,7 +606,7 @@ export function DuesPage() {
               aria-label="Filter dues"
               onClick={() => setFilterOpen((open) => !open)}
             >
-              <Filter className="h-[19px] w-[19px]" strokeWidth={2} />
+              <SlidersHorizontal className="h-[19px] w-[19px]" strokeWidth={2} />
               <span
                 className={clsx(
                   "tb-filter-badge",
@@ -513,224 +719,193 @@ export function DuesPage() {
 
       {loading ? <LoadingBlock label="Loading dues…" /> : null}
       {error ? (
-        <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
+        <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
 
       {tab === "customer" && data && !loading ? (
-        <>
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-ember-500/10 to-transparent px-4 py-2.5 ring-1 ring-ember-500/15">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                {data.periodLabel}
-              </p>
-              <p className="text-sm text-ink-700">
-                {query.trim() ? filteredDues.length : data.count} open due
-                {(query.trim() ? filteredDues.length : data.count) === 1
-                  ? ""
-                  : "s"}
-              </p>
-            </div>
-            <p className="font-display text-xl font-semibold tabular-nums text-ember-500">
-              {formatINR(query.trim() ? filteredTotal : data.totalDue)}
-            </p>
-          </div>
-
-          {filteredDues.length === 0 ? (
-            <EmptyState
-              title={query.trim() ? "No matching dues" : "No dues in this period"}
-              description={
-                query.trim()
-                  ? "Try another search, or clear the search box."
-                  : "Try another filter, or check back when a bill has pending amount."
-              }
-            />
-          ) : (
-            <div className="space-y-2">
-              {customerReveal.visibleItems.map((due) => {
-                const dueWhen = dueDateStatus(due.dueDate);
-                return (
-                <article
-                  key={due.id}
-                  role="link"
-                  tabIndex={0}
-                  className={clsx(
-                    "interactive-card rounded-2xl border px-3.5 py-3 shadow-sm backdrop-blur-sm",
-                    dueWhen?.overdue
-                      ? "interactive-card-danger border-red-500/40 bg-red-500/20"
-                      : "border-ink-100/80 bg-white/90 shadow-ink-900/5",
-                  )}
-                  onClick={() =>
-                    navigate(`/dues/${due.id}`, { state: fromState(location) })
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/dues/${due.id}`, {
-                        state: fromState(location),
-                      });
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <h3 className="truncate text-sm font-semibold text-ink-900">
-                          {due.customerName}
-                        </h3>
-                        {due.isPartialPaid ? (
-                          <span className="rounded-full bg-ember-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
-                            Partial
-                          </span>
-                        ) : null}
-                        {isAdmin && due.duePrivate ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-700 dark:bg-white/10 dark:text-ink-800">
-                            <Lock className="h-2.5 w-2.5" strokeWidth={2.6} />
-                            Private
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 truncate text-xs text-ink-500">
-                        <span className="tabular-nums">{due.customerPhone}</span>
-                        <span className="text-ink-300"> · </span>
-                        <span className="font-mono text-tide-600">
-                          {due.invoiceNumber}
-                        </span>
-                      </p>
+        filteredDues.length === 0 ? (
+          <EmptyState
+            title={query.trim() ? "No matching dues" : "No dues in this period"}
+            description={
+              query.trim()
+                ? "Try another search, or clear the search box."
+                : "Try another filter, or check back when a bill has pending amount."
+            }
+          />
+        ) : (
+          <div>
+            {customerReveal.visibleItems.map(({ due, status }, index) => {
+              const tone = URGENCY_TONE[status.urgency];
+              const StatusIcon = URGENCY_ICON[status.urgency];
+              const paid = round2(due.paidTotal ?? 0);
+              const startsGroup =
+                index === 0 ||
+                customerReveal.visibleItems[index - 1].status.urgency !==
+                  status.urgency;
+              const to = `/dues/${due.id}`;
+              return (
+                <Fragment key={due.id}>
+                  {startsGroup ? (
+                    <div
+                      className={clsx(
+                        "mb-2 flex items-center justify-between gap-3 px-1",
+                        index > 0 && "mt-4",
+                      )}
+                    >
+                      <h2 className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ background: tone.accent }}
+                        />
+                        {GROUP_TITLE[status.urgency]}
+                      </h2>
+                      <span className="text-[13px] font-bold tabular-nums text-ink-500">
+                        {formatRupees(groupTotals[status.urgency])}
+                      </span>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2.5">
-                      <div className="text-right">
-                        <p className="text-base font-semibold tabular-nums text-ember-500">
-                          {formatINR(due.dueAmount)}
+                  ) : null}
+                  <article
+                    role="link"
+                    tabIndex={0}
+                    className="due-card due-card-stripe interactive-card mb-2 cursor-pointer px-3.5 py-3"
+                    style={{ "--due-accent": tone.accent } as CSSProperties}
+                    onClick={() => navigate(to, { state: fromState(location) })}
+                    onKeyDown={(event) => openOnEnter(event, to)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={clsx(
+                          "grid h-11 w-11 shrink-0 place-items-center rounded-full text-[15px] font-bold",
+                          tone.avatar,
+                        )}
+                        aria-hidden
+                      >
+                        {initials(due.customerName)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <h3 className="truncate text-[15px] font-bold text-ink-900">
+                            {due.customerName}
+                          </h3>
+                          {isAdmin && due.duePrivate ? (
+                            <Lock
+                              className="h-3.5 w-3.5 shrink-0 text-ink-400"
+                              strokeWidth={2.4}
+                              aria-label="Private due"
+                            />
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 truncate text-[12.5px] text-ink-400">
+                          <span className="tabular-nums">{due.customerPhone}</span>
+                          <span className="text-ink-300"> · </span>
+                          <span className="font-mono text-tide-600">
+                            {due.invoiceNumber}
+                          </span>
                         </p>
-                        <p
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[17px] font-bold tabular-nums tracking-tight text-ink-900">
+                          {formatRupees(due.dueAmount)}
+                        </p>
+                        <span
                           className={clsx(
-                            "mt-0.5 text-[11.5px] font-semibold",
-                            dueWhen?.overdue
-                              ? "text-[#E5484D]"
-                              : dueWhen
-                                ? "text-[#B76E00]"
-                                : "text-ink-400",
+                            "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold",
+                            tone.pill,
                           )}
                         >
-                          {dueWhen?.label || "No due date"}
-                        </p>
+                          <StatusIcon className="h-3 w-3" strokeWidth={2.4} />
+                          {status.label}
+                        </span>
                       </div>
-                      <ChevronRight
-                        className="h-5 w-5 shrink-0 text-ink-300"
-                        aria-hidden
-                      />
                     </div>
-                  </div>
-                </article>
-                );
-              })}
-              <LoadMoreSentinel
-                sentinelRef={customerReveal.sentinelRef}
-                hasMore={customerReveal.hasMore}
-                loadingMore={customerReveal.loadingMore}
-                totalCount={customerReveal.totalCount}
-              />
-            </div>
-          )}
-        </>
+                    {paid > 0 ? (
+                      <div className="mt-2.5 flex items-center gap-2.5">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-emerald-500"
+                            style={{
+                              width: `${Math.min(paid / (paid + due.dueAmount), 1) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-500">
+                          <b className="text-emerald-600 dark:text-emerald-400">
+                            {formatRupees(paid)}
+                          </b>{" "}
+                          paid of {formatRupees(round2(paid + due.dueAmount))}
+                        </span>
+                      </div>
+                    ) : null}
+                  </article>
+                </Fragment>
+              );
+            })}
+            <LoadMoreSentinel
+              sentinelRef={customerReveal.sentinelRef}
+              hasMore={customerReveal.hasMore}
+              loadingMore={customerReveal.loadingMore}
+              totalCount={customerReveal.totalCount}
+            />
+          </div>
+        )
       ) : null}
 
       {tab === "finance" && financeData && !loading ? (
         <>
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-ember-500/10 to-transparent px-4 py-2.5 ring-1 ring-ember-500/15">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                Finance pending
-                {financeCompanyFilter ? ` · ${financeCompanyFilter}` : ""}
-              </p>
-              <p className="text-sm text-ink-700">
-                {filteredFinanceDues.length} settlement
-                {filteredFinanceDues.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <p className="font-display text-xl font-semibold tabular-nums text-ember-500">
-              {formatINR(filteredFinanceTotal)}
-            </p>
-          </div>
-
           {financeCompanyTotals.length > 0 ? (
-            <div className="mb-3 overflow-x-auto pb-1">
-              <div className="flex w-max min-w-full justify-center gap-2 px-1">
-                <button
-                  type="button"
-                  className={clsx(
-                    "min-w-[5.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition",
-                    !financeCompanyFilter
-                      ? "border-ink-900 bg-ink-900 dark:border-tide-400 dark:bg-tide-400"
-                      : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
-                  )}
-                  onClick={() => setFinanceCompanyFilter(null)}
-                >
-                  <p
+            <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+              {[
+                {
+                  name: null as string | null,
+                  label: "All",
+                  amount: financeCompanyTotals.reduce(
+                    (sum, company) => sum + company.amount,
+                    0,
+                  ),
+                },
+                ...financeCompanyTotals.map((company) => ({
+                  name: company.name as string | null,
+                  label: company.name,
+                  amount: company.amount,
+                })),
+              ].map((chip) => {
+                const on = financeCompanyFilter === chip.name;
+                return (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    aria-pressed={on}
                     className={clsx(
-                      "truncate text-xs",
-                      !financeCompanyFilter
-                        ? "text-white/70 dark:!text-slate-700"
-                        : "text-ink-500",
+                      "min-w-[6.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left transition",
+                      on
+                        ? "dues-seg-on border-transparent"
+                        : "border-[#E7EAF0] bg-white hover:border-ink-300 dark:border-[rgb(var(--color-line))] dark:bg-surface",
                     )}
+                    onClick={() =>
+                      setFinanceCompanyFilter(on || !chip.name ? null : chip.name)
+                    }
                   >
-                    All
-                  </p>
-                  <p
-                    className={clsx(
-                      "mt-0.5 text-sm font-semibold tabular-nums",
-                      !financeCompanyFilter
-                        ? "text-white dark:!text-slate-900"
-                        : "text-ember-500",
-                    )}
-                  >
-                    {formatINR(
-                      financeCompanyTotals.reduce(
-                        (sum, company) => sum + company.amount,
-                        0,
-                      ),
-                    )}
-                  </p>
-                </button>
-                {financeCompanyTotals.map((company) => {
-                  const on = financeCompanyFilter === company.name;
-                  return (
-                    <button
-                      key={company.name}
-                      type="button"
+                    <p
                       className={clsx(
-                        "min-w-[9.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition",
-                        on
-                          ? "border-ink-900 bg-ink-900 dark:border-tide-400 dark:bg-tide-400"
-                          : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
+                        "max-w-[10rem] truncate text-[11.5px] font-semibold",
+                        on ? "text-white/70 dark:text-[#1f1600]/70" : "text-ink-500",
                       )}
-                      aria-pressed={on}
-                      onClick={() =>
-                        setFinanceCompanyFilter(on ? null : company.name)
-                      }
                     >
-                      <p
-                        className={clsx(
-                          "truncate text-xs",
-                          on ? "text-white/70 dark:!text-slate-700" : "text-ink-500",
-                        )}
-                      >
-                        {company.name}
-                      </p>
-                      <p
-                        className={clsx(
-                          "mt-0.5 text-sm font-semibold tabular-nums",
-                          on ? "text-white dark:!text-slate-900" : "text-ember-500",
-                        )}
-                      >
-                        {formatINR(company.amount)}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+                      {chip.label}
+                    </p>
+                    <p
+                      className={clsx(
+                        "mt-0.5 text-[15px] font-bold tabular-nums",
+                        on ? "text-[#FFA800] dark:text-[#1f1600]" : "text-ink-900",
+                      )}
+                    >
+                      {formatRupees(chip.amount)}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
 
@@ -750,59 +925,76 @@ export function DuesPage() {
               }
             />
           ) : (
-            <div className="space-y-2">
-              {financeReveal.visibleItems.map((due) => (
-                <article
-                  key={due.id}
-                  role="link"
-                  tabIndex={0}
-                  className="interactive-card rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-sm shadow-ink-900/5 backdrop-blur-sm"
-                  onClick={() =>
-                    navigate(`/bills/${due.id}`, { state: fromState(location) })
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/bills/${due.id}`, {
-                        state: fromState(location),
-                      });
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold text-ink-900">
-                        {financeCompanyFilter
-                          ? financeCompanyFilter
-                          : formatFinanceCompanies(
-                              due.financeReceived
-                                ? null
-                                : due.financeCompanyName,
-                              due.financeReceived2
-                                ? null
-                                : due.financeCompanyName2,
-                            ) || "Finance company"}
-                      </h3>
-                      <p className="mt-0.5 truncate text-xs text-ink-500">
-                        {due.customerName}
-                        <span className="text-ink-300"> · </span>
-                        <span className="tabular-nums">{due.customerPhone}</span>
-                        <span className="text-ink-300"> · </span>
-                        <span className="font-mono text-tide-600">
-                          {due.invoiceNumber}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2.5">
-                      <p className="text-right text-base font-semibold tabular-nums text-ember-500">
-                        {formatINR(
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <h2 className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
+                  <span className="h-2 w-2 rounded-full bg-[#FFB020]" />
+                  Waiting longest
+                </h2>
+                <span className="text-[13px] font-bold tabular-nums text-ink-500">
+                  {filteredFinanceDues.length} bill
+                  {filteredFinanceDues.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {financeReveal.visibleItems.map((due) => {
+                const company = financeCompanyFilter
+                  ? financeCompanyFilter
+                  : formatFinanceCompanies(
+                      due.financeReceived ? null : due.financeCompanyName,
+                      due.financeReceived2 ? null : due.financeCompanyName2,
+                    ) || "Finance company";
+                const days = daysSince(due.billDate);
+                const to = `/bills/${due.id}`;
+                return (
+                  <article
+                    key={due.id}
+                    role="link"
+                    tabIndex={0}
+                    className="due-card due-card-stripe interactive-card mb-2 cursor-pointer px-3.5 py-3"
+                    style={{ "--due-accent": waitingAccent(days) } as CSSProperties}
+                    onClick={() => navigate(to, { state: fromState(location) })}
+                    onKeyDown={(event) => openOnEnter(event, to)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={clsx(
+                          "grid h-11 w-11 shrink-0 place-items-center rounded-full text-[14px] font-bold",
+                          companyAvatar(company),
+                        )}
+                        aria-hidden
+                      >
+                        {initials(company)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-[15px] font-bold text-ink-900">
+                          {company}
+                        </h3>
+                        <p className="mt-0.5 truncate text-[12.5px] text-ink-400">
+                          {due.customerName}
+                          <span className="text-ink-300"> · </span>
+                          <span className="font-mono text-tide-600">
+                            {due.invoiceNumber}
+                          </span>
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-right text-[17px] font-bold tabular-nums tracking-tight text-ink-900">
+                        {formatRupees(
                           financeAmountForCompany(due, financeCompanyFilter),
                         )}
+                      </p>
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-[#E7EAF0] pt-2.5 dark:border-[rgb(var(--color-line))]">
+                      <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-ink-500">
+                        <Clock3 className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                        <span className="truncate">
+                          {days > 0 ? `Waiting ${waitingDays(days)}` : "Sold today"}
+                          {" · "}sold {format(new Date(due.billDate), "dd MMM")}
+                        </span>
                       </p>
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 disabled:opacity-50 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
+                          className="due-btn-dark inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-[13px] font-bold transition disabled:opacity-50"
                           disabled={receivingId === due.id}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -811,14 +1003,14 @@ export function DuesPage() {
                           }}
                           aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
                         >
-                          <Check className="h-3.5 w-3.5" />
+                          <Check className="h-4 w-4" strokeWidth={2.4} />
                           {receivingId === due.id ? "…" : "Received"}
                         </button>
                       ) : null}
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
               <LoadMoreSentinel
                 sentinelRef={financeReveal.sentinelRef}
                 hasMore={financeReveal.hasMore}

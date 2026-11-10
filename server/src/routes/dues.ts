@@ -70,6 +70,7 @@ duesRouter.get("/", async (req, res, next) => {
         payableAmount: true,
         isPartialPaid: true,
         duePrivate: true,
+        duePayments: { select: { amount: true } },
         items: {
           select: {
             productName: true,
@@ -91,8 +92,12 @@ duesRouter.get("/", async (req, res, next) => {
         periodLabel: periodLabel(period),
         totalDue: Number(totalDue.toFixed(2)),
         count: dues.length,
-        dues: dues.map(({ items, ...bill }) => ({
+        dues: dues.map(({ items, duePayments, ...bill }) => ({
           ...bill,
+          /** Paid so far against this due (part payments). */
+          paidTotal: Number(
+            duePayments.reduce((sum, p) => sum + p.amount, 0).toFixed(2),
+          ),
           dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
           billDate: bill.billDate.toISOString(),
           productLabels: items

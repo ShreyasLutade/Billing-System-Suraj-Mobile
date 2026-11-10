@@ -2185,3 +2185,148 @@ html.dark .login-btn {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------
+ * Dues + due history: navy summary card, segmented tabs, due cards.
+ * Navy in light mode; in dark mode the "on" states use the brand yellow.
+ * ------------------------------------------------------------------ */
+.dues-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #0b1f33 0%, #17385a 100%);
+  box-shadow: 0 18px 36px -14px rgba(11, 31, 51, 0.45);
+}
+.dues-hero::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -60px;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 168, 0, 0.28), rgba(255, 168, 0, 0) 70%);
+  pointer-events: none;
+}
+.dues-hero > * {
+  position: relative;
+  z-index: 1;
+}
+html.dark .dues-hero {
+  background: linear-gradient(135deg, #132a44 0%, #1c3d60 100%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 36px -14px rgba(0, 0, 0, 0.6);
+}
+
+.dues-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 16px;
+  border: 1px solid #e7eaf0;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(11, 31, 51, 0.05);
+}
+html.dark .dues-seg {
+  border-color: rgb(var(--color-line));
+  background: rgb(var(--color-surface));
+}
+.dues-seg-btn {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a657a;
+  transition: background-color 0.15s, color 0.15s;
+}
+html.dark .dues-seg-btn {
+  color: rgb(var(--color-ink-600));
+}
+.dues-seg-cnt {
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #eef2f6;
+  color: #4a657a;
+}
+html.dark .dues-seg-cnt {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgb(var(--color-ink-600));
+}
+.dues-seg-on,
+.due-btn-dark {
+  background: #0b1f33;
+  color: #fff;
+}
+.dues-seg-on .dues-seg-cnt {
+  background: #ffa800;
+  color: #0b1f33;
+}
+html.dark .dues-seg-on,
+html.dark .due-btn-dark {
+  background: var(--brand-grad);
+  color: var(--on-brand);
+}
+html.dark .dues-seg-on .dues-seg-cnt {
+  background: rgba(31, 22, 0, 0.14);
+  color: var(--on-brand);
+}
+.due-btn-dark svg {
+  color: #ffa800;
+}
+html.dark .due-btn-dark svg {
+  color: var(--on-brand);
+}
+.due-btn-dark:not(:disabled):hover {
+  filter: brightness(1.15);
+}
+html.dark .due-btn-dark:not(:disabled):hover {
+  filter: brightness(0.97) saturate(1.05);
+}
+
+/* Card with a coloured stripe on the left (set --due-accent). */
+.due-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid #e7eaf0;
+  background: #fff;
+  box-shadow: 0 8px 22px -8px rgba(11, 31, 51, 0.12);
+}
+html.dark .due-card {
+  border-color: rgb(var(--color-line));
+  background: rgb(var(--color-surface));
+  box-shadow: none;
+}
+.due-card-stripe::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--due-accent, #c9d0db);
+}
+
+/* Dotted line joining the payment history events. */
+.due-timeline-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 42px;
+  bottom: -2px;
+  width: 2px;
+  background: repeating-linear-gradient(to bottom, #d5dce5 0 4px, transparent 4px 8px);
+}
+html.dark .due-timeline-item:not(:last-child)::before {
+  background: repeating-linear-gradient(to bottom, rgb(var(--color-line-strong)) 0 4px, transparent 4px 8px);
+}

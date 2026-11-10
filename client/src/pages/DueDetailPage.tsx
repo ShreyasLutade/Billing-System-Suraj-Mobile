@@ -4,20 +4,35 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { BillPdfViewer } from "../components/BillPdfViewer";
 import {
-  CalendarClock,
+  ArrowLeft,
+  Banknote,
+  CalendarDays,
   Check,
+  CircleAlert,
+  CircleCheck,
+  Clock3,
+  CreditCard,
   Download,
+  FileText,
   Lock,
   Phone,
-  ReceiptText,
+  ShoppingBag,
+  Smartphone,
   Wallet,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { useFixedBottomBar } from "../hooks/useFixedBottomBar";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, round2 } from "../lib/api";
+import {
+  formatRupees,
+  initials,
+  URGENCY_TONE,
+  type DueUrgency,
+} from "../lib/dueStatus";
 import { backLabel, fromState, readFromState } from "../lib/navMemory";
 import type { CustomerDueDetail } from "../types";
 
@@ -33,19 +48,11 @@ function formatDate(value: string | null) {
   }).format(date);
 }
 
-/** "07 Oct" over "2026": keeps the statement's date column narrow on phones. */
-function StatementDate({ value }: { value: string }) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return <>—</>;
-  const part = (options: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", ...options }).format(date);
-  return (
-    <>
-      <span className="block font-medium text-ink-800">{part({ day: "2-digit", month: "short" })}</span>
-      <span className="block text-[10.5px] text-ink-400">{part({ year: "numeric" })}</span>
-    </>
-  );
-}
+const METHOD_ICON: Record<string, LucideIcon> = {
+  cash: Banknote,
+  online: Smartphone,
+  card: CreditCard,
+};
 
 function delayLabel(days: number | null) {
   if (days === null) return null;
@@ -58,16 +65,18 @@ function DelayPill({ days, className }: { days: number | null; className?: strin
   const label = delayLabel(days);
   if (!label) return null;
   const late = days !== null && days > 0;
+  const Icon = late ? CircleAlert : Check;
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold",
         late
           ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
           : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
         className,
       )}
     >
+      <Icon className="h-3 w-3" strokeWidth={2.4} />
       {label}
     </span>
   );
@@ -147,18 +156,89 @@ export function DueDetailPage() {
   const late = data.delayDays !== null && data.delayDays > 0;
   const paidShare =
     data.originalDue > 0 ? Math.min(data.paidTotal / data.originalDue, 1) : 1;
+  // Settled → green; late → red; due today → amber; otherwise by date.
+  const urgency: DueUrgency = data.settled
+    ? "upcoming"
+    : late
+      ? "overdue"
+      : data.delayDays === 0
+        ? "today"
+        : data.delayDays === null
+          ? "none"
+          : "upcoming";
+  const tone = URGENCY_TONE[urgency];
+  const statusLabel = late
+    ? `${delayLabel(data.delayDays)}`
+    : data.settled
+      ? data.delayDays === null
+        ? "Paid"
+        : "On time"
+      : data.delayDays === null
+        ? "No due date"
+        : data.delayDays === 0
+          ? "Due today"
+          : `${-data.delayDays} day${data.delayDays === -1 ? "" : "s"} left`;
+  const StatusIcon = data.settled
+    ? CircleCheck
+    : late
+      ? CircleAlert
+      : data.delayDays === 0
+        ? Clock3
+        : CalendarDays;
+  const products = data.products.map((p) => p.label).filter(Boolean);
+  const productSummary = products.length
+    ? `${products[0]}${products.length > 1 ? ` +${products.length - 1} more` : ""}`
+    : null;
+  const newestFirst = [...data.payments].reverse();
+  const backText = from ? backLabel(from) : "Back to dues";
 
   return (
     <div ref={rootRef} className="mx-auto max-w-2xl pb-4">
-      {back}
+      {/* Back · title · statement */}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <Link
+          to={from ?? "/dues"}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-[#E7EAF0] bg-white text-ink-900 shadow-sm transition hover:border-ink-300 dark:border-[rgb(var(--color-line))] dark:bg-surface"
+          aria-label={backText}
+          title={backText}
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <p className="text-[15px] font-bold text-ink-900">Due details</p>
+        <button
+          type="button"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-[#E7EAF0] bg-white text-ink-900 shadow-sm transition hover:border-ink-300 disabled:opacity-60 dark:border-[rgb(var(--color-line))] dark:bg-surface"
+          disabled={downloading}
+          onClick={() => void downloadStatement()}
+          aria-label="Download statement PDF"
+          title="Download statement PDF"
+        >
+          {downloading ? (
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-tide-500" />
+          ) : (
+            <Download className="h-[18px] w-[18px]" />
+          )}
+        </button>
+      </div>
 
-      {/* Customer + actions */}
-      <div className="mb-2.5 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-xl font-semibold leading-tight text-ink-900">
+      {/* Customer + call */}
+      <div className="mb-3 flex items-center gap-3 px-0.5">
+        <div
+          className={clsx(
+            "grid h-14 w-14 shrink-0 place-items-center rounded-full text-lg font-bold",
+            tone.avatar,
+          )}
+          aria-hidden
+        >
+          {initials(data.customerName)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-xl font-bold leading-tight tracking-tight text-ink-900">
             {data.customerName}
           </h1>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-ink-500">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[13px] text-ink-400">
+            <span className="tabular-nums">{data.customerPhone}</span>
+            <span className="text-ink-300">·</span>
             <Link
               to={`/bills/${data.id}`}
               state={fromState(location)}
@@ -174,25 +254,14 @@ export function DueDetailPage() {
             ) : null}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1.5">
-          <a
-            href={`tel:${data.customerPhone}`}
-            className="grid h-9 w-9 place-items-center rounded-[10px] border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-400"
-            aria-label={`Call ${data.customerName}`}
-            title={`Call ${data.customerPhone}`}
-          >
-            <Phone className="h-4 w-4" />
-          </a>
-          <button
-            type="button"
-            className="btn-secondary !h-9 !gap-1.5 !rounded-[10px] !px-2.5 !py-0 text-xs"
-            disabled={downloading}
-            onClick={() => void downloadStatement()}
-          >
-            <Download className="h-3.5 w-3.5" />
-            {downloading ? "Preparing…" : "Statement"}
-          </button>
-        </div>
+        <a
+          href={`tel:${data.customerPhone}`}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_8px_18px_-6px_rgba(16,185,129,0.7)] transition hover:bg-emerald-600"
+          aria-label={`Call ${data.customerName}`}
+          title={`Call ${data.customerPhone}`}
+        >
+          <Phone className="h-5 w-5" />
+        </a>
       </div>
 
       {error ? (
@@ -201,201 +270,168 @@ export function DueDetailPage() {
         </div>
       ) : null}
 
-      {/* Pending amount, promise date, paid progress */}
-      <section
-        className={clsx(
-          "mb-3 rounded-2xl px-3.5 py-3 ring-1",
-          data.settled
-            ? "bg-gradient-to-r from-emerald-500/10 to-transparent ring-emerald-500/20"
-            : "bg-gradient-to-r from-ember-500/10 to-transparent ring-ember-500/15",
-        )}
-      >
+      {/* Still to collect · status · paid so far */}
+      <section className="due-card px-3.5 pb-3 pt-3.5">
+        <div
+          className="absolute inset-x-0 top-0 h-1"
+          style={{ background: tone.accent }}
+          aria-hidden
+        />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-500">
-              {data.settled ? "Settled" : "Pending due"}
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-400">
+              {data.settled ? "Settled" : "Still to collect"}
             </p>
             <p
               className={clsx(
-                "font-display text-xl font-semibold leading-tight tabular-nums",
-                data.settled ? "text-emerald-600 dark:text-emerald-400" : "text-ember-500",
+                "mt-px font-display text-[27px] font-bold leading-tight tracking-tight tabular-nums",
+                data.settled
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : late
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-ink-900",
               )}
             >
-              {data.settled ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Check className="h-5 w-5" /> Paid
-                </span>
-              ) : (
-                formatINR(data.pending)
-              )}
+              {data.settled ? "Fully paid" : formatRupees(data.pending)}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pt-0.5">
-            <p className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-800">
-              <CalendarClock className="h-3.5 w-3.5 text-ink-400" />
-              {data.settled && data.settledAt
-                ? `Cleared ${formatDate(data.settledAt)}`
-                : data.dueDate
-                  ? formatDate(data.dueDate)
-                  : "No date given"}
-            </p>
-            {data.delayDays !== null ? (
-              <span
-                  className={clsx(
-                    "inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                    late
-                      ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                  )}
-                >
-                  {late
-                    ? `${delayLabel(data.delayDays)}${data.settled ? "" : " so far"}`
-                    : data.settled
-                      ? "On time"
-                      : data.delayDays === 0
-                        ? "Due today"
-                        : `${-data.delayDays} day${data.delayDays === -1 ? "" : "s"} left`}
-                </span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-2.5">
-          <div
-            className="h-1.5 rounded-full bg-ink-900/[0.07] dark:bg-white/10"
-            role="progressbar"
-            aria-label="Paid so far"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(paidShare * 100)}
+          <span
+            className={clsx(
+              "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold",
+              data.settled && !late ? URGENCY_TONE.upcoming.pill : tone.pill,
+            )}
           >
-            <div
-              className="paid-bar-glow h-full rounded-full bg-emerald-500"
-              style={{ width: `${paidShare * 100}%` }}
-            />
-          </div>
-          <p className="mt-1.5 flex items-center justify-between gap-2 text-[12px] text-ink-500">
-            <span>
-              Due{" "}
-              <span className="font-semibold tabular-nums text-ink-900">
-                {formatINR(data.originalDue)}
-              </span>
-            </span>
-            <span>
-              Paid{" "}
-              <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                {formatINR(data.paidTotal)}
-              </span>
-            </span>
-          </p>
+            <StatusIcon className="h-3.5 w-3.5" strokeWidth={2.4} />
+            {statusLabel}
+          </span>
         </div>
+
+        <div
+          className="mb-2 mt-2.5 h-[7px] overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10"
+          role="progressbar"
+          aria-label="Paid so far"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(paidShare * 100)}
+        >
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+            style={{ width: `${paidShare * 100}%` }}
+          />
+        </div>
+        <p className="flex items-center justify-between gap-2 text-xs font-semibold text-ink-500">
+          <span>
+            <span className="text-emerald-600 dark:text-emerald-400">
+              Paid{" "}
+              <b className="tabular-nums">{formatRupees(data.paidTotal)}</b>
+            </span>{" "}
+            of <b className="tabular-nums text-ink-900">{formatRupees(data.originalDue)}</b>
+          </span>
+          <span
+            className={clsx(
+              "text-right",
+              data.settled
+                ? "text-emerald-600 dark:text-emerald-400"
+                : late && "text-rose-600 dark:text-rose-400",
+            )}
+          >
+            {data.settled && data.settledAt
+              ? `Cleared ${formatDate(data.settledAt)}`
+              : data.dueDate
+                ? `Promised ${formatDate(data.dueDate)}`
+                : "No promise date"}
+          </span>
+        </p>
       </section>
 
-      {/* Statement, passbook style: Due added, Paid, running Balance */}
-      <section className="mb-4 overflow-hidden rounded-2xl border border-ink-100/80 bg-white/90 shadow-sm dark:bg-surface-elevated">
-        <p className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
-          <ReceiptText className="h-3.5 w-3.5" /> Statement
-        </p>
-        <table className="w-full table-fixed border-collapse text-[12px] leading-tight">
-          <colgroup>
-            <col className="w-[17%]" />
-            <col />
-            <col className="w-[20%]" />
-            <col className="w-[20%]" />
-            <col className="w-[21%]" />
-          </colgroup>
-          <thead>
-            <tr className="bg-ink-900 text-[10px] font-semibold uppercase tracking-wide text-white dark:bg-ink-100/40">
-              <th className="py-2 pl-2.5 pr-1 text-left">Date</th>
-              <th className="px-1 py-2 text-left">Details</th>
-              <th className="px-1 py-2 text-right">Due</th>
-              <th className="px-1 py-2 text-right">Paid</th>
-              <th className="py-2 pl-1 pr-2.5 text-right">Balance</th>
-            </tr>
-          </thead>
-          <tbody className="tabular-nums">
-            <tr className="border-b border-ink-100/80 align-top">
-              <td className="py-2.5 pl-2.5 pr-1">
-                <StatementDate value={data.billDate} />
-              </td>
-              <td className="px-1 py-2.5 align-top">
-                <span className="block font-semibold text-ink-900">Purchase</span>
-                <button
-                  type="button"
-                  className="mt-1 text-[12px] font-bold text-tide-600 underline decoration-tide-500 decoration-[1.5px] underline-offset-2 transition hover:text-tide-500 dark:text-tide-400"
-                  onClick={() => setViewingBill(true)}
-                >
-                  View bill
-                </button>
-              </td>
-              <td className="break-words px-1 py-2.5 text-right font-semibold text-ember-500">
-                {formatINR(data.originalDue)}
-              </td>
-              <td className="px-1 py-2.5" />
-              <td className="break-words py-2.5 pl-1 pr-2.5 text-right font-semibold text-ink-900">
-                {formatINR(data.originalDue)}
-              </td>
-            </tr>
-            {data.payments.map((payment, index) => (
-              <tr
-                key={payment.id}
-                className={clsx(
-                  "border-b border-ink-100/80 align-top",
-                  index % 2 === 0 && "bg-ink-50/40 dark:bg-white/[0.02]",
-                )}
-              >
-                <td className="py-2.5 pl-2.5 pr-1">
-                  <StatementDate value={payment.paidAt} />
-                </td>
-                <td className="px-1 py-2.5">
-                  <span className="block font-semibold text-emerald-700 dark:text-emerald-400">
-                    {payment.methodLabel}
-                  </span>
-                  <DelayPill days={payment.delayDays} className="mt-1 !px-1.5 !py-px !text-[9.5px]" />
-                </td>
-                <td className="px-1 py-2.5" />
-                <td className="break-words px-1 py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                  {formatINR(payment.amount)}
-                </td>
-                <td
-                  className={clsx(
-                    "break-words py-2.5 pl-1 pr-2.5 text-right font-semibold",
-                    payment.balanceAfter > 0 ? "text-ink-900" : "text-emerald-600 dark:text-emerald-400",
+      {/* Payment history, newest first, ending with the purchase */}
+      <div className="mb-2.5 mt-5 flex items-center justify-between gap-3 px-1">
+        <h2 className="flex items-center gap-2 text-base font-bold text-ink-900">
+          Payment history
+          <span className="rounded-full bg-ink-900/[0.06] px-2 py-px text-xs font-bold tabular-nums text-ink-500 dark:bg-white/10">
+            {data.payments.length}
+          </span>
+        </h2>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 text-[13px] font-bold text-tide-600 transition hover:text-tide-500 dark:text-tide-400"
+          onClick={() => setViewingBill(true)}
+        >
+          <FileText className="h-4 w-4" />
+          View bill
+        </button>
+      </div>
+
+      {data.payments.length === 0 ? (
+        <p className="mb-3 px-1 text-[13px] text-ink-500">No payments received yet.</p>
+      ) : null}
+
+      <ol className="mb-4">
+        {newestFirst.map((payment) => {
+          const MethodIcon = METHOD_ICON[payment.method] ?? Wallet;
+          return (
+            <li key={payment.id} className="due-timeline-item relative flex gap-3 pb-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <MethodIcon className="h-[18px] w-[18px]" />
+              </div>
+              <div className="due-card min-w-0 flex-1 px-3.5 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[15px] font-bold text-ink-900">
+                    {payment.method === "na"
+                      ? "Payment received"
+                      : `${payment.methodLabel} received`}
+                  </p>
+                  <p className="shrink-0 text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    + {formatRupees(payment.amount)}
+                  </p>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[12.5px] text-ink-400">
+                  <span>{formatDate(payment.paidAt)}</span>
+                  {payment.balanceAfter > 0 ? (
+                    <span className="font-semibold text-ink-500">
+                      Balance{" "}
+                      <b className="tabular-nums text-ink-900">
+                        {formatRupees(payment.balanceAfter)}
+                      </b>
+                    </span>
+                  ) : (
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      Fully cleared
+                    </span>
                   )}
-                >
-                  {formatINR(payment.balanceAfter)}
-                </td>
-              </tr>
-            ))}
-            {data.payments.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-4 text-center text-sm text-ink-500">
-                  No payments yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-          <tfoot className="tabular-nums">
-            <tr className="bg-amber-50 font-semibold dark:bg-amber-500/10">
-              <td className="py-2.5 pl-2.5 pr-1 text-ink-900" colSpan={2}>
-                Total
-              </td>
-              <td className="break-words px-1 py-2.5 text-right text-ink-900">{formatINR(data.originalDue)}</td>
-              <td className="break-words px-1 py-2.5 text-right text-emerald-600 dark:text-emerald-400">
-                {formatINR(data.paidTotal)}
-              </td>
-              <td
-                className={clsx(
-                  "break-words py-2.5 pl-1 pr-2.5 text-right",
-                  data.pending > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400",
-                )}
-              >
-                {formatINR(data.pending)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </section>
+                </div>
+                {payment.note ? (
+                  <p className="mt-1 text-[12.5px] italic text-ink-500">“{payment.note}”</p>
+                ) : null}
+                <DelayPill days={payment.delayDays} className="mt-2" />
+              </div>
+            </li>
+          );
+        })}
+        <li className="due-timeline-item relative flex gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0B1F33] text-[#FFA800] dark:ring-1 dark:ring-white/10">
+            <ShoppingBag className="h-[18px] w-[18px]" />
+          </div>
+          <div className="due-card min-w-0 flex-1 px-3.5 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[15px] font-bold text-ink-900">Bought on credit</p>
+              <p className="shrink-0 text-base font-bold tabular-nums text-ink-900">
+                {formatRupees(data.originalDue)}
+              </p>
+            </div>
+            <p className="mt-1 text-[12.5px] text-ink-400">
+              {formatDate(data.billDate)}
+              {productSummary ? ` · ${productSummary}` : ""}
+            </p>
+            <p className="mt-0.5 text-[12.5px] text-ink-400">
+              Bill total{" "}
+              <span className="font-semibold tabular-nums text-ink-500">
+                {formatRupees(data.billTotal)}
+              </span>
+            </p>
+          </div>
+        </li>
+      </ol>
 
       {showPayBar ? (
         <>
@@ -406,7 +442,7 @@ export function DueDetailPage() {
             <div
               ref={barRef}
               className={clsx(
-                "fixed z-30",
+                "fixed z-30 flex gap-2.5",
                 // Hidden (not unmounted) under the pay sheet so its size stays measured.
                 paying && "invisible",
                 bar.mobile &&
@@ -420,12 +456,19 @@ export function DueDetailPage() {
             >
               <button
                 type="button"
-                className="btn-primary w-full shadow-lift"
+                className="due-btn-dark inline-flex h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl text-base font-bold shadow-lift transition"
                 onClick={() => setPaying(true)}
               >
-                <Wallet className="h-4 w-4" />
+                <Wallet className="h-5 w-5" />
                 Mark paid
               </button>
+              <a
+                href={`tel:${data.customerPhone}`}
+                className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-400"
+                aria-label={`Call ${data.customerName}`}
+              >
+                <Phone className="h-5 w-5" />
+              </a>
             </div>,
             document.body,
           )}

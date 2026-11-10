@@ -563,6 +563,8 @@ export type DueItem = {
   grandTotal?: number;
   payableAmount?: number;
   isPartialPaid?: boolean;
+  /** Paid so far against this due (part payments). */
+  paidTotal?: number;
   productLabels?: string[];
   imeiNumbers?: string[];
   duePrivate?: boolean;
