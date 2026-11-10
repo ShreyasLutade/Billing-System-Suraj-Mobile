@@ -2321,6 +2321,50 @@ html.dark .due-card.due-card-overdue {
   width: 3px;
   border-radius: 0 4px 4px 0;
   background: var(--due-accent, #c9d0db);
+  z-index: 1;
+}
+
+/* Part-paid due: green fill up to the paid share, with a soft shine. */
+.due-paid-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Solid, so it reads green on red (overdue) cards too. */
+  background: linear-gradient(90deg, #e3f8ef, #c4eedb);
+  box-shadow: inset -2px 0 0 #34d399;
+  transition: width 0.4s ease;
+}
+.due-paid-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: translateX(-110%);
+  animation: due-paid-shine 3s ease-in-out infinite;
+}
+html.dark .due-paid-fill {
+  background: linear-gradient(90deg, #10302b, #12483a);
+  box-shadow: inset -2px 0 0 #10b981;
+}
+html.dark .due-paid-fill::after {
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+@keyframes due-paid-shine {
+  0% {
+    transform: translateX(-110%);
+  }
+  55%,
+  100% {
+    transform: translateX(230%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .due-paid-fill::after {
+    animation: none;
+    display: none;
+  }
 }
 
 /* Dotted line joining the payment history events. */

@@ -822,7 +822,17 @@ export function DuesPage() {
                     onClick={() => navigate(to, { state: fromState(location) })}
                     onKeyDown={(event) => openOnEnter(event, to)}
                   >
-                    <div className="flex items-center gap-2.5">
+                    {paid > 0 ? (
+                      // Part paid: the card fills green up to the paid share.
+                      <div
+                        className="due-paid-fill"
+                        style={{
+                          width: `${Math.min(paid / (paid + due.dueAmount), 1) * 100}%`,
+                        }}
+                        aria-hidden
+                      />
+                    ) : null}
+                    <div className="relative flex items-center gap-2.5">
                       <div
                         className={clsx(
                           "grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold",
@@ -845,6 +855,14 @@ export function DuesPage() {
                               strokeWidth={2.4}
                               aria-label="Private due"
                             />
+                          ) : null}
+                          {paid > 0 ? (
+                            <span
+                              className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+                              title={`${formatRupees(paid)} paid of ${formatRupees(round2(paid + due.dueAmount))}`}
+                            >
+                              {formatRupees(paid)} paid
+                            </span>
                           ) : null}
                         </div>
                         <p className="truncate text-xs text-ink-400">
@@ -870,24 +888,6 @@ export function DuesPage() {
                         </span>
                       </div>
                     </div>
-                    {paid > 0 ? (
-                      <div className="mt-2 flex items-center gap-2.5">
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-emerald-500"
-                            style={{
-                              width: `${Math.min(paid / (paid + due.dueAmount), 1) * 100}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-ink-500">
-                          <b className="text-emerald-600 dark:text-emerald-400">
-                            {formatRupees(paid)}
-                          </b>{" "}
-                          paid of {formatRupees(round2(paid + due.dueAmount))}
-                        </span>
-                      </div>
-                    ) : null}
                   </article>
                 </Fragment>
               );
