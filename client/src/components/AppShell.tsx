@@ -305,9 +305,10 @@ export function AppShell() {
         ref={mainRef}
         className={clsx(
           "relative mx-auto min-h-0 flex-1 w-full max-w-6xl overflow-y-auto overscroll-y-contain scroll-pt-28 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:scroll-pt-32 sm:pb-8",
+          // Header is ~69px tall: leave a small gap under it (+2rem for the Offline strip).
           isOnline
-            ? "pt-[calc(6.5rem+env(safe-area-inset-top))] sm:pt-[calc(6.75rem+env(safe-area-inset-top))]"
-            : "pt-[calc(8.5rem+env(safe-area-inset-top))] sm:pt-[calc(8.75rem+env(safe-area-inset-top))]",
+            ? "pt-[calc(5.25rem+env(safe-area-inset-top))] sm:pt-[calc(5.75rem+env(safe-area-inset-top))]"
+            : "pt-[calc(7.25rem+env(safe-area-inset-top))] sm:pt-[calc(7.75rem+env(safe-area-inset-top))]",
         )}
       >
         <motion.div
