@@ -738,6 +738,7 @@ export function DuesPage() {
           <div>
             {customerReveal.visibleItems.map(({ due, status }, index) => {
               const tone = URGENCY_TONE[status.urgency];
+              const overdue = status.urgency === "overdue";
               const StatusIcon = URGENCY_ICON[status.urgency];
               const paid = round2(due.paidTotal ?? 0);
               const startsGroup =
@@ -769,7 +770,10 @@ export function DuesPage() {
                   <article
                     role="link"
                     tabIndex={0}
-                    className="due-card due-card-stripe interactive-card mb-2 cursor-pointer px-3.5 py-3"
+                    className={clsx(
+                      "due-card due-card-stripe interactive-card mb-2 cursor-pointer px-3.5 py-3",
+                      overdue && "due-card-overdue interactive-card-danger",
+                    )}
                     style={{ "--due-accent": tone.accent } as CSSProperties}
                     onClick={() => navigate(to, { state: fromState(location) })}
                     onKeyDown={(event) => openOnEnter(event, to)}
@@ -778,7 +782,9 @@ export function DuesPage() {
                       <div
                         className={clsx(
                           "grid h-11 w-11 shrink-0 place-items-center rounded-full text-[15px] font-bold",
-                          tone.avatar,
+                          overdue
+                            ? "bg-white/80 text-rose-600 dark:bg-white/10 dark:text-rose-300"
+                            : tone.avatar,
                         )}
                         aria-hidden
                       >
@@ -812,7 +818,7 @@ export function DuesPage() {
                         <span
                           className={clsx(
                             "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold",
-                            tone.pill,
+                            overdue ? "bg-[#E5484D] text-white" : tone.pill,
                           )}
                         >
                           <StatusIcon className="h-3 w-3" strokeWidth={2.4} />

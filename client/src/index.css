@@ -2306,6 +2306,12 @@ html.dark .due-card {
   background: rgb(var(--color-surface));
   box-shadow: none;
 }
+/* Overdue dues: red tint, as on the old Dues page. */
+.due-card.due-card-overdue,
+html.dark .due-card.due-card-overdue {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.2);
+}
 .due-card-stripe::before {
   content: "";
   position: absolute;
