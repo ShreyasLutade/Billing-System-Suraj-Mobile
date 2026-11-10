@@ -190,13 +190,13 @@ function DuesHero({
   children?: ReactNode;
 }) {
   return (
-    <section className="dues-hero mb-2.5" aria-label={label}>
+    <section className="dues-hero mb-2" aria-label={label}>
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/65">
             {label}
           </p>
-          <p className="mt-px font-display text-[27px] font-bold leading-tight tracking-tight tabular-nums">
+          <p className="font-display text-[23px] font-bold leading-tight tracking-tight tabular-nums">
             {amount === null ? (
               "—"
             ) : (
@@ -466,12 +466,12 @@ export function DuesPage() {
 
   return (
     <div>
-      <div className="mb-3 flex items-end justify-between gap-3">
+      <div className="mb-2.5 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-[26px] font-bold leading-tight tracking-tight text-ink-900">
+          <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-ink-900">
             Dues
           </h1>
-          <p className="mt-0.5 text-[13px] text-ink-500">
+          <p className="text-[12.5px] text-ink-500">
             {tab === "customer"
               ? "Money customers still owe you"
               : "Money finance companies still owe you"}
@@ -492,7 +492,7 @@ export function DuesPage() {
         >
           {data && customerTotal > 0 ? (
             <>
-              <div className="mt-2.5 flex h-1.5 gap-[3px] overflow-hidden rounded-full bg-white/10">
+              <div className="mt-2 flex h-1 gap-[3px] overflow-hidden rounded-full bg-white/10">
                 {heroSegments.map((segment) =>
                   segment.amount > 0 ? (
                     <span
@@ -506,11 +506,11 @@ export function DuesPage() {
                   ) : null,
                 )}
               </div>
-              <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1">
+              <div className="mt-1.5 flex flex-wrap justify-between gap-x-3 gap-y-1">
                 {heroSegments.map((segment) => (
                   <span
                     key={segment.label}
-                    className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-semibold text-white/70"
+                    className="flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-white/70"
                   >
                     <span
                       className="h-[7px] w-[7px] rounded-full"
@@ -547,7 +547,7 @@ export function DuesPage() {
         />
       )}
 
-      <div className="dues-seg mb-2.5" role="tablist" aria-label="Due type">
+      <div className="dues-seg mb-2" role="tablist" aria-label="Due type">
         <button
           type="button"
           role="tab"
@@ -555,7 +555,7 @@ export function DuesPage() {
           className={clsx("dues-seg-btn", tab === "customer" && "dues-seg-on")}
           onClick={() => setTab("customer")}
         >
-          <UserRound className="h-4 w-4 shrink-0" />
+          <UserRound className="h-[15px] w-[15px] shrink-0" />
           Customer
           <span className="dues-seg-cnt">
             {data?.count ?? (tab === "customer" ? filteredDues.length : "—")}
@@ -568,7 +568,7 @@ export function DuesPage() {
           className={clsx("dues-seg-btn", tab === "finance" && "dues-seg-on")}
           onClick={() => setTab("finance")}
         >
-          <Landmark className="h-4 w-4 shrink-0" />
+          <Landmark className="h-[15px] w-[15px] shrink-0" />
           Finance
           <span className="dues-seg-cnt">
             {financeData?.count ??
@@ -751,18 +751,18 @@ export function DuesPage() {
                   {startsGroup ? (
                     <div
                       className={clsx(
-                        "mb-2 flex items-center justify-between gap-3 px-1",
-                        index > 0 && "mt-4",
+                        "mb-1.5 flex items-center justify-between gap-3 px-1",
+                        index > 0 && "mt-3",
                       )}
                     >
-                      <h2 className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
+                      <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
                         <span
                           className="h-2 w-2 rounded-full"
                           style={{ background: tone.accent }}
                         />
                         {GROUP_TITLE[status.urgency]}
                       </h2>
-                      <span className="text-[13px] font-bold tabular-nums text-ink-500">
+                      <span className="text-[12.5px] font-bold tabular-nums text-ink-500">
                         {formatRupees(groupTotals[status.urgency])}
                       </span>
                     </div>
@@ -771,17 +771,17 @@ export function DuesPage() {
                     role="link"
                     tabIndex={0}
                     className={clsx(
-                      "due-card due-card-stripe interactive-card mb-2 cursor-pointer px-3.5 py-3",
+                      "due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5",
                       overdue && "due-card-overdue interactive-card-danger",
                     )}
                     style={{ "--due-accent": tone.accent } as CSSProperties}
                     onClick={() => navigate(to, { state: fromState(location) })}
                     onKeyDown={(event) => openOnEnter(event, to)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                       <div
                         className={clsx(
-                          "grid h-11 w-11 shrink-0 place-items-center rounded-full text-[15px] font-bold",
+                          "grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold",
                           overdue
                             ? "bg-white/80 text-rose-600 dark:bg-white/10 dark:text-rose-300"
                             : tone.avatar,
@@ -792,7 +792,7 @@ export function DuesPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <h3 className="truncate text-[15px] font-bold text-ink-900">
+                          <h3 className="truncate text-sm font-bold text-ink-900">
                             {due.customerName}
                           </h3>
                           {isAdmin && due.duePrivate ? (
@@ -803,7 +803,7 @@ export function DuesPage() {
                             />
                           ) : null}
                         </div>
-                        <p className="mt-0.5 truncate text-[12.5px] text-ink-400">
+                        <p className="truncate text-xs text-ink-400">
                           <span className="tabular-nums">{due.customerPhone}</span>
                           <span className="text-ink-300"> · </span>
                           <span className="font-mono text-tide-600">
@@ -812,23 +812,23 @@ export function DuesPage() {
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[17px] font-bold tabular-nums tracking-tight text-ink-900">
+                        <p className="text-[15px] font-bold tabular-nums tracking-tight text-ink-900">
                           {formatRupees(due.dueAmount)}
                         </p>
                         <span
                           className={clsx(
-                            "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold",
+                            "mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] font-bold",
                             overdue ? "bg-[#E5484D] text-white" : tone.pill,
                           )}
                         >
-                          <StatusIcon className="h-3 w-3" strokeWidth={2.4} />
+                          <StatusIcon className="h-2.5 w-2.5" strokeWidth={2.6} />
                           {status.label}
                         </span>
                       </div>
                     </div>
                     {paid > 0 ? (
-                      <div className="mt-2.5 flex items-center gap-2.5">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10">
+                      <div className="mt-2 flex items-center gap-2.5">
+                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10">
                           <div
                             className="h-full rounded-full bg-emerald-500"
                             style={{
@@ -836,7 +836,7 @@ export function DuesPage() {
                             }}
                           />
                         </div>
-                        <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-500">
+                        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-ink-500">
                           <b className="text-emerald-600 dark:text-emerald-400">
                             {formatRupees(paid)}
                           </b>{" "}
@@ -861,7 +861,7 @@ export function DuesPage() {
       {tab === "finance" && financeData && !loading ? (
         <>
           {financeCompanyTotals.length > 0 ? (
-            <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            <div className="-mx-1 mb-2.5 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
               {[
                 {
                   name: null as string | null,
@@ -884,7 +884,7 @@ export function DuesPage() {
                     type="button"
                     aria-pressed={on}
                     className={clsx(
-                      "min-w-[6.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left transition",
+                      "min-w-[6rem] shrink-0 rounded-xl border px-2.5 py-1.5 text-left transition",
                       on
                         ? "dues-seg-on border-transparent"
                         : "border-[#E7EAF0] bg-white hover:border-ink-300 dark:border-[rgb(var(--color-line))] dark:bg-surface",
@@ -895,7 +895,7 @@ export function DuesPage() {
                   >
                     <p
                       className={clsx(
-                        "max-w-[10rem] truncate text-[11.5px] font-semibold",
+                        "max-w-[10rem] truncate text-[11px] font-semibold",
                         on ? "text-white/70 dark:text-[#1f1600]/70" : "text-ink-500",
                       )}
                     >
@@ -903,7 +903,7 @@ export function DuesPage() {
                     </p>
                     <p
                       className={clsx(
-                        "mt-0.5 text-[15px] font-bold tabular-nums",
+                        "text-sm font-bold tabular-nums",
                         on ? "text-[#FFA800] dark:text-[#1f1600]" : "text-ink-900",
                       )}
                     >
@@ -932,12 +932,12 @@ export function DuesPage() {
             />
           ) : (
             <div>
-              <div className="mb-2 flex items-center justify-between gap-3 px-1">
-                <h2 className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
+              <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
+                <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
                   <span className="h-2 w-2 rounded-full bg-[#FFB020]" />
                   Waiting longest
                 </h2>
-                <span className="text-[13px] font-bold tabular-nums text-ink-500">
+                <span className="text-[12.5px] font-bold tabular-nums text-ink-500">
                   {filteredFinanceDues.length} bill
                   {filteredFinanceDues.length === 1 ? "" : "s"}
                 </span>
@@ -956,15 +956,15 @@ export function DuesPage() {
                     key={due.id}
                     role="link"
                     tabIndex={0}
-                    className="due-card due-card-stripe interactive-card mb-2 cursor-pointer px-3.5 py-3"
+                    className="due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5"
                     style={{ "--due-accent": waitingAccent(days) } as CSSProperties}
                     onClick={() => navigate(to, { state: fromState(location) })}
                     onKeyDown={(event) => openOnEnter(event, to)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                       <div
                         className={clsx(
-                          "grid h-11 w-11 shrink-0 place-items-center rounded-full text-[14px] font-bold",
+                          "grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12.5px] font-bold",
                           companyAvatar(company),
                         )}
                         aria-hidden
@@ -972,10 +972,10 @@ export function DuesPage() {
                         {initials(company)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-[15px] font-bold text-ink-900">
+                        <h3 className="truncate text-sm font-bold text-ink-900">
                           {company}
                         </h3>
-                        <p className="mt-0.5 truncate text-[12.5px] text-ink-400">
+                        <p className="truncate text-xs text-ink-400">
                           {due.customerName}
                           <span className="text-ink-300"> · </span>
                           <span className="font-mono text-tide-600">
@@ -983,14 +983,14 @@ export function DuesPage() {
                           </span>
                         </p>
                       </div>
-                      <p className="shrink-0 text-right text-[17px] font-bold tabular-nums tracking-tight text-ink-900">
+                      <p className="shrink-0 text-right text-[15px] font-bold tabular-nums tracking-tight text-ink-900">
                         {formatRupees(
                           financeAmountForCompany(due, financeCompanyFilter),
                         )}
                       </p>
                     </div>
-                    <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-[#E7EAF0] pt-2.5 dark:border-[rgb(var(--color-line))]">
-                      <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-ink-500">
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-[#E7EAF0] pt-2 dark:border-[rgb(var(--color-line))]">
+                      <p className="flex min-w-0 items-center gap-1.5 text-[11.5px] font-semibold text-ink-500">
                         <Clock3 className="h-3.5 w-3.5 shrink-0 text-ink-400" />
                         <span className="truncate">
                           {days > 0 ? `Waiting ${waitingDays(days)}` : "Sold today"}
@@ -1000,7 +1000,7 @@ export function DuesPage() {
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="due-btn-dark inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-[13px] font-bold transition disabled:opacity-50"
+                          className="due-btn-dark inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-3 text-xs font-bold transition disabled:opacity-50"
                           disabled={receivingId === due.id}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -1009,7 +1009,7 @@ export function DuesPage() {
                           }}
                           aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
                         >
-                          <Check className="h-4 w-4" strokeWidth={2.4} />
+                          <Check className="h-3.5 w-3.5" strokeWidth={2.6} />
                           {receivingId === due.id ? "…" : "Received"}
                         </button>
                       ) : null}

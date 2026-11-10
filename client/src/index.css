@@ -2193,8 +2193,8 @@ html.dark .login-btn {
 .dues-hero {
   position: relative;
   overflow: hidden;
-  border-radius: 18px;
-  padding: 12px 14px;
+  border-radius: 16px;
+  padding: 10px 13px;
   color: #fff;
   background: linear-gradient(135deg, #0b1f33 0%, #17385a 100%);
   box-shadow: 0 18px 36px -14px rgba(11, 31, 51, 0.45);
@@ -2222,9 +2222,9 @@ html.dark .dues-hero {
 .dues-seg {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 16px;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 13px;
   border: 1px solid #e7eaf0;
   background: #fff;
   box-shadow: 0 6px 18px rgba(11, 31, 51, 0.05);
@@ -2235,12 +2235,12 @@ html.dark .dues-seg {
 }
 .dues-seg-btn {
   display: flex;
-  height: 40px;
+  height: 34px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  border-radius: 12px;
-  font-size: 14px;
+  gap: 6px;
+  border-radius: 10px;
+  font-size: 13px;
   font-weight: 600;
   color: #4a657a;
   transition: background-color 0.15s, color 0.15s;
@@ -2250,8 +2250,8 @@ html.dark .dues-seg-btn {
 }
 .dues-seg-cnt {
   border-radius: 999px;
-  padding: 1px 7px;
-  font-size: 11.5px;
+  padding: 0 6px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   background: #eef2f6;
@@ -2296,10 +2296,10 @@ html.dark .due-btn-dark:not(:disabled):hover {
 .due-card {
   position: relative;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid #e7eaf0;
   background: #fff;
-  box-shadow: 0 8px 22px -8px rgba(11, 31, 51, 0.12);
+  box-shadow: 0 6px 16px -8px rgba(11, 31, 51, 0.14);
 }
 html.dark .due-card {
   border-color: rgb(var(--color-line));
@@ -2316,9 +2316,9 @@ html.dark .due-card.due-card-overdue {
   content: "";
   position: absolute;
   left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 4px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
   border-radius: 0 4px 4px 0;
   background: var(--due-accent, #c9d0db);
 }
@@ -2327,9 +2327,9 @@ html.dark .due-card.due-card-overdue {
 .due-timeline-item:not(:last-child)::before {
   content: "";
   position: absolute;
-  left: 19px;
-  top: 42px;
-  bottom: -2px;
+  left: 15px;
+  top: 34px;
+  bottom: 0;
   width: 2px;
   background: repeating-linear-gradient(to bottom, #d5dce5 0 4px, transparent 4px 8px);
 }

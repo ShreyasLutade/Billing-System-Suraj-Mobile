@@ -69,7 +69,7 @@ function DelayPill({ days, className }: { days: number | null; className?: strin
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold",
+        "inline-flex items-center gap-1 rounded-full px-2 py-px text-[11px] font-bold",
         late
           ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
           : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -195,19 +195,19 @@ export function DueDetailPage() {
   return (
     <div ref={rootRef} className="mx-auto max-w-2xl pb-4">
       {/* Back · title · statement */}
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
         <Link
           to={from ?? "/dues"}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-[#E7EAF0] bg-white text-ink-900 shadow-sm transition hover:border-ink-300 dark:border-[rgb(var(--color-line))] dark:bg-surface"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#E7EAF0] bg-white text-ink-900 shadow-sm transition hover:border-ink-300 dark:border-[rgb(var(--color-line))] dark:bg-surface"
           aria-label={backText}
           title={backText}
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-[18px] w-[18px]" />
         </Link>
-        <p className="text-[15px] font-bold text-ink-900">Due details</p>
+        <p className="text-sm font-bold text-ink-900">Due details</p>
         <button
           type="button"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-[#E7EAF0] bg-white text-ink-900 shadow-sm transition hover:border-ink-300 disabled:opacity-60 dark:border-[rgb(var(--color-line))] dark:bg-surface"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#E7EAF0] bg-white text-ink-900 shadow-sm transition hover:border-ink-300 disabled:opacity-60 dark:border-[rgb(var(--color-line))] dark:bg-surface"
           disabled={downloading}
           onClick={() => void downloadStatement()}
           aria-label="Download statement PDF"
@@ -216,16 +216,16 @@ export function DueDetailPage() {
           {downloading ? (
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-tide-500" />
           ) : (
-            <Download className="h-[18px] w-[18px]" />
+            <Download className="h-4 w-4" />
           )}
         </button>
       </div>
 
       {/* Customer + call */}
-      <div className="mb-3 flex items-center gap-3 px-0.5">
+      <div className="mb-2.5 flex items-center gap-2.5 px-0.5">
         <div
           className={clsx(
-            "grid h-14 w-14 shrink-0 place-items-center rounded-full text-lg font-bold",
+            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-[15px] font-bold",
             tone.avatar,
           )}
           aria-hidden
@@ -233,10 +233,10 @@ export function DueDetailPage() {
           {initials(data.customerName)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-xl font-bold leading-tight tracking-tight text-ink-900">
+          <h1 className="truncate font-display text-[17px] font-bold leading-tight tracking-tight text-ink-900">
             {data.customerName}
           </h1>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[13px] text-ink-400">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] text-ink-400">
             <span className="tabular-nums">{data.customerPhone}</span>
             <span className="text-ink-300">·</span>
             <Link
@@ -256,11 +256,11 @@ export function DueDetailPage() {
         </div>
         <a
           href={`tel:${data.customerPhone}`}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_8px_18px_-6px_rgba(16,185,129,0.7)] transition hover:bg-emerald-600"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_6px_14px_-6px_rgba(16,185,129,0.7)] transition hover:bg-emerald-600"
           aria-label={`Call ${data.customerName}`}
           title={`Call ${data.customerPhone}`}
         >
-          <Phone className="h-5 w-5" />
+          <Phone className="h-[18px] w-[18px]" />
         </a>
       </div>
 
@@ -271,7 +271,7 @@ export function DueDetailPage() {
       ) : null}
 
       {/* Still to collect · status · paid so far */}
-      <section className="due-card px-3.5 pb-3 pt-3.5">
+      <section className="due-card px-3 pb-2.5 pt-3">
         <div
           className="absolute inset-x-0 top-0 h-1"
           style={{ background: tone.accent }}
@@ -284,7 +284,7 @@ export function DueDetailPage() {
             </p>
             <p
               className={clsx(
-                "mt-px font-display text-[27px] font-bold leading-tight tracking-tight tabular-nums",
+                "mt-px font-display text-2xl font-bold leading-tight tracking-tight tabular-nums",
                 data.settled
                   ? "text-emerald-600 dark:text-emerald-400"
                   : late
@@ -297,17 +297,17 @@ export function DueDetailPage() {
           </div>
           <span
             className={clsx(
-              "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold",
+              "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold",
               data.settled && !late ? URGENCY_TONE.upcoming.pill : tone.pill,
             )}
           >
-            <StatusIcon className="h-3.5 w-3.5" strokeWidth={2.4} />
+            <StatusIcon className="h-3 w-3" strokeWidth={2.4} />
             {statusLabel}
           </span>
         </div>
 
         <div
-          className="mb-2 mt-2.5 h-[7px] overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10"
+          className="mb-1.5 mt-2 h-1.5 overflow-hidden rounded-full bg-ink-900/[0.07] dark:bg-white/10"
           role="progressbar"
           aria-label="Paid so far"
           aria-valuemin={0}
@@ -319,7 +319,7 @@ export function DueDetailPage() {
             style={{ width: `${paidShare * 100}%` }}
           />
         </div>
-        <p className="flex items-center justify-between gap-2 text-xs font-semibold text-ink-500">
+        <p className="flex items-center justify-between gap-2 text-[11.5px] font-semibold text-ink-500">
           <span>
             <span className="text-emerald-600 dark:text-emerald-400">
               Paid{" "}
@@ -345,8 +345,8 @@ export function DueDetailPage() {
       </section>
 
       {/* Payment history, newest first, ending with the purchase */}
-      <div className="mb-2.5 mt-5 flex items-center justify-between gap-3 px-1">
-        <h2 className="flex items-center gap-2 text-base font-bold text-ink-900">
+      <div className="mb-2 mt-4 flex items-center justify-between gap-3 px-1">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink-900">
           Payment history
           <span className="rounded-full bg-ink-900/[0.06] px-2 py-px text-xs font-bold tabular-nums text-ink-500 dark:bg-white/10">
             {data.payments.length}
@@ -354,10 +354,10 @@ export function DueDetailPage() {
         </h2>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 text-[13px] font-bold text-tide-600 transition hover:text-tide-500 dark:text-tide-400"
+          className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-tide-600 transition hover:text-tide-500 dark:text-tide-400"
           onClick={() => setViewingBill(true)}
         >
-          <FileText className="h-4 w-4" />
+          <FileText className="h-3.5 w-3.5" />
           View bill
         </button>
       </div>
@@ -370,22 +370,22 @@ export function DueDetailPage() {
         {newestFirst.map((payment) => {
           const MethodIcon = METHOD_ICON[payment.method] ?? Wallet;
           return (
-            <li key={payment.id} className="due-timeline-item relative flex gap-3 pb-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <MethodIcon className="h-[18px] w-[18px]" />
+            <li key={payment.id} className="due-timeline-item relative flex gap-2.5 pb-2">
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <MethodIcon className="h-4 w-4" />
               </div>
-              <div className="due-card min-w-0 flex-1 px-3.5 py-3">
+              <div className="due-card min-w-0 flex-1 rounded-2xl px-3 py-2.5">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-[15px] font-bold text-ink-900">
+                  <p className="text-sm font-bold text-ink-900">
                     {payment.method === "na"
                       ? "Payment received"
                       : `${payment.methodLabel} received`}
                   </p>
-                  <p className="shrink-0 text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <p className="shrink-0 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                     + {formatRupees(payment.amount)}
                   </p>
                 </div>
-                <div className="mt-1 flex items-center justify-between gap-2 text-[12.5px] text-ink-400">
+                <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-ink-400">
                   <span>{formatDate(payment.paidAt)}</span>
                   {payment.balanceAfter > 0 ? (
                     <span className="font-semibold text-ink-500">
@@ -401,29 +401,29 @@ export function DueDetailPage() {
                   )}
                 </div>
                 {payment.note ? (
-                  <p className="mt-1 text-[12.5px] italic text-ink-500">“{payment.note}”</p>
+                  <p className="mt-0.5 text-xs italic text-ink-500">“{payment.note}”</p>
                 ) : null}
-                <DelayPill days={payment.delayDays} className="mt-2" />
+                <DelayPill days={payment.delayDays} className="mt-1.5" />
               </div>
             </li>
           );
         })}
-        <li className="due-timeline-item relative flex gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0B1F33] text-[#FFA800] dark:ring-1 dark:ring-white/10">
-            <ShoppingBag className="h-[18px] w-[18px]" />
+        <li className="due-timeline-item relative flex gap-2.5">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0B1F33] text-[#FFA800] dark:ring-1 dark:ring-white/10">
+            <ShoppingBag className="h-4 w-4" />
           </div>
-          <div className="due-card min-w-0 flex-1 px-3.5 py-3">
+          <div className="due-card min-w-0 flex-1 rounded-2xl px-3 py-2.5">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-[15px] font-bold text-ink-900">Bought on credit</p>
-              <p className="shrink-0 text-base font-bold tabular-nums text-ink-900">
+              <p className="text-sm font-bold text-ink-900">Bought on credit</p>
+              <p className="shrink-0 text-sm font-bold tabular-nums text-ink-900">
                 {formatRupees(data.originalDue)}
               </p>
             </div>
-            <p className="mt-1 text-[12.5px] text-ink-400">
+            <p className="mt-0.5 text-xs text-ink-400">
               {formatDate(data.billDate)}
               {productSummary ? ` · ${productSummary}` : ""}
             </p>
-            <p className="mt-0.5 text-[12.5px] text-ink-400">
+            <p className="mt-0.5 text-xs text-ink-400">
               Bill total{" "}
               <span className="font-semibold tabular-nums text-ink-500">
                 {formatRupees(data.billTotal)}
@@ -442,7 +442,7 @@ export function DueDetailPage() {
             <div
               ref={barRef}
               className={clsx(
-                "fixed z-30 flex gap-2.5",
+                "fixed z-30 flex gap-2",
                 // Hidden (not unmounted) under the pay sheet so its size stays measured.
                 paying && "invisible",
                 bar.mobile &&
@@ -456,18 +456,18 @@ export function DueDetailPage() {
             >
               <button
                 type="button"
-                className="due-btn-dark inline-flex h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl text-base font-bold shadow-lift transition"
+                className="due-btn-dark inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[15px] font-bold transition"
                 onClick={() => setPaying(true)}
               >
-                <Wallet className="h-5 w-5" />
+                <Wallet className="h-[18px] w-[18px]" />
                 Mark paid
               </button>
               <a
                 href={`tel:${data.customerPhone}`}
-                className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-400"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-400"
                 aria-label={`Call ${data.customerName}`}
               >
-                <Phone className="h-5 w-5" />
+                <Phone className="h-[18px] w-[18px]" />
               </a>
             </div>,
             document.body,
