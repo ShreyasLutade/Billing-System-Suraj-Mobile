@@ -779,12 +779,13 @@ stockRouter.post("/", async (req, res, next) => {
 const updateStockSchema = z
   .object({
     mobileName: z.string().trim().min(2, "Mobile name is required").max(100),
-    platform: z.enum(["IOS", "ANDROID"]),
+    /** ACCESSORY: chargers, adapters… (no storage, RAM or colour). */
+    platform: z.enum(["IOS", "ANDROID", "ACCESSORY"]),
     /** NEW | USED — omit to keep the unit's current condition. */
     condition: z.enum(["NEW", "USED"]).optional(),
-    storage: z.string().trim().min(1, "Storage is required").max(30),
+    storage: z.string().trim().max(30).optional().default(""),
     ram: z.string().trim().max(30).optional().default(""),
-    color: z.string().trim().min(1, "Color is required").max(40),
+    color: z.string().trim().max(40).optional().default(""),
     purchasePrice: z.coerce
       .number({ invalid_type_error: "Purchase price is required" })
       .positive("Purchase price must be greater than 0"),
@@ -798,6 +799,14 @@ const updateStockSchema = z
       .default([]),
   })
   .superRefine((data, ctx) => {
+    if (data.platform !== "ACCESSORY") {
+      if (!data.storage.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Storage is required", path: ["storage"] });
+      }
+      if (!data.color.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Color is required", path: ["color"] });
+      }
+    }
     if (data.platform === "ANDROID" && !data.ram?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -908,7 +917,7 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
     const mobileName = data.mobileName.trim();
     const purchasePrice = data.purchasePrice;
     const platform = data.platform;
-    const storage = normalizeCapacity(data.storage);
+    const storage = platform === "ACCESSORY" ? "" : normalizeCapacity(data.storage);
     const ram =
       platform === "ANDROID" ? normalizeCapacity(data.ram || "") : "";
     const color = data.color.trim();

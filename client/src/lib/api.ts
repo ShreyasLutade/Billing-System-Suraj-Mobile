@@ -540,7 +540,7 @@ export const api = {
     id: string,
     payload: {
       mobileName: string;
-      platform: "IOS" | "ANDROID";
+      platform: "IOS" | "ANDROID" | "ACCESSORY";
       condition?: "NEW" | "USED";
       storage: string;
       ram?: string;

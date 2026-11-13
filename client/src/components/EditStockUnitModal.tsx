@@ -49,6 +49,8 @@ export function EditStockUnitModal({
   onSaved: (item: StockItem) => void;
   onDeleted?: (id: string) => void;
 }) {
+  /** Chargers, adapters…: no OS, storage, colour or IMEI. */
+  const isAccessory = unit.platform === "ACCESSORY" || unit.kind === "ACCESSORY";
   const [platform, setPlatform] = useState<"IOS" | "ANDROID">(
     unit.platform === "ANDROID" ? "ANDROID" : "IOS",
   );
@@ -127,18 +129,18 @@ export function EditStockUnitModal({
     const nextColor = color.trim();
 
     if (name.length < 2) {
-      setError("Enter the mobile name");
+      setError(isAccessory ? "Enter the accessory name" : "Enter the mobile name");
       return;
     }
-    if (!nextStorage) {
+    if (!isAccessory && !nextStorage) {
       setError("Select a mobile with storage from the list");
       return;
     }
-    if (platform === "ANDROID" && !nextRam) {
+    if (!isAccessory && platform === "ANDROID" && !nextRam) {
       setError("Select a mobile with RAM from the list");
       return;
     }
-    if (!nextColor) {
+    if (!isAccessory && !nextColor) {
       setError("Enter the color");
       return;
     }
@@ -164,11 +166,11 @@ export function EditStockUnitModal({
     try {
       const { data } = await api.updateStockItem(unit.id, {
         mobileName: name,
-        platform,
+        platform: isAccessory ? "ACCESSORY" : platform,
         condition,
-        storage: nextStorage,
-        ram: nextRam,
-        color: nextColor,
+        storage: isAccessory ? "" : nextStorage,
+        ram: isAccessory ? "" : nextRam,
+        color: isAccessory ? "" : nextColor,
         purchasePrice: price,
         imei: nextImei,
         serialNumber: nextSerial,
@@ -268,6 +270,7 @@ export function EditStockUnitModal({
 
           <div className="space-y-2 [@media(max-height:720px)]:space-y-1.5">
             {/* OS and condition share a row so the dialog fits phone screens. */}
+            {!isAccessory ? (
             <div className="grid grid-cols-2 gap-2">
               <div className="min-w-0">
                 <span className="label required">OS</span>
@@ -317,6 +320,23 @@ export function EditStockUnitModal({
               </div>
             </div>
 
+            ) : null}
+
+            {isAccessory ? (
+              <div>
+                <label className="label required" htmlFor="edit-stock-name">
+                  Accessory name
+                </label>
+                <input
+                  id="edit-stock-name"
+                  className="field"
+                  value={mobileName}
+                  onChange={(event) => setMobileName(event.target.value)}
+                  disabled={busy}
+                  required
+                />
+              </div>
+            ) : (
             <div>
               <label className="label required" htmlFor="edit-stock-name">
                 Mobile name
@@ -347,8 +367,10 @@ export function EditStockUnitModal({
                 }}
               />
             </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
+              {!isAccessory ? (
               <div>
                 <label className="label required" htmlFor="edit-stock-color">
                   Color
@@ -363,6 +385,7 @@ export function EditStockUnitModal({
                   required
                 />
               </div>
+              ) : null}
 
               <div>
                 <label className="label required" htmlFor="edit-stock-price">
@@ -384,6 +407,7 @@ export function EditStockUnitModal({
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {!isAccessory ? (
               <div>
                 <label className="label required" htmlFor="edit-stock-imei">
                   IMEI
@@ -401,6 +425,7 @@ export function EditStockUnitModal({
                   <ImeiScanFieldButton disabled={busy} onScan={setImei} />
                 </ScanFieldShell>
               </div>
+              ) : null}
 
               <div>
                 <label className="label" htmlFor="edit-stock-serial">
