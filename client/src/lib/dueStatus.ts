@@ -69,12 +69,3 @@ export function formatRupees(amount: number) {
     maximumFractionDigits: 2,
   }).format(value);
 }
-
-/** Short amount for tight spots: ₹950, ₹1.5k, ₹20k, ₹4.33L. */
-export function shortRupees(amount: number) {
-  const value = Math.abs(amount || 0);
-  const trim = (n: number, digits: number) => String(Number(n.toFixed(digits)));
-  if (value < 1000) return `₹${Math.round(value)}`;
-  if (value < 100000) return `₹${trim(value / 1000, value < 10000 ? 1 : 0)}k`;
-  return `₹${trim(value / 100000, 2)}L`;
-}

@@ -13,9 +13,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { differenceInCalendarDays, format } from "date-fns";
 import { AnimatePresence } from "framer-motion";
 import {
-  CalendarDays,
   Check,
-  CircleAlert,
   Clock3,
   Landmark,
   Lock,
@@ -48,7 +46,6 @@ import {
   dueStatus,
   formatRupees,
   initials,
-  shortRupees,
   URGENCY_TONE,
   type DueUrgency,
 } from "../lib/dueStatus";
@@ -141,11 +138,11 @@ const GROUP_TITLE: Record<DueUrgency, string> = {
   none: "No due date",
 };
 
-const URGENCY_ICON: Record<DueUrgency, typeof Clock3> = {
-  overdue: CircleAlert,
-  today: Clock3,
-  upcoming: CalendarDays,
-  none: CalendarDays,
+/** Status circle colours (no circle for "no due date"). */
+const STATUS_DOT: Record<Exclude<DueUrgency, "none">, string> = {
+  overdue: "bg-[#E5484D] text-white",
+  today: "bg-[#FFB020] text-white",
+  upcoming: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
 };
 
 const COMPANY_AVATARS = [
@@ -794,7 +791,6 @@ export function DuesPage() {
             {customerReveal.visibleItems.map(({ due, status }, index) => {
               const tone = URGENCY_TONE[status.urgency];
               const overdue = status.urgency === "overdue";
-              const StatusIcon = URGENCY_ICON[status.urgency];
               const paid = round2(due.paidTotal ?? 0);
               const startsGroup =
                 index === 0 ||
@@ -844,7 +840,7 @@ export function DuesPage() {
                         aria-hidden
                       />
                     ) : null}
-                    <div className="relative flex items-center gap-2.5">
+                    <div className="relative flex items-center gap-2">
                       <div
                         className={clsx(
                           "grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold",
@@ -868,19 +864,17 @@ export function DuesPage() {
                               aria-label="Private due"
                             />
                           ) : null}
-                        </div>
-                        <p className="truncate text-xs text-ink-400">
                           {paid > 0 ? (
-                            // Part paid: how much is in, instead of the phone.
                             <span
-                              className="font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+                              className="shrink-0 rounded-full bg-emerald-500/15 px-[5px] py-px text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
                               title={`${formatRupees(paid)} paid of ${formatRupees(round2(paid + due.dueAmount))}`}
                             >
-                              {shortRupees(paid)} of {shortRupees(paid + due.dueAmount)} paid
+                              {formatRupees(paid)} paid
                             </span>
-                          ) : (
-                            <span className="tabular-nums">{due.customerPhone}</span>
-                          )}
+                          ) : null}
+                        </div>
+                        <p className="truncate text-xs text-ink-400">
+                          <span className="tabular-nums">{due.customerPhone}</span>
                           <span className="text-ink-300"> · </span>
                           <span className="font-mono text-tide-600">
                             {due.invoiceNumber}
@@ -891,15 +885,26 @@ export function DuesPage() {
                         <p className="text-[15px] font-bold tabular-nums tracking-tight text-ink-900">
                           {formatRupees(due.dueAmount)}
                         </p>
-                        <span
-                          className={clsx(
-                            "mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] font-bold",
-                            overdue ? "bg-[#E5484D] text-white" : tone.pill,
-                          )}
-                        >
-                          <StatusIcon className="h-2.5 w-2.5" strokeWidth={2.6} />
-                          {status.label}
-                        </span>
+                        {status.urgency === "none" ? (
+                          // Same height as the cards with a circle.
+                          <span className="mt-0.5 block h-5" aria-hidden />
+                        ) : (
+                          // Small circle: days late (red) / left (green), clock for today.
+                          <span
+                            className={clsx(
+                              "ml-auto mt-0.5 grid h-5 w-fit min-w-[20px] place-items-center rounded-full px-1 text-[10px] font-bold leading-none tabular-nums",
+                              STATUS_DOT[status.urgency],
+                            )}
+                            title={status.label}
+                            aria-label={status.label}
+                          >
+                            {status.urgency === "today" ? (
+                              <Clock3 className="h-3 w-3" strokeWidth={2.6} />
+                            ) : (
+                              `${status.days}d`
+                            )}
+                          </span>
+                        )}
                       </div>
                       {reminder ? (
                         <a
