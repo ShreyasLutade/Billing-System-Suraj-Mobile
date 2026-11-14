@@ -1,6 +1,5 @@
-import { format } from "date-fns";
 import type { DueItem } from "../types";
-import { dueStatus, formatRupees } from "./dueStatus";
+import { formatRupees } from "./dueStatus";
 
 const SHOP_NAME = "Suraj Mobile";
 const SHOP_PHONE = "9516533556";
@@ -14,42 +13,20 @@ export function whatsappNumber(phone: string) {
   return null;
 }
 
-function day(value: string) {
-  return format(new Date(value), "dd MMM yyyy");
-}
-
-/** Short, polite due reminder with the bill details (WhatsApp *bold*). */
-export function dueReminderMessage(due: DueItem, now = new Date()) {
-  const status = dueStatus(due.dueDate, now);
-  const paid = Math.round((due.paidTotal ?? 0) * 100) / 100;
+/** Short, polite due reminder: product and pending amount (WhatsApp *bold*). */
+export function dueReminderMessage(due: DueItem) {
   const products = (due.productLabels ?? []).filter(Boolean);
   const product = products.length
     ? `${products[0]}${products.length > 1 ? ` + ${products.length - 1} more` : ""}`
     : null;
-
-  let dueLine: string | null = null;
-  if (due.dueDate) {
-    if (status.urgency === "overdue") {
-      dueLine = `Due date: ${day(due.dueDate)} (${status.days} day${status.days === 1 ? "" : "s"} overdue)`;
-    } else if (status.urgency === "today") {
-      dueLine = `Due date: Today, ${day(due.dueDate)}`;
-    } else {
-      dueLine = `Due date: ${day(due.dueDate)}`;
-    }
-  }
 
   return [
     `Namaste ${due.customerName} ji,`,
     "",
     `This is a gentle reminder from *${SHOP_NAME}*, Balaghat, about your pending payment.`,
     "",
-    `Bill: ${due.invoiceNumber} (${day(due.billDate)})`,
     product ? `Product: ${product}` : null,
     `Pending amount: *${formatRupees(due.dueAmount)}*`,
-    paid > 0
-      ? `(Total due ${formatRupees(paid + due.dueAmount)} · Paid ${formatRupees(paid)})`
-      : null,
-    dueLine,
     "",
     "Kindly clear the pending amount at the earliest. You can pay in cash at the shop or online.",
     "If you have already paid, please ignore this message.",
