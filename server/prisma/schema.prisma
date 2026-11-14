@@ -128,6 +128,8 @@ model DuePayment {
   kind      String   @default("partial")
   paidAt    DateTime @default(now())
   note      String?
+  /// Promised date before this payment moved it (so Undo can put it back).
+  dueDateBefore DateTime?
   bill      Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
 
   @@index([billId])

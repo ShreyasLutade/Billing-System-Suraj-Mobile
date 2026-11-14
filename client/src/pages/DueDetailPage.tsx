@@ -18,6 +18,7 @@ import {
   Phone,
   ShoppingBag,
   Smartphone,
+  Undo2,
   Wallet,
   X,
   type LucideIcon,
@@ -93,6 +94,8 @@ export function DueDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [paying, setPaying] = useState(false);
   const [viewingBill, setViewingBill] = useState(false);
+  /** Latest payment the admin is about to undo (confirm sheet open). */
+  const [undoing, setUndoing] = useState<CustomerDueDetail["payments"][number] | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   const showPayBar = Boolean(isAdmin && data && !data.settled);
@@ -367,7 +370,7 @@ export function DueDetailPage() {
       ) : null}
 
       <ol className="mb-4">
-        {newestFirst.map((payment) => {
+        {newestFirst.map((payment, index) => {
           const MethodIcon = METHOD_ICON[payment.method] ?? Wallet;
           return (
             <li key={payment.id} className="due-timeline-item relative flex gap-2.5 pb-2">
@@ -403,7 +406,22 @@ export function DueDetailPage() {
                 {payment.note ? (
                   <p className="mt-0.5 text-xs italic text-ink-500">“{payment.note}”</p>
                 ) : null}
-                <DelayPill days={payment.delayDays} className="mt-1.5" />
+                {payment.delayDays !== null || (isAdmin && index === 0) ? (
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <DelayPill days={payment.delayDays} />
+                    {isAdmin && index === 0 ? (
+                      // Only the newest payment can be undone.
+                      <button
+                        type="button"
+                        className="ml-auto inline-flex h-7 items-center gap-1 rounded-lg border border-rose-500/30 px-2 text-[11.5px] font-bold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
+                        onClick={() => setUndoing(payment)}
+                      >
+                        <Undo2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+                        Undo
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </li>
           );
@@ -489,6 +507,20 @@ export function DueDetailPage() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {undoing && isAdmin ? (
+          <UndoPaymentSheet
+            due={data}
+            payment={undoing}
+            onClose={() => setUndoing(null)}
+            onUndone={(updated) => {
+              setUndoing(null);
+              setData(updated);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {viewingBill ? (
           <BillPdfViewer
             billId={data.id}
@@ -498,6 +530,110 @@ export function DueDetailPage() {
         ) : null}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** "Undo this payment?" — the amount goes back to the pending due. */
+function UndoPaymentSheet({
+  due,
+  payment,
+  onClose,
+  onUndone,
+}: {
+  due: CustomerDueDetail;
+  payment: CustomerDueDetail["payments"][number];
+  onClose: () => void;
+  onUndone: (updated: CustomerDueDetail) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pendingAfter = round2(due.pending + payment.amount);
+
+  async function undo() {
+    setSaving(true);
+    setError(null);
+    try {
+      const { data: updated } = await api.undoDuePayment(due.id, payment.id);
+      onUndone(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not undo the payment");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={() => !saving && onClose()}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="undo-payment-title"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
+        className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-5 shadow-lift dark:border-white/10 dark:bg-surface-elevated"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
+            <Undo2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="undo-payment-title" className="font-display text-lg font-bold text-ink-900">
+              Undo this payment?
+            </h2>
+            <p className="mt-0.5 text-sm text-ink-500">
+              {formatRupees(payment.amount)}{" "}
+              {payment.method === "na" ? "payment" : payment.methodLabel.toLowerCase()} on{" "}
+              {formatDate(payment.paidAt)} from {due.customerName}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-ink-900/[0.04] px-3.5 py-2.5 text-sm dark:bg-white/5">
+          <p className="flex items-center justify-between gap-2">
+            <span className="text-ink-500">Pending now</span>
+            <span className="font-semibold tabular-nums text-ink-900">{formatRupees(due.pending)}</span>
+          </p>
+          <p className="mt-1 flex items-center justify-between gap-2">
+            <span className="text-ink-500">Pending after undo</span>
+            <span className="font-bold tabular-nums text-rose-600 dark:text-rose-400">
+              {formatRupees(pendingAfter)}
+            </span>
+          </p>
+        </div>
+        <p className="mt-2 text-xs text-ink-500">
+          The payment is removed from the history and its amount comes off the bill's{" "}
+          {payment.method === "na" ? "payments" : `${payment.methodLabel.toLowerCase()} total`}.
+        </p>
+
+        {error ? (
+          <p className="mt-3 rounded-2xl bg-orange-50 px-4 py-3 text-sm text-ember-500 dark:bg-orange-500/10">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button type="button" className="btn-secondary !py-2.5" onClick={onClose} disabled={saving}>
+            Keep it
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-60"
+            onClick={() => void undo()}
+            disabled={saving}
+          >
+            <Undo2 className="h-4 w-4" />
+            {saving ? "Undoing…" : "Undo payment"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

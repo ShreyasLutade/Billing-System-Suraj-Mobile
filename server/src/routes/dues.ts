@@ -527,6 +527,8 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
             method,
             kind: isFull ? "full" : "partial",
             paidAt,
+            dueDateBefore:
+              !isFull && parsed.data.nextDueDate ? bill.dueDate : null,
           },
         },
       },
@@ -558,3 +560,66 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Undo the latest payment received on a due: the amount goes back to the
+ * pending due and comes off the bill's cash / online / card total. Only the
+ * newest payment can be undone, so the balances in the history stay right.
+ */
+duesRouter.delete(
+  "/:id/payments/:paymentId",
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const bill = await prisma.bill.findUnique({
+        where: { id: req.params.id },
+        include: { duePayments: { orderBy: { paidAt: "asc" } } },
+      });
+      if (!bill) {
+        res.status(404).json({ error: "Bill not found" });
+        return;
+      }
+      const payment = bill.duePayments.find((p) => p.id === req.params.paymentId);
+      if (!payment) {
+        res.status(404).json({ error: "Payment not found" });
+        return;
+      }
+      if (bill.duePayments.at(-1)?.id !== payment.id) {
+        res.status(400).json({ error: "Only the latest payment can be undone" });
+        return;
+      }
+
+      const round = (value: number) => Number(value.toFixed(2));
+      const takeBack = (total: number, method: string) =>
+        payment.method === method ? round(Math.max(total - payment.amount, 0)) : total;
+      const cashAmount = takeBack(bill.cashAmount, "cash");
+      const onlineAmount = takeBack(bill.onlineAmount, "online");
+      const cardAmount = takeBack(bill.cardAmount, "card");
+      const previous = bill.duePayments.at(-2) ?? null;
+
+      await prisma.$transaction([
+        prisma.duePayment.delete({ where: { id: payment.id } }),
+        prisma.bill.update({
+          where: { id: bill.id },
+          data: {
+            dueAmount: round(Math.max(bill.dueAmount, 0) + payment.amount),
+            dueSettled: false,
+            dueSettledMethod: previous?.method ?? null,
+            dueSettledAt: previous?.paidAt ?? null,
+            dueDate: payment.dueDateBefore ?? bill.dueDate,
+            cashAmount,
+            onlineAmount,
+            cardAmount,
+            // Same rule as a bill edit: due left and something already paid.
+            isPartialPaid:
+              cashAmount + onlineAmount + cardAmount + bill.financeAmount + bill.financeAmount2 > 0,
+          },
+        }),
+      ]);
+
+      res.json({ data: await getCustomerDue(bill.id) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);

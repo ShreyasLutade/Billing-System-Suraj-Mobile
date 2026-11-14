@@ -828,6 +828,12 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  /** Undo the latest payment received on a due (admin). */
+  undoDuePayment: (id: string, paymentId: string) =>
+    request<{ data: CustomerDueDetail }>(
+      `/dues/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}`,
+      { method: "DELETE" },
+    ),
   pdfUrl: (id: string) => {
     const token = getAuthToken();
     const base = `${API_BASE}/bills/${id}/pdf`;
