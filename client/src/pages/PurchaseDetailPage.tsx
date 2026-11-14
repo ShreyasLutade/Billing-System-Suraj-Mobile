@@ -51,7 +51,9 @@ function toEditUnit(item: PurchaseStockRef, purchase: Purchase): StockItem {
   return {
     id: item.id,
     condition: unitCondition(item, purchase),
-    platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
+    // Keep accessories as accessories so the edit popup shows accessory fields.
+    platform:
+      item.platform === "ACCESSORY" ? "ACCESSORY" : item.platform === "ANDROID" ? "ANDROID" : "IOS",
     mobileName: item.mobileName,
     storage: item.storage || "",
     ram: item.ram || "",
