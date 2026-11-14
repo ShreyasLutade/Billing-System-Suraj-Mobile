@@ -282,6 +282,16 @@ export type AnalyticsExchangeItem = {
   status: string;
 };
 
+/** An exchange mobile on the Exchange page (everyone; no prices). */
+export type ExchangeMobile = Omit<AnalyticsExchangeItem, "purchaseId" | "supplierId" | "value">;
+
+export type ExchangeMobilesSummary = {
+  period: "today" | "yesterday" | "all";
+  periodLabel: string;
+  count: number;
+  items: ExchangeMobile[];
+};
+
 export type AnalyticsExchangesSummary = {
   period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
   periodLabel: string;

@@ -8,6 +8,7 @@ import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
 import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
 import { AnalyticsCustomerPayoutsPage } from "./pages/AnalyticsCustomerPayoutsPage";
+import { ExchangesPage } from "./pages/ExchangesPage";
 import { AnalyticsPendingItemsPage } from "./pages/AnalyticsPendingItemsPage";
 import { BackupPage } from "./pages/BackupPage";
 import { RecycleBinPage } from "./pages/RecycleBinPage";
@@ -59,6 +60,7 @@ export default function App() {
                   element={<PurchaseDetailPage />}
                 />
                 <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+                <Route path="exchanges" element={<ExchangesPage />} />
                 <Route element={<RequireAdmin />}>
                   <Route path="analytics" element={<AnalyticsPage />} />
                   <Route

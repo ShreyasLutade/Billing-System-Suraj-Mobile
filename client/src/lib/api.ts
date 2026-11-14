@@ -1,4 +1,5 @@
 import type {
+  ExchangeMobilesSummary,
   AnalyticsCustomerPayoutsSummary,
   AnalyticsExchangesSummary,
   AnalyticsPurchasesSummary,
@@ -289,6 +290,11 @@ export const api = {
     request<{ data: { itemIndex: number; accessories: ExchangeAccessory[] } }>(
       `/bills/${billId}/exchange-accessories`,
       { method: "PATCH", body: JSON.stringify(payload) },
+    ),
+  /** Exchange mobiles taken in (staff and admin; no prices). */
+  listExchangeMobiles: (period: "today" | "yesterday" | "all") =>
+    request<{ data: ExchangeMobilesSummary }>(
+      `/exchanges?period=${encodeURIComponent(period)}`,
     ),
   analyticsExchanges: (
     period: string = "all",

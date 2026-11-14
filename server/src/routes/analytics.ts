@@ -618,7 +618,7 @@ async function loadPurchaseHistory(
   };
 }
 
-async function loadExchangeIntake(
+export async function loadExchangeIntake(
   purchaseDateFilter: ReturnType<typeof toDateFilter>,
 ) {
   const purchases = await prisma.purchase.findMany({

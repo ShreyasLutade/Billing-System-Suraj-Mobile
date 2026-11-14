@@ -153,7 +153,7 @@ export function PeriodFilter(props: PeriodFilterProps) {
   );
 }
 
-function PeriodChipRow<T extends string>({
+export function PeriodChipRow<T extends string>({
   options,
   value,
   onChange,

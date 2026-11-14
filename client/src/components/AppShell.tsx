@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowDownUp,
   ArrowUp,
   BarChart3,
   FilePlus2,
@@ -102,7 +103,10 @@ export function AppShell() {
     { to: "/dues", label: "Dues", icon: Wallet },
     { to: "/stock", label: "Stock", icon: Package },
     { to: "/suppliers", label: "Suppliers", icon: Truck },
-    ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
+    // Staff get Exchange (no prices) where admins have Analytics.
+    isAdmin
+      ? { to: "/analytics", label: "Analytics", icon: BarChart3 }
+      : { to: "/exchanges", label: "Exchange", icon: ArrowDownUp },
   ];
 
   function onMainNavClick() {
