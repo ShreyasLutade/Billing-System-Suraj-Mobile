@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   format,
@@ -183,13 +189,31 @@ function periodDateRangeLabel(
   return null;
 }
 
+/** Last summary shown, so coming back to Analytics shows it at once. */
+let lastSummary: { key: string; data: AnalyticsSummary } | null = null;
+
+/** Where the page was when a link on it was opened (cleared by the main nav). */
+const RETURN_KEY = "analytics.returnScroll";
+type ReturnScroll = { top: number; count: number };
+
+function readReturnScroll(): ReturnScroll | null {
+  try {
+    const raw = sessionStorage.getItem(RETURN_KEY);
+    return raw ? (JSON.parse(raw) as ReturnScroll) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The app's scrolling area (AppShell <main>). */
+function scroller() {
+  return document.querySelector("main");
+}
+
 export function AnalyticsPage() {
   const location = useLocation();
   const { theme } = useTheme();
   const dark = theme === "dark";
-  const [data, setData] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useSessionState<AnalyticsPeriodValue>(
     "analytics.period",
     "today",
@@ -199,6 +223,23 @@ export function AnalyticsPage() {
     "",
   );
   const [customTo, setCustomTo] = useSessionState("analytics.customTo", "");
+  const summaryKey = `${period}|${customFrom}|${customTo}`;
+  const [data, setData] = useState<AnalyticsSummary | null>(() =>
+    lastSummary?.key === summaryKey ? lastSummary.data : null,
+  );
+  const [loading, setLoading] = useState(() => lastSummary?.key !== summaryKey);
+  const [error, setError] = useState<string | null>(null);
+  const [returnScroll] = useState(readReturnScroll);
+  const restoredRef = useRef(false);
+
+  // Used once: a later visit (e.g. from the menu) starts at the top.
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(RETURN_KEY);
+    } catch {
+      // ignore
+    }
+  }, []);
   const [sortKey, setSortKey] = useSessionState<BillSortKey>(
     "analytics.sortKey",
     "date",
@@ -244,7 +285,10 @@ export function AnalyticsPage() {
     if (period === "custom" && !customRangeReady) return;
 
     let active = true;
-    setLoading(true);
+    // Same filter as last time: keep showing it and refresh quietly.
+    const cached = lastSummary?.key === summaryKey ? lastSummary.data : null;
+    if (cached) setData(cached);
+    else setLoading(true);
     (async () => {
       try {
         const response = await api.analytics(
@@ -257,6 +301,7 @@ export function AnalyticsPage() {
             : undefined,
         );
         if (active) {
+          lastSummary = { key: summaryKey, data: response.data };
           setData(response.data);
           setError(null);
         }
@@ -273,6 +318,8 @@ export function AnalyticsPage() {
     return () => {
       active = false;
     };
+    // summaryKey is built from period / customFrom / customTo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, customFrom, customTo, customRangeReady]);
 
   useEffect(() => {
@@ -304,7 +351,37 @@ export function AnalyticsPage() {
   const billsReveal = useInfiniteReveal(
     sortedBills,
     `${period}|${customFrom}|${customTo}|${sortKey}|${sortDir}|${sortedBills.length}`,
+    undefined,
+    returnScroll?.count,
   );
+
+  // Back from a bill (or any card) opened here: same place in the list.
+  useEffect(() => {
+    if (!returnScroll || restoredRef.current || !data || loading) return;
+    if (billsReveal.visibleCount < Math.min(returnScroll.count, sortedBills.length)) {
+      return;
+    }
+    restoredRef.current = true;
+    requestAnimationFrame(() => {
+      scroller()?.scrollTo({ top: returnScroll.top });
+    });
+  }, [returnScroll, data, loading, billsReveal.visibleCount, sortedBills.length]);
+
+  /** Remember the spot when a link on this page is opened. */
+  function rememberSpot(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!(event.target as Element).closest("a[href]")) return;
+    try {
+      sessionStorage.setItem(
+        RETURN_KEY,
+        JSON.stringify({
+          top: scroller()?.scrollTop ?? 0,
+          count: billsReveal.visibleCount,
+        } satisfies ReturnScroll),
+      );
+    } catch {
+      // Private mode / quota — ignore.
+    }
+  }
 
   const billTotals = useMemo(() => {
     return sortedBills.reduce(
@@ -391,7 +468,7 @@ export function AnalyticsPage() {
     : [];
 
   return (
-    <div>
+    <div onClickCapture={rememberSpot}>
       <PageHeader
         icon={BarChart3}
         title="Analytics"
