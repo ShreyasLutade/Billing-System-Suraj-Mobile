@@ -11248,3 +11248,163 @@ html.dark .acc {
   padding: 4px 8px;
 }
 
+
+/* Fill a box (A) and box picker (B) */
+.acc-fill {
+  display: grid;
+  gap: 8px;
+}
+
+.acc-fill-label {
+  margin: 4px 0 0;
+  color: var(--a-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.acc-fill-in,
+.acc-fill-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-fill-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.acc-fill-in li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 7px 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--a-accent) 30%, var(--a-line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+}
+
+.acc-fill-in li span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.acc-fill-in li small {
+  color: var(--a-muted);
+  font-size: 11.5px;
+}
+
+.acc-fill-in li b {
+  font: 800 15px/1 "Sora", sans-serif;
+}
+
+.acc .acc-fill-in li button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: var(--a-card);
+  color: var(--a-red);
+}
+
+.acc-fill-in li button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.acc .acc-fill-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.acc .acc-fill-row.is-on {
+  border-color: var(--a-accent);
+  background: color-mix(in srgb, var(--a-accent) 9%, var(--a-card));
+}
+
+.acc-tick {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border: 2px solid var(--a-line);
+  border-radius: 6px;
+  color: #fff;
+}
+
+.is-on > .acc-tick {
+  border-color: var(--a-accent);
+  background: var(--a-accent);
+}
+
+.acc-tick svg {
+  width: 13px;
+  height: 13px;
+}
+
+.acc-mini-grid-block {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.acc-mini-grid {
+  display: grid;
+  gap: 5px;
+}
+
+.acc .acc-mini-box {
+  position: relative;
+  display: grid;
+  height: 42px;
+  place-items: center;
+  border: 1px dashed var(--a-line);
+  border-radius: 10px;
+  background: var(--a-field);
+  color: var(--a-ink);
+  font: 800 13px/1 "Sora", sans-serif;
+  transition: transform 0.12s, background 0.12s;
+}
+
+.acc .acc-mini-box:active {
+  transform: scale(0.94);
+}
+
+.acc .acc-mini-box.has-items {
+  border-style: solid;
+  background: var(--a-card);
+}
+
+.acc .acc-mini-box.is-here {
+  border: 1px solid var(--a-accent);
+  background: var(--a-accent);
+  color: #fff;
+  box-shadow: 0 6px 14px -8px var(--a-accent);
+}
+
+.acc-mini-box i {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  color: var(--a-muted);
+  font-size: 9px;
+  font-style: normal;
+}

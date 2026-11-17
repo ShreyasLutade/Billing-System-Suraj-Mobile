@@ -102,6 +102,29 @@ accBoxesRouter.post("/boxes/:id/items", async (req, res, next) => {
   }
 });
 
+/** Put several covers in one box at once ("Fill box"). */
+accBoxesRouter.post("/boxes/:id/items/bulk", async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({ items: z.array(z.object({ productId: z.string().min(1), model: z.string().trim().max(60).default("") })).min(1).max(500) })
+      .safeParse(req.body);
+    if (!parsed.success) return void res.status(400).json({ error: "Choose the covers" });
+    const boxId = req.params.id;
+    await prisma.$transaction(
+      parsed.data.items.map(({ productId, model }) =>
+        prisma.accBoxItem.upsert({
+          where: { boxId_productId_model: { boxId, productId, model } },
+          create: { boxId, productId, model },
+          update: {},
+        }),
+      ),
+    );
+    res.status(201).json({ data: await listBoxes() });
+  } catch (error) {
+    next(error);
+  }
+});
+
 accBoxesRouter.delete("/boxes/items/:itemId", async (req, res, next) => {
   try {
     await prisma.accBoxItem.delete({ where: { id: req.params.itemId } });

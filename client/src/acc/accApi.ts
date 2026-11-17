@@ -404,6 +404,7 @@ export const accApi = {
   addSingleBox: (code?: string) => post<AccBox[]>("/acc/boxes/single", { code }),
   deleteBox: (id: string) => apiRequest<{ data: AccBox[] }>(`/acc/boxes/${id}`, { method: "DELETE" }),
   placeInBox: (boxId: string, productId: string, model: string) => post<AccBox[]>(`/acc/boxes/${boxId}/items`, { productId, model }),
+  fillBox: (boxId: string, items: Array<{ productId: string; model: string }>) => post<AccBox[]>(`/acc/boxes/${boxId}/items/bulk`, { items }),
   removeFromBox: (itemId: string) => apiRequest<{ data: AccBox[] }>(`/acc/boxes/items/${itemId}`, { method: "DELETE" }),
   /** Phone model names from the mobile shop's list (for cover suggestions). */
   phoneNames: () => apiRequest<{ data: Array<{ name: string }> }>("/phone-models"),

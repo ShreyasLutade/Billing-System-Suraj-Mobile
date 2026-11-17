@@ -331,7 +331,8 @@ export function AccCoverBoxesPage() {
   const { catalog } = useAccCatalog();
   const boxes = useBoxes();
   const [q, setQ] = useState("");
-  const [picked, setPicked] = useState<Pile | null>(null);
+  /** B: the cover whose box picker is open. */
+  const [pickerFor, setPickerFor] = useState<Pile | null>(null);
   const [dragging, setDragging] = useState<Pile | null>(null);
   const [openBox, setOpenBox] = useState<AccBox | null>(null);
   const [adding, setAdding] = useState<"grid" | "box" | null>(null);
@@ -378,7 +379,6 @@ export function AccCoverBoxesPage() {
       const { data } = await accApi.placeInBox(box.id, pile.product.id, pile.model);
       setBoxes(data);
       toast(`${pile.model || "Not segregated"} · ${pile.product.name} → ${box.code}`);
-      setPicked(null);
     } catch (err) {
       toast(errorText(err), { tone: "error" });
     }
@@ -432,10 +432,10 @@ export function AccCoverBoxesPage() {
                   <Search aria-hidden />
                   <input data-keep-case className="bg-transparent" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search phone or cover…" />
                 </label>
-                <p className="acc-tray-hint">Hold and drag onto a box, or tap a cover then tap a box.</p>
+                <p className="acc-tray-hint">Tap a cover to choose its box, or tap a box to fill it with many covers.</p>
                 <ul className="acc-tray-list">
                   {shown.map((p) => (
-                    <TrayPile key={p.key} pile={p} codes={where.get(p.key) ?? []} picked={picked?.key === p.key} onPick={() => setPicked(picked?.key === p.key ? null : p)} />
+                    <TrayPile key={p.key} pile={p} codes={where.get(p.key) ?? []} picked={pickerFor?.key === p.key} onPick={() => setPickerFor(p)} />
                   ))}
                   {!shown.length ? <li className="acc-tray-empty">{piles.length ? "Nothing matches." : "No cover stock yet."}</li> : null}
                 </ul>
@@ -464,8 +464,8 @@ export function AccCoverBoxesPage() {
                           key={b.id}
                           box={b}
                           pileByKey={pileByKey}
-                          armed={Boolean(picked || dragging)}
-                          onTap={() => (picked ? void place(b, picked) : setOpenBox(b))}
+                          armed={Boolean(dragging)}
+                          onTap={() => setOpenBox(b)}
                         />
                       ))}
                     </div>
@@ -476,18 +476,6 @@ export function AccCoverBoxesPage() {
           </section>
         </div>
 
-        <AnimatePresence>
-          {picked ? (
-            <motion.div className="acc-pick-bar" initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}>
-              <span>
-                Tap a box for <b>{picked.model || "Not segregated"}</b> · {picked.product.name}
-              </span>
-              <button type="button" onClick={() => setPicked(null)} aria-label="Cancel">
-                <X />
-              </button>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
       </div>
 
       <DragOverlay dropAnimation={{ duration: 180 }}>
@@ -501,7 +489,14 @@ export function AccCoverBoxesPage() {
         ) : null}
       </DragOverlay>
 
-      <BoxSheet box={openBox ? boxes?.find((b) => b.id === openBox.id) ?? null : null} pileByKey={pileByKey} onClose={() => setOpenBox(null)} />
+      <FillBoxSheet
+        box={openBox ? boxes?.find((b) => b.id === openBox.id) ?? null : null}
+        piles={piles}
+        where={where}
+        pileByKey={pileByKey}
+        onClose={() => setOpenBox(null)}
+      />
+      <BoxPickerSheet pile={pickerFor} boxes={boxes ?? []} where={where} onClose={() => setPickerFor(null)} />
       <AddBoxesSheet mode={adding} onClose={() => setAdding(null)} />
     </DndContext>
   );
@@ -561,59 +556,190 @@ function BoxTile({ box, pileByKey, armed, onTap }: { box: AccBox; pileByKey: Map
   );
 }
 
-function BoxSheet({ box, pileByKey, onClose }: { box: AccBox | null; pileByKey: Map<string, Pile>; onClose: () => void }) {
+/** A: open a box: what's in it, and tick many covers to put in at once. */
+function FillBoxSheet({
+  box,
+  piles,
+  where,
+  pileByKey,
+  onClose,
+}: {
+  box: AccBox | null;
+  piles: Pile[];
+  where: Map<string, string[]>;
+  pileByKey: Map<string, Pile>;
+  onClose: () => void;
+}) {
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  const [ticked, setTicked] = useState<string[]>([]);
+  useEffect(() => {
+    setTicked([]);
+    setQ("");
+  }, [box?.id]);
+
+  const inBox = new Set(box?.items.map((i) => `${i.productId}|${i.model}`) ?? []);
+  const t = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const choices = piles
+    .filter((p) => p.qty > 0 && !inBox.has(p.key))
+    .filter((p) => t.every((x) => `${p.model} ${p.product.name}`.toLowerCase().includes(x)))
+    .sort((a, b) => Number(Boolean(where.get(a.key))) - Number(Boolean(where.get(b.key))) || collator.compare(a.model || "~", b.model || "~"));
+
   async function run(work: () => Promise<{ data: AccBox[] }>, done?: string) {
     setBusy(true);
     try {
       const { data } = await work();
       setBoxes(data);
       if (done) toast(done);
+      return true;
     } catch (err) {
       toast(errorText(err), { tone: "error" });
+      return false;
     } finally {
       setBusy(false);
     }
   }
+
+  async function fill() {
+    if (!box || !ticked.length) return;
+    const items = ticked.map((k) => pileByKey.get(k)).filter(Boolean).map((p) => ({ productId: p!.product.id, model: p!.model }));
+    if (await run(() => accApi.fillBox(box.id, items), `${plural(items.length, "cover")} put in ${box.code}`)) setTicked([]);
+  }
+
   return (
-    <Sheet open={Boolean(box)} onClose={onClose} title={box ? `Box ${box.code}` : ""} subtitle={box ? (box.grid === "Single" ? "Single box" : box.grid) : ""}>
+    <Sheet
+      open={Boolean(box)}
+      onClose={onClose}
+      title={box ? `Box ${box.code}` : ""}
+      subtitle={box ? `${box.grid === "Single" ? "Single box" : box.grid} · ${plural(box.items.length, "cover")} inside` : ""}
+      footer={
+        ticked.length ? (
+          <button type="button" className="acc-btn is-primary is-big is-block" disabled={busy} onClick={() => void fill()}>
+            {busy ? <Loader2 className="acc-spin" /> : <Check />} Put {plural(ticked.length, "cover")} in {box?.code}
+          </button>
+        ) : undefined
+      }
+    >
       {box ? (
-        <div className="acc-boxsheet">
+        <div className="acc-fill">
           {box.items.length ? (
-            <ul>
-              {box.items.map((i) => {
-                const pile = pileByKey.get(`${i.productId}|${i.model}`);
-                return (
-                  <li key={i.id}>
-                    <span>
-                      <strong>{i.model || "Not segregated"}</strong>
-                      <small>{pile?.product.name ?? "Removed product"}</small>
+            <>
+              <p className="acc-fill-label">In this box</p>
+              <ul className="acc-fill-in">
+                {box.items.map((i) => {
+                  const pile = pileByKey.get(`${i.productId}|${i.model}`);
+                  return (
+                    <li key={i.id}>
+                      <span>
+                        <strong>{i.model || "Not segregated"}</strong>
+                        <small>{pile?.product.name ?? "Removed product"}</small>
+                      </span>
+                      <b>{pile?.qty ?? 0}</b>
+                      <button type="button" disabled={busy} onClick={() => void run(() => accApi.removeFromBox(i.id), `Taken out of ${box.code}`)} aria-label="Take out of box">
+                        <X />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
+
+          <p className="acc-fill-label">Add covers{ticked.length ? ` · ${ticked.length} ticked` : ""}</p>
+          <label className="acc-tray-search">
+            <Search aria-hidden />
+            <input data-keep-case className="bg-transparent" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search phone or cover…" />
+          </label>
+          <ul className="acc-fill-list">
+            {choices.map((p) => {
+              const on = ticked.includes(p.key);
+              const codes = where.get(p.key) ?? [];
+              return (
+                <li key={p.key}>
+                  <button type="button" className={clsx("acc-fill-row", on && "is-on")} onClick={() => setTicked(on ? ticked.filter((k) => k !== p.key) : [...ticked, p.key])}>
+                    <i className="acc-tick">{on ? <Check /> : null}</i>
+                    <span className="acc-pile-text">
+                      <strong>{p.model || "Not segregated"}</strong>
+                      <small>{p.product.name}</small>
                     </span>
-                    <b>{pile?.qty ?? 0}</b>
-                    <button type="button" disabled={busy} onClick={() => void run(() => accApi.removeFromBox(i.id), `Taken out of ${box.code}`)} aria-label="Take out of box">
-                      <X />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="acc-hint">Empty. Drag a cover here, or tap a cover in the stock list and then this box.</p>
-          )}
-          {!box.items.length ? (
-            <button
-              type="button"
-              className="acc-link-btn is-red"
-              disabled={busy}
-              onClick={() =>
-                void run(() => accApi.deleteBox(box.id), `Box ${box.code} removed`).then(onClose)
-              }
-            >
+                    <span className="acc-pile-side">
+                      <b>{p.qty}</b>
+                      {codes.length ? <em>{codes.join(" · ")}</em> : <em className="is-none">No box</em>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {!choices.length ? <li className="acc-tray-empty">{t.length ? "Nothing matches." : "Every cover is already here."}</li> : null}
+          </ul>
+          {!box.items.length && !ticked.length ? (
+            <button type="button" className="acc-link-btn is-red" disabled={busy} onClick={() => void run(() => accApi.deleteBox(box.id), `Box ${box.code} removed`).then((ok) => ok && onClose())}>
               <Trash2 /> Remove this box
             </button>
           ) : null}
         </div>
       ) : null}
+    </Sheet>
+  );
+}
+
+/** B: tap a cover → small seat map; tap a box to put it in (tap again to take it out). */
+function BoxPickerSheet({ pile, boxes, where, onClose }: { pile: Pile | null; boxes: AccBox[]; where: Map<string, string[]>; onClose: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const codes = pile ? where.get(pile.key) ?? [] : [];
+  const grids = useMemo(() => {
+    const out = new Map<string, AccBox[]>();
+    for (const b of boxes) out.set(b.grid, [...(out.get(b.grid) ?? []), b]);
+    return [...out.entries()];
+  }, [boxes]);
+
+  async function toggle(b: AccBox) {
+    if (!pile || busy) return;
+    setBusy(b.id);
+    try {
+      const existing = b.items.find((i) => i.productId === pile.product.id && i.model === pile.model);
+      const { data } = existing ? await accApi.removeFromBox(existing.id) : await accApi.placeInBox(b.id, pile.product.id, pile.model);
+      setBoxes(data);
+      toast(existing ? `Taken out of ${b.code}` : `${pile.model || "Not segregated"} → ${b.code}`);
+    } catch (err) {
+      toast(errorText(err), { tone: "error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Sheet
+      open={Boolean(pile)}
+      onClose={onClose}
+      title={pile ? pile.model || "Not segregated" : ""}
+      subtitle={pile ? `${pile.product.name} · ${pile.qty} pcs · ${codes.length ? `in ${codes.join(", ")}` : "not in a box"}` : ""}
+      footer={
+        <button type="button" className="acc-btn is-big is-block" onClick={onClose}>
+          Done
+        </button>
+      }
+    >
+      <p className="acc-tray-hint">Tap a box to put it there · tap a blue box to take it out.</p>
+      {grids.map(([name, list]) => {
+        const cols = name === "Single" ? 5 : Math.max(...list.map((b) => b.col)) + 1;
+        return (
+          <div key={name} className="acc-mini-grid-block">
+            {grids.length > 1 ? <p className="acc-fill-label">{name === "Single" ? "Single boxes" : name}</p> : null}
+            <div className="acc-mini-grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+              {list.map((b) => {
+                const here = codes.includes(b.code);
+                return (
+                  <button key={b.id} type="button" className={clsx("acc-mini-box", here && "is-here", b.items.length && "has-items")} onClick={() => void toggle(b)} disabled={Boolean(busy)}>
+                    {busy === b.id ? <Loader2 className="acc-spin" /> : b.code}
+                    {b.items.length && !here ? <i>{b.items.length}</i> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </Sheet>
   );
 }
