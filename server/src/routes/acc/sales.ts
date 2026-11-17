@@ -77,8 +77,8 @@ const saleSchema = z.object({
         rate: z.coerce.number().min(0).max(10_000_000),
       }),
     )
-    .min(1, "Add at least one item")
-    .max(200),
+    // No cap on how many items one bill can have.
+    .min(1, "Add at least one item"),
   discount: z.coerce.number().min(0).max(10_000_000).default(0),
   transportCharge: z.coerce.number().min(0).max(10_000_000).default(0),
   cashAmount: z.coerce.number().min(0).max(10_000_000).default(0),
