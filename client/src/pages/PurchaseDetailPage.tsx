@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
-import { Plus, SquarePen, Trash2 } from "lucide-react";
+import { Cable, Plus, Smartphone, SquarePen, Trash2 } from "lucide-react";
 import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
@@ -196,17 +196,15 @@ export function PurchaseDetailPage() {
             Back to {purchase.supplier?.name || "supplier"}
           </span>
         </BackButton>
-        <button
-          type="button"
-          className="btn-primary shrink-0 !px-3 !py-2 text-sm"
-          onClick={() => {
+        <AddMenu
+          onAddMobile={() => {
             setNotice(null);
             setAddingMobiles(true);
           }}
-        >
-          <Plus className="h-4 w-4" />
-          Add mobiles
-        </button>
+          onAddAccessories={() =>
+            navigate("/stock/accessories/add", { state: { supplierId: purchase.supplierId } })
+          }
+        />
       </div>
 
       <div className="mb-3">
@@ -638,6 +636,70 @@ export function PurchaseDetailPage() {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** Round + button: tap for "Add mobile" or "Add accessories" (same look as the Stock page's floating +). */
+function AddMenu({ onAddMobile, onAddAccessories }: { onAddMobile: () => void; onAddAccessories: () => void }) {
+  const [open, setOpen] = useState(false);
+  const options = [
+    { label: "Add mobile", icon: Smartphone, onSelect: onAddMobile },
+    { label: "Add accessories", icon: Cable, onSelect: onAddAccessories },
+  ];
+  return (
+    <div className="relative shrink-0">
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            key="add-backdrop"
+            className="fixed inset-0 z-40 bg-ink-950/30 backdrop-blur-[1px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+        ) : null}
+      </AnimatePresence>
+      <button
+        type="button"
+        className="fab-glass relative z-50 grid h-11 w-11 place-items-center rounded-full transition active:scale-95"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={open ? "Close add menu" : "Add to this purchase"}
+      >
+        <motion.span className="grid place-items-center" animate={{ rotate: open ? 45 : 0 }} transition={{ duration: 0.2 }}>
+          <Plus className="h-5 w-5" strokeWidth={2.5} />
+        </motion.span>
+      </button>
+      <AnimatePresence>
+        {open ? (
+          <div className="absolute right-0 top-full z-50 mt-2 flex flex-col items-end gap-2" role="menu">
+            {options.map((option, index) => (
+              <motion.button
+                key={option.label}
+                type="button"
+                role="menuitem"
+                className="flex items-center gap-3 whitespace-nowrap rounded-full bg-white/80 py-1.5 pl-4 pr-1.5 text-sm font-semibold text-ink-900 shadow-lift backdrop-blur-xl backdrop-saturate-150 dark:bg-white/10"
+                initial={{ opacity: 0, y: -8, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.18, delay: index * 0.04 } }}
+                exit={{ opacity: 0, y: -6, scale: 0.96, transition: { duration: 0.12 } }}
+                onClick={() => {
+                  setOpen(false);
+                  option.onSelect();
+                }}
+              >
+                {option.label}
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-ink-50 text-ink-700 dark:bg-white/10 dark:text-ink-100">
+                  <option.icon className="h-[18px] w-[18px]" />
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

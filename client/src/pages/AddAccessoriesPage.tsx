@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Cable, Minus, Plus, Search, Store, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -259,7 +259,11 @@ export function AddAccessoriesPage() {
   const [purchasePrice, setPurchasePrice] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [supplierId, setSupplierId] = useState("");
+  // A purchase page's "+ → Add accessories" arrives with its supplier chosen.
+  const location = useLocation();
+  const [supplierId, setSupplierId] = useState(
+    () => (location.state as { supplierId?: string } | null)?.supplierId || "",
+  );
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
   const [useNewSupplier, setUseNewSupplier] = useState(false);
