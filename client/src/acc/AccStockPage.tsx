@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -102,18 +102,19 @@ export function AccStockPage() {
   // Category sections in the counter's order; only categories with
   // matches. Every category shows; each one lists its first products and
   // grows with "Show all" (paging the whole A–Z list hid later categories).
-  const [showAllIn, setShowAllIn] = useState<string[]>([]);
+  /** Products shown per category (grows as you scroll to its end). */
+  const [limits, setLimits] = useState<Record<string, number>>({});
   const sections = useMemo(
     () =>
       categories
         .map((c) => {
           const allItems = list.filter((p) => p.categoryId === c.id);
-          const items = tokens.length || showAllIn.includes(c.id) ? allItems : allItems.slice(0, STOCK_PAGE_SIZE);
+          const items = tokens.length ? allItems : allItems.slice(0, limits[c.id] ?? STOCK_PAGE_SIZE);
           return { category: c, items, allItems };
         })
         .filter((s) => s.allItems.length),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [categories, list, showAllIn, q],
+    [categories, list, limits, q],
   );
 
   const units = products.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
@@ -283,7 +284,9 @@ export function AccStockPage() {
               onToggle={() =>
                 setCollapsed(collapsed.includes(category.id) ? collapsed.filter((id) => id !== category.id) : [...collapsed, category.id])
               }
-              onShowAll={() => setShowAllIn((cur) => [...cur, category.id])}
+              onShowAll={() =>
+                setLimits((cur) => ({ ...cur, [category.id]: (cur[category.id] ?? STOCK_PAGE_SIZE) + STOCK_PAGE_SIZE }))
+              }
             />
           ))}
           <div className="acc-stock-list-footer">
@@ -414,11 +417,20 @@ function StockSection({
           })}
         </ul>
       ) : null}
-      {open && items.length < allItems.length ? (
-        <button type="button" className="acc-section-more" onClick={onShowAll}>
-          Show all {allItems.length} {category.name.toLowerCase()}
-        </button>
-      ) : null}
+      {open && items.length < allItems.length ? <LoadMoreWhenNear onNear={onShowAll} /> : null}
     </section>
   );
+}
+
+/** Invisible marker: loads the next products when it scrolls near the screen. */
+function LoadMoreWhenNear({ onNear }: { onNear: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && onNear(), { rootMargin: "600px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onNear]);
+  return <div ref={ref} aria-hidden style={{ height: 1 }} />;
 }
