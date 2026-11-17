@@ -3699,3 +3699,23 @@ html.dark .login-fp-brand strong .brand-suffix {
   color: var(--p1);
 }
 
+
+/* On-screen keyboard open (phones): nothing fixed may cover the field. */
+html.keyboard-open .babu-mobile-nav,
+html.keyboard-open .fab-glass,
+html.keyboard-open .acc-pick-bar,
+html.keyboard-open .babu-scroll-top {
+  display: none !important;
+}
+
+html.keyboard-open .acc-seg-save,
+html.keyboard-open .acc-form-actions {
+  position: static !important;
+}
+
+/* Fields scrolled into view keep a little room above / below them. */
+input,
+textarea,
+select {
+  scroll-margin: 96px 0 120px;
+}

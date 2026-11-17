@@ -79,6 +79,38 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
+  // Phones: while the on-screen keyboard is open, hide the bottom tabs and
+  // floating buttons (they ride up above the keyboard and cover inputs) and
+  // keep the field being typed in visible above the keyboard.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    const isField = (el: Element | null): el is HTMLElement =>
+      Boolean(el?.matches?.("input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, select, [contenteditable=true]"));
+    const reveal = () => {
+      const el = document.activeElement;
+      if (isField(el)) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    };
+    let wasOpen = false;
+    const update = () => {
+      const open = vv ? window.innerHeight - vv.height > 140 : false;
+      root.classList.toggle("keyboard-open", open);
+      if (open && !wasOpen) window.setTimeout(reveal, 60);
+      wasOpen = open;
+    };
+    const onFocus = (event: FocusEvent) => {
+      if (isField(event.target as Element)) window.setTimeout(reveal, 320);
+    };
+    vv?.addEventListener("resize", update);
+    document.addEventListener("focusin", onFocus);
+    update();
+    return () => {
+      vv?.removeEventListener("resize", update);
+      document.removeEventListener("focusin", onFocus);
+      root.classList.remove("keyboard-open");
+    };
+  }, []);
+
   // Sidebar account menu: close on outside click or Escape.
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -627,7 +659,7 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
             exit={{ opacity: 0, scale: 0.72, y: 16 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6 [body.has-fab_&]:bottom-[10.5rem] md:[body.has-fab_&]:bottom-6"
+            className="babu-scroll-top fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6 [body.has-fab_&]:bottom-[10.5rem] md:[body.has-fab_&]:bottom-6"
             aria-label="Scroll to top"
             title="Scroll to top"
           >
