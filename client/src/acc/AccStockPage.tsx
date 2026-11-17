@@ -20,8 +20,7 @@ import {
   plural,
   sortedQty,
   toast,
-  useAccCatalog,
-} from "./shared";
+  useAccCatalog, useGodown } from "./shared";
 
 /**
  * Stock: every product grouped by category, with how much is sorted by
@@ -29,7 +28,7 @@ import {
  * (breakdown, stock in, count, history).
  */
 
-type Filter = "all" | "fav" | "low" | "check";
+type Filter = "all" | "fav" | "low" | "check" | "shop" | "godown";
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
@@ -47,6 +46,7 @@ function loadCollapsed(): string[] {
 }
 
 export function AccStockPage() {
+  const godown = useGodown();
   const { catalog, error } = useAccCatalog();
   const { isAdmin } = useAuth();
   const [q, setQ] = useState("");
@@ -75,7 +75,17 @@ export function AccStockPage() {
     return products
       .filter((p) => !categoryId || p.categoryId === categoryId)
       .filter((p) =>
-        filter === "fav" ? p.isFavourite : filter === "low" ? isLow(p) : filter === "check" ? needsCheck(p.countedAt) : true,
+        filter === "fav"
+          ? p.isFavourite
+          : filter === "low"
+            ? isLow(p)
+            : filter === "check"
+              ? needsCheck(p.countedAt)
+              : filter === "shop"
+                ? p.shopQty > 0
+                : filter === "godown"
+                  ? p.godownQty > 0
+                  : true,
       )
       .filter((p) => {
         if (!tokens.length) return true;
@@ -119,6 +129,12 @@ export function AccStockPage() {
     ["fav", "On counter", "Counter favourites", products.filter((p) => p.isFavourite).length],
     ["low", "Low & out", "Needs restocking", lowCount],
     ["check", "Not counted", "Weekly check pending", uncheckedCount],
+    ...(godown
+      ? ([
+          ["shop", "In shop", "Pieces on the shop shelf", products.filter((p) => p.shopQty > 0).length],
+          ["godown", "In godown", "Pieces kept in the godown", products.filter((p) => p.godownQty > 0).length],
+        ] as Array<[Filter, string, string, number]>)
+      : []),
   ];
   const activeFilterLabel = filterOptions.find(([key]) => key === filter)?.[1] || "All stock";
 
@@ -338,6 +354,7 @@ function StockSection({
   open: boolean;
   onToggle: () => void;
 }) {
+  const godown = useGodown();
   const navigate = useNavigate();
   const pieces = allItems.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
   const value = allItems.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
@@ -400,7 +417,14 @@ function StockSection({
                       </span>
                     </span>
                   </span>
-                  <StockBadge qty={p.stockQty} low={p.lowStockAt} long />
+                  {godown && p.godownQty > 0 ? (
+                    <span className="acc-qty-split" title={`${p.shopQty} in shop, ${p.godownQty} in godown`}>
+                      <em className="is-shop">Shop {p.shopQty}</em>
+                      <em className="is-godown">Godown {p.godownQty}</em>
+                    </span>
+                  ) : (
+                    <StockBadge qty={p.stockQty} low={p.lowStockAt} long />
+                  )}
                 </button>
                 <button
                   type="button"

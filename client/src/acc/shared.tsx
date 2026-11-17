@@ -1,3 +1,4 @@
+import { useAuth } from "../auth/AuthContext";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Outlet } from "react-router-dom";
@@ -756,4 +757,11 @@ export function suggestPrices(price: number, saved: number[] = []) {
   const step = price < 100 ? 10 : price < 400 ? 20 : price < 1000 ? 50 : price < 3000 ? 100 : 500;
   const base = Math.round(price / step) * step;
   return [...new Set([base - 2 * step, base - step, price, base + step].filter((n) => n > 0))].sort((a, b) => a - b);
+}
+
+/** Godown / shop split is being tried by one login only for now. */
+const GODOWN_PHONES = new Set(["7038006342"]);
+export function useGodown() {
+  const { user } = useAuth();
+  return Boolean(user?.phone && GODOWN_PHONES.has(user.phone));
 }

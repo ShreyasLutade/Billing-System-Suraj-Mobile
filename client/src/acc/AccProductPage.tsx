@@ -32,8 +32,7 @@ import {
   refreshCatalog,
   sortedQty,
   toast,
-  useAccCatalog,
-} from "./shared";
+  useAccCatalog, useGodown } from "./shared";
 
 /**
  * One product: stock, the split by phone brand (a record only), weekly count
@@ -51,9 +50,11 @@ export const MOVE_LABEL: Record<AccStockMove["kind"], string> = {
   VOID: "Bill cancelled",
   ADJUST: "Count corrected",
   COUNT: "Stock check",
+  MOVE: "Moved godown ↔ shop",
 };
 
 export function AccProductPage() {
+  const godown = useGodown();
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
@@ -62,6 +63,7 @@ export function AccProductPage() {
   const category = catalog?.categories.find((c) => c.id === product?.categoryId);
   const [sorting, setSorting] = useState(false);
   const [counting, setCounting] = useState(false);
+  const [moving, setMoving] = useState<"SHOP" | "GODOWN" | null>(null);
   const [moves, setMoves] = useState<AccStockMove[] | null>(null);
 
   const loadHistory = () =>
@@ -173,6 +175,24 @@ export function AccProductPage() {
           </div>
           <StockBadge qty={product.stockQty} low={product.lowStockAt} long />
         </div>
+        {godown ? (
+        <div className="acc-place-split">
+          <div className="is-shop">
+            <small>In shop</small>
+            <b>{product.shopQty}</b>
+            <button type="button" onClick={() => setMoving("GODOWN")} disabled={product.shopQty <= 0}>
+              To godown
+            </button>
+          </div>
+          <div className="is-godown">
+            <small>In godown</small>
+            <b>{product.godownQty}</b>
+            <button type="button" onClick={() => setMoving("SHOP")} disabled={product.godownQty <= 0}>
+              To shop
+            </button>
+          </div>
+        </div>
+        ) : null}
         <div className="acc-split-bar" role="img" aria-label={`${sorted} sorted, ${Math.max(unsorted, 0)} not sorted`}>
           <i style={{ flexGrow: Math.min(sorted, total) }} />
           <span style={{ flexGrow: Math.max(unsorted, 0) }} />
@@ -286,6 +306,7 @@ export function AccProductPage() {
 
       <SortSheet open={sorting} product={product} onClose={() => setSorting(false)} />
       <CountSheet open={counting} product={product} onClose={() => setCounting(false)} />
+      {moving ? <GodownMoveSheet product={product} to={moving} onClose={() => setMoving(null)} /> : null}
     </div>
   );
 }
@@ -578,6 +599,49 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
           .
         </p>
       ) : null}
+    </Sheet>
+  );
+}
+
+/** Move pieces between the godown and the shop (total stock unchanged). */
+function GodownMoveSheet({ product, to, onClose }: { product: AccProduct; to: "SHOP" | "GODOWN"; onClose: () => void }) {
+  const max = to === "SHOP" ? product.godownQty : product.shopQty;
+  const [qty, setQty] = useState(String(max));
+  const [busy, setBusy] = useState(false);
+  const n = Math.floor(Number(qty) || 0);
+
+  async function save() {
+    if (busy || n < 1 || n > max) return;
+    setBusy(true);
+    try {
+      const { data } = await accApi.moveGodown(product.id, n, to);
+      patchCatalogProduct(data);
+      toast(to === "SHOP" ? `${n} pcs moved to the shop` : `${n} pcs moved to the godown`);
+      onClose();
+    } catch (err) {
+      toast(errorText(err), { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={to === "SHOP" ? "Godown → Shop" : "Shop → Godown"}
+      subtitle={`${product.name} · ${max} available`}
+      footer={
+        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || n < 1 || n > max}>
+          {busy ? <Loader2 className="acc-spin" /> : null} Move {n > 0 ? n : ""} pcs
+        </button>
+      }
+    >
+      <label className="acc-field">
+        <span>How many pieces?</span>
+        <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+      </label>
+      {n > max ? <p className="acc-hint is-red">Only {max} available</p> : null}
     </Sheet>
   );
 }

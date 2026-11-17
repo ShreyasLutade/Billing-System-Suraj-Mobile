@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { accRange, round2, takeStockOff } from "../../lib/accShop";
+import { accRange, round2, takeStockOff, godownAllowed } from "../../lib/accShop";
 import { requireAdmin } from "../../middleware/auth";
 import { istDateString } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfSection } from "../../services/accPdf";
@@ -370,6 +370,8 @@ const purchaseSchema = z.object({
   billNo: z.string().trim().max(40).default(""),
   note: z.string().trim().max(300).default(""),
   paidNow: z.coerce.number().min(0).max(100_000_000).default(0),
+  /** Ticked "Add to godown": these pieces go to the godown, not the shop. */
+  toGodown: z.boolean().default(false),
   paidMethod: z.enum(["CASH", "UPI", "BANK", "CHEQUE"]).default("CASH"),
   items: z
     .array(
@@ -465,6 +467,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
           where: { id: product.id },
           data: {
             stockQty: { increment: item.qty },
+            ...(input.toGodown && godownAllowed(req.user) ? { godownQty: { increment: item.qty } } : {}),
             purchasePrice: cost,
             ...(item.sellingPrice ? { sellingPrice: item.sellingPrice } : {}),
             ...(item.wholesalePrice ? { wholesalePrice: item.wholesalePrice } : {}),
@@ -477,6 +480,7 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
             qty: item.qty,
             unitCost: item.unitCost,
             refId: created.id,
+            note: input.toGodown ? "To godown" : null,
             createdByName: by,
           },
         });

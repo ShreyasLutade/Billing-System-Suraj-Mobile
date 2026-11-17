@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { DEFAULT_ACC_CATEGORIES, parseQuickPrices, round2 } from "../../lib/accShop";
+import { DEFAULT_ACC_CATEGORIES, parseQuickPrices, round2, godownAllowed } from "../../lib/accShop";
 import { renderAccPdf, rs, sendPdf, PDF_TONE, type PdfRow } from "../../services/accPdf";
 import { money } from "../../services/pdf";
 import { istDateString } from "../../lib/ist";
@@ -47,6 +47,8 @@ export function serializeProduct(
     wholesalePrice: product.wholesalePrice,
     quickPrices: parseQuickPrices(product.quickPrices),
     stockQty: product.stockQty,
+    godownQty: Math.min(Math.max(product.godownQty, 0), Math.max(product.stockQty, 0)),
+    shopQty: product.stockQty - Math.min(Math.max(product.godownQty, 0), Math.max(product.stockQty, 0)),
     lowStockAt: product.lowStockAt,
     isFavourite: product.isFavourite,
     active: product.active,
@@ -399,7 +401,11 @@ accCatalogRouter.post("/products/:id/adjust", async (req, res, next) => {
       }
       return tx.accProduct.update({
         where: { id: current.id },
-        data: { stockQty: parsed.data.setTo, countedAt: new Date() },
+        data: {
+          stockQty: parsed.data.setTo,
+          godownQty: Math.min(current.godownQty, Math.max(parsed.data.setTo, 0)),
+          countedAt: new Date(),
+        },
         include: productInclude,
       });
     });
@@ -540,7 +546,7 @@ accCatalogRouter.post("/stock-check", async (req, res, next) => {
         out.push(
           await tx.accProduct.update({
             where: { id: current.id },
-            data: { stockQty: item.qty, countedAt: now },
+            data: { stockQty: item.qty, godownQty: Math.min(current.godownQty, Math.max(item.qty, 0)), countedAt: now },
             include: productInclude,
           }),
         );
@@ -733,6 +739,58 @@ accCatalogRouter.get("/products/pdf", async (req, res, next) => {
     });
     sendPdf(res, pdf, `accessories-stock-${istDateString()}.pdf`);
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Move pieces between the godown and the shop (total stock stays the same).
+ * to: "SHOP" brings pieces from the godown to the shop; "GODOWN" sends
+ * shop pieces to the godown.
+ */
+accCatalogRouter.post("/products/:id/godown-move", async (req, res, next) => {
+  try {
+    if (!godownAllowed(req.user)) {
+      res.status(403).json({ error: "Godown stock is not turned on for this login" });
+      return;
+    }
+    const parsed = z
+      .object({ qty: z.coerce.number().int().min(1, "Enter how many pieces").max(1_000_000), to: z.enum(["SHOP", "GODOWN"]) })
+      .safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const { qty, to } = parsed.data;
+    const product = await prisma.$transaction(async (tx) => {
+      const current = await tx.accProduct.findUniqueOrThrow({ where: { id: req.params.id } });
+      const total = Math.max(current.stockQty, 0);
+      const godown = Math.min(Math.max(current.godownQty, 0), total);
+      const available = to === "SHOP" ? godown : total - godown;
+      if (qty > available) {
+        throw Object.assign(
+          new Error(to === "SHOP" ? `Only ${godown} in the godown` : `Only ${total - godown} in the shop`),
+          { status: 400 },
+        );
+      }
+      await tx.accStockMove.create({
+        data: {
+          productId: current.id,
+          kind: "MOVE",
+          qty: 0,
+          note: to === "SHOP" ? `${qty} pcs godown → shop` : `${qty} pcs shop → godown`,
+          createdByName: req.user?.name || null,
+        },
+      });
+      return tx.accProduct.update({
+        where: { id: current.id },
+        data: { godownQty: to === "SHOP" ? godown - qty : godown + qty },
+        include: productInclude,
+      });
+    });
+    res.json({ data: serializeProduct(product) });
+  } catch (error) {
+    if ((error as { status?: number }).status === 400) {
+      res.status(400).json({ error: (error as Error).message });
+      return;
+    }
     next(error);
   }
 });

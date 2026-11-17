@@ -25,6 +25,9 @@ export type AccProduct = {
   wholesalePrice: number;
   quickPrices: number[];
   stockQty: number;
+  /** Part of stockQty kept in the godown; shopQty = stockQty − godownQty. */
+  godownQty: number;
+  shopQty: number;
   lowStockAt: number;
   isFavourite: boolean;
   active: boolean;
@@ -245,7 +248,7 @@ export type AccSupplierDetail = {
 
 export type AccStockMove = {
   id: string;
-  kind: "OPENING" | "PURCHASE" | "SALE" | "VOID" | "ADJUST" | "COUNT";
+  kind: "OPENING" | "PURCHASE" | "SALE" | "VOID" | "ADJUST" | "COUNT" | "MOVE";
   qty: number;
   unitCost: number;
   note: string | null;
@@ -349,6 +352,12 @@ const put = <T>(path: string, body: unknown) =>
   apiRequest<{ data: T }>(path, { method: "PUT", body: JSON.stringify(body) });
 
 export const accApi = {
+  /** Move pieces godown → shop (to "SHOP") or shop → godown (to "GODOWN"). */
+  moveGodown: (id: string, qty: number, to: "SHOP" | "GODOWN") =>
+    apiRequest<{ data: AccProduct }>(`/acc/products/${id}/godown-move`, {
+      method: "POST",
+      body: JSON.stringify({ qty, to }),
+    }),
   /** Admin: customer with their bills, old dues and payments. */
   deleteCustomer: (id: string) =>
     apiRequest<{ data: { deleted: boolean; bills: number } }>(`/acc/customers/${id}`, { method: "DELETE" }),
@@ -441,6 +450,8 @@ export const accApi = {
     note?: string;
     paidNow?: number;
     paidMethod?: string;
+    /** These pieces go to the godown instead of the shop. */
+    toGodown?: boolean;
     items: Array<{
       /** An existing product… */
       productId?: string;

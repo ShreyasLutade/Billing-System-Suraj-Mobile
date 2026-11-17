@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { accRange, nextAccNumber, round2 } from "../../lib/accShop";
+import { accRange, clampGodown, nextAccNumber, round2 } from "../../lib/accShop";
 import { istDateString, startOfDayIST } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfRow } from "../../services/accPdf";
 import { money } from "../../services/pdf";
@@ -204,6 +204,8 @@ accSalesRouter.post("/sales", async (req, res, next) => {
           short.push({ name: p.name, inStock: fresh?.stockQty ?? 0, qty });
         }
       }
+      // Sold pieces come from the shop first; trim the godown only if needed.
+      await clampGodown(tx);
       if (short.length) {
         throw new SaleError(
           short.length === 1
@@ -648,6 +650,7 @@ accSalesRouter.put("/sales/:id", async (req, res, next) => {
           },
         });
       }
+      await clampGodown(tx);
       if (short.length) {
         throw new SaleError(
           short.length === 1

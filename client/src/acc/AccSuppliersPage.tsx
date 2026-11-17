@@ -25,8 +25,7 @@ import {
   refreshCatalog,
   shortDate,
   toast,
-  useAccCatalog,
-} from "./shared";
+  useAccCatalog, useGodown } from "./shared";
 
 const EMPTY_SUPPLIER: AccSupplierInput = { name: "", phone: "", city: "", address: "" };
 
@@ -519,6 +518,7 @@ const isStockSheetLineActive = (line: InLine) =>
  * ones created right here), 3. what was paid. Cost averages on save.
  */
 export function AccStockInPage() {
+  const godown = useGodown();
   const { catalog } = useAccCatalog();
   const navigate = useNavigate();
   const location = useLocation();
@@ -529,6 +529,7 @@ export function AccStockInPage() {
   const [lines, setLines] = useState<InLine[]>(() => Array.from({ length: 5 }, emptyStockSheetLine));
   const [paid, setPaid] = useState("");
   const [method, setMethod] = useState<"CASH" | "UPI">("CASH");
+  const [toGodown, setToGodown] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Old stock already in the shop: no supplier and nothing to pay. */
   const [oldStock, setOldStock] = useState(false);
@@ -663,6 +664,7 @@ export function AccStockInPage() {
               paidNow,
             }),
         paidMethod: method,
+        toGodown: godown && toGodown,
         items: linesForSave.map(({ line: l }) => ({
           ...(l.product
             ? { productId: l.product.id }
@@ -814,8 +816,22 @@ export function AccStockInPage() {
                 <b>{inr(Math.max(total - paidNow, 0))}</b>
               </div>
             ) : null}
+            {godown ? (
+            <button
+              type="button"
+              className={clsx("acc-godown-toggle", toGodown && "is-on")}
+              onClick={() => setToGodown((v) => !v)}
+              aria-pressed={toGodown}
+            >
+              <span className="acc-godown-box">{toGodown ? <Check /> : null}</span>
+              <span>
+                <strong>Add to godown</strong>
+                <small>{toGodown ? "These pieces go to the godown, not the shop" : "Untick: pieces go to the shop"}</small>
+              </span>
+            </button>
+            ) : null}
             <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || !enteredLines.length}>
-              {busy ? <Loader2 className="acc-spin" /> : <Check />} Save stock · {inr(total)}
+              {busy ? <Loader2 className="acc-spin" /> : <Check />} Save stock{toGodown ? " to godown" : ""} · {inr(total)}
             </button>
           </section>
         </aside>

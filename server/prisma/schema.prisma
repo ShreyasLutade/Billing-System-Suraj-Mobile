@@ -519,6 +519,10 @@ model AccProduct {
   /// JSON number array of quick price chips on the counter
   quickPrices   String   @default("[]")
   stockQty      Int      @default(0)
+  /// Part of stockQty kept in the godown (back store); the rest is in the
+  /// shop. Sales take from the shop first, so this is trimmed only when the
+  /// shop has none left (see clampGodown).
+  godownQty     Int      @default(0)
   /// Show as low stock at or below this (0 = off)
   lowStockAt    Int      @default(0)
   isFavourite   Boolean  @default(false)

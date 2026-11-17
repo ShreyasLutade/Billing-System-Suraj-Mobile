@@ -7,6 +7,13 @@ import { endOfDayIST, istDateString, startOfDayIST } from "./ist";
  * Every admin of the Babu shop can open it, plus these logins. Set
  * ACCESSORIES_SHOP_PHONES="7038006342,7581817575" to let more staff in.
  */
+/** Godown / shop split is being tried by these logins only (comma list). */
+export const GODOWN_PHONES = (process.env.GODOWN_PHONES || "7038006342")
+  .split(",")
+  .map((phone) => phone.trim())
+  .filter(Boolean);
+export const godownAllowed = (user?: { phone?: string } | null) => Boolean(user?.phone && GODOWN_PHONES.includes(user.phone));
+
 export const ACC_PHONES = (process.env.ACCESSORIES_SHOP_PHONES || "7038006342")
   .split(",")
   .map((phone) => phone.trim())
@@ -143,6 +150,7 @@ export async function takeStockOff(tx: Prisma.TransactionClient, productId: stri
   if (!product || qty <= 0) return 0;
   const next = Math.max(0, product.stockQty - qty);
   await tx.accProduct.update({ where: { id: productId }, data: { stockQty: next } });
+  await clampGodown(tx);
   let over = product.models.reduce((a, m) => a + m.qty, 0) - next;
   for (const m of [...product.models].sort((a, b) => b.qty - a.qty)) {
     if (over <= 0) break;
@@ -151,4 +159,16 @@ export async function takeStockOff(tx: Prisma.TransactionClient, productId: stri
     over -= cut;
   }
   return product.stockQty - next;
+}
+
+/**
+ * Godown pieces are part of total stock, so they can't be more than it.
+ * Call after anything that lowers stock (sales, counts, supplier delete):
+ * the shop's pieces go first, the godown count is trimmed only when the
+ * shop has none left.
+ */
+export async function clampGodown(tx: Prisma.TransactionClient | import("@prisma/client").PrismaClient) {
+  await tx.$executeRawUnsafe(
+    'UPDATE "AccProduct" SET "godownQty" = MAX("stockQty", 0) WHERE "godownQty" > MAX("stockQty", 0)',
+  );
 }
