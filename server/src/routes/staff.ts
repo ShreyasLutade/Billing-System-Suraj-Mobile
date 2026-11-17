@@ -127,7 +127,9 @@ staffRouter.post("/:id/attendance", async (req, res, next) => {
     if (!staff) return void res.status(404).json({ error: "Staff not found" });
     const existing = await prisma.staffAttendance.findUnique({ where: { staffId_day: { staffId: staff.id, day } } });
     // Today, first mark: anyone. Past day, a change, or clearing: admin password.
-    const needsAdmin = day !== today || Boolean(existing) || kind === "CLEAR";
+    // Staff mark their own day from their account; an admin marking (any
+    // day), a past day, a change or clearing needs the admin password.
+    const needsAdmin = day !== today || Boolean(existing) || kind === "CLEAR" || isAdmin(req);
     if (needsAdmin && !(await adminPasswordOk(adminPassword || ""))) {
       return void res.status(403).json({ error: "Wrong admin password", code: "ADMIN_PASSWORD" });
     }

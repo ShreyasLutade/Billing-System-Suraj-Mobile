@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import {
+  CalendarClock,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -453,12 +455,14 @@ function DaySheet({
   onSaved: () => void;
 }) {
   const [kind, setKind] = useState<"FULL" | "HALF">(mark?.kind ?? "FULL");
-  const [editing, setEditing] = useState(!mark);
+  // Today is marked from the staff account; an admin adds it only on purpose.
+  const [editing, setEditing] = useState(!mark && !(isAdmin && day === today));
+  const [zoom, setZoom] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null | undefined>(undefined);
-  const needsAdmin = day !== today || Boolean(mark);
+  const needsAdmin = day !== today || Boolean(mark) || isAdmin;
 
   useEffect(() => {
     if (!isAdmin || !mark?.hasPhoto) return;
@@ -476,7 +480,8 @@ function DaySheet({
     setBusy(true);
     setError(null);
     try {
-      const shot = next === "CLEAR" || day !== today ? null : await quietSelfie();
+      // Photo only when the staff member marks their own day.
+      const shot = next === "CLEAR" || day !== today || isAdmin ? null : await quietSelfie();
       await api.markStaff(person.id, { day, kind: next, photo: shot, adminPassword: needsAdmin ? password : undefined });
       onSaved();
     } catch (err) {
@@ -487,9 +492,28 @@ function DaySheet({
 
   return (
     <Sheet title={dayLabel(day)} subtitle={person.name} onClose={() => !busy && onClose()}>
-      {mark && !editing ? (
+      {!mark && !editing ? (
         <div className="space-y-3">
-          <div className={clsx("flex items-center gap-3 rounded-2xl p-3", mark.kind === "FULL" ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-amber-50 dark:bg-amber-500/10")}>
+          <div className="flex items-center gap-3 rounded-2xl bg-tide-100/60 p-3 dark:bg-tide-400/10">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-tide-500 text-white">
+              <CalendarClock className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 text-sm">
+              <p className="font-semibold text-ink-900">Not marked yet</p>
+              <p className="text-ink-500">Staff marks today&apos;s attendance from their own account.</p>
+            </div>
+          </div>
+          <button type="button" className="btn-secondary w-full" onClick={() => setEditing(true)}>
+            <KeyRound className="h-4 w-4" /> Add as admin
+          </button>
+        </div>
+      ) : mark && !editing ? (
+        <div className="space-y-3">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={clsx("flex items-center gap-3 rounded-2xl p-3", mark.kind === "FULL" ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-amber-50 dark:bg-amber-500/10")}
+          >
             <span className={clsx("grid h-10 w-10 place-items-center rounded-xl text-white", mark.kind === "FULL" ? "bg-emerald-500" : "bg-amber-500")}>
               <Check className="h-5 w-5" />
             </span>
@@ -501,19 +525,27 @@ function DaySheet({
                 {mark.byAdmin ? " · admin" : ""}
               </p>
             </div>
-          </div>
-          {isAdmin ? (
-            <div className="overflow-hidden rounded-2xl bg-ink-50 dark:bg-white/5">
-              {photo ? (
-                <img src={photo} alt={`${person.name} on ${day}`} className="mx-auto h-44 w-auto object-contain [image-rendering:auto]" />
+            {isAdmin ? (
+              mark.hasPhoto ? (
+                <button
+                  type="button"
+                  onClick={() => photo && setZoom(true)}
+                  className="ml-auto grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white shadow-md ring-2 ring-white transition active:scale-95 dark:bg-white/10 dark:ring-white/10"
+                  aria-label="Open photo"
+                >
+                  {photo ? (
+                    <motion.img layoutId={`staff-photo-${mark.id}`} src={photo} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin text-ink-400" />
+                  )}
+                </button>
               ) : (
-                <p className="flex items-center justify-center gap-2 py-6 text-sm text-ink-400">
-                  {photo === undefined && mark.hasPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageOff className="h-4 w-4" />}
-                  {photo === undefined && mark.hasPhoto ? "Loading photo…" : "No photo for this day"}
-                </p>
-              )}
-            </div>
-          ) : null}
+                <span className="ml-auto grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/70 text-ink-300 dark:bg-white/5" title="No photo">
+                  <ImageOff className="h-5 w-5" />
+                </span>
+              )
+            ) : null}
+          </motion.div>
           <button type="button" className="btn-secondary w-full" onClick={() => setEditing(true)}>
             Change (admin)
           </button>
@@ -564,6 +596,38 @@ function DaySheet({
             </button>
           ) : null}
         </div>
+      )}
+      {createPortal(
+        <AnimatePresence>
+          {zoom && photo && mark ? (
+            <motion.div
+              className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-4 bg-ink-950/80 p-6 backdrop-blur-md"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setZoom(false)}
+            >
+              <motion.img
+                layoutId={`staff-photo-${mark.id}`}
+                src={photo}
+                alt={`${person.name} on ${day}`}
+                className="w-full max-w-[320px] rounded-[28px] object-cover shadow-2xl ring-4 ring-white/15"
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              />
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0, transition: { delay: 0.12 } }}
+                exit={{ opacity: 0 }}
+                className="text-center text-sm font-semibold text-white/90"
+              >
+                <span className="capitalize">{person.name}</span> · {dayLabel(day)} ·{" "}
+                {new Date(mark.createdAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}
+                <span className="mt-1 block text-xs font-normal normal-case text-white/60">Tap anywhere to close</span>
+              </motion.p>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>,
+        document.body,
       )}
     </Sheet>
   );
