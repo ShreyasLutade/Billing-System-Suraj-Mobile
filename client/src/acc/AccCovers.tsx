@@ -331,6 +331,8 @@ export function AccCoverBoxesPage() {
   const { catalog } = useAccCatalog();
   const boxes = useBoxes();
   const [q, setQ] = useState("");
+  /** "Where is it?": find covers already in boxes. */
+  const [findQ, setFindQ] = useState("");
   /** B: the cover whose box picker is open. */
   const [pickerFor, setPickerFor] = useState<Pile | null>(null);
   const [dragging, setDragging] = useState<Pile | null>(null);
@@ -358,11 +360,21 @@ export function AccCoverBoxesPage() {
   }, [piles, where]);
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // Covers already in a box leave this list (find them with "Where is it?").
     return piles
-      .filter((p) => p.qty > 0 || where.get(p.key))
+      .filter((p) => p.qty > 0 && !where.get(p.key))
       .filter((p) => t.every((x) => `${p.model} ${p.product.name}`.toLowerCase().includes(x)))
-      .sort((a, b) => Number(Boolean(where.get(a.key))) - Number(Boolean(where.get(b.key))) || collator.compare(a.model || "~", b.model || "~"));
+      .sort((a, b) => collator.compare(a.model || "~", b.model || "~") || collator.compare(a.product.name, b.product.name));
   }, [piles, q, where]);
+
+  const found = useMemo(() => {
+    const t = findQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!t.length) return [];
+    return piles
+      .filter((p) => where.get(p.key) && t.every((x) => `${p.model} ${p.product.name}`.toLowerCase().includes(x)))
+      .map((p) => ({ pile: p, codes: where.get(p.key)! }));
+  }, [piles, findQ, where]);
+  const foundBoxes = useMemo(() => new Set(found.flatMap((f) => f.codes)), [found]);
 
   const grids = useMemo(() => {
     const out = new Map<string, AccBox[]>();
@@ -414,14 +426,50 @@ export function AccCoverBoxesPage() {
           </div>
         </div>
 
+        {/* Where is it? */}
+        <div className="acc-where">
+          <label className="acc-tray-search">
+            <Search aria-hidden />
+            <input data-keep-case className="bg-transparent" value={findQ} onChange={(e) => setFindQ(e.target.value)} placeholder="Where is it? Search phone or cover in boxes…" />
+            {findQ ? (
+              <button type="button" className="acc-where-clear" onClick={() => setFindQ("")} aria-label="Clear">
+                <X />
+              </button>
+            ) : null}
+          </label>
+          {findQ.trim() ? (
+            found.length ? (
+              <ul className="acc-where-list">
+                {found.map(({ pile, codes }) => (
+                  <li key={pile.key}>
+                    <span>
+                      <strong>{pile.model || "Not segregated"}</strong>
+                      <small>
+                        {pile.product.name} · {pile.qty} pcs
+                      </small>
+                    </span>
+                    <span className="acc-finder-boxes">
+                      {codes.map((c) => (
+                        <em key={c}>{c}</em>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="acc-hint">Not in any box.</p>
+            )
+          ) : null}
+        </div>
+
         <div className="acc-boxes-layout">
           {/* Cover stock tray */}
           <section className={clsx("acc-tray", !trayOpen && "is-closed")}>
             <button type="button" className="acc-tray-head" onClick={() => setTrayOpen((v) => !v)} aria-expanded={trayOpen}>
               <span>
-                <strong>Cover stock</strong>
+                <strong>Not in a box · {shown.length}</strong>
                 <small>
-                  {totals.seg} segregated · {totals.rest} not · {totals.unplaced} not in a box
+                  Cover stock {totals.all} pcs · {totals.seg} segregated · {totals.rest} not
                 </small>
               </span>
               <em>{trayOpen ? "Hide" : "Show"}</em>
@@ -437,7 +485,9 @@ export function AccCoverBoxesPage() {
                   {shown.map((p) => (
                     <TrayPile key={p.key} pile={p} codes={where.get(p.key) ?? []} picked={pickerFor?.key === p.key} onPick={() => setPickerFor(p)} />
                   ))}
-                  {!shown.length ? <li className="acc-tray-empty">{piles.length ? "Nothing matches." : "No cover stock yet."}</li> : null}
+                  {!shown.length ? (
+                    <li className="acc-tray-empty">{q.trim() ? "Nothing matches." : piles.length ? "Every cover is in a box 🎉" : "No cover stock yet."}</li>
+                  ) : null}
                 </ul>
               </>
             ) : null}
@@ -465,6 +515,7 @@ export function AccCoverBoxesPage() {
                           box={b}
                           pileByKey={pileByKey}
                           armed={Boolean(dragging)}
+                          found={foundBoxes.has(b.code)}
                           onTap={() => setOpenBox(b)}
                         />
                       ))}
@@ -527,7 +578,19 @@ function TrayPile({ pile, codes, picked, onPick }: { pile: Pile; codes: string[]
   );
 }
 
-function BoxTile({ box, pileByKey, armed, onTap }: { box: AccBox; pileByKey: Map<string, Pile>; armed: boolean; onTap: () => void }) {
+function BoxTile({
+  box,
+  pileByKey,
+  armed,
+  found,
+  onTap,
+}: {
+  box: AccBox;
+  pileByKey: Map<string, Pile>;
+  armed: boolean;
+  found: boolean;
+  onTap: () => void;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: box.id });
   const items = box.items.map((i) => ({ item: i, pile: pileByKey.get(`${i.productId}|${i.model}`) }));
   const pcs = items.reduce((a, x) => a + (x.pile?.qty ?? 0), 0);
@@ -536,7 +599,7 @@ function BoxTile({ box, pileByKey, armed, onTap }: { box: AccBox; pileByKey: Map
       ref={setNodeRef}
       type="button"
       onClick={onTap}
-      className={clsx("acc-box", !items.length && "is-empty", armed && "is-armed", isOver && "is-over")}
+      className={clsx("acc-box", !items.length && "is-empty", armed && "is-armed", isOver && "is-over", found && "is-found")}
     >
       <span className="acc-box-code">{box.code}</span>
       {items.length ? (
@@ -798,9 +861,20 @@ function AddBoxesSheet({ mode, onClose }: { mode: "grid" | "box" | null; onClose
 
 /* ---------------- Counter: find covers for a phone ---------------- */
 
-export function CoverFinder({ products, onSell }: { products: AccProduct[]; onSell: (p: AccProduct) => void }) {
+export function CoverFinder({
+  products,
+  query,
+  onQuery,
+  onSell,
+}: {
+  products: AccProduct[];
+  /** The counter's own search text (one search bar). */
+  query: string;
+  onQuery: (q: string) => void;
+  onSell: (p: AccProduct) => void;
+}) {
   const boxes = useBoxes();
-  const [q, setQ] = useState("");
+  const q = query;
   const where = useMemo(() => locationMap(boxes), [boxes]);
   const models = useMemo(() => {
     const set = new Set<string>();
@@ -823,24 +897,16 @@ export function CoverFinder({ products, onSell }: { products: AccProduct[]; onSe
 
   return (
     <section className="acc-finder">
-      <label className="acc-finder-search">
-        <Smartphone aria-hidden />
-        <input data-keep-case className="bg-transparent" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find covers for a phone, e.g. iPhone 15 Pro" />
-        {q ? (
-          <button type="button" onClick={() => setQ("")} aria-label="Clear">
-            <X />
-          </button>
-        ) : null}
-      </label>
       {!hits.length || !term ? (
-        <div className="acc-finder-chips">
-          {quick.map((m) => (
-            <button key={m} type="button" onClick={() => setQ(m)}>
-              {m}
-            </button>
-          ))}
-          {term && !hits.length ? <span className="acc-hint">No segregated cover for “{q.trim()}”.</span> : null}
-        </div>
+        term ? null : (
+          <div className="acc-finder-chips">
+            {quick.map((m) => (
+              <button key={m} type="button" onClick={() => onQuery(m)}>
+                <Smartphone /> {m}
+              </button>
+            ))}
+          </div>
+        )
       ) : (
         <ul className="acc-finder-list">
           {hits.map((h) => (

@@ -206,6 +206,12 @@ export function AccCounterPage() {
   }
 
   const showingSearch = tokens.length > 0;
+  const inCovers = Boolean(category && /cover/i.test(category.name));
+  // In Cover, the one search also finds covers by phone model (CoverFinder).
+  const coverPhoneHit =
+    inCovers && showingSearch
+      ? products.some((p) => /cover/i.test(p.categoryName) && p.models.some((m) => m.qty > 0 && m.model.toLowerCase().includes(query.trim().toLowerCase())))
+      : false;
   const level: "home" | "drill" | "products" = !category ? "home" : drillKey === null ? "drill" : "products";
   const drillCrumb = drillKey === null ? null : drillLabel(drillKey, drillBy);
 
@@ -229,7 +235,7 @@ export function AccCounterPage() {
           <input
             type="search"
             value={query}
-            placeholder="Search cover, model, brand, barcode…"
+            placeholder={inCovers ? "Search phone (iPhone 15 Pro) or cover…" : "Search cover, model, brand, barcode…"}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onSearchEnter();
@@ -274,8 +280,8 @@ export function AccCounterPage() {
         ) : null}
       </header>
 
-      {catalog && category && /cover/i.test(category.name) && !showingSearch ? (
-        <CoverFinder products={products} onSell={(p) => setSelling(p)} />
+      {catalog && inCovers ? (
+        <CoverFinder products={products} query={query} onQuery={setQuery} onSell={(p) => setSelling(p)} />
       ) : null}
 
       {!catalog ? (
@@ -293,7 +299,7 @@ export function AccCounterPage() {
               <ProductTile key={p.id} product={p} onTap={() => setSelling(p)} />
             ))}
           </div>
-        ) : (
+        ) : coverPhoneHit ? null : (
           <Empty title={`Nothing matches “${query}”`}>
             <Link to="/acc/stock/in" className="acc-btn is-ghost">
               <Plus /> Add stock

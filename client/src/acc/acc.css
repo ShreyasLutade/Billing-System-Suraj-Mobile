@@ -11408,3 +11408,71 @@ html.dark .acc {
   font-size: 9px;
   font-style: normal;
 }
+
+/* Cover boxes: "Where is it?" */
+.acc-where {
+  display: grid;
+  gap: 6px;
+}
+
+.acc .acc-where-clear {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--a-muted);
+}
+
+.acc-where-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acc-where-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--a-accent) 35%, var(--a-line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
+}
+
+.acc-where-list li > span:first-child {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.acc-where-list small {
+  color: var(--a-muted);
+  font-size: 12px;
+}
+
+.acc .acc-box.is-found {
+  border: 2px solid var(--a-accent);
+  background: color-mix(in srgb, var(--a-accent) 20%, var(--a-card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-accent) 20%, transparent);
+  animation: acc-found-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes acc-found-pulse {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--a-accent) 10%, transparent);
+  }
+}
+
+.acc .acc-finder-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.acc-finder-chips svg {
+  width: 13px;
+  height: 13px;
+  color: var(--a-accent);
+}
