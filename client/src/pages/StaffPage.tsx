@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
 import {
-  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -279,8 +278,6 @@ export function StaffPage() {
 
           {tab === "days" || !isAdmin ? (
             <>
-              {/* Today, front and centre */}
-              {month === monthOf(today) ? <TodayCard status={statusOf(today)} onOpen={() => setOpenDay(today)} name={person.name} /> : null}
 
               <div className="grid grid-cols-3 gap-2">
                 <Stat label="Full day" value={counts.FULL} tone="text-emerald-600" dot="bg-emerald-500" />
@@ -381,43 +378,6 @@ export function StaffPage() {
         ) : null}
       </AnimatePresence>
     </div>
-  );
-}
-
-function TodayCard({ status, onOpen, name }: { status: Status; onOpen: () => void; name: string }) {
-  const done = status === "FULL" || status === "HALF";
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={clsx(
-        "flex w-full items-center gap-3 rounded-3xl p-4 text-left shadow-sm transition active:scale-[0.99]",
-        done
-          ? "bg-emerald-50 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:ring-emerald-500/30"
-          : "bg-gradient-to-br from-tide-500 to-[#5d73b6] text-white",
-      )}
-    >
-      <span className={clsx("grid h-11 w-11 place-items-center rounded-2xl", done ? "bg-emerald-500 text-white" : "bg-white/20")}>
-        {done ? <Check className="h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className={clsx("block text-[11px] font-semibold uppercase tracking-wide", done ? "text-emerald-700 dark:text-emerald-300" : "text-white/80")}>
-          Today
-        </span>
-        <span className={clsx("block truncate font-display text-lg font-bold", done ? "text-ink-900" : "text-white")}>
-          {done ? (
-            <>
-              <span className="capitalize">{name}</span> · {status === "FULL" ? "Full day" : "Half day"}
-            </>
-          ) : (
-            <>
-              Mark <span className="capitalize">{name}</span>&apos;s attendance
-            </>
-          )}
-        </span>
-      </span>
-      <ChevronRight className={clsx("h-5 w-5", done ? "text-ink-300" : "text-white/80")} />
-    </button>
   );
 }
 
