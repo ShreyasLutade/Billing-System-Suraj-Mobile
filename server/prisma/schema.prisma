@@ -769,3 +769,52 @@ model AccCounter {
   key   String @id
   value Int    @default(0)
 }
+
+/// A shop worker (no login of their own): attendance and money given are tracked.
+model Staff {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  attendance StaffAttendance[]
+  payments   StaffPayment[]
+}
+
+/// One day of attendance. Days with no row before today count as absent.
+model StaffAttendance {
+  id        String   @id @default(cuid())
+  staffId   String
+  /// yyyy-mm-dd (India time)
+  day       String
+  /// FULL | HALF
+  kind      String
+  /// Small JPEG (data URL) taken when marking; admins can view it.
+  photo     String?
+  /// Marked for a past day (or changed) with the admin password.
+  byAdmin   Boolean  @default(false)
+  markedByName String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, day])
+  @@index([day])
+}
+
+/// Money given to a staff member: advance or salary, entered by hand.
+model StaffPayment {
+  id        String   @id @default(cuid())
+  staffId   String
+  amount    Float
+  /// yyyy-mm-dd
+  day       String
+  /// ADVANCE | SALARY | OTHER
+  kind      String   @default("ADVANCE")
+  note      String   @default("")
+  createdByName String?
+  createdAt DateTime @default(now())
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, day])
+}

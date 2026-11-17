@@ -14,6 +14,7 @@ import {
   ArrowUp,
   LayoutGrid,
   BarChart3,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   FilePlus2,
@@ -312,6 +313,19 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                     <Settings /> Settings
                   </Link>
                 ) : null}
+                {!repairOnly ? (
+                  <Link
+                    to={isAcc ? "/acc/staff" : "/staff"}
+                    role="menuitem"
+                    className="babu-user-menu-item"
+                    onClick={() => {
+                      onMainNavClick();
+                      setUserMenuOpen(false);
+                    }}
+                  >
+                    <CalendarCheck /> Staff attendance
+                  </Link>
+                ) : null}
                 {isAdmin && !repairOnly ? (
                   <Link
                     to="/users"
@@ -477,6 +491,18 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                     className="babu-utility-button"
                   >
                     <Settings /> Settings
+                  </Link>
+                ) : null}
+                {!repairOnly ? (
+                  <Link
+                    to={isAcc ? "/acc/staff" : "/staff"}
+                    onClick={() => {
+                      onMainNavClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="babu-utility-button"
+                  >
+                    <CalendarCheck /> Staff attendance
                   </Link>
                 ) : null}
                 {isAdmin && !repairOnly ? (

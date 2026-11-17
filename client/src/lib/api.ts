@@ -276,7 +276,51 @@ export async function shareAuthed(path: string, fallbackName: string, title: str
   await navigator.share(data);
 }
 
+export type StaffMark = {
+  id: string;
+  day: string;
+  kind: "FULL" | "HALF";
+  byAdmin: boolean;
+  markedByName: string | null;
+  createdAt: string;
+  hasPhoto: boolean;
+};
+export type StaffPaymentRow = {
+  id: string;
+  amount: number;
+  day: string;
+  kind: "ADVANCE" | "SALARY" | "OTHER";
+  note: string;
+  createdByName: string | null;
+};
+export type StaffMember = {
+  id: string;
+  name: string;
+  phone: string;
+  /** yyyy-mm-dd the staff member was added (no "absent" before it). */
+  since: string;
+  attendance: StaffMark[];
+  payments: StaffPaymentRow[];
+};
+
 export const api = {
+  /** Staff list with the month's attendance (and payments for admins). */
+  staff: (month: string) =>
+    request<{ data: { month: string; today: string; staff: StaffMember[] } }>(`/staff?month=${month}`),
+  addStaff: (body: { name: string; phone?: string }) =>
+    request<{ data: { id: string } }>("/staff", { method: "POST", body: JSON.stringify(body) }),
+  removeStaff: (id: string) => request<{ data: unknown }>(`/staff/${id}`, { method: "DELETE" }),
+  markStaff: (
+    id: string,
+    body: { day: string; kind: "FULL" | "HALF" | "CLEAR"; photo?: string | null; adminPassword?: string },
+  ) => request<{ data: unknown }>(`/staff/${id}/attendance`, { method: "POST", body: JSON.stringify(body) }),
+  staffPhoto: (attendanceId: string) =>
+    request<{ data: { photo: string | null } }>(`/staff/attendance/${attendanceId}/photo`),
+  addStaffPayment: (id: string, body: { amount: number; day: string; kind: string; note: string }) =>
+    request<{ data: StaffPaymentRow }>(`/staff/${id}/payments`, { method: "POST", body: JSON.stringify(body) }),
+  deleteStaffPayment: (paymentId: string) =>
+    request<{ data: unknown }>(`/staff/payments/${paymentId}`, { method: "DELETE" }),
+
   health: () => request<{ ok: boolean }>("/health"),
   login: (phone: string, password: string) =>
     request<{ data: { token: string; user: AuthUser } }>("/auth/login", {

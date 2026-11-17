@@ -10,6 +10,7 @@ import {
   seedFinanceCompanies,
 } from "./routes/financeCompanies";
 import { duesRouter } from "./routes/dues";
+import { staffRouter } from "./routes/staff";
 import { authRouter, seedUsers } from "./routes/auth";
 import { reportsRouter, reportsCronRouter } from "./routes/reports";
 import { mobileCatalogRouter } from "./routes/mobileCatalog";
@@ -96,6 +97,7 @@ app.use("/api/phone-models", requireAuth, phoneModelsRouter);
 app.use("/api/dues", requireAuth, requireFullAccess, duesRouter);
 app.use("/api/repairs", requireAuth, repairsRouter);
 app.use("/api/acc", requireAuth, requireAccessories, accRouter);
+app.use("/api/staff", requireAuth, staffRouter);
 app.use("/api/reports", requireAuth, requireFullAccess, requireAdmin, reportsRouter);
 app.use("/api/recycle-bin", requireAuth, requireFullAccess, requireAdmin, recycleBinRouter);
 

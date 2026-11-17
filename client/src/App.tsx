@@ -17,6 +17,7 @@ import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
 import { CreateBillPage } from "./pages/CreateBillPage";
+import { StaffPage } from "./pages/StaffPage";
 import { DuesPage } from "./pages/DuesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
@@ -89,6 +90,7 @@ export default function App() {
                       <Route path="dues" element={<AccDuesPage />} />
                       <Route path="dues/old" element={<AccOldDuePage />} />
                       <Route path="settings" element={<AccSettingsPage />} />
+                      <Route path="staff" element={<StaffPage />} />
                       <Route path="dues/:id" element={<AccCustomerPage />} />
                       <Route element={<RequireAdmin />}>
                         <Route path="analytics" element={<AccAnalyticsPage />} />
@@ -142,6 +144,7 @@ export default function App() {
                     <Route path="backup" element={<BackupPage />} />
                     <Route path="recycle-bin" element={<RecycleBinPage />} />
                     <Route path="users" element={<ManageUsersPage />} />
+                    <Route path="staff" element={<StaffPage />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
