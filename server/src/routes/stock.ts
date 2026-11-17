@@ -271,7 +271,8 @@ const createAccessoriesSchema = z.preprocess(
   },
   z
     .object({
-      items: z.array(accessoryLineSchema).min(1).max(20),
+      // No cap on how many accessory types one purchase can have.
+      items: z.array(accessoryLineSchema).min(1),
       supplierId: z.string().trim().optional().nullable(),
       supplierName: z.string().trim().min(2).max(100).optional().nullable(),
       supplierPhone: z.string().trim().max(15).optional().nullable(),
