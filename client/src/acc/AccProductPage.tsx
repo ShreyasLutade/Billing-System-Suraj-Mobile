@@ -99,6 +99,8 @@ export function AccProductPage() {
   }
 
   const { sorted, unsorted } = sortedQty(product);
+  // Sorting stock by phone brand only makes sense for covers.
+  const byBrand = /cover/i.test(product.categoryName);
   const total = Math.max(product.stockQty, 0);
   const overSorted = unsorted < 0;
 
@@ -193,20 +195,26 @@ export function AccProductPage() {
           </div>
         </div>
         ) : null}
+        {byBrand ? (
         <div className="acc-split-bar" role="img" aria-label={`${sorted} sorted, ${Math.max(unsorted, 0)} not sorted`}>
           <i style={{ flexGrow: Math.min(sorted, total) }} />
           <span style={{ flexGrow: Math.max(unsorted, 0) }} />
         </div>
+        ) : null}
         <div className="acc-split-legend">
+          {byBrand ? (
+            <>
           <span>
             <i className="is-sorted" /> Sorted by brand <b>{sorted}</b>
           </span>
           <span>
             <i className="is-unsorted" /> Not sorted <b className={clsx(overSorted && "is-red")}>{Math.max(unsorted, 0)}</b>
           </span>
+            </>
+          ) : null}
           <span className={clsx("acc-checked", needsCheck(product.countedAt) && "is-stale")}>{checkedLabel(product.countedAt)}</span>
         </div>
-        {overSorted ? (
+        {byBrand && overSorted ? (
           <p className="acc-warn-text">
             Brands add up to {sorted} but stock is {product.stockQty}. Update the brands or do a count to fix it.
           </p>
@@ -227,6 +235,7 @@ export function AccProductPage() {
         </div>
       </section>
 
+      {byBrand ? (
       <section className="acc-card">
         <div className="acc-card-head">
           <h3 className="acc-card-title">
@@ -272,6 +281,7 @@ export function AccProductPage() {
           </div>
         )}
       </section>
+      ) : null}
 
       <section className="acc-card">
         <h3 className="acc-card-title">History</h3>
