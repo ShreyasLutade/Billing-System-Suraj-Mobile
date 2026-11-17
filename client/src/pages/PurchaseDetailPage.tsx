@@ -202,7 +202,14 @@ export function PurchaseDetailPage() {
             setAddingMobiles(true);
           }}
           onAddAccessories={() =>
-            navigate("/stock/accessories/add", { state: { supplierId: purchase.supplierId } })
+            navigate("/stock/accessories/add", {
+              state: {
+                supplierId: purchase.supplierId,
+                addToPurchaseId: purchase.id,
+                purchaseLabel: `the purchase of ${new Date(purchase.purchaseDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`,
+                backTo: location.pathname,
+              },
+            })
           }
         />
       </div>

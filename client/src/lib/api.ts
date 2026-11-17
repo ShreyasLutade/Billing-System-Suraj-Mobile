@@ -494,6 +494,8 @@ export const api = {
     supplierName?: string | null;
     supplierPhone?: string | null;
     payment?: PaymentAtPurchase | null;
+    /** Add into this existing purchase instead of a new one. */
+    addToPurchaseId?: string | null;
   }) =>
     request<{ data: StockItem[] }>("/stock/accessories", {
       method: "POST",

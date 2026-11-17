@@ -259,11 +259,14 @@ export function AddAccessoriesPage() {
   const [purchasePrice, setPurchasePrice] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  // A purchase page's "+ → Add accessories" arrives with its supplier chosen.
+  // A purchase page's "+ → Add accessories" arrives with its supplier
+  // chosen and the purchase to add into.
   const location = useLocation();
-  const [supplierId, setSupplierId] = useState(
-    () => (location.state as { supplierId?: string } | null)?.supplierId || "",
-  );
+  const fromPurchase = location.state as
+    | { supplierId?: string; addToPurchaseId?: string; purchaseLabel?: string; backTo?: string }
+    | null;
+  const addToPurchaseId = fromPurchase?.addToPurchaseId || null;
+  const [supplierId, setSupplierId] = useState(() => fromPurchase?.supplierId || "");
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
   const [useNewSupplier, setUseNewSupplier] = useState(false);
@@ -318,6 +321,10 @@ export function AddAccessoriesPage() {
   );
 
   function goBack() {
+    if (addToPurchaseId && fromPurchase?.backTo) {
+      navigate(fromPurchase.backTo, { replace: true });
+      return;
+    }
     navigate("/stock?condition=ACCESSORY", {
       replace: true,
       state: { condition: "ACCESSORY" },
@@ -502,6 +509,7 @@ export function AddAccessoriesPage() {
           ? supplierPhone.replace(/\D/g, "")
           : null,
         payment: isAdmin ? paymentPayload(payment, total) : null,
+        addToPurchaseId,
       });
       goBack();
     } catch (err) {
@@ -534,7 +542,7 @@ export function AddAccessoriesPage() {
   return (
     <div className="mx-auto max-w-lg">
       <BackButton className="mb-4" onClick={goBack} disabled={saving}>
-        Back to stock
+        {addToPurchaseId ? "Back to purchase" : "Back to stock"}
       </BackButton>
 
       <div className="mb-5 flex items-start gap-3">
@@ -549,7 +557,9 @@ export function AddAccessoriesPage() {
             Add accessories
           </h1>
           <p className="mt-1 text-sm text-ink-500">
-            Supplier, name, quantity, and one serial number per unit.
+            {addToPurchaseId
+              ? `Adding to ${fromPurchase?.purchaseLabel || "this purchase"} — saved in the same purchase.`
+              : "Supplier, name, quantity, and one serial number per unit."}
           </p>
         </div>
       </div>

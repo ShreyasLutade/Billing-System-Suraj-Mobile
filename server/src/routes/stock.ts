@@ -273,6 +273,8 @@ const createAccessoriesSchema = z.preprocess(
     .object({
       // No cap on how many accessory types one purchase can have.
       items: z.array(accessoryLineSchema).min(1),
+      /** Add these pieces into an existing purchase (from its page) instead of a new one. */
+      addToPurchaseId: z.string().trim().optional().nullable(),
       supplierId: z.string().trim().optional().nullable(),
       supplierName: z.string().trim().min(2).max(100).optional().nullable(),
       supplierPhone: z.string().trim().max(15).optional().nullable(),
@@ -343,11 +345,21 @@ stockRouter.post("/accessories", async (req, res, next) => {
       if (existing) soldSerialOwners.push({ id: existing.id, serialNumber: serial });
     }
 
-    let supplier = parsed.data.supplierId
-      ? await prisma.supplier.findUnique({
-          where: { id: parsed.data.supplierId },
-        })
+    const target = parsed.data.addToPurchaseId
+      ? await prisma.purchase.findUnique({ where: { id: parsed.data.addToPurchaseId } })
       : null;
+    if (parsed.data.addToPurchaseId && !target) {
+      res.status(404).json({ error: "Purchase not found" });
+      return;
+    }
+
+    let supplier = target
+      ? await prisma.supplier.findUnique({ where: { id: target.supplierId } })
+      : parsed.data.supplierId
+        ? await prisma.supplier.findUnique({
+            where: { id: parsed.data.supplierId },
+          })
+        : null;
 
     if (!supplier && parsed.data.supplierName?.trim()) {
       const phoneDigits =
@@ -380,17 +392,19 @@ stockRouter.post("/accessories", async (req, res, next) => {
         });
       }
 
-      const purchase = await tx.purchase.create({
-        data: {
-          supplierId: supplier!.id,
-          purchaseDate,
-          note: "ACCESSORIES",
-          condition: "NEW",
-          totalAmount,
-          createdByUserId: req.user?.id || null,
-          createdByName: req.user?.name || null,
-        },
-      });
+      const purchase =
+        target ??
+        (await tx.purchase.create({
+          data: {
+            supplierId: supplier!.id,
+            purchaseDate,
+            note: "ACCESSORIES",
+            condition: "NEW",
+            totalAmount,
+            createdByUserId: req.user?.id || null,
+            createdByName: req.user?.name || null,
+          },
+        }));
 
       const items = [];
       for (const { name, purchasePrice, serials: lineSerials } of lines) {
@@ -430,7 +444,44 @@ stockRouter.post("/accessories", async (req, res, next) => {
           items.push(item);
         }
       }
-      await recordPaymentAtPurchase(tx, purchase, payment);
+      if (target) {
+        // Added to an existing purchase: same rules as adding mobiles to it.
+        // Already paid stays paid; the new pieces are due unless paid now.
+        const oldTotalPaise = Math.round((target.totalAmount || 0) * 100);
+        const alreadyPaidPaise = target.paidAt
+          ? oldTotalPaise
+          : Math.min(Math.round((target.paidAmount || 0) * 100), oldTotalPaise);
+        const addedPaise = Math.round(totalAmount * 100);
+        const payNowPaise =
+          !payment || payment.mode === "UNPAID"
+            ? 0
+            : payment.mode === "FULL"
+              ? addedPaise
+              : Math.min(Math.round((payment.amount ?? 0) * 100), addedPaise);
+        const newTotalPaise = oldTotalPaise + addedPaise;
+        const newPaidPaise = alreadyPaidPaise + payNowPaise;
+        await tx.purchase.update({
+          where: { id: target.id },
+          data: {
+            totalAmount: newTotalPaise / 100,
+            paidAmount: newPaidPaise / 100,
+            paidAt: newPaidPaise >= newTotalPaise ? (target.paidAt ?? new Date()) : null,
+          },
+        });
+        if (payNowPaise > 0) {
+          await tx.supplierPayment.create({
+            data: {
+              supplierId: target.supplierId,
+              amount: payNowPaise / 100,
+              method: "na",
+              paidAt: new Date(),
+              note: `For accessories added to purchase of ${target.purchaseDate.toISOString().slice(0, 10)}`,
+            },
+          });
+        }
+      } else {
+        await recordPaymentAtPurchase(tx, purchase, payment);
+      }
       // Supplier credit from returned products clears what's left unpaid.
       await applyPendingReturnCredits(tx, purchase.supplierId);
       return items;
