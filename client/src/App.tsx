@@ -121,6 +121,7 @@ export default function App() {
                     element={<PurchaseDetailPage />}
                   />
                   <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+                  <Route path="staff" element={<StaffPage />} />
                   <Route element={<RequireAdmin />}>
                     <Route path="suppliers/:id/statement" element={<SupplierStatementPage />} />
                     <Route path="bills/replace" element={<ReplaceProductPage />} />
@@ -144,7 +145,6 @@ export default function App() {
                     <Route path="backup" element={<BackupPage />} />
                     <Route path="recycle-bin" element={<RecycleBinPage />} />
                     <Route path="users" element={<ManageUsersPage />} />
-                    <Route path="staff" element={<StaffPage />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
