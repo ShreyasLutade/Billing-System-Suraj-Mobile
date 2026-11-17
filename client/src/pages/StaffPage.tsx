@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import { api, formatINR, type StaffMark, type StaffMember, type StaffPaymentRow } from "../lib/api";
 
 /*
@@ -96,6 +97,8 @@ export function StaffPage() {
   const [tab, setTab] = useState<"days" | "money">("days");
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -147,6 +150,22 @@ export function StaffPage() {
     return c;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, marks, today, person]);
+
+  async function removePerson() {
+    if (!person) return;
+    setRemoveBusy(true);
+    try {
+      await api.removeStaff(person.id);
+      setRemoving(false);
+      setSelectedId(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove staff");
+      setRemoving(false);
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
 
   const changeMonth = (by: number) => {
     const next = shiftMonth(month, by);
@@ -233,7 +252,8 @@ export function StaffPage() {
       ) : (
         <>
           {isAdmin ? (
-            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-ink-50 p-1 dark:bg-white/5">
+            <div className="flex items-center gap-2">
+            <div className="grid flex-1 grid-cols-2 gap-1 rounded-2xl bg-ink-50 p-1 dark:bg-white/5">
               {(["days", "money"] as const).map((t) => (
                 <button
                   key={t}
@@ -244,6 +264,16 @@ export function StaffPage() {
                   {t === "days" ? "Attendance" : "Money given"}
                 </button>
               ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRemoving(true)}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400"
+              aria-label={`Remove ${person.name}`}
+              title="Remove staff"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
             </div>
           ) : null}
 
@@ -321,6 +351,22 @@ export function StaffPage() {
               setOpenDay(null);
               void load();
             }}
+          />
+        ) : null}
+        {removing && person ? (
+          <DangerConfirmModal
+            key="remove"
+            title="Remove staff?"
+            subtitle={person.name}
+            points={[
+              `${person.name} leaves the staff list and can't be marked any more.`,
+              "Past attendance, photos and money given stay saved.",
+            ]}
+            confirmLabel="Remove staff"
+            cancelLabel="Keep"
+            working={removeBusy}
+            onCancel={() => !removeBusy && setRemoving(false)}
+            onConfirm={() => void removePerson()}
           />
         ) : null}
         {adding ? (
