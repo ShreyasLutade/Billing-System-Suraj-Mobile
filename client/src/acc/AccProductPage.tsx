@@ -22,11 +22,9 @@ import {
   Empty,
   Sheet,
   StockBadge,
-  checkedLabel,
   dateTime,
   errorText,
   inr,
-  needsCheck,
   patchCatalogProduct,
   plural,
   refreshCatalog,
@@ -201,19 +199,16 @@ export function AccProductPage() {
           <span style={{ flexGrow: Math.max(unsorted, 0) }} />
         </div>
         ) : null}
+        {byBrand ? (
         <div className="acc-split-legend">
-          {byBrand ? (
-            <>
           <span>
             <i className="is-sorted" /> Sorted by brand <b>{sorted}</b>
           </span>
           <span>
             <i className="is-unsorted" /> Not sorted <b className={clsx(overSorted && "is-red")}>{Math.max(unsorted, 0)}</b>
           </span>
-            </>
-          ) : null}
-          <span className={clsx("acc-checked", needsCheck(product.countedAt) && "is-stale")}>{checkedLabel(product.countedAt)}</span>
         </div>
+        ) : null}
         {byBrand && overSorted ? (
           <p className="acc-warn-text">
             Brands add up to {sorted} but stock is {product.stockQty}. Update the brands or do a count to fix it.

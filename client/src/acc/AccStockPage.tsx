@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, ChevronDown, ClipboardCheck, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
+import { Check, ChevronDown, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCategory, type AccProduct } from "./accApi";
@@ -12,10 +12,8 @@ import {
   PdfButton,
   Sheet,
   StockBadge,
-  checkedLabel,
   errorText,
   inr,
-  needsCheck,
   patchCatalogProduct,
   plural,
   sortedQty,
@@ -28,7 +26,7 @@ import {
  * (breakdown, stock in, count, history).
  */
 
-type Filter = "all" | "fav" | "low" | "check" | "shop" | "godown";
+type Filter = "all" | "fav" | "low" | "shop" | "godown";
 
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
@@ -79,9 +77,7 @@ export function AccStockPage() {
           ? p.isFavourite
           : filter === "low"
             ? isLow(p)
-            : filter === "check"
-              ? needsCheck(p.countedAt)
-              : filter === "shop"
+            : filter === "shop"
                 ? p.shopQty > 0
                 : filter === "godown"
                   ? p.godownQty > 0
@@ -123,12 +119,10 @@ export function AccStockPage() {
   const units = products.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
   const value = products.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
   const lowCount = products.filter(isLow).length;
-  const uncheckedCount = products.filter((p) => needsCheck(p.countedAt)).length;
   const filterOptions: Array<[Filter, string, string, number]> = [
     ["all", "All stock", "Every product", products.length],
     ["fav", "On counter", "Counter favourites", products.filter((p) => p.isFavourite).length],
     ["low", "Low & out", "Needs restocking", lowCount],
-    ["check", "Not counted", "Weekly check pending", uncheckedCount],
     ...(godown
       ? ([
           ["shop", "In shop", "Pieces on the shop shelf", products.filter((p) => p.shopQty > 0).length],
@@ -161,22 +155,6 @@ export function AccStockPage() {
         document.body,
       )}
 
-      <Link to="/acc/stock/check" className={clsx("acc-check-banner", uncheckedCount === 0 && "is-done")}>
-        <span className="acc-check-banner-icon">
-          <ClipboardCheck />
-        </span>
-        <span className="acc-check-banner-text">
-          <strong>Weekly stock check</strong>
-          <small>
-            {products.length === 0
-              ? "Add products to start"
-              : uncheckedCount === 0
-                ? "Everything counted this week"
-                : `${uncheckedCount} of ${plural(products.length, "product")} not counted this week`}
-          </small>
-        </span>
-        <em>{uncheckedCount === 0 ? "View" : "Start"}</em>
-      </Link>
 
       <div className="acc-stat-strip">
         <div>
@@ -390,7 +368,6 @@ function StockSection({
           {items.map((p) => {
             const { sorted } = sortedQty(p);
             const total = Math.max(p.stockQty, 0);
-            const stale = needsCheck(p.countedAt);
             return (
               <li key={p.id} className="acc-row">
                 <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/stock/${p.id}`)}>
@@ -413,7 +390,6 @@ function StockSection({
                             </em>
                           </span>
                         ) : null}
-                        <span className={clsx("acc-checked", stale && "is-stale")}>{checkedLabel(p.countedAt)}</span>
                       </span>
                     </span>
                   </span>
