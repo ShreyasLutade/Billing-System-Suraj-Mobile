@@ -53,7 +53,6 @@ export function AccStockPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState<string[]>(loadCollapsed);
-  const [visibleCount, setVisibleCount] = useState(STOCK_PAGE_SIZE);
 
   function setCollapsed(ids: string[]) {
     setCollapsedState(ids);
@@ -94,26 +93,27 @@ export function AccStockPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, categoryId, filter, q]);
 
-  useEffect(() => setVisibleCount(STOCK_PAGE_SIZE), [q, categoryId, filter]);
 
   useEffect(() => {
     document.body.classList.add("has-fab");
     return () => document.body.classList.remove("has-fab");
   }, []);
 
-  const visibleList = list.slice(0, visibleCount);
-
-  // Category sections in the counter's order; only categories with matches.
+  // Category sections in the counter's order; only categories with
+  // matches. Every category shows; each one lists its first products and
+  // grows with "Show all" (paging the whole A–Z list hid later categories).
+  const [showAllIn, setShowAllIn] = useState<string[]>([]);
   const sections = useMemo(
     () =>
       categories
-        .map((c) => ({
-          category: c,
-          items: visibleList.filter((p) => p.categoryId === c.id),
-          allItems: list.filter((p) => p.categoryId === c.id),
-        }))
-        .filter((s) => s.items.length),
-    [categories, list, visibleList],
+        .map((c) => {
+          const allItems = list.filter((p) => p.categoryId === c.id);
+          const items = tokens.length || showAllIn.includes(c.id) ? allItems : allItems.slice(0, STOCK_PAGE_SIZE);
+          return { category: c, items, allItems };
+        })
+        .filter((s) => s.allItems.length),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [categories, list, showAllIn, q],
   );
 
   const units = products.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
@@ -283,17 +283,13 @@ export function AccStockPage() {
               onToggle={() =>
                 setCollapsed(collapsed.includes(category.id) ? collapsed.filter((id) => id !== category.id) : [...collapsed, category.id])
               }
+              onShowAll={() => setShowAllIn((cur) => [...cur, category.id])}
             />
           ))}
           <div className="acc-stock-list-footer">
             <span>
-              Showing <b>{Math.min(visibleCount, list.length)}</b> of <b>{list.length}</b> products
+              <b>{list.length}</b> products
             </span>
-            {visibleCount < list.length ? (
-              <button type="button" className="acc-btn" onClick={() => setVisibleCount((count) => count + STOCK_PAGE_SIZE)}>
-                Show {Math.min(STOCK_PAGE_SIZE, list.length - visibleCount)} more
-              </button>
-            ) : null}
           </div>
         </div>
       ) : (
@@ -325,12 +321,14 @@ function StockSection({
   allItems,
   open,
   onToggle,
+  onShowAll,
 }: {
   category: AccCategory;
   items: AccProduct[];
   allItems: AccProduct[];
   open: boolean;
   onToggle: () => void;
+  onShowAll: () => void;
 }) {
   const godown = useGodown();
   const navigate = useNavigate();
@@ -415,6 +413,11 @@ function StockSection({
             );
           })}
         </ul>
+      ) : null}
+      {open && items.length < allItems.length ? (
+        <button type="button" className="acc-section-more" onClick={onShowAll}>
+          Show all {allItems.length} {category.name.toLowerCase()}
+        </button>
       ) : null}
     </section>
   );

@@ -11247,3 +11247,16 @@ html.dark .acc {
   font-size: 12.5px;
   padding: 4px 8px;
 }
+
+/* Stock: "Show all …" at the end of a long category */
+.acc .acc-section-more {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-top: 1px solid var(--a-line);
+  background: none;
+  color: var(--a-accent);
+  font-size: 13px;
+  font-weight: 800;
+}
