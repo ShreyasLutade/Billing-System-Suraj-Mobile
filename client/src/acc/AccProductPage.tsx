@@ -237,7 +237,7 @@ export function AccProductPage() {
             <Smartphone /> By phone brand
           </h3>
           {models.length ? (
-            <button type="button" className="acc-btn is-small" onClick={() => setSorting(true)}>
+            <button type="button" className="acc-btn is-small" onClick={() => navigate(`/acc/stock/${product.id}/segregate`)}>
               <Pencil /> Update
             </button>
           ) : null}
@@ -270,8 +270,8 @@ export function AccProductPage() {
               30 Vivo, 25 Samsung, 20 Redmi). It's only for your record; check and update it each week. The counter still
               sells <b>{product.name}</b>.
             </p>
-            <button type="button" className="acc-btn is-primary" onClick={() => setSorting(true)} disabled={total <= 0}>
-              <Smartphone /> Sort by phone brand
+            <button type="button" className="acc-btn is-primary" onClick={() => navigate(`/acc/stock/${product.id}/segregate`)} disabled={total <= 0}>
+              <Smartphone /> Segregate covers
             </button>
           </div>
         )}

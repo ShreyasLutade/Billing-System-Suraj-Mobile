@@ -5,6 +5,7 @@ import { accSalesRouter } from "./sales";
 import { accCustomersRouter } from "./customers";
 import { accSuppliersRouter } from "./suppliers";
 import { accAnalyticsRouter } from "./analytics";
+import { accBoxesRouter } from "./boxes";
 
 /** Accessories shop API (/api/acc). Mounted behind requireAccessories. */
 export const accRouter = Router();
@@ -13,5 +14,6 @@ accRouter.use(accCatalogRouter);
 accRouter.use(accSalesRouter);
 accRouter.use(accCustomersRouter);
 accRouter.use(accSuppliersRouter);
+accRouter.use(accBoxesRouter);
 accRouter.use("/analytics", requireAdmin);
 accRouter.use(accAnalyticsRouter);

@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Loader2, PackagePlus, PencilLine, Phone, Search, Trash2, Wallet } from "lucide-react";
 import { BackLink } from "../components/ui";
+import { SegregateLink } from "./AccCovers";
 import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccSupplier, type AccSupplierDetail } from "./accApi";
@@ -203,6 +204,7 @@ export function AccSupplierPage() {
                             </small>
                           </span>
                           <b className="acc-bv-amount">{inr(i.amount)}</b>
+                          <SegregateLink product={{ id: i.productId, categoryName: i.categoryName }} className="acc-seg-link" />
                         </li>
                       ))}
                     </ul>

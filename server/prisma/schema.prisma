@@ -533,6 +533,7 @@ model AccProduct {
   updatedAt     DateTime @updatedAt
   category      AccCategory @relation(fields: [categoryId], references: [id])
   models        AccProductModel[]
+  boxItems      AccBoxItem[]
   moves         AccStockMove[]
   saleItems     AccSaleItem[]
   purchaseItems AccPurchaseItem[]
@@ -821,4 +822,33 @@ model StaffPayment {
   staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([staffId, day])
+}
+
+/// A storage box for covers in the shop (e.g. A1). Boxes come in grids
+/// (rows lettered A, B, C…, columns numbered 1, 2, 3…) or as single boxes.
+model AccBox {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  /// Grid name the box belongs to ("Main", "Grid 2", "Single")
+  grid      String   @default("Main")
+  row       Int      @default(0)
+  col       Int      @default(0)
+  createdAt DateTime @default(now())
+  items     AccBoxItem[]
+}
+
+/// Which covers sit in a box: a product, and the phone model it was
+/// segregated for ("" = the not-segregated pile). Location only; the
+/// count comes from the product's stock.
+model AccBoxItem {
+  id        String   @id @default(cuid())
+  boxId     String
+  productId String
+  model     String   @default("")
+  createdAt DateTime @default(now())
+  box       AccBox     @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  product   AccProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([boxId, productId, model])
+  @@index([productId])
 }

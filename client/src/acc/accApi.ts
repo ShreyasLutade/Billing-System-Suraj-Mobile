@@ -60,6 +60,9 @@ export type AccSaleItem = {
   amount: number;
 };
 
+export type AccBoxItem = { id: string; productId: string; model: string };
+export type AccBox = { id: string; code: string; grid: string; row: number; col: number; items: AccBoxItem[] };
+
 export type AccSale = {
   id: string;
   number: string;
@@ -230,7 +233,7 @@ export type AccSupplierDetail = {
     note: string;
     createdByName: string | null;
     pieces: number;
-    items: Array<{ name: string; qty: number; unitCost: number; amount: number }>;
+    items: Array<{ productId: string; categoryName: string; name: string; qty: number; unitCost: number; amount: number }>;
   }>;
   payments: Array<{ id: string; amount: number; method: string; paidAt: string; reference: string; note: string }>;
   /** Purchases (Dr) and payments (Cr) by date, with the running balance. */
@@ -395,6 +398,15 @@ export const accApi = {
   deleteProduct: (id: string) => apiRequest(`/acc/products/${id}`, { method: "DELETE" }),
   productHistory: (id: string) => apiRequest<{ data: AccStockMove[] }>(`/acc/products/${id}/history`),
   setProductModels: (id: string, models: AccModelQty[]) => put<AccProduct>(`/acc/products/${id}/models`, { models }),
+  /** Cover boxes (A1…G4 and any added grids / single boxes) with what's in them. */
+  boxes: () => apiRequest<{ data: AccBox[] }>("/acc/boxes"),
+  addBoxGrid: (rows: number, cols: number) => post<AccBox[]>("/acc/boxes/grid", { rows, cols }),
+  addSingleBox: (code?: string) => post<AccBox[]>("/acc/boxes/single", { code }),
+  deleteBox: (id: string) => apiRequest<{ data: AccBox[] }>(`/acc/boxes/${id}`, { method: "DELETE" }),
+  placeInBox: (boxId: string, productId: string, model: string) => post<AccBox[]>(`/acc/boxes/${boxId}/items`, { productId, model }),
+  removeFromBox: (itemId: string) => apiRequest<{ data: AccBox[] }>(`/acc/boxes/items/${itemId}`, { method: "DELETE" }),
+  /** Phone model names from the mobile shop's list (for cover suggestions). */
+  phoneNames: () => apiRequest<{ data: Array<{ name: string }> }>("/phone-models"),
   stockCheck: (items: AccStockCheckItem[], note = "") =>
     post<{ checked: number; changed: number; products: AccProduct[] }>("/acc/stock-check", { items, note }),
 

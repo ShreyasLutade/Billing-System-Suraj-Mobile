@@ -173,7 +173,7 @@ async function supplierAccount(id: string) {
   const supplier = await prisma.accSupplier.findUnique({
     where: { id },
     include: {
-      purchases: { include: { items: { include: { product: { select: { name: true, categoryId: true } } } } }, orderBy: { purchaseDate: "desc" } },
+      purchases: { include: { items: { include: { product: { select: { name: true, categoryId: true, category: { select: { name: true } } } } } } }, orderBy: { purchaseDate: "desc" } },
       payments: { orderBy: { paidAt: "desc" } },
     },
   });
@@ -228,7 +228,14 @@ async function supplierAccount(id: string) {
       note: p.note,
       createdByName: p.createdByName,
       pieces: p.items.reduce((a, i) => a + i.qty, 0),
-      items: p.items.map((i) => ({ name: i.product.name, qty: i.qty, unitCost: i.unitCost, amount: round2(i.qty * i.unitCost) })),
+      items: p.items.map((i) => ({
+        productId: i.productId,
+        categoryName: i.product.category.name,
+        name: i.product.name,
+        qty: i.qty,
+        unitCost: i.unitCost,
+        amount: round2(i.qty * i.unitCost),
+      })),
     })),
     payments: supplier.payments,
     statement,

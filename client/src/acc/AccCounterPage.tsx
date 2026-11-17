@@ -19,6 +19,7 @@ import {
   toast,
   useAccCatalog,
 } from "./shared";
+import { CoverFinder } from "./AccCovers";
 
 /**
  * Counter: quick retail billing. Favourite products sit in tiles by
@@ -272,6 +273,10 @@ export function AccCounterPage() {
           </div>
         ) : null}
       </header>
+
+      {catalog && category && /cover/i.test(category.name) && !showingSearch ? (
+        <CoverFinder products={products} onSell={(p) => setSelling(p)} />
+      ) : null}
 
       {!catalog ? (
         error ? (

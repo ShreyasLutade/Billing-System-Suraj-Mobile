@@ -18,6 +18,7 @@ import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
 import { CreateBillPage } from "./pages/CreateBillPage";
 import { StaffPage } from "./pages/StaffPage";
+import { AccCoverBoxesPage, AccSegregatePage } from "./acc/AccCovers";
 import { DuesPage } from "./pages/DuesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
@@ -83,6 +84,8 @@ export default function App() {
                       <Route path="stock/in" element={<AccStockInPage />} />
                       <Route path="stock/:id" element={<AccProductPage />} />
                       <Route path="stock/:id/edit" element={<AccProductFormPage key="edit-product" />} />
+                      <Route path="stock/:id/segregate" element={<AccSegregatePage />} />
+                      <Route path="covers" element={<AccCoverBoxesPage />} />
                       <Route path="suppliers" element={<AccSuppliersPage />} />
                       <Route path="suppliers/:id" element={<AccSupplierPage />} />
                       <Route path="dues" element={<AccDuesPage />} />
