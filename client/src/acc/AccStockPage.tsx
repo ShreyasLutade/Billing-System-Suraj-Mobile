@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowRightLeft, Check, ChevronDown, ClipboardCheck, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
+import { Check, ChevronDown, ClipboardCheck, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCategory, type AccProduct } from "./accApi";
-import { GodownMoveSheet } from "./AccProductPage";
 import {
   CategoryIcon,
   Empty,
@@ -356,7 +355,6 @@ function StockSection({
   onToggle: () => void;
 }) {
   const godown = useGodown();
-  const [moveFor, setMoveFor] = useState<AccProduct | null>(null);
   const navigate = useNavigate();
   const pieces = allItems.reduce((a, p) => a + Math.max(p.stockQty, 0), 0);
   const value = allItems.reduce((a, p) => a + Math.max(p.stockQty, 0) * p.sellingPrice, 0);
@@ -428,11 +426,6 @@ function StockSection({
                     <StockBadge qty={p.stockQty} low={p.lowStockAt} long />
                   )}
                 </button>
-                {godown && p.godownQty > 0 ? (
-                  <button type="button" className="acc-move-shop" onClick={() => setMoveFor(p)} title="Move godown pieces to the shop">
-                    <ArrowRightLeft /> Shop
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   className={clsx("acc-star", p.isFavourite && "is-on")}
@@ -447,7 +440,6 @@ function StockSection({
           })}
         </ul>
       ) : null}
-      {moveFor ? <GodownMoveSheet product={moveFor} to="SHOP" onClose={() => setMoveFor(null)} /> : null}
     </section>
   );
 }
