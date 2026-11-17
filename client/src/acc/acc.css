@@ -10357,3 +10357,117 @@ html.dark .acc {
   background: color-mix(in srgb, var(--a-godown) 10%, var(--a-card));
   color: var(--a-godown);
 }
+
+/* Godown → shop: quick move (stock list button and move popup) */
+.acc .acc-move-shop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  margin-right: 4px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--a-shop) 35%, var(--a-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a-shop) 9%, var(--a-card));
+  color: var(--a-shop);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.acc .acc-move-shop svg {
+  width: 13px;
+  height: 13px;
+}
+
+.acc-move-qty {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  gap: 8px;
+  align-items: center;
+}
+
+.acc .acc-move-qty button {
+  height: 52px;
+  border: 1px solid var(--a-line);
+  border-radius: 16px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.acc .acc-move-qty button:disabled {
+  opacity: 0.35;
+}
+
+.acc .acc-move-qty input {
+  height: 52px;
+  border: 1px solid var(--a-line);
+  border-radius: 16px;
+  color: var(--a-ink);
+  font: 800 26px/1 "Sora", sans-serif;
+  text-align: center;
+}
+
+.acc-move-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.acc .acc-move-chips button {
+  flex: 1 1 0;
+  min-width: 56px;
+  padding: 9px 8px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.acc .acc-move-chips button.is-on {
+  border-color: var(--a-shop);
+  background: color-mix(in srgb, var(--a-shop) 12%, var(--a-card));
+  color: var(--a-shop);
+}
+
+.acc-move-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.acc-move-preview > span {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.acc-move-preview small {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.acc-move-preview b {
+  font: 800 17px/1.2 "Sora", sans-serif;
+}
+
+.acc-move-preview .is-shop {
+  background: color-mix(in srgb, var(--a-shop) 10%, var(--a-card));
+  color: var(--a-shop);
+}
+
+.acc-move-preview .is-godown {
+  background: color-mix(in srgb, var(--a-godown) 10%, var(--a-card));
+  color: var(--a-godown);
+}

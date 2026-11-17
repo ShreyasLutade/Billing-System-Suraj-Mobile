@@ -604,11 +604,18 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
 }
 
 /** Move pieces between the godown and the shop (total stock unchanged). */
-function GodownMoveSheet({ product, to, onClose }: { product: AccProduct; to: "SHOP" | "GODOWN"; onClose: () => void }) {
+export function GodownMoveSheet({ product, to, onClose }: { product: AccProduct; to: "SHOP" | "GODOWN"; onClose: () => void }) {
   const max = to === "SHOP" ? product.godownQty : product.shopQty;
-  const [qty, setQty] = useState(String(max));
+  const [n, setN] = useState(max);
   const [busy, setBusy] = useState(false);
-  const n = Math.floor(Number(qty) || 0);
+  const clamp = (v: number) => Math.min(Math.max(Math.floor(v) || 0, 0), max);
+  const shopAfter = to === "SHOP" ? product.shopQty + n : product.shopQty - n;
+  const godownAfter = to === "SHOP" ? product.godownQty - n : product.godownQty + n;
+  const chips = [
+    ...[1, 5, 10].filter((v) => v < max).map((v) => ({ label: String(v), v })),
+    ...(max >= 4 ? [{ label: "Half", v: Math.floor(max / 2) }] : []),
+    { label: `All ${max}`, v: max },
+  ];
 
   async function save() {
     if (busy || n < 1 || n > max) return;
@@ -629,19 +636,52 @@ function GodownMoveSheet({ product, to, onClose }: { product: AccProduct; to: "S
     <Sheet
       open
       onClose={onClose}
-      title={to === "SHOP" ? "Godown → Shop" : "Shop → Godown"}
-      subtitle={`${product.name} · ${max} available`}
+      title={to === "SHOP" ? "Move to shop" : "Move to godown"}
+      subtitle={`${product.name} · ${max} in the ${to === "SHOP" ? "godown" : "shop"}`}
       footer={
-        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || n < 1 || n > max}>
-          {busy ? <Loader2 className="acc-spin" /> : null} Move {n > 0 ? n : ""} pcs
+        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || n < 1}>
+          {busy ? <Loader2 className="acc-spin" /> : null} Move {n} pcs to {to === "SHOP" ? "shop" : "godown"}
         </button>
       }
     >
-      <label className="acc-field">
-        <span>How many pieces?</span>
-        <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
-      </label>
-      {n > max ? <p className="acc-hint is-red">Only {max} available</p> : null}
+      <div className="acc-move-qty">
+        <button type="button" onClick={() => setN((v) => clamp(v - 1))} disabled={n <= 1} aria-label="One less">
+          −
+        </button>
+        <input
+          type="number"
+          inputMode="numeric"
+          className="bg-transparent"
+          value={n || ""}
+          onChange={(e) => setN(clamp(Number(e.target.value)))}
+          onFocus={(e) => e.target.select()}
+          aria-label="Pieces to move"
+        />
+        <button type="button" onClick={() => setN((v) => clamp(v + 1))} disabled={n >= max} aria-label="One more">
+          +
+        </button>
+      </div>
+      <div className="acc-move-chips">
+        {chips.map((c) => (
+          <button key={c.label} type="button" className={clsx(n === c.v && "is-on")} onClick={() => setN(c.v)}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      <div className="acc-move-preview">
+        <span className="is-shop">
+          <small>Shop</small>
+          <b>
+            {product.shopQty} → {shopAfter}
+          </b>
+        </span>
+        <span className="is-godown">
+          <small>Godown</small>
+          <b>
+            {product.godownQty} → {godownAfter}
+          </b>
+        </span>
+      </div>
     </Sheet>
   );
 }
