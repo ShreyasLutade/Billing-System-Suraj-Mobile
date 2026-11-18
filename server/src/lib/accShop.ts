@@ -7,12 +7,8 @@ import { endOfDayIST, istDateString, startOfDayIST } from "./ist";
  * Every admin of the Babu shop can open it, plus these logins. Set
  * ACCESSORIES_SHOP_PHONES="7038006342,7581817575" to let more staff in.
  */
-/** Godown / shop split is being tried by these logins only (comma list). */
-export const GODOWN_PHONES = (process.env.GODOWN_PHONES || "7038006342")
-  .split(",")
-  .map((phone) => phone.trim())
-  .filter(Boolean);
-export const godownAllowed = (user?: { phone?: string } | null) => Boolean(user?.phone && GODOWN_PHONES.includes(user.phone));
+/** Godown / shop split is on for every login. */
+export const godownAllowed = (user?: { phone?: string } | null) => Boolean(user);
 
 export const ACC_PHONES = (process.env.ACCESSORIES_SHOP_PHONES || "7038006342")
   .split(",")

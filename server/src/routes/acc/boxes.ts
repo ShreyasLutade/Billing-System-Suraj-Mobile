@@ -78,6 +78,10 @@ accBoxesRouter.post("/boxes/single", async (req, res, next) => {
 
 accBoxesRouter.delete("/boxes/:id", async (req, res, next) => {
   try {
+    if (req.user?.role !== "ADMIN") {
+      res.status(403).json({ error: "Only the admin can remove a box" });
+      return;
+    }
     await prisma.accBox.delete({ where: { id: req.params.id } });
     res.json({ data: await listBoxes() });
   } catch (error) {

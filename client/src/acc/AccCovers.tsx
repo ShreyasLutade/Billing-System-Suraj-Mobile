@@ -14,6 +14,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { useAuth } from "../auth/AuthContext";
 import { Boxes, Check, Grid3x3, Loader2, Minus, PackageOpen, Plus, Search, Smartphone, SquarePlus, Trash2, X } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccBox, type AccProduct } from "./accApi";
@@ -214,7 +215,7 @@ export function AccSegregatePage() {
             data-keep-case
             className="bg-transparent"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); setFocus(true); }}
             onFocus={() => setFocus(true)}
             onBlur={() => setTimeout(() => setFocus(false), 150)}
             onKeyDown={(e) => e.key === "Enter" && add()}
@@ -232,7 +233,7 @@ export function AccSegregatePage() {
             <motion.ul className="acc-seg-suggest" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               {suggestions.map((n) => (
                 <li key={n}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setDraft(n)}>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setDraft(n); setFocus(false); (document.activeElement as HTMLElement | null)?.blur(); }}>
                     {n}
                   </button>
                 </li>
@@ -633,6 +634,7 @@ function FillBoxSheet({
   pileByKey: Map<string, Pile>;
   onClose: () => void;
 }) {
+  const { isAdmin } = useAuth();
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [ticked, setTicked] = useState<string[]>([]);
@@ -735,10 +737,10 @@ function FillBoxSheet({
             })}
             {!choices.length ? <li className="acc-tray-empty">{t.length ? "Nothing matches." : "Every cover is already here."}</li> : null}
           </ul>
-          {!box.items.length && !ticked.length ? (
-            <button type="button" className="acc-link-btn is-red" disabled={busy} onClick={() => void run(() => accApi.deleteBox(box.id), `Box ${box.code} removed`).then((ok) => ok && onClose())}>
-              <Trash2 /> Remove this box
-            </button>
+          {isAdmin && !box.items.length && !ticked.length ? (
+              <button type="button" className="acc-link-btn is-red" disabled={busy} onClick={() => void run(() => accApi.deleteBox(box.id), `Box ${box.code} removed`).then((ok) => ok && onClose())}>
+                <Trash2 /> Remove this box
+              </button>
           ) : null}
         </div>
       ) : null}

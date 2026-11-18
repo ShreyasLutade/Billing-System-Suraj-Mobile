@@ -1,4 +1,3 @@
-import { useAuth } from "../auth/AuthContext";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Outlet } from "react-router-dom";
@@ -760,8 +759,7 @@ export function suggestPrices(price: number, saved: number[] = []) {
 }
 
 /** Godown / shop split is being tried by one login only for now. */
-const GODOWN_PHONES = new Set(["7038006342"]);
+/** Godown stock is on for every login (admin-only actions are checked separately). */
 export function useGodown() {
-  const { user } = useAuth();
-  return Boolean(user?.phone && GODOWN_PHONES.has(user.phone));
+  return true;
 }
