@@ -11477,35 +11477,36 @@ html.dark .acc {
   color: var(--a-accent);
 }
 
-/* Stock: "Sort" (cover boxes) on the Cover category header */
-.acc .acc-stock-section > header {
-  display: flex;
-  align-items: center;
-  border-radius: 14px;
-  background: var(--a-card);
+/* Stock: "Sort covers into boxes" row at the top of the Cover list */
+.acc .acc-sort-row .acc-row-main {
+  gap: 10px;
+  background: color-mix(in srgb, var(--a-accent) 7%, var(--a-card));
 }
 
-.acc .acc-stock-section > header > .acc-section-toggle {
-  flex: 1;
-  min-width: 0;
-}
-
-.acc .acc-section-sort {
-  display: inline-flex;
+.acc-sort-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
   flex: none;
-  align-items: center;
-  gap: 4px;
-  margin-right: 8px;
-  padding: 7px 11px;
-  border: 1px solid color-mix(in srgb, var(--a-accent) 35%, var(--a-line));
+  place-items: center;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--a-accent) 9%, var(--a-card));
+  background: color-mix(in srgb, var(--a-accent) 16%, var(--a-card));
   color: var(--a-accent);
-  font-size: 12.5px;
-  font-weight: 800;
 }
 
-.acc-section-sort svg {
-  width: 14px;
-  height: 14px;
+.acc-sort-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.acc .acc-sort-row strong {
+  color: var(--a-accent);
+}
+
+.acc-sort-chev {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-left: auto;
+  color: var(--a-accent);
 }

@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, ChevronDown, Grid3x3, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Grid3x3, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCategory, type AccProduct } from "./accApi";
+import { useUnboxedCovers } from "./AccCovers";
 import {
   CategoryIcon,
   Empty,
@@ -363,14 +364,10 @@ function StockSection({
           <b>{inr(value)}</b>
           <ChevronDown className="acc-section-chevron" aria-hidden />
         </button>
-        {/cover/i.test(category.name) ? (
-          <button type="button" className="acc-section-sort" onClick={() => navigate("/acc/covers")} title="Sort covers into boxes">
-            <Grid3x3 /> Sort
-          </button>
-        ) : null}
       </header>
       {open ? (
         <ul className="acc-list">
+          {/cover/i.test(category.name) ? <SortCoversRow products={allItems} onOpen={() => navigate("/acc/covers")} /> : null}
           {items.map((p) => {
             const { sorted } = sortedQty(p);
             const total = Math.max(p.stockQty, 0);
@@ -438,4 +435,23 @@ function LoadMoreWhenNear({ onNear }: { onNear: () => void }) {
     return () => io.disconnect();
   }, [onNear]);
   return <div ref={ref} aria-hidden style={{ height: 1 }} />;
+}
+
+/** Top row of the Cover list: opens the cover boxes (with how many still need a box). */
+function SortCoversRow({ products, onOpen }: { products: AccProduct[]; onOpen: () => void }) {
+  const left = useUnboxedCovers(products);
+  return (
+    <li className="acc-row acc-sort-row">
+      <button type="button" className="acc-row-main" onClick={onOpen}>
+        <span className="acc-sort-icon" aria-hidden>
+          <Grid3x3 />
+        </span>
+        <span className="acc-row-text">
+          <strong>Sort covers into boxes</strong>
+          <small>{left === null ? "A1–G4 cover boxes" : left ? `${left} cover${left === 1 ? "" : "s"} not in a box yet` : "Every cover is in a box"}</small>
+        </span>
+        <ChevronRight className="acc-sort-chev" aria-hidden />
+      </button>
+    </li>
+  );
 }

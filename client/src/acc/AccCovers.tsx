@@ -104,6 +104,16 @@ function coverPiles(products: AccProduct[]): Pile[] {
   return piles;
 }
 
+/** How many cover piles (with stock) are not in any box yet; null while loading. */
+export function useUnboxedCovers(products: AccProduct[]) {
+  const boxes = useBoxes();
+  return useMemo(() => {
+    if (!boxes) return null;
+    const where = locationMap(boxes);
+    return coverPiles(products).filter((p) => p.qty > 0 && !where.get(p.key)).length;
+  }, [boxes, products]);
+}
+
 /* ---------------- Segregate one cover product ---------------- */
 
 type Row = { id: string; model: string; qty: number };
