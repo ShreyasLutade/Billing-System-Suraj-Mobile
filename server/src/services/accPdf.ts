@@ -16,6 +16,8 @@ export type PdfCol = {
   /** Relative width; columns are stretched to the page. */
   width: number;
   align?: "left" | "right" | "center";
+  /** Print the text as typed (no Title Case), e.g. "iPhone 15". */
+  keepCase?: boolean;
 };
 
 export type PdfRow = {
@@ -35,6 +37,8 @@ export type PdfSection = {
   /** Bold footer row of the table. */
   total?: Record<string, string>;
   empty?: string;
+  /** With twoUp reports: always use the full page width for this table. */
+  full?: boolean;
 };
 
 export type PdfReport = {
@@ -48,6 +52,8 @@ export type PdfReport = {
   /** Lines under the last table (terms, notes, signature…). */
   notes?: string[];
   footNote?: string;
+  /** Put small tables two side by side (e.g. cover boxes). */
+  twoUp?: boolean;
 };
 
 export const PDF_TONE = {
@@ -114,36 +120,68 @@ export function renderAccPdf(report: PdfReport): Promise<Buffer> {
     if (report.info?.length) y = drawInfo(doc, y, report.info, W);
     if (report.summary?.length) y = drawSummary(doc, y, report.summary, W);
 
-    for (const section of report.sections) {
-      const cols = fitColumns(section.columns, W);
-      if (y + 60 > bottom) y = newPage();
+    const drawSection = (section: PdfSection, width: number, paged: boolean) => {
+      const cols = fitColumns(section.columns, width);
+      if (paged && y + 60 > bottom) y = newPage();
       if (section.heading) {
-        doc.font(FONT.bold).fontSize(10).fillColor(COLORS.ink).text(section.heading, M, y + 2, { lineBreak: false });
+        doc.font(FONT.bold).fontSize(10).fillColor(COLORS.ink).text(section.heading, M, y + 2, { width, lineBreak: false, ellipsis: true });
         y += 18;
       }
-      y = drawTableHeader(doc, y, cols, W);
+      y = drawTableHeader(doc, y, cols, width);
       if (!section.rows.length) {
         doc
           .font(FONT.regular)
           .fontSize(9)
           .fillColor(COLORS.muted)
-          .text(section.empty || "Nothing to show.", M, y + 10, { width: W, align: "center" });
+          .text(section.empty || "Nothing to show.", M, y + 10, { width, align: "center" });
         y += 32;
       }
       let stripe = 0;
       for (const row of section.rows) {
-        if (y + ROW_H > bottom) {
+        if (paged && y + ROW_H > bottom) {
           y = newPage();
-          y = drawTableHeader(doc, y, cols, W);
+          y = drawTableHeader(doc, y, cols, width);
         }
-        y = drawRow(doc, y, row, cols, W, stripe);
+        y = drawRow(doc, y, row, cols, width, stripe);
         stripe = row.kind === "group" ? 0 : stripe + 1;
       }
       if (section.total) {
-        if (y + 22 > bottom) y = newPage();
-        y = drawTotal(doc, y, section.total, cols, W);
+        if (paged && y + 22 > bottom) y = newPage();
+        y = drawTotal(doc, y, section.total, cols, width);
       }
       y += 14;
+    };
+
+    const GAP = 14;
+    const half = (W - GAP) / 2;
+    const sections = report.sections;
+    for (let i = 0; i < sections.length; i += 1) {
+      const left = sections[i];
+      const right = sections[i + 1];
+      if (!report.twoUp || left.full) {
+        drawSection(left, W, true);
+        continue;
+      }
+      const pair = right && !right.full ? [left, right] : [left];
+      const tallest = Math.max(...pair.map(sectionHeight));
+      if (tallest > bottom - M) {
+        // Too long to sit side by side on one page: print it full width.
+        drawSection(left, W, true);
+        continue;
+      }
+      if (y + tallest > bottom) y = newPage();
+      const top = y;
+      let end = y;
+      pair.forEach((section, n) => {
+        y = top;
+        doc.save();
+        doc.translate(n * (half + GAP), 0);
+        drawSection(section, half, false);
+        doc.restore();
+        end = Math.max(end, y);
+      });
+      y = end;
+      if (pair.length === 2) i += 1;
     }
 
     if (report.notes?.length) {
@@ -159,6 +197,15 @@ export function renderAccPdf(report: PdfReport): Promise<Buffer> {
     drawFooters(doc, page, W, report.footNote);
     doc.end();
   });
+}
+
+function sectionHeight(section: PdfSection) {
+  let h = (section.heading ? 18 : 0) + 20 + (section.rows.length ? 0 : 32) + (section.total ? 22 : 0) + 14;
+  for (const row of section.rows) {
+    const hasSub = Boolean(row.sub && Object.values(row.sub).some(Boolean));
+    h += row.kind === "group" || row.kind === "subtotal" ? 22 : hasSub ? ROW_H + 2 : 20;
+  }
+  return h;
 }
 
 function fitColumns(cols: PdfCol[], W: number) {
@@ -281,12 +328,13 @@ function drawRow(doc: PDFKit.PDFDocument, y: number, row: PdfRow, cols: PdfCol[]
   let x = M;
   for (const col of cols) {
     const w = col.width - PAD * 2;
-    const text = titleCase(row.cells[col.key] ?? "");
+    const raw = row.cells[col.key] ?? "";
+    const text = col.keepCase ? raw : titleCase(raw);
     doc
       .font(col === cols[0] || col.key === "name" ? FONT.semibold : FONT.regular)
       .fontSize(8)
       .fillColor(row.color?.[col.key] || COLORS.ink)
-      .text(text || "—", x + PAD, y + 6, { width: w, align: col.align || "left", lineBreak: false, ellipsis: true });
+      .text(text || "—", x + PAD, y + 6, { width: w, height: 10, align: col.align || "left", lineBreak: false, ellipsis: true });
     const sub = row.sub?.[col.key];
     if (sub) {
       doc.font(FONT.regular).fontSize(6.8).fillColor(COLORS.muted).text(titleCase(sub), x + PAD, y + 16, {

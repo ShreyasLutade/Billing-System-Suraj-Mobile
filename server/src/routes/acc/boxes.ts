@@ -173,11 +173,11 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     }
     const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
     const columns = [
-      { key: "n", label: "#", width: 0.5, align: "center" as const },
-      { key: "model", label: "Phone model", width: 3 },
-      { key: "cover", label: "Cover", width: 3.4 },
+      { key: "n", label: "#", width: 0.45, align: "center" as const },
+      { key: "model", label: "Phone model", width: 2.5, keepCase: true },
+      { key: "cover", label: "Cover", width: 3.8 },
       { key: "qty", label: "Pcs", width: 0.9, align: "right" as const },
-      { key: "also", label: "Also in", width: 1.6 },
+      { key: "also", label: "Also in", width: 1.3 },
     ];
 
     const picked = boxId ? boxes.filter((b) => b.id === boxId) : boxes.filter((b) => b.items.length);
@@ -210,7 +210,7 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
       pieces += boxPcs;
       lines += rows.length;
       return {
-        heading: `Box ${b.code}  ·  ${b.grid === "Single" ? "Single box" : `${b.grid} grid`}  ·  ${rows.length} ${rows.length === 1 ? "cover" : "covers"}`,
+        heading: `Box ${b.code}  ·  ${rows.length} ${rows.length === 1 ? "cover" : "covers"}`,
         columns,
         rows,
         total: { model: "Box total", qty: String(boxPcs) },
@@ -234,13 +234,14 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
       rows.sort((x, y) => collator.compare(x.cells.model, y.cells.model));
       rows.forEach((r, i) => (r.cells.n = String(i + 1)));
       if (rows.length) {
-        sections.push({ heading: "Not in any box", columns, rows, total: { model: "Total", qty: String(loose) } });
+        sections.push({ heading: "Not in any box", full: true, columns, rows, total: { model: "Total", qty: String(loose) } });
       }
     }
 
     const one = boxId ? picked[0] : null;
     const pdf = await renderAccPdf({
       title: one ? `Box ${one.code}` : "Cover Boxes",
+      twoUp: !one,
       subtitle: one ? "Covers in this box" : "Where every cover is kept",
       summary: one
         ? [
