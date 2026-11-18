@@ -816,6 +816,8 @@ model StaffPayment {
   day       String
   /// ADVANCE | SALARY | OTHER
   kind      String   @default("ADVANCE")
+  /// CASH | ONLINE
+  mode      String   @default("CASH")
   note      String   @default("")
   createdByName String?
   createdAt DateTime @default(now())

@@ -7,8 +7,10 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Banknote,
   ImageOff,
   KeyRound,
+  Smartphone,
   Loader2,
   Plus,
   Trash2,
@@ -426,7 +428,7 @@ export function StaffPage() {
         ) : null}
         {moneyPerson ? (
           <Sheet key="money" title="Money given" subtitle={moneyPerson.name} onClose={() => setMoneyId(null)}>
-            <MoneyTab person={moneyPerson} month={month} today={today} onChanged={() => void load()} />
+            <MoneyTab person={moneyPerson} month={month} today={today} onMonth={changeMonth} onChanged={() => void load()} />
           </Sheet>
         ) : null}
         {removeTarget ? (
@@ -903,21 +905,57 @@ function DaySheet({
   );
 }
 
-function MoneyTab({ person, month, today, onChanged }: { person: StaffMember; month: string; today: string; onChanged: () => void }) {
+const KIND_TONE: Record<StaffPaymentRow["kind"], string> = {
+  ADVANCE: "bg-amber-50 text-amber-700 ring-amber-200/70 dark:bg-amber-400/10 dark:text-amber-300",
+  SALARY: "bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-400/10 dark:text-emerald-300",
+  OTHER: "bg-slate-100 text-slate-600 ring-slate-200/70 dark:bg-white/10 dark:text-slate-300",
+};
+
+function rupees(n: number) {
+  return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function MoneyTab({
+  person,
+  month,
+  today,
+  onMonth,
+  onChanged,
+}: {
+  person: StaffMember;
+  month: string;
+  today: string;
+  onMonth: (by: number) => void;
+  onChanged: () => void;
+}) {
+  const thisMonth = month === today.slice(0, 7);
   const [amount, setAmount] = useState("");
-  const [day, setDay] = useState(month === today.slice(0, 7) ? today : `${month}-01`);
+  const [day, setDay] = useState(thisMonth ? today : `${month}-01`);
   const [kind, setKind] = useState<StaffPaymentRow["kind"]>("ADVANCE");
+  const [mode, setMode] = useState<StaffPaymentRow["mode"]>("CASH");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const total = person.payments.reduce((a, p) => a + p.amount, 0);
+
+  // New entries go into the month being looked at.
+  useEffect(() => {
+    setDay(month === today.slice(0, 7) ? today : `${month}-01`);
+  }, [month, today]);
+
+  const pays = person.payments;
+  const total = pays.reduce((a, p) => a + p.amount, 0);
+  const sumBy = (f: (p: StaffPaymentRow) => boolean) => pays.filter(f).reduce((a, p) => a + p.amount, 0);
+  const cash = sumBy((p) => (p.mode ?? "CASH") === "CASH");
+  const online = total - cash;
+  const short = monthLabel(month).split(" ")[0];
+  const n = Number(amount);
 
   async function add() {
-    if (!(Number(amount) > 0)) return setError("Enter the amount");
+    if (!(n > 0)) return setError("Enter the amount");
     setBusy(true);
     setError(null);
     try {
-      await api.addStaffPayment(person.id, { amount: Number(amount), day, kind, note });
+      await api.addStaffPayment(person.id, { amount: n, day, kind, mode, note });
       setAmount("");
       setNote("");
       onChanged();
@@ -929,88 +967,181 @@ function MoneyTab({ person, month, today, onChanged }: { person: StaffMember; mo
   }
 
   async function remove(p: StaffPaymentRow) {
-    if (!window.confirm(`Delete ${formatINR(p.amount)} given on ${dayLabel(p.day)}?`)) return;
+    if (!window.confirm(`Delete ${rupees(p.amount)} given on ${dayLabel(p.day)}?`)) return;
     await api.deleteStaffPayment(p.id).catch(() => undefined);
     onChanged();
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-3xl bg-gradient-to-br from-[#5d73b6] to-tide-500 p-4 text-white shadow-sm">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Given in {monthLabel(month)}</p>
-          <p className="font-display text-2xl font-bold tabular-nums">{formatINR(total)}</p>
-        </div>
-        <Wallet className="h-8 w-8 text-white/70" />
+      {/* Month */}
+      <div className="flex items-center justify-between rounded-2xl bg-ink-50 p-1 dark:bg-white/5">
+        <button type="button" className="grid h-8 w-8 place-items-center rounded-xl text-ink-600 transition hover:bg-white active:scale-95 dark:hover:bg-white/10" onClick={() => onMonth(-1)} aria-label="Previous month">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold text-ink-900">{monthLabel(month)}</span>
+        <button
+          type="button"
+          className="grid h-8 w-8 place-items-center rounded-xl text-ink-600 transition hover:bg-white active:scale-95 disabled:opacity-30 dark:hover:bg-white/10"
+          onClick={() => onMonth(1)}
+          disabled={thisMonth}
+          aria-label="Next month"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
 
-      <section className="space-y-2.5 rounded-3xl border border-ink-100 bg-white/90 p-4 shadow-sm dark:bg-surface-elevated">
+      {/* Summary */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1e293b] via-[#24365f] to-[#3b5bdb] p-4 text-white shadow-lift">
+        <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Given in {short}</p>
+        <p className="mt-0.5 font-display text-[28px] font-extrabold leading-tight tabular-nums">{rupees(total)}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2">
+            <Banknote className="h-4 w-4 text-emerald-300" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/55">Cash</p>
+              <p className="text-sm font-bold tabular-nums">{rupees(cash)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2">
+            <Smartphone className="h-4 w-4 text-sky-300" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/55">Online</p>
+              <p className="text-sm font-bold tabular-nums">{rupees(online)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Give money */}
+      <section className="space-y-2.5 rounded-3xl border border-ink-100 bg-white p-3.5 shadow-sm dark:bg-surface-elevated">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Give money</p>
         <div className="grid grid-cols-3 gap-1 rounded-xl bg-ink-50 p-1 dark:bg-white/5">
           {(["ADVANCE", "SALARY", "OTHER"] as const).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setKind(k)}
-              className={clsx("rounded-lg py-1.5 text-xs font-semibold", kind === k ? "bg-white text-ink-900 shadow-sm dark:bg-surface-elevated" : "text-ink-500")}
+              className={clsx("rounded-lg py-1.5 text-xs font-semibold transition", kind === k ? "bg-white text-ink-900 shadow-sm dark:bg-surface-elevated" : "text-ink-500")}
             >
               {KIND_LABEL[k]}
             </button>
           ))}
         </div>
+        <label className="flex items-center gap-2 rounded-2xl border border-ink-100 bg-ink-50/50 px-3 focus-within:border-tide-400 focus-within:bg-white dark:bg-white/5">
+          <span className="text-lg font-bold text-ink-400">₹</span>
+          <input
+            className="h-12 w-full min-w-0 bg-transparent text-xl font-bold tabular-nums text-ink-900 outline-none placeholder:text-base placeholder:font-medium placeholder:text-ink-300"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            placeholder="Amount"
+            value={amount}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              setError(null);
+            }}
+          />
+        </label>
         <div className="grid grid-cols-2 gap-2">
-          <input className="field" type="number" inputMode="decimal" min={0} placeholder="₹ Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <input className="field" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} />
+          {(
+            [
+              ["CASH", "Cash", Banknote],
+              ["ONLINE", "Online", Smartphone],
+            ] as const
+          ).map(([m, label, Icon]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={clsx(
+                "flex h-10 items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition active:scale-[0.98]",
+                mode === m
+                  ? m === "CASH"
+                    ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+                    : "border-sky-400 bg-sky-50 text-sky-700 dark:bg-sky-400/10 dark:text-sky-300"
+                  : "border-ink-100 text-ink-500",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+              {mode === m ? <Check className="h-3.5 w-3.5" /> : null}
+            </button>
+          ))}
         </div>
-        <input className="field w-full" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+        <div className="grid grid-cols-[1fr_1.2fr] gap-2">
+          <input className="field h-10" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} />
+          <input className="field h-10" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
         {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
         <button type="button" className="btn-primary w-full" disabled={busy} onClick={() => void add()}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Save {KIND_LABEL[kind].toLowerCase()}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {n > 0 ? `Give ${rupees(n)} · ${KIND_LABEL[kind]} · ${mode === "CASH" ? "Cash" : "Online"}` : `Save ${KIND_LABEL[kind].toLowerCase()}`}
         </button>
       </section>
 
-      <ul className="overflow-hidden rounded-3xl border border-ink-100 bg-white/90 dark:bg-surface-elevated">
-        {person.payments.length ? (
-          person.payments.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 border-b border-ink-100/80 px-4 py-3 last:border-0">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-tide-100 text-xs font-bold text-tide-600 dark:bg-tide-400/15">
-                {Number(p.day.slice(8))}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink-900">
-                  {KIND_LABEL[p.kind]} <span className="font-normal text-ink-500">· {dayLabel(p.day)}</span>
-                </p>
-                {p.note ? <p className="truncate text-xs text-ink-500">{p.note}</p> : null}
-              </div>
-              <p className="font-display font-bold tabular-nums text-ink-900">{formatINR(p.amount)}</p>
-              <button type="button" onClick={() => void remove(p)} className="rounded-lg p-1.5 text-ink-300 hover:text-rose-600" aria-label="Delete">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </li>
-          ))
+      {/* History */}
+      <section className="overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-sm dark:bg-surface-elevated">
+        <div className="flex items-center justify-between px-4 pb-1 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">History · {short}</p>
+          <p className="text-xs font-medium text-ink-400">{pays.length} {pays.length === 1 ? "entry" : "entries"}</p>
+        </div>
+        {pays.length ? (
+          <ul>
+            {pays.map((p) => {
+              const online = (p.mode ?? "CASH") === "ONLINE";
+              return (
+                <li key={p.id} className="flex items-center gap-3 border-b border-ink-100/70 px-4 py-2.5 last:border-0">
+                  <span className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-xl text-center ring-1", KIND_TONE[p.kind])}>
+                    <span className="text-sm font-extrabold leading-none">{Number(p.day.slice(8))}</span>
+                    <span className="-mt-1 text-[9px] font-semibold uppercase leading-none opacity-70">{p.day && monthLabel(p.day.slice(0, 7)).slice(0, 3)}</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
+                      {KIND_LABEL[p.kind]}
+                      <span
+                        className={clsx(
+                          "inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold",
+                          online ? "bg-sky-50 text-sky-700 dark:bg-sky-400/10 dark:text-sky-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300",
+                        )}
+                      >
+                        {online ? <Smartphone className="h-3 w-3" /> : <Banknote className="h-3 w-3" />}
+                        {online ? "Online" : "Cash"}
+                      </span>
+                    </p>
+                    <p className="truncate text-xs text-ink-500">{[dayLabel(p.day), p.note].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <p className="font-display text-[15px] font-bold tabular-nums text-ink-900">{rupees(p.amount)}</p>
+                  <button type="button" onClick={() => void remove(p)} className="-mr-1 rounded-lg p-1.5 text-ink-300 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
-          <li className="px-4 py-8 text-center text-sm text-ink-500">Nothing given in {monthLabel(month)}.</li>
+          <p className="px-4 pb-6 pt-4 text-center text-sm text-ink-500">Nothing given in {monthLabel(month)}.</p>
         )}
-        {person.payments.length ? (
-          <li className="bg-ink-50/80 px-4 py-3 dark:bg-white/5">
+        {pays.length ? (
+          <div className="border-t border-ink-100 bg-ink-50/70 px-4 py-3 dark:bg-white/5">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-bold text-ink-900">
-                Total for {monthLabel(month).split(" ")[0]} <span className="font-normal text-ink-500">· {person.payments.length} {person.payments.length === 1 ? "entry" : "entries"}</span>
-              </p>
-              <p className="font-display text-lg font-extrabold tabular-nums text-ink-900">{formatINR(total)}</p>
+              <p className="text-sm font-bold text-ink-900">Total for {short}</p>
+              <p className="font-display text-lg font-extrabold tabular-nums text-ink-900">{rupees(total)}</p>
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {(["ADVANCE", "SALARY", "OTHER"] as const).map((k) => {
-                const sum = person.payments.filter((x) => x.kind === k).reduce((a, x) => a + x.amount, 0);
+                const sum = sumBy((x) => x.kind === k);
                 return sum > 0 ? (
-                  <span key={k} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-600 ring-1 ring-ink-100 dark:bg-surface-elevated">
-                    {KIND_LABEL[k]} {formatINR(sum)}
+                  <span key={k} className={clsx("rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1", KIND_TONE[k])}>
+                    {KIND_LABEL[k]} {rupees(sum)}
                   </span>
                 ) : null;
               })}
             </div>
-          </li>
+          </div>
         ) : null}
-      </ul>
+      </section>
     </div>
   );
 }

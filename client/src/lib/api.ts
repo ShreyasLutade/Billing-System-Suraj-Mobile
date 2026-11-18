@@ -290,6 +290,7 @@ export type StaffPaymentRow = {
   amount: number;
   day: string;
   kind: "ADVANCE" | "SALARY" | "OTHER";
+  mode: "CASH" | "ONLINE";
   note: string;
   createdByName: string | null;
 };
@@ -316,7 +317,7 @@ export const api = {
   ) => request<{ data: unknown }>(`/staff/${id}/attendance`, { method: "POST", body: JSON.stringify(body) }),
   staffPhoto: (attendanceId: string) =>
     request<{ data: { photo: string | null } }>(`/staff/attendance/${attendanceId}/photo`),
-  addStaffPayment: (id: string, body: { amount: number; day: string; kind: string; note: string }) =>
+  addStaffPayment: (id: string, body: { amount: number; day: string; kind: string; mode: string; note: string }) =>
     request<{ data: StaffPaymentRow }>(`/staff/${id}/payments`, { method: "POST", body: JSON.stringify(body) }),
   deleteStaffPayment: (paymentId: string) =>
     request<{ data: unknown }>(`/staff/payments/${paymentId}`, { method: "DELETE" }),

@@ -160,6 +160,7 @@ const paymentSchema = z.object({
   amount: z.coerce.number().positive("Enter the amount").max(10_000_000),
   day: z.string().regex(DAY),
   kind: z.enum(["ADVANCE", "SALARY", "OTHER"]).default("ADVANCE"),
+  mode: z.enum(["CASH", "ONLINE"]).default("CASH"),
   note: z.string().trim().max(200).default(""),
 });
 
