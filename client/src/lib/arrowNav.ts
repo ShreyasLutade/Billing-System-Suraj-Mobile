@@ -72,7 +72,8 @@ function best(from: DOMRect, dir: Dir, list: HTMLElement[], current: Element | n
   let winner: HTMLElement | null = null;
   let score = Infinity;
   for (const el of list) {
-    if (el === current || (current && (el.contains(current) || current.contains(el)))) continue;
+    // Parents of the current item are skipped; items inside it (e.g. buttons in a card) are fine.
+    if (el === current || (current && el.contains(current))) continue;
     const r = el.getBoundingClientRect();
     const ex = r.left + r.width / 2;
     const ey = r.top + r.height / 2;
@@ -136,7 +137,12 @@ function focusEl(el: HTMLElement) {
 }
 
 function onKeyDown(event: KeyboardEvent) {
-  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+  if (event.key === "Escape") {
+    onEscape(event, document.activeElement as HTMLElement | null);
+    return;
+  }
+  if (event.defaultPrevented) return;
 
   const active = document.activeElement as HTMLElement | null;
 
@@ -192,6 +198,59 @@ function onKeyDown(event: KeyboardEvent) {
   if (!next) return; // nothing that way: let the page scroll as usual
   event.preventDefault();
   focusEl(next);
+}
+
+/** A popup on screen: a dialog, or a full-screen layer over the page. */
+function topPopup(): HTMLElement | null {
+  const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"], [aria-modal="true"], dialog[open]')).filter(isVisible);
+  if (dialogs.length) return dialogs[dialogs.length - 1];
+  const layers = Array.from(document.querySelectorAll<HTMLElement>("body *")).filter((el) => {
+    const st = getComputedStyle(el);
+    if (st.position !== "fixed" || Number(st.zIndex) < 30) return false;
+    const r = el.getBoundingClientRect();
+    return r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9 && isVisible(el) && el.childElementCount > 0;
+  });
+  return layers[layers.length - 1] ?? null;
+}
+
+function closePopup(popup: HTMLElement) {
+  const closeBtn = Array.from(
+    popup.querySelectorAll<HTMLElement>(
+      'button[aria-label^="Close" i], button[aria-label^="Cancel" i], button[title^="Close" i], [data-close], .acc-sheet-close',
+    ),
+  ).find((b) => isVisible(b) && !isDisabled(b));
+  if (closeBtn) {
+    closeBtn.click();
+    return true;
+  }
+  // Most popups close when the dark area around them is clicked.
+  const overlay = popup.getAttribute("role") === "dialog" ? popup.parentElement : popup;
+  if (overlay && overlay !== document.body && reactProp(overlay, "onClick")) {
+    overlay.click();
+    return true;
+  }
+  return false;
+}
+
+/** Esc: close the popup on top; otherwise leave the text box; otherwise go back. */
+function onEscape(event: KeyboardEvent, active: HTMLElement | null) {
+  const popup = topPopup();
+  if (popup) {
+    // Popups that handle Esc themselves already did; don't close twice.
+    if (event.defaultPrevented) return;
+    if (closePopup(popup)) event.preventDefault();
+    return;
+  }
+  if (event.defaultPrevented) return;
+  if (active && active !== document.body && active.matches("input, textarea, select, [contenteditable='true']")) {
+    active.blur();
+    event.preventDefault();
+    return;
+  }
+  if (window.history.length > 1) {
+    event.preventDefault();
+    window.history.back();
+  }
 }
 
 let installed = false;
