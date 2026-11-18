@@ -141,7 +141,7 @@ export function AccSegregatePage() {
     const model = name.trim().replace(/\s+/g, " ");
     if (!model || !rows) return;
     const qty = Math.min(Math.max(draftQty, 1), Math.max(left, 0));
-    if (qty < 1) return void toast("All pieces are segregated", { tone: "error" });
+    if (qty < 1) return void toast("All pieces are split", { tone: "error" });
     const existing = rows.find((r) => r.model.toLowerCase() === model.toLowerCase());
     setRows(existing ? rows.map((r) => (r === existing ? { ...r, qty: r.qty + qty } : r)) : [{ id: `${model}-${Date.now()}`, model, qty }, ...rows]);
     setDraft("");
@@ -158,7 +158,7 @@ export function AccSegregatePage() {
     try {
       const { data } = await accApi.setProductModels(product.id, rows.filter((r) => r.qty > 0).map((r) => ({ model: r.model, qty: r.qty })));
       patchCatalogProduct(data);
-      toast(`Saved · ${sorted} segregated, ${left} left as ${product.name}`);
+      toast(`Saved · ${sorted} split, ${left} left as ${product.name}`);
       navigate(-1);
     } catch (err) {
       toast(errorText(err), { tone: "error" });
@@ -184,7 +184,7 @@ export function AccSegregatePage() {
 
       <section className="acc-seg-hero">
         <div>
-          <small>Segregate covers</small>
+          <small>Split by model</small>
           <h1>{product.name}</h1>
         </div>
         <div className="acc-seg-stats">
@@ -194,7 +194,7 @@ export function AccSegregatePage() {
           </span>
           <span className="is-sorted">
             <b>{sorted}</b>
-            <small>Segregated</small>
+            <small>Split</small>
           </span>
           <span className={clsx("is-left", left < 0 && "is-over")}>
             <b>{left}</b>
@@ -286,7 +286,7 @@ export function AccSegregatePage() {
           <li className="is-rest">
             <span className="acc-seg-model">
               <PackageOpen aria-hidden />
-              <strong>Not segregated</strong>
+              <strong>Not split</strong>
               <small>stays as {product.name}</small>
             </span>
             <b>{left}</b>
@@ -296,7 +296,7 @@ export function AccSegregatePage() {
 
       <div className="acc-seg-save">
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || left < 0}>
-          {busy ? <Loader2 className="acc-spin" /> : <Check />} Save · {sorted} segregated{left > 0 ? `, ${left} left` : ""}
+          {busy ? <Loader2 className="acc-spin" /> : <Check />} Save · {sorted} split{left > 0 ? `, ${left} left` : ""}
         </button>
       </div>
     </div>
@@ -390,7 +390,7 @@ export function AccCoverBoxesPage() {
     try {
       const { data } = await accApi.placeInBox(box.id, pile.product.id, pile.model);
       setBoxes(data);
-      toast(`${pile.model || "Not segregated"} · ${pile.product.name} → ${box.code}`);
+      toast(`${pile.model || "Not split"} · ${pile.product.name} → ${box.code}`);
     } catch (err) {
       toast(errorText(err), { tone: "error" });
     }
@@ -443,7 +443,7 @@ export function AccCoverBoxesPage() {
                 {found.map(({ pile, codes }) => (
                   <li key={pile.key}>
                     <span>
-                      <strong>{pile.model || "Not segregated"}</strong>
+                      <strong>{pile.model || "Not split"}</strong>
                       <small>
                         {pile.product.name} · {pile.qty} pcs
                       </small>
@@ -469,7 +469,7 @@ export function AccCoverBoxesPage() {
               <span>
                 <strong>Not in a box · {shown.length}</strong>
                 <small>
-                  Cover stock {totals.all} pcs · {totals.seg} segregated · {totals.rest} not
+                  Cover stock {totals.all} pcs · {totals.seg} split · {totals.rest} not
                 </small>
               </span>
               <em>{trayOpen ? "Hide" : "Show"}</em>
@@ -532,7 +532,7 @@ export function AccCoverBoxesPage() {
       <DragOverlay dropAnimation={{ duration: 180 }}>
         {dragging ? (
           <div className="acc-drag-ghost">
-            <strong>{dragging.model || "Not segregated"}</strong>
+            <strong>{dragging.model || "Not split"}</strong>
             <small>
               {dragging.product.name} · {dragging.qty}
             </small>
@@ -566,7 +566,7 @@ function TrayPile({ pile, codes, picked, onPick }: { pile: Pile; codes: string[]
         {...attributes}
       >
         <span className="acc-pile-text">
-          <strong>{pile.model || "Not segregated"}</strong>
+          <strong>{pile.model || "Not split"}</strong>
           <small>{pile.product.name}</small>
         </span>
         <span className="acc-pile-side">
@@ -694,7 +694,7 @@ function FillBoxSheet({
                   return (
                     <li key={i.id}>
                       <span>
-                        <strong>{i.model || "Not segregated"}</strong>
+                        <strong>{i.model || "Not split"}</strong>
                         <small>{pile?.product.name ?? "Removed product"}</small>
                       </span>
                       <b>{pile?.qty ?? 0}</b>
@@ -722,7 +722,7 @@ function FillBoxSheet({
                   <button type="button" className={clsx("acc-fill-row", on && "is-on")} onClick={() => setTicked(on ? ticked.filter((k) => k !== p.key) : [...ticked, p.key])}>
                     <i className="acc-tick">{on ? <Check /> : null}</i>
                     <span className="acc-pile-text">
-                      <strong>{p.model || "Not segregated"}</strong>
+                      <strong>{p.model || "Not split"}</strong>
                       <small>{p.product.name}</small>
                     </span>
                     <span className="acc-pile-side">
@@ -763,7 +763,7 @@ function BoxPickerSheet({ pile, boxes, where, onClose }: { pile: Pile | null; bo
       const existing = b.items.find((i) => i.productId === pile.product.id && i.model === pile.model);
       const { data } = existing ? await accApi.removeFromBox(existing.id) : await accApi.placeInBox(b.id, pile.product.id, pile.model);
       setBoxes(data);
-      toast(existing ? `Taken out of ${b.code}` : `${pile.model || "Not segregated"} → ${b.code}`);
+      toast(existing ? `Taken out of ${b.code}` : `${pile.model || "Not split"} → ${b.code}`);
     } catch (err) {
       toast(errorText(err), { tone: "error" });
     } finally {
@@ -775,7 +775,7 @@ function BoxPickerSheet({ pile, boxes, where, onClose }: { pile: Pile | null; bo
     <Sheet
       open={Boolean(pile)}
       onClose={onClose}
-      title={pile ? pile.model || "Not segregated" : ""}
+      title={pile ? pile.model || "Not split" : ""}
       subtitle={pile ? `${pile.product.name} · ${pile.qty} pcs · ${codes.length ? `in ${codes.join(", ")}` : "not in a box"}` : ""}
       footer={
         <button type="button" className="acc-btn is-big is-block" onClick={onClose}>
@@ -935,7 +935,7 @@ export function SegregateLink({ product, className }: { product: Pick<AccProduct
   if (!isCover(product)) return null;
   return (
     <Link to={`/acc/stock/${product.id}/segregate`} className={clsx("acc-btn is-small", className)}>
-      <Smartphone /> Segregate covers
+      <Smartphone /> Split by model
     </Link>
   );
 }

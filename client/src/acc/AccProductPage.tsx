@@ -266,10 +266,10 @@ export function AccProductPage() {
         ) : (
           <div className="acc-sort-empty">
             <p>
-              <strong>Not segregated yet</strong> · {plural(total, "piece")}
+              <strong>Not split yet</strong> · {plural(total, "piece")}
             </p>
             <button type="button" className="acc-btn is-primary" onClick={() => navigate(`/acc/stock/${product.id}/segregate`)} disabled={total <= 0}>
-              <Smartphone /> Segregate covers
+              <Smartphone /> Split by model
             </button>
           </div>
         )}
