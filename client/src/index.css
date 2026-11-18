@@ -3739,3 +3739,11 @@ h3,
 .font-display {
   letter-spacing: -0.02em;
 }
+
+/* Compact page titles on phones: the work area matters more. */
+@media (max-width: 640px) {
+  .babu-main h1 {
+    font-size: 22px !important;
+    line-height: 1.2 !important;
+  }
+}

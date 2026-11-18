@@ -109,15 +109,15 @@ export function PageHeader({
   titleAction?: ReactNode;
 }) {
   const heading = (
-    <h1 className="babu-page-title font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
+    <h1 className="babu-page-title font-display text-[22px] font-semibold leading-tight tracking-tight text-ink-900 sm:text-[26px]">
       {title}
     </h1>
   );
   return (
-    <div className="babu-page-header mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div className="babu-page-header mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-end sm:justify-between">
       <div className={titleAction ? "w-full min-w-0 flex-1" : undefined}>
         {eyebrow ? (
-          <p className="babu-eyebrow mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
+          <p className="babu-eyebrow mb-1 hidden text-[11px] font-semibold sm:block uppercase tracking-[0.18em] text-tide-600">
             {eyebrow}
           </p>
         ) : null}
