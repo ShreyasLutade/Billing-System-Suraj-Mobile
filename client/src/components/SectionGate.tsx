@@ -48,9 +48,9 @@ const isAccPath = (path: string) => /^\/acc(\/|$)/.test(path);
 type Section = "shop" | "repair" | "acc";
 
 const OPTIONS = [
-  { key: "shop", label: "Mobile shop", hint: "New bills, stock, dues and suppliers", icon: ReceiptText },
-  { key: "repair", label: "Repair shop", hint: "Take in phones for repair, with photos", icon: Wrench },
-  { key: "acc", label: "Accessories shop", hint: "Quick counter billing, wholesale and dues", icon: Headphones },
+  { key: "shop", label: "Mobile shop", hint: "Bills, stock, dues and suppliers", icon: ReceiptText },
+  { key: "repair", label: "Repair shop", hint: "Phone repairs with photos", icon: Wrench },
+  { key: "acc", label: "Accessories shop", hint: "Counter, wholesale and dues", icon: Headphones },
 ] as const;
 
 const SECTION_HOME: Record<Section, string> = { shop: "/", repair: "/repair", acc: "/acc" };
@@ -222,7 +222,6 @@ export function SectionGate() {
                       "section-gate-option",
                       option.key === "repair" && "is-repair",
                       option.key === "acc" && "is-acc",
-                      here && "is-current",
                     )}
                     onClick={() => choose(option.key)}
                     autoFocus={switching ? option.key !== current : option.key === "shop"}
@@ -232,12 +231,10 @@ export function SectionGate() {
                     </span>
                     <span className="section-gate-text">
                       <strong>{option.label}</strong>
-                      <small className={here ? "is-here" : undefined}>
-                        {here ? "You're here" : option.hint}
-                      </small>
+                      <small>{option.hint}</small>
                     </span>
                     {here ? (
-                      <Check className="section-gate-arrow" aria-hidden />
+                      <Check className="section-gate-arrow" aria-label="You're here" />
                     ) : (
                       <ArrowRight className="section-gate-arrow" aria-hidden />
                     )}
