@@ -95,7 +95,8 @@ function DueStatus({ c }: { c: AccCustomerRow }) {
   if (c.overdue > 0 && open && open.daysOverdue > 0) {
     return (
       <span className="acc-due-chip is-red">
-        Overdue {plural(open.daysOverdue, "day")} · {inr(c.overdue)}
+        Overdue {plural(open.daysOverdue, "day")}
+        {c.overdue < c.balance ? ` · ${inr(c.overdue)}` : ""}
       </span>
     );
   }
@@ -218,45 +219,56 @@ export function AccDuesPage() {
             .map((c) => {
             const limitPct = c.creditLimit > 0 ? Math.round((Math.max(c.balance, 0) / c.creditLimit) * 100) : 0;
             return (
-              <li key={c.id} className={clsx("acc-due-card", c.overdue > 0 && "is-overdue")}>
-                <button type="button" className="acc-due-main" onClick={() => navigate(`/acc/dues/${c.id}`)}>
-                  <span className="acc-avatar" style={{ ["--g" as string]: c.group?.color || "#94a3b8" }}>
-                    {(c.shopName || c.name).slice(0, 1).toUpperCase()}
-                  </span>
-                  {/* Shop name big and bold; the person's name small under it. */}
-                  <span className="acc-row-text acc-due-who">
+              <li key={c.id} className={clsx("acc-due-card is-ledger", c.overdue > 0 && "is-overdue")}>
+                <div
+                  className="acc-due-head"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/acc/dues/${c.id}`)}
+                  onKeyDown={(e) => e.key === "Enter" && navigate(`/acc/dues/${c.id}`)}
+                >
+                  {/* Shop name big and bold; the person's name and area under it. */}
+                  <span className="acc-due-who">
                     <strong>{c.shopName || c.name}</strong>
-                    <small>{[c.shopName ? c.name : "", c.city].filter(Boolean).join(" · ") || c.phone}</small>
+                    <small>
+                      <span>{[c.shopName ? c.name : "", c.city].filter(Boolean).join(" · ") || c.phone}</span>
+                      {c.group ? (
+                        <em className="acc-due-tag" style={{ ["--g" as string]: c.group.color }}>
+                          {c.group.name}
+                        </em>
+                      ) : null}
+                    </small>
+                    {c.creditLimit > 0 ? (
+                      <span className={clsx("acc-credit", limitPct >= 100 && "is-over")} title={`Credit limit ${inr(c.creditLimit)}`}>
+                        <span>
+                          <i style={{ width: `${Math.min(100, limitPct)}%` }} />
+                        </span>
+                        <em>{limitPct}% of limit</em>
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="acc-row-amt">
-                    <b className={clsx(c.balance > 0 ? "is-red" : c.balance < 0 && "is-green")}>
+                  <span className="acc-due-amt">
+                    <b className={clsx(c.overdue > 0 ? "is-red" : c.balance > 0 ? "is-amber" : c.balance < 0 && "is-green")}>
                       {c.balance < 0 ? inr(-c.balance) : inr(c.balance)}
                     </b>
-                    <small>{c.openBillCount ? plural(c.openBillCount, "open bill") : plural(c.billCount, "bill")}</small>
-                  </span>
-                </button>
-                <div className="acc-due-status">
-                  {c.balance > 0 ? (
-                    <button type="button" className="acc-due-chip-btn" onClick={() => setDating(c)} title="Change due date">
+                    {c.balance > 0 ? (
+                      <button
+                        type="button"
+                        className="acc-due-chip-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDating(c);
+                        }}
+                        title="Change due date"
+                      >
+                        <DueStatus c={c} />
+                        <i>· {plural(c.openBillCount || c.billCount, "bill")}</i>
+                        <CalendarDays aria-hidden />
+                      </button>
+                    ) : (
                       <DueStatus c={c} />
-                      <CalendarDays aria-hidden />
-                    </button>
-                  ) : (
-                    <DueStatus c={c} />
-                  )}
-                  {c.group ? (
-                    <span className="acc-due-group" style={{ ["--g" as string]: c.group.color }}>
-                      <i className="acc-dot" /> {c.group.name}
-                    </span>
-                  ) : null}
-                  {c.creditLimit > 0 ? (
-                    <span className={clsx("acc-credit", limitPct >= 100 && "is-over")} title={`Credit limit ${inr(c.creditLimit)}`}>
-                      <span>
-                        <i style={{ width: `${Math.min(100, limitPct)}%` }} />
-                      </span>
-                      <em>{limitPct}% of limit</em>
-                    </span>
-                  ) : null}
+                    )}
+                  </span>
                 </div>
                 {c.balance > 0 ? (
                   <div className="acc-due-actions">
