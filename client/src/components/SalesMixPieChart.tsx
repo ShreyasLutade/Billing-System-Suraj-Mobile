@@ -127,7 +127,7 @@ export function SalesMixPieChart({
               y={cy - 6}
               textAnchor="middle"
               className="fill-ink-500"
-              style={{ fontSize: 11, fontFamily: '"Manrope", sans-serif' }}
+              style={{ fontSize: 11, fontFamily: '"Inter", sans-serif' }}
             >
               Total paid mix
             </text>
@@ -139,7 +139,7 @@ export function SalesMixPieChart({
               style={{
                 fontSize: 15,
                 fontWeight: 600,
-                fontFamily: '"Manrope", sans-serif',
+                fontFamily: '"Inter", sans-serif',
               }}
             >
               {formatINR(total)}

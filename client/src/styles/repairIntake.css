@@ -52,7 +52,7 @@
 
 .ri .ri-title h1 {
   margin: 0;
-  font: 800 21px/1.2 "Sora", sans-serif;
+  font: 800 21px/1.2 "Inter", sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -715,7 +715,7 @@
 
 .ri-sheet h2 {
   margin: 0;
-  font: 800 22px "Sora", sans-serif;
+  font: 800 22px "Inter", sans-serif;
 }
 
 .ri-jid {

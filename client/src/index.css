@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Sora:wght@400;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -159,7 +158,7 @@ body,
   overflow: hidden;
   background: var(--app-bg);
   color: var(--app-ink);
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   transition: grid-template-columns 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -238,7 +237,7 @@ body,
 }
 
 .babu-brand strong {
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 18px;
   font-weight: 800;
   line-height: 1.1;
@@ -332,7 +331,7 @@ body,
   border-radius: 12px;
   background: var(--grad);
   color: #ffffff;
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   font-weight: 800;
 }
@@ -358,7 +357,7 @@ body,
   border-radius: 12px;
   background: transparent;
   color: var(--app-ink);
-  font: 600 14px "DM Sans", sans-serif;
+  font: 600 14px "Inter", sans-serif;
   text-decoration: none;
   transition: 0.2s ease;
 }
@@ -451,7 +450,7 @@ body,
   border-radius: 10px;
   background: transparent;
   color: var(--app-ink);
-  font: 600 14px "DM Sans", sans-serif;
+  font: 600 14px "Inter", sans-serif;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -523,7 +522,7 @@ body,
 .babu-main h1,
 .babu-main h2,
 .babu-main h3 {
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .babu-offline-banner {
@@ -772,7 +771,7 @@ body,
 
   .babu-mobile-brand strong {
     overflow: hidden;
-    font-family: "Sora", sans-serif;
+    font-family: "Inter", sans-serif;
     font-size: 17px;
     font-weight: 800;
     white-space: nowrap;
@@ -865,7 +864,7 @@ body,
 .babu-main h2,
 .babu-main h3,
 .babu-main h4 {
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .babu-page-header {
@@ -874,13 +873,13 @@ body,
 
 .babu-eyebrow {
   color: var(--accent) !important;
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
   letter-spacing: 0.18em;
 }
 
 .babu-page-title {
   color: var(--app-ink) !important;
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 800 !important;
   letter-spacing: 0 !important;
 }
@@ -917,7 +916,7 @@ body,
   border-radius: 14px !important;
   background: var(--app-card) !important;
   color: var(--app-ink) !important;
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .babu-main .field:focus,
@@ -936,7 +935,7 @@ body,
 .babu-main .tb-toolbar,
 .babu-main button,
 .babu-main a {
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .babu-main .label {
@@ -949,7 +948,7 @@ body,
 .babu-main button.bg-ink-900,
 .babu-main a.bg-ink-900 {
   border-radius: 14px !important;
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .babu-main .btn-primary,
@@ -1007,7 +1006,7 @@ body {
   /* iOS: 100vh is the toolbar-hidden height, which lets the page shift under the header. */
   height: 100dvh;
   overflow: hidden;
-  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   background-image: var(--bg-mesh);
   background-attachment: fixed;
   color: rgb(var(--color-page-text));
@@ -1093,15 +1092,15 @@ body {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-ink-900 px-5 py-3 text-sm font-semibold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-ink-800 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:bg-tide-400 dark:text-[#0F172A] dark:hover:bg-tide-500 dark:hover:text-[#0F172A];
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-ink-800 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:bg-tide-400 dark:text-[#0F172A] dark:hover:bg-tide-500 dark:hover:text-[#0F172A];
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-ink-100 bg-white/80 px-5 py-3 text-sm font-semibold text-ink-800 transition hover:border-ink-300 hover:bg-white dark:border-ink-100 dark:bg-surface-elevated dark:text-ink-800 dark:hover:border-ink-300 dark:hover:bg-surface-muted;
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-ink-100 bg-white/80 px-4 py-2.5 text-sm font-semibold text-ink-800 transition hover:border-ink-300 hover:bg-white dark:border-ink-100 dark:bg-surface-elevated dark:text-ink-800 dark:hover:border-ink-300 dark:hover:bg-surface-muted;
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-rose-500 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:border-rose-500/40;
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-rose-500 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:border-rose-500/40;
   }
 
   .back-pill {
@@ -1695,7 +1694,7 @@ html.dark .border-amber-300 {
   height: 100%;
   overflow: hidden;
   color: var(--login-ink);
-  font-family: "Manrope", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   background: #fff;
 }
 
@@ -1853,7 +1852,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-bp-name {
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 36px;
   line-height: 1.05;
@@ -1862,7 +1861,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 
 .login-bp-name small {
   display: block;
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 500;
   font-size: 15.5px;
   color: #9fb1c6;
@@ -1878,7 +1877,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-bp-head h1 {
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: clamp(26px, 2.6vw, 32px);
   line-height: 1.18;
@@ -1959,7 +1958,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-rc-shop {
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 14px;
   line-height: 1;
@@ -1967,7 +1966,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 
 .login-rc-shop small {
   display: block;
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 600;
   font-size: 8px;
   letter-spacing: 0.14em;
@@ -2005,7 +2004,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-rc-total b {
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 17px;
   font-variant-numeric: tabular-nums;
@@ -2101,7 +2100,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-chip-v {
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 15px;
   color: #fff;
@@ -2175,7 +2174,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 }
 
 .login-form-pane h2 {
-  font-family: "Manrope", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 32px;
   margin: 0 0 8px;
@@ -2585,7 +2584,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 
   .login-mobile-name {
     margin: 0;
-    font-family: "Manrope", sans-serif;
+    font-family: "Inter", sans-serif;
     font-weight: 700;
     font-size: 28px;
     letter-spacing: -0.01em;
@@ -2593,7 +2592,7 @@ html.dark .login-page-forgot .login-form-pane h2 {
 
   .login-mobile-meta {
     margin: 10px 0 0;
-    font-family: "Manrope", sans-serif;
+    font-family: "Inter", sans-serif;
     font-weight: 500;
     font-size: 15px;
     letter-spacing: 0.08em;
@@ -2881,7 +2880,7 @@ html.dark .login-alert {
   --login-loss-soft: #fff0f2;
   background: #f3f8fd;
   color: var(--login-ink);
-  font-family: "Manrope", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
 }
 
 .login-auth {
@@ -3426,7 +3425,7 @@ html.dark .login-brand {
 }
 
 .login-page {
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .login-fp-brand strong,
@@ -3437,7 +3436,7 @@ html.dark .login-brand {
 .login-art-card strong,
 .login-dashboard-title,
 .login-dashboard-amount {
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .login-fp-brand span,
@@ -3450,7 +3449,7 @@ html.dark .login-brand {
 .login-art-card small,
 .login-art-chips span,
 .login-art-pill {
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 /* Keep the artwork composition inside the panel: cards left, phone right. */
@@ -3529,7 +3528,7 @@ html.dark .login-brand {
   gap: 8px;
   margin-top: 34px;
   color: var(--login-muted);
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 13.5px;
 }
 
@@ -3718,4 +3717,25 @@ input,
 textarea,
 select {
   scroll-margin: 96px 0 120px;
+}
+
+/* Fintech type: Inter everywhere, aligned numbers, tighter headings. */
+html,
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.babu-main,
+.acc {
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  letter-spacing: -0.02em;
 }

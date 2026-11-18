@@ -41,8 +41,8 @@ export default {
         },
       },
       fontFamily: {
-        display: ['"Manrope"', "system-ui", "sans-serif"],
-        sans: ['"Manrope"', "system-ui", "-apple-system", "sans-serif"],
+        display: ['"Inter"', "system-ui", "sans-serif"],
+        sans: ['"Inter"', "system-ui", "-apple-system", "sans-serif"],
         mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
       },
       boxShadow: {

@@ -51,7 +51,7 @@ html.dark .acc {
 .acc .acc-page h1,
 .acc .acc-h1 {
   margin: 0;
-  font: 800 22px "Sora", sans-serif;
+  font: 800 22px "Inter", sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -136,9 +136,9 @@ html.dark .acc {
 }
 
 .acc-btn.is-big {
-  min-height: 52px;
-  font-size: 17px;
-  border-radius: 14px;
+  min-height: 46px;
+  font-size: 15px;
+  border-radius: 13px;
 }
 
 .acc-btn.is-small {
@@ -244,7 +244,7 @@ html.dark .acc {
 
 .acc-card-title {
   margin: 0;
-  font: 700 14px "Sora", sans-serif;
+  font: 700 14px "Inter", sans-serif;
   color: var(--a-ink);
 }
 
@@ -349,7 +349,7 @@ html.dark .acc {
 }
 
 .acc-total-big {
-  font: 800 22px "Sora", sans-serif;
+  font: 800 22px "Inter", sans-serif;
   line-height: 42px;
 }
 
@@ -475,7 +475,7 @@ html.dark .acc {
 
 .acc-stock-header-total b {
   grid-row: span 2;
-  font: 800 20px "Sora", sans-serif;
+  font: 800 20px "Inter", sans-serif;
 }
 
 .acc-stock-workspace,
@@ -889,7 +889,7 @@ html.dark .acc {
 }
 
 .acc-stock-summary b {
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-stock-summary .is-total b {
@@ -991,7 +991,7 @@ html.dark .acc {
   border-radius: 50%;
   background: color-mix(in srgb, var(--a-accent) 14%, var(--a-card));
   color: var(--a-accent);
-  font: 800 14px "Sora", sans-serif;
+  font: 800 14px "Inter", sans-serif;
   font-style: normal;
 }
 
@@ -1011,7 +1011,7 @@ html.dark .acc {
 }
 
 .acc-step-title strong {
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-step-title small {
@@ -1065,7 +1065,7 @@ html.dark .acc {
 }
 
 .acc-in-line-head > b {
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-new-tag {
@@ -1381,7 +1381,7 @@ html.dark .acc {
 
 .acc-today b {
   color: var(--a-ink);
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-crumbs {
@@ -1630,7 +1630,7 @@ html.dark .acc {
 .acc-tile-price {
   margin-top: auto;
   padding-top: 8px;
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
   color: var(--a-ink);
 }
 
@@ -1759,7 +1759,7 @@ html.dark .acc {
 }
 
 .acc-cartbar-btn b {
-  font: 800 18px "Sora", sans-serif;
+  font: 800 18px "Inter", sans-serif;
 }
 
 .acc-cartbar-btn em {
@@ -1783,7 +1783,7 @@ html.dark .acc {
   border-radius: 14px;
   background: var(--a-card);
   color: var(--a-ink);
-  font: 800 18px "Sora", sans-serif;
+  font: 800 18px "Inter", sans-serif;
   cursor: pointer;
 }
 
@@ -1810,13 +1810,13 @@ html.dark .acc {
   position: absolute;
   left: 14px;
   color: var(--a-muted);
-  font: 800 20px "Sora", sans-serif;
+  font: 800 20px "Inter", sans-serif;
 }
 
 .acc .acc-amount input {
   min-height: 54px;
   padding-left: 34px;
-  font: 800 22px "Sora", sans-serif !important;
+  font: 800 22px "Inter", sans-serif !important;
   border-radius: 14px;
 }
 
@@ -1863,7 +1863,7 @@ html.dark .acc {
   border-radius: 0;
   background: transparent;
   text-align: center;
-  font: 800 18px "Sora", sans-serif !important;
+  font: 800 18px "Inter", sans-serif !important;
   box-shadow: none;
 }
 
@@ -2031,7 +2031,7 @@ html.dark .acc {
 }
 
 .acc-cust-bal b {
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-group-tag {
@@ -2167,7 +2167,7 @@ html.dark .acc {
 }
 
 .acc-wholesale-items-head h2 {
-  font: 700 16px "Sora", sans-serif;
+  font: 700 16px "Inter", sans-serif;
 }
 
 .acc-wholesale-items-head p {
@@ -2421,7 +2421,7 @@ html.dark .acc {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-wholesale-line-total {
@@ -2434,7 +2434,7 @@ html.dark .acc {
 }
 
 .acc-wholesale-line-total b {
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-wholesale-empty {
@@ -2587,7 +2587,7 @@ html.dark .acc {
 .acc-wholesale-sheet-total {
   padding-right: 10px;
   text-align: right;
-  font: 800 14px "Sora", sans-serif;
+  font: 800 14px "Inter", sans-serif;
 }
 
 .acc-add-another-product {
@@ -2797,7 +2797,7 @@ html.dark .acc {
 }
 
 .acc-payment-heading h2 {
-  font: 700 16px "Sora", sans-serif;
+  font: 700 16px "Inter", sans-serif;
 }
 
 .acc-payment-heading p {
@@ -2980,7 +2980,7 @@ html.dark .acc {
 }
 
 .acc-payment-result b {
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-sum-row {
@@ -3077,7 +3077,7 @@ html.dark .acc {
 }
 
 .acc-due-line b {
-  font: 800 19px "Sora", sans-serif;
+  font: 800 19px "Inter", sans-serif;
 }
 
 .acc-kv {
@@ -3215,7 +3215,7 @@ html.dark .acc {
 
 .acc-bill-summary > div > b {
   text-align: right;
-  font: 800 18px "Sora", sans-serif;
+  font: 800 18px "Inter", sans-serif;
 }
 
 .acc-bill-summary > .is-due > b {
@@ -3564,7 +3564,7 @@ html.dark .acc {
   margin: 0 0 6px;
   padding: 0 4px;
   color: var(--a-muted);
-  font: 700 13px "Sora", sans-serif;
+  font: 700 13px "Inter", sans-serif;
 }
 
 .acc-day-head b {
@@ -3696,7 +3696,7 @@ html.dark .acc {
 .acc-empty > p {
   margin: 0;
   color: var(--a-ink);
-  font: 700 16px "Sora", sans-serif;
+  font: 700 16px "Inter", sans-serif;
 }
 
 .acc-empty > div {
@@ -3767,7 +3767,7 @@ html.dark .acc {
 
 .acc-stat-strip b {
   overflow: hidden;
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3842,7 +3842,7 @@ html.dark .acc {
 }
 
 .acc-kpis b {
-  font: 800 19px "Sora", sans-serif;
+  font: 800 19px "Inter", sans-serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3990,7 +3990,7 @@ html.dark .acc {
 }
 
 .acc-group-card b {
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-group-card.is-on {
@@ -4639,7 +4639,7 @@ body.acc-sheet-open {
 
 .acc-sheet-title h2 {
   margin: 0;
-  font: 800 18px "Sora", sans-serif;
+  font: 800 18px "Inter", sans-serif;
   color: var(--a-ink);
 }
 
@@ -5518,7 +5518,7 @@ body.acc-sheet-open {
 }
 
 .acc-stock-section > header strong {
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-stock-section > header small {
@@ -5528,7 +5528,7 @@ body.acc-sheet-open {
 }
 
 .acc-section-toggle > b {
-  font: 800 14px "Sora", sans-serif;
+  font: 800 14px "Inter", sans-serif;
   color: var(--a-muted);
 }
 
@@ -5662,7 +5662,7 @@ body.acc-sheet-open {
 
 .acc-stock-card-top b {
   display: block;
-  font: 800 34px/1.1 "Sora", sans-serif;
+  font: 800 34px/1.1 "Inter", sans-serif;
 }
 
 .acc-stock-card-top b span {
@@ -5818,7 +5818,7 @@ body.acc-sheet-open {
 }
 
 .acc-model-list b {
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
   text-align: right;
 }
 
@@ -5915,7 +5915,7 @@ body.acc-sheet-open {
 
 .acc .acc-count-big {
   min-height: 56px;
-  font: 800 26px "Sora", sans-serif;
+  font: 800 26px "Inter", sans-serif;
   text-align: center;
 }
 
@@ -5953,7 +5953,7 @@ body.acc-sheet-open {
 }
 
 .acc-check-progress strong {
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-check-progress small {
@@ -7208,7 +7208,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-bill-balance b {
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-bill-items-table {
@@ -7442,7 +7442,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-counter-day-head > b {
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-counter-day-toggle {
@@ -7547,7 +7547,7 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc-customer-account-title h1 {
   margin: 0;
-  font: 800 28px/1.1 "Sora", sans-serif;
+  font: 800 28px/1.1 "Inter", sans-serif;
   letter-spacing: -0.025em;
 }
 
@@ -7614,7 +7614,7 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc-customer-contact-section strong {
   margin-top: 3px;
-  font: 700 17px "Sora", sans-serif;
+  font: 700 17px "Inter", sans-serif;
 }
 
 .acc-customer-contact-section a,
@@ -7669,7 +7669,7 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc-customer-account-balance strong {
   margin-top: 5px;
-  font: 800 27px "Sora", sans-serif;
+  font: 800 27px "Inter", sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -8398,7 +8398,15 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-supplier-page .acc-btn-row .acc-btn.is-big {
-  font-size: 15px;
+  min-height: 42px;
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+
+.acc-supplier-page .acc-btn-row .acc-btn.is-big svg {
+  width: 17px;
+  height: 17px;
 }
 
 /* Bill page on phones: share/contact actions as one row of icon tiles,
@@ -8518,7 +8526,7 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc .acc-bv-hero h1 {
   margin: 0;
-  font: 800 26px/1.1 "Sora", sans-serif;
+  font: 800 26px/1.1 "Inter", sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -8550,7 +8558,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-bv-total b {
-  font: 800 26px/1.1 "Sora", sans-serif;
+  font: 800 26px/1.1 "Inter", sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -8617,7 +8625,7 @@ html.dark .acc-sell-pay button.is-on {
   align-items: center;
   gap: 8px;
   margin: 0;
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-bv-card-head h2 svg {
@@ -8711,7 +8719,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-bv-balance b {
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-bv-balance.is-due {
@@ -8774,7 +8782,7 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc-bv-amount {
   flex: none;
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-bv-subtotal {
@@ -8789,7 +8797,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-bv-subtotal b {
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 /* Payment */
@@ -8836,7 +8844,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-bv-pay li.is-total > b {
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-bv-pay li.is-paid > span svg,
@@ -8882,7 +8890,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-bv-result b {
-  font: 800 20px "Sora", sans-serif;
+  font: 800 20px "Inter", sans-serif;
 }
 
 .acc-bv-result.is-due {
@@ -8999,7 +9007,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-tl-amt b {
-  font: 800 15px "Sora", sans-serif;
+  font: 800 15px "Inter", sans-serif;
 }
 
 .acc-tl li.is-out .acc-tl-amt b {
@@ -9054,7 +9062,7 @@ html.dark .acc-sell-pay button.is-on {
   }
 
   .acc-ledger-statement .acc-ledger-money b {
-    font: 800 15px "Sora", sans-serif;
+    font: 800 15px "Inter", sans-serif;
   }
 
   .acc-ledger-statement .acc-ledger-money.is-balance {
@@ -9222,7 +9230,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-cancel-option strong {
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-cancel-option small {
@@ -9376,7 +9384,7 @@ html.dark .acc-sell-pay button.is-on {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font: 800 13.5px "Sora", sans-serif;
+  font: 800 13.5px "Inter", sans-serif;
   letter-spacing: 0.06em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -9460,7 +9468,7 @@ html.dark .acc-sell-pay button.is-on {
 }
 
 .acc-settings-head strong {
-  font: 800 16px "Sora", sans-serif;
+  font: 800 16px "Inter", sans-serif;
 }
 
 .acc-settings-head small {
@@ -9557,7 +9565,7 @@ html.dark .acc-sell-pay button.is-on {
   border-radius: 13px;
   background: var(--g);
   color: #fff;
-  font: 800 17px "Sora", sans-serif;
+  font: 800 17px "Inter", sans-serif;
 }
 
 .acc-gt-title {
@@ -9570,7 +9578,7 @@ html.dark .acc-sell-pay button.is-on {
 
 .acc-gt-title strong {
   overflow: hidden;
-  font: 800 14.5px "Sora", sans-serif;
+  font: 800 14.5px "Inter", sans-serif;
   letter-spacing: 0.05em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -10327,7 +10335,7 @@ html.dark .acc {
 }
 
 .acc-place-split b {
-  font: 800 22px "Sora", sans-serif;
+  font: 800 22px "Inter", sans-serif;
 }
 
 .acc-place-split button {
@@ -10386,7 +10394,7 @@ html.dark .acc {
   border: 1px solid var(--a-line);
   border-radius: 16px;
   color: var(--a-ink);
-  font: 800 26px/1 "Sora", sans-serif;
+  font: 800 26px/1 "Inter", sans-serif;
   text-align: center;
 }
 
@@ -10437,7 +10445,7 @@ html.dark .acc {
 }
 
 .acc-move-preview b {
-  font: 800 17px/1.2 "Sora", sans-serif;
+  font: 800 17px/1.2 "Inter", sans-serif;
 }
 
 .acc-move-preview .is-shop {
@@ -10475,7 +10483,7 @@ html.dark .acc {
 
 .acc .acc-seg-hero h1 {
   margin: 2px 0 0;
-  font: 800 20px/1.2 "Sora", sans-serif;
+  font: 800 20px/1.2 "Inter", sans-serif;
 }
 
 .acc-seg-stats {
@@ -10492,7 +10500,7 @@ html.dark .acc {
 }
 
 .acc-seg-stats b {
-  font: 800 20px/1.1 "Sora", sans-serif;
+  font: 800 20px/1.1 "Inter", sans-serif;
 }
 
 .acc-seg-stats small {
@@ -10712,7 +10720,7 @@ html.dark .acc {
 .acc-seg-list li.is-rest > b {
   margin-left: auto;
   padding-right: 6px;
-  font: 800 18px/1 "Sora", sans-serif;
+  font: 800 18px/1 "Inter", sans-serif;
 }
 
 .acc-seg-model {
@@ -10948,7 +10956,7 @@ html.dark .acc {
 }
 
 .acc-pile-side b {
-  font: 800 15px/1 "Sora", sans-serif;
+  font: 800 15px/1 "Inter", sans-serif;
 }
 
 .acc-pile-side em,
@@ -11054,7 +11062,7 @@ html.dark .acc {
 }
 
 .acc-box-code {
-  font: 800 13px/1 "Sora", sans-serif;
+  font: 800 13px/1 "Inter", sans-serif;
 }
 
 .acc-box-items {
@@ -11166,7 +11174,7 @@ html.dark .acc {
 }
 
 .acc-boxsheet li b {
-  font: 800 16px/1 "Sora", sans-serif;
+  font: 800 16px/1 "Inter", sans-serif;
 }
 
 .acc .acc-boxsheet li button {
@@ -11301,7 +11309,7 @@ html.dark .acc {
 }
 
 .acc-fill-in li b {
-  font: 800 15px/1 "Sora", sans-serif;
+  font: 800 15px/1 "Inter", sans-serif;
 }
 
 .acc .acc-fill-in li button {
@@ -11380,7 +11388,7 @@ html.dark .acc {
   border-radius: 10px;
   background: var(--a-field);
   color: var(--a-ink);
-  font: 800 13px/1 "Sora", sans-serif;
+  font: 800 13px/1 "Inter", sans-serif;
   transition: transform 0.12s, background 0.12s;
 }
 
@@ -11508,4 +11516,11 @@ html.dark .acc {
 .acc-section-sort svg {
   width: 14px;
   height: 14px;
+}
+
+/* Supplier header: smaller PDF icon buttons */
+.acc-supplier-page .acc-bill-head .acc-pdf-actions .acc-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
 }
