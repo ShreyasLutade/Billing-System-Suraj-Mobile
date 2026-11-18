@@ -15,7 +15,6 @@ import {
   LayoutGrid,
   BarChart3,
   CalendarCheck,
-  Grid3x3,
   ChevronLeft,
   ChevronRight,
   FilePlus2,
@@ -346,19 +345,6 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                     <Settings /> Settings
                   </Link>
                 ) : null}
-                {isAcc ? (
-                  <Link
-                    to="/acc/covers"
-                    role="menuitem"
-                    className="babu-user-menu-item"
-                    onClick={() => {
-                      onMainNavClick();
-                      setUserMenuOpen(false);
-                    }}
-                  >
-                    <Grid3x3 /> Cover boxes
-                  </Link>
-                ) : null}
                 {!repairOnly ? (
                   <Link
                     to={isAcc ? "/acc/staff" : "/staff"}
@@ -537,18 +523,6 @@ export function AppShell({ section = "shop" }: { section?: "shop" | "repair" | "
                     className="babu-utility-button"
                   >
                     <Settings /> Settings
-                  </Link>
-                ) : null}
-                {isAcc ? (
-                  <Link
-                    to="/acc/covers"
-                    onClick={() => {
-                      onMainNavClick();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="babu-utility-button"
-                  >
-                    <Grid3x3 /> Cover boxes
                   </Link>
                 ) : null}
                 {!repairOnly ? (

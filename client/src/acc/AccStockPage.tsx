@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Check, ChevronDown, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
+import { Check, ChevronDown, Grid3x3, FileDown, Loader2, PackagePlus, Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { SearchClearButton } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { accApi, type AccCategory, type AccProduct } from "./accApi";
@@ -363,6 +363,11 @@ function StockSection({
           <b>{inr(value)}</b>
           <ChevronDown className="acc-section-chevron" aria-hidden />
         </button>
+        {/cover/i.test(category.name) ? (
+          <button type="button" className="acc-section-sort" onClick={() => navigate("/acc/covers")} title="Sort covers into boxes">
+            <Grid3x3 /> Sort
+          </button>
+        ) : null}
       </header>
       {open ? (
         <ul className="acc-list">
