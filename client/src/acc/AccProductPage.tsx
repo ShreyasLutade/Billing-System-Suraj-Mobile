@@ -266,9 +266,7 @@ export function AccProductPage() {
         ) : (
           <div className="acc-sort-empty">
             <p>
-              <strong>Not sorted yet.</strong> When you have time, split these {plural(total, "piece")} by phone brand (e.g.
-              30 Vivo, 25 Samsung, 20 Redmi). It's only for your record; check and update it each week. The counter still
-              sells <b>{product.name}</b>.
+              <strong>Not segregated yet</strong> · {plural(total, "piece")}
             </p>
             <button type="button" className="acc-btn is-primary" onClick={() => navigate(`/acc/stock/${product.id}/segregate`)} disabled={total <= 0}>
               <Smartphone /> Segregate covers
