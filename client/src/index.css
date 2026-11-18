@@ -3747,3 +3747,9 @@ h3,
     line-height: 1.2 !important;
   }
 }
+
+/* Laptop arrow-key navigation: clear ring on the focused item. */
+html.kbd-nav :focus {
+  outline: 2.5px solid #3b82f6 !important;
+  outline-offset: -2.5px !important;
+}
