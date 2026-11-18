@@ -19,6 +19,8 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { BackLink } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import { api, formatINR, type StaffMark, type StaffMember, type StaffPaymentRow } from "../lib/api";
@@ -103,7 +105,7 @@ export function StaffPage() {
   /** Admin: everyone on one day. */
   const [teamDay, setTeamDay] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
-  const [moneyId, setMoneyId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -205,7 +207,6 @@ export function StaffPage() {
   };
 
   const dayPerson = dayFor ? staff?.find((s) => s.id === dayFor.id) ?? null : null;
-  const moneyPerson = moneyId ? staff?.find((s) => s.id === moneyId) ?? null : null;
   const hasStaff = Boolean(staff?.length);
 
   return (
@@ -418,18 +419,13 @@ export function StaffPage() {
             }}
             onMoney={(id) => {
               setListOpen(false);
-              setMoneyId(id);
+              navigate(`${id}/money?month=${month}`);
             }}
             onRemove={(p) => {
               setListOpen(false);
               setRemoveTarget(p);
             }}
           />
-        ) : null}
-        {moneyPerson ? (
-          <Sheet key="money" title="Money given" subtitle={moneyPerson.name} onClose={() => setMoneyId(null)}>
-            <MoneyTab person={moneyPerson} month={month} today={today} onMonth={changeMonth} onChanged={() => void load()} />
-          </Sheet>
         ) : null}
         {removeTarget ? (
           <DangerConfirmModal
@@ -905,6 +901,71 @@ function DaySheet({
   );
 }
 
+/** Money given to one staff member, month by month (admin). */
+export function StaffMoneyPage() {
+  const { id } = useParams();
+  const location = useLocation();
+  const base = location.pathname.replace(/\/[^/]+\/money\/?$/, "") || "/staff";
+  const [search, setSearch] = useSearchParams();
+  const [month, setMonth] = useState(search.get("month") || "");
+  const [today, setToday] = useState("");
+  const [person, setPerson] = useState<StaffMember | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (m: string) => {
+      try {
+        const { data } = await api.staff(m);
+        setMonth(data.month);
+        setToday(data.today);
+        const found = data.staff.find((s) => s.id === id) ?? null;
+        setPerson(found);
+        setError(found ? null : "This staff member was not found");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load");
+      }
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    void load(month);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const changeMonth = (by: number) => {
+    const next = shiftMonth(month, by);
+    if (by > 0 && next > monthOf(today)) return;
+    setMonth(next);
+    setSearch({ month: next }, { replace: true });
+    void load(next);
+  };
+
+  return (
+    <div className="mx-auto max-w-md space-y-3 pb-8">
+      <BackLink to={base} historyBack>
+        Staff
+      </BackLink>
+      <header className="flex items-center gap-3">
+        <Avatar name={person?.name || "?"} size="h-11 w-11" />
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-[22px] font-bold leading-tight text-ink-900">{person?.name || "…"}</h1>
+          <p className="text-sm text-ink-500">Money given</p>
+        </div>
+      </header>
+      {error ? (
+        <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>
+      ) : person && today ? (
+        <MoneyTab person={person} month={month} today={today} onMonth={changeMonth} onChanged={() => void load(month)} />
+      ) : (
+        <div className="grid place-items-center py-16 text-ink-400">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 const KIND_TONE: Record<StaffPaymentRow["kind"], string> = {
   ADVANCE: "bg-amber-50 text-amber-700 ring-amber-200/70 dark:bg-amber-400/10 dark:text-amber-300",
   SALARY: "bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:bg-emerald-400/10 dark:text-emerald-300",
@@ -975,14 +1036,14 @@ function MoneyTab({
   return (
     <div className="space-y-3">
       {/* Month */}
-      <div className="flex items-center justify-between rounded-2xl bg-ink-50 p-1 dark:bg-white/5">
-        <button type="button" className="grid h-8 w-8 place-items-center rounded-xl text-ink-600 transition hover:bg-white active:scale-95 dark:hover:bg-white/10" onClick={() => onMonth(-1)} aria-label="Previous month">
+      <div className="flex items-center justify-between rounded-2xl border border-ink-100 bg-white/90 p-1 shadow-sm dark:bg-surface-elevated">
+        <button type="button" className="grid h-8 w-8 place-items-center rounded-xl text-ink-600 transition hover:bg-ink-50 active:scale-95 dark:hover:bg-white/10" onClick={() => onMonth(-1)} aria-label="Previous month">
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-semibold text-ink-900">{monthLabel(month)}</span>
         <button
           type="button"
-          className="grid h-8 w-8 place-items-center rounded-xl text-ink-600 transition hover:bg-white active:scale-95 disabled:opacity-30 dark:hover:bg-white/10"
+          className="grid h-8 w-8 place-items-center rounded-xl text-ink-600 transition hover:bg-ink-50 active:scale-95 disabled:opacity-30 dark:hover:bg-white/10"
           onClick={() => onMonth(1)}
           disabled={thisMonth}
           aria-label="Next month"

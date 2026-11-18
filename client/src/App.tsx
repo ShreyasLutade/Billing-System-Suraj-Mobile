@@ -17,7 +17,7 @@ import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
 import { CreateBillPage } from "./pages/CreateBillPage";
-import { StaffPage } from "./pages/StaffPage";
+import { StaffMoneyPage, StaffPage } from "./pages/StaffPage";
 import { AccCoverBoxesPage, AccSegregatePage } from "./acc/AccCovers";
 import { DuesPage } from "./pages/DuesPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -92,6 +92,7 @@ export default function App() {
                       <Route path="dues/old" element={<AccOldDuePage />} />
                       <Route path="settings" element={<AccSettingsPage />} />
                       <Route path="staff" element={<StaffPage />} />
+                      <Route path="staff/:id/money" element={<StaffMoneyPage />} />
                       <Route path="dues/:id" element={<AccCustomerPage />} />
                       <Route element={<RequireAdmin />}>
                         <Route path="analytics" element={<AccAnalyticsPage />} />
@@ -123,6 +124,7 @@ export default function App() {
                   />
                   <Route path="suppliers/:id" element={<SupplierDetailPage />} />
                   <Route path="staff" element={<StaffPage />} />
+                  <Route path="staff/:id/money" element={<StaffMoneyPage />} />
                   <Route element={<RequireAdmin />}>
                     <Route path="suppliers/:id/statement" element={<SupplierStatementPage />} />
                     <Route path="bills/replace" element={<ReplaceProductPage />} />
