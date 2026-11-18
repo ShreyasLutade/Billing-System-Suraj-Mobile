@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useAuth } from "../auth/AuthContext";
-import { Boxes, Check, Grid3x3, Loader2, Minus, PackageOpen, Plus, Search, Smartphone, SquarePlus, Trash2, X } from "lucide-react";
+import { Boxes, Check, FileDown, Grid3x3, Loader2, Minus, PackageOpen, Plus, Search, Share2, Smartphone, SquarePlus, Trash2, X } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccBox, type AccProduct } from "./accApi";
 import { COMMON_PHONE_BRANDS, Sheet, errorText, patchCatalogProduct, plural, toast, useAccCatalog } from "./shared";
@@ -34,6 +34,15 @@ const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true })
 let boxCache: AccBox[] | null = null;
 let boxLoading: Promise<void> | null = null;
 const boxListeners = new Set<() => void>();
+/** Run a PDF download/share and show a toast if it fails. */
+async function pdfRun(job: () => Promise<void>) {
+  try {
+    await job();
+  } catch (err) {
+    toast(errorText(err), { tone: "error" });
+  }
+}
+
 function setBoxes(next: AccBox[]) {
   boxCache = next;
   boxListeners.forEach((l) => l());
@@ -418,6 +427,9 @@ export function AccCoverBoxesPage() {
             </p>
           </div>
           <div className="acc-boxes-actions">
+            <button type="button" onClick={() => void pdfRun(() => accApi.pdf.boxes())} title="Download PDF of all boxes">
+              <FileDown /> PDF
+            </button>
             <button type="button" onClick={() => setAdding("grid")}>
               <Grid3x3 /> Grid
             </button>
@@ -689,7 +701,17 @@ function FillBoxSheet({
         <div className="acc-fill">
           {box.items.length ? (
             <>
-              <p className="acc-fill-label">In this box</p>
+              <div className="acc-fill-labelrow">
+                <p className="acc-fill-label">In this box</p>
+                <span className="acc-box-pdf">
+                  <button type="button" onClick={() => void pdfRun(() => accApi.pdf.boxes(box.id))} title={`Download PDF of box ${box.code}`}>
+                    <FileDown /> PDF
+                  </button>
+                  <button type="button" onClick={() => void pdfRun(() => accApi.sharePdf.boxes(box.id))} aria-label={`Share PDF of box ${box.code}`}>
+                    <Share2 />
+                  </button>
+                </span>
+              </div>
               <ul className="acc-fill-in">
                 {box.items.map((i) => {
                   const pile = pileByKey.get(`${i.productId}|${i.model}`);

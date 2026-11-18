@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
+import { renderAccPdf, sendPdf, PDF_TONE, titleCase, type PdfRow, type PdfSection } from "../../services/accPdf";
 
 /**
  * Cover boxes: where each cover (product + phone model) sits in the shop.
@@ -133,6 +134,129 @@ accBoxesRouter.delete("/boxes/items/:itemId", async (req, res, next) => {
   try {
     await prisma.accBoxItem.delete({ where: { id: req.params.itemId } });
     res.json({ data: await listBoxes() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Cover boxes as a PDF: every box with the covers inside (phone model,
+ * cover, pieces, other boxes it is also in), plus covers not in any box.
+ * ?boxId= gives just that one box.
+ */
+accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
+  try {
+    const boxId = typeof req.query.boxId === "string" ? req.query.boxId : "";
+    await ensureDefaultGrid();
+    const [boxes, products] = await Promise.all([
+      prisma.accBox.findMany({
+        orderBy: [{ createdAt: "asc" }, { row: "asc" }, { col: "asc" }],
+        include: { items: { orderBy: { createdAt: "asc" } } },
+      }),
+      prisma.accProduct.findMany({
+        where: { active: true },
+        include: { category: { select: { name: true } }, models: true },
+      }),
+    ]);
+    const covers = products.filter((p) => /cover/i.test(p.category.name));
+    const byId = new Map(covers.map((p) => [p.id, p]));
+    const qtyOf = (productId: string, model: string) => {
+      const p = byId.get(productId);
+      if (!p) return 0;
+      if (model) return p.models.find((m) => m.model === model)?.qty ?? 0;
+      return Math.max(0, p.stockQty - p.models.reduce((a, m) => a + Math.max(0, m.qty), 0));
+    };
+    const where = new Map<string, string[]>();
+    for (const b of boxes) for (const i of b.items) {
+      const k = `${i.productId}|${i.model}`;
+      where.set(k, [...(where.get(k) ?? []), b.code]);
+    }
+    const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+    const columns = [
+      { key: "n", label: "#", width: 0.5, align: "center" as const },
+      { key: "model", label: "Phone model", width: 3 },
+      { key: "cover", label: "Cover", width: 3.4 },
+      { key: "qty", label: "Pcs", width: 0.9, align: "right" as const },
+      { key: "also", label: "Also in", width: 1.6 },
+    ];
+
+    const picked = boxId ? boxes.filter((b) => b.id === boxId) : boxes.filter((b) => b.items.length);
+    if (boxId && !picked.length) {
+      res.status(404).json({ error: "Box not found" });
+      return;
+    }
+    let pieces = 0;
+    let lines = 0;
+    const sections: PdfSection[] = picked.map((b) => {
+      const items = b.items
+        .filter((i) => byId.has(i.productId))
+        .sort((x, y) => collator.compare(x.model || "~", y.model || "~") || collator.compare(byId.get(x.productId)!.name, byId.get(y.productId)!.name));
+      let boxPcs = 0;
+      const rows: PdfRow[] = items.map((i, n) => {
+        const qty = qtyOf(i.productId, i.model);
+        boxPcs += qty;
+        const also = (where.get(`${i.productId}|${i.model}`) ?? []).filter((c) => c !== b.code);
+        return {
+          cells: {
+            n: String(n + 1),
+            model: i.model || "Not split",
+            cover: titleCase(byId.get(i.productId)!.name),
+            qty: String(qty),
+            also: also.join(", ") || "-",
+          },
+          color: { ...(i.model ? {} : { model: PDF_TONE.amber }), ...(qty <= 0 ? { qty: PDF_TONE.red } : {}) },
+        };
+      });
+      pieces += boxPcs;
+      lines += rows.length;
+      return {
+        heading: `Box ${b.code}  ·  ${b.grid === "Single" ? "Single box" : `${b.grid} grid`}  ·  ${rows.length} ${rows.length === 1 ? "cover" : "covers"}`,
+        columns,
+        rows,
+        total: { model: "Box total", qty: String(boxPcs) },
+        empty: "This box is empty.",
+      };
+    });
+
+    // Whole-shop PDF: covers that are not in any box yet.
+    let loose = 0;
+    if (!boxId) {
+      const rows: PdfRow[] = [];
+      for (const p of covers) {
+        const piles = [...p.models.filter((m) => m.qty > 0).map((m) => m.model), ""];
+        for (const model of piles) {
+          const qty = qtyOf(p.id, model);
+          if (qty <= 0 || where.has(`${p.id}|${model}`)) continue;
+          loose += qty;
+          rows.push({ cells: { n: "", model: model || "Not split", cover: titleCase(p.name), qty: String(qty), also: "-" }, color: model ? {} : { model: PDF_TONE.amber } });
+        }
+      }
+      rows.sort((x, y) => collator.compare(x.cells.model, y.cells.model));
+      rows.forEach((r, i) => (r.cells.n = String(i + 1)));
+      if (rows.length) {
+        sections.push({ heading: "Not in any box", columns, rows, total: { model: "Total", qty: String(loose) } });
+      }
+    }
+
+    const one = boxId ? picked[0] : null;
+    const pdf = await renderAccPdf({
+      title: one ? `Box ${one.code}` : "Cover Boxes",
+      subtitle: one ? "Covers in this box" : "Where every cover is kept",
+      summary: one
+        ? [
+            { label: "Covers", value: String(lines), tone: "blue" },
+            { label: "Pieces", value: String(pieces), tone: "green" },
+          ]
+        : [
+            { label: "Boxes in use", value: `${picked.length} / ${boxes.length}`, tone: "blue" },
+            { label: "Covers in boxes", value: String(lines), tone: "green" },
+            { label: "Pieces in boxes", value: String(pieces), tone: "green" },
+            { label: "Not in a box", value: `${loose} pcs`, tone: loose ? "amber" : "green" },
+          ],
+      sections: sections.length ? sections : [{ columns, rows: [], empty: "No covers are in boxes yet." }],
+      notes: ["Pcs = pieces of that phone model in stock. A cover kept in two boxes shows the same pieces in both."],
+    });
+    sendPdf(res, pdf, one ? `box-${one.code}.pdf` : "cover-boxes.pdf");
   } catch (error) {
     next(error);
   }

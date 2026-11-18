@@ -491,8 +491,10 @@ export const accApi = {
     suppliers: () => downloadAuthed("/acc/suppliers/pdf", "accessories-suppliers.pdf"),
     supplier: (id: string) => downloadAuthed(`/acc/suppliers/${id}/pdf`, "supplier-statement.pdf"),
     analytics: (q: PeriodQuery) => downloadAuthed(`/acc/analytics/pdf${qs(q)}`, "accessories-report.pdf"),
+    boxes: (boxId?: string) => downloadAuthed(`/acc/boxes/pdf${qs({ boxId })}`, boxId ? "cover-box.pdf" : "cover-boxes.pdf"),
   },
   sharePdf: {
+    boxes: (boxId?: string) => shareAuthed(`/acc/boxes/pdf${qs({ boxId })}`, boxId ? "cover-box.pdf" : "cover-boxes.pdf", "Cover boxes"),
     stock: (q: { filter?: string; categoryId?: string; cost?: boolean }) =>
       shareAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf", "Accessories stock"),
     sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string; scope?: AccSaleSearchScope; void?: boolean }) =>
