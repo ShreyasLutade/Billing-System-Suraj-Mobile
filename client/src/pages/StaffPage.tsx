@@ -426,7 +426,7 @@ export function StaffPage() {
         ) : null}
         {moneyPerson ? (
           <Sheet key="money" title="Money given" subtitle={moneyPerson.name} onClose={() => setMoneyId(null)}>
-            <MoneyTab person={moneyPerson} today={today} onChanged={() => void load()} />
+            <MoneyTab person={moneyPerson} month={month} today={today} onChanged={() => void load()} />
           </Sheet>
         ) : null}
         {removeTarget ? (
@@ -903,9 +903,9 @@ function DaySheet({
   );
 }
 
-function MoneyTab({ person, today, onChanged }: { person: StaffMember; today: string; onChanged: () => void }) {
+function MoneyTab({ person, month, today, onChanged }: { person: StaffMember; month: string; today: string; onChanged: () => void }) {
   const [amount, setAmount] = useState("");
-  const [day, setDay] = useState(today);
+  const [day, setDay] = useState(month === today.slice(0, 7) ? today : `${month}-01`);
   const [kind, setKind] = useState<StaffPaymentRow["kind"]>("ADVANCE");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -938,7 +938,7 @@ function MoneyTab({ person, today, onChanged }: { person: StaffMember; today: st
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded-3xl bg-gradient-to-br from-[#5d73b6] to-tide-500 p-4 text-white shadow-sm">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Given this month</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Given in {monthLabel(month)}</p>
           <p className="font-display text-2xl font-bold tabular-nums">{formatINR(total)}</p>
         </div>
         <Wallet className="h-8 w-8 text-white/70" />
@@ -988,13 +988,13 @@ function MoneyTab({ person, today, onChanged }: { person: StaffMember; today: st
             </li>
           ))
         ) : (
-          <li className="px-4 py-8 text-center text-sm text-ink-500">Nothing given this month.</li>
+          <li className="px-4 py-8 text-center text-sm text-ink-500">Nothing given in {monthLabel(month)}.</li>
         )}
         {person.payments.length ? (
           <li className="bg-ink-50/80 px-4 py-3 dark:bg-white/5">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-ink-900">
-                Total given <span className="font-normal text-ink-500">· {person.payments.length} {person.payments.length === 1 ? "entry" : "entries"}</span>
+                Total for {monthLabel(month).split(" ")[0]} <span className="font-normal text-ink-500">· {person.payments.length} {person.payments.length === 1 ? "entry" : "entries"}</span>
               </p>
               <p className="font-display text-lg font-extrabold tabular-nums text-ink-900">{formatINR(total)}</p>
             </div>
