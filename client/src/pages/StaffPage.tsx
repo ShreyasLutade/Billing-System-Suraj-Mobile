@@ -990,6 +990,26 @@ function MoneyTab({ person, today, onChanged }: { person: StaffMember; today: st
         ) : (
           <li className="px-4 py-8 text-center text-sm text-ink-500">Nothing given this month.</li>
         )}
+        {person.payments.length ? (
+          <li className="bg-ink-50/80 px-4 py-3 dark:bg-white/5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-ink-900">
+                Total given <span className="font-normal text-ink-500">· {person.payments.length} {person.payments.length === 1 ? "entry" : "entries"}</span>
+              </p>
+              <p className="font-display text-lg font-extrabold tabular-nums text-ink-900">{formatINR(total)}</p>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {(["ADVANCE", "SALARY", "OTHER"] as const).map((k) => {
+                const sum = person.payments.filter((x) => x.kind === k).reduce((a, x) => a + x.amount, 0);
+                return sum > 0 ? (
+                  <span key={k} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-600 ring-1 ring-ink-100 dark:bg-surface-elevated">
+                    {KIND_LABEL[k]} {formatINR(sum)}
+                  </span>
+                ) : null;
+              })}
+            </div>
+          </li>
+        ) : null}
       </ul>
     </div>
   );
