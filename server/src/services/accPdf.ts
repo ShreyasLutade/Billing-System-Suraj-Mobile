@@ -27,7 +27,7 @@ export type PdfRow = {
   /** Text colour per cell. */
   color?: Record<string, string>;
   /** group: a heading row across the table; subtotal: bold tinted row. */
-  kind?: "row" | "group" | "subtotal";
+  kind?: "row" | "group" | "subtotal" | "blank";
 };
 
 export type PdfSection = {
@@ -162,7 +162,15 @@ export function renderAccPdf(report: PdfReport): Promise<Buffer> {
         drawSection(left, W, true);
         continue;
       }
-      const pair = right && !right.full ? [left, right] : [left];
+      let pair = right && !right.full ? [left, right] : [left];
+      if (pair.length === 2) {
+        // Same number of lines on both sides, so the two totals line up.
+        const most = Math.max(pair[0].rows.length, pair[1].rows.length, 1);
+        pair = pair.map((sec) => ({
+          ...sec,
+          rows: [...sec.rows, ...Array.from({ length: most - sec.rows.length }, () => ({ cells: {}, kind: "blank" as const }))],
+        }));
+      }
       const tallest = Math.max(...pair.map(sectionHeight));
       if (tallest > bottom - M) {
         // Too long to sit side by side on one page: print it full width.
@@ -325,6 +333,11 @@ function drawRow(doc: PDFKit.PDFDocument, y: number, row: PdfRow, cols: PdfCol[]
   const hasSub = Boolean(row.sub && Object.values(row.sub).some(Boolean));
   const h = hasSub ? ROW_H + 2 : 20;
   if (stripe % 2 === 1) doc.rect(M, y, W, h).fill("#F8FAFD");
+  if (row.kind === "blank") {
+    // Filler so tables printed side by side end at the same line.
+    doc.moveTo(M, y + h).lineTo(M + W, y + h).strokeColor("#E6EAF1").lineWidth(0.5).stroke();
+    return y + h;
+  }
   let x = M;
   for (const col of cols) {
     const w = col.width - PAD * 2;

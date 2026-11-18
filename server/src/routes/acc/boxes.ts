@@ -175,7 +175,7 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     const columns = [
       { key: "n", label: "#", width: 0.45, align: "center" as const },
       { key: "model", label: "Phone model", width: 2.5, keepCase: true },
-      { key: "cover", label: "Cover", width: 3.8 },
+      { key: "cover", label: "Cover", width: 3.8, keepCase: true },
       { key: "qty", label: "Pcs", width: 0.9, align: "right" as const },
       { key: "also", label: "Also in", width: 1.3 },
     ];
