@@ -11720,3 +11720,55 @@ html.dark .acc {
   height: 15px;
   color: var(--a-accent);
 }
+
+/* Phones: the "Not in a box" list scrolls with the page (no inner scroll
+   that traps the finger in the middle of the screen). */
+@media (max-width: 1023px) {
+  .acc-tray-list {
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+}
+
+/* Cover boxes title: one line, small buttons beside it */
+.acc .acc-boxes-head {
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.acc .acc-boxes-head > div:first-child {
+  min-width: 0;
+}
+
+.acc .acc-boxes-head h1,
+.acc .acc-boxes-head p {
+  white-space: nowrap;
+}
+
+.acc .acc-boxes-head h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.acc .acc-boxes-head p {
+  font-size: 12px;
+}
+
+.acc .acc-boxes-actions {
+  gap: 5px;
+}
+
+.acc .acc-boxes-actions button {
+  height: 34px;
+  padding: 0 9px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.acc .acc-boxes-actions svg {
+  width: 15px;
+  height: 15px;
+}
