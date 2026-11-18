@@ -11537,7 +11537,16 @@ html.dark .acc {
 }
 
 .acc .acc-due-card.is-ledger.is-overdue {
-  border-color: color-mix(in srgb, var(--a-red) 22%, var(--a-line));
+  border-color: color-mix(in srgb, var(--a-red) 35%, var(--a-line));
+  background: color-mix(in srgb, var(--a-red) 7%, var(--a-card));
+}
+
+.acc .acc-due-card.is-ledger.is-overdue .acc-due-actions {
+  border-top-color: color-mix(in srgb, var(--a-red) 18%, var(--a-line));
+}
+
+.acc .acc-due-card.is-ledger.is-overdue .acc-due-actions > * {
+  border-right-color: color-mix(in srgb, var(--a-red) 18%, var(--a-line));
 }
 
 .acc .acc-due-head {
