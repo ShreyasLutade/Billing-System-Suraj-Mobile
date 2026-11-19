@@ -38,7 +38,7 @@ export function AccSettingsPage() {
           </span>
           <span className="acc-reset-text">
             <strong>Start fresh</strong>
-            <small>Clear all products, stock, bills, purchases, suppliers and customers. Groups stay.</small>
+            <small>Clear all products, stock, purchases and suppliers. Dues and groups stay.</small>
           </span>
           <button type="button" className="acc-btn is-danger is-small" onClick={() => setResetOpen(true)}>
             Clear
@@ -71,7 +71,7 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     try {
       const { data } = await accApi.resetShop(password);
       await Promise.allSettled([refreshCatalog(), refreshBoxes()]);
-      toast(`Cleared · ${data.products ?? 0} products, ${data.sales ?? 0} bills, ${data.customers ?? 0} customers`);
+      toast(`Cleared · ${data.products ?? 0} products, ${data.purchases ?? 0} purchases, ${data.suppliers ?? 0} suppliers`);
       setBusy(false);
       close();
       navigate("/acc");
@@ -96,7 +96,7 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div className="acc-reset-body">
         <div className="acc-reset-warn">
           <AlertTriangle />
-          <span>This permanently deletes the accessories shop data. The mobile shop is not touched.</span>
+          <span>This permanently deletes accessories stock, purchases and suppliers. Dues are kept. The mobile shop is not touched.</span>
         </div>
         <div className="acc-reset-lists">
           <div>
@@ -104,14 +104,14 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             <ul>
               <li>Products & stock</li>
               <li>Cover splits & box contents</li>
-              <li>Counter & wholesale bills</li>
-              <li>Customers, dues & payments</li>
               <li>Suppliers, purchases & payments</li>
             </ul>
           </div>
           <div>
             <p className="is-green">Kept</p>
             <ul>
+              <li>Customers & dues</li>
+              <li>Bills & payments</li>
               <li>Customer groups</li>
               <li>Supplier groups</li>
               <li>Categories</li>

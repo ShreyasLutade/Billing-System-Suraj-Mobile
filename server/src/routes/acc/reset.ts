@@ -7,9 +7,9 @@ import { requireAdmin } from "../../middleware/auth";
 /**
  * "Start fresh" for the accessories shop (admin only, password + CLEAR).
  * Deletes products, stock, cover splits and box contents, purchases,
- * suppliers and their payments, counter/wholesale bills, customers and
- * their payments, and restarts bill numbers. Keeps customer groups,
- * supplier groups, categories, the empty cover boxes and settings.
+ * suppliers and their payments. Keeps dues: customers, their bills and
+ * payments (bill lines keep the item names), bill numbers, groups,
+ * categories and the empty cover boxes.
  */
 export const accResetRouter = Router();
 
@@ -24,19 +24,15 @@ accResetRouter.post("/reset", requireAdmin, async (req, res, next) => {
     const counts = await prisma.$transaction(async (tx) => {
       const c = {
         boxItems: (await tx.accBoxItem.deleteMany()).count,
-        saleItems: (await tx.accSaleItem.deleteMany()).count,
-        payments: (await tx.accPayment.deleteMany()).count,
-        sales: (await tx.accSale.deleteMany()).count,
         purchaseItems: (await tx.accPurchaseItem.deleteMany()).count,
         supplierPayments: (await tx.accSupplierPayment.deleteMany()).count,
         purchases: (await tx.accPurchase.deleteMany()).count,
         suppliers: (await tx.accSupplier.deleteMany()).count,
-        customers: (await tx.accCustomer.deleteMany()).count,
         stockMoves: (await tx.accStockMove.deleteMany()).count,
         models: (await tx.accProductModel.deleteMany()).count,
+        // Bill lines keep their name/price; their product link is cleared.
         products: (await tx.accProduct.deleteMany()).count,
       };
-      await tx.accCounter.deleteMany({ where: { key: { in: ["RETAIL", "WHOLESALE", "OPENING"] } } });
       return c;
     });
     console.log(`[acc] start fresh by ${req.user?.name ?? "admin"}:`, counts);
