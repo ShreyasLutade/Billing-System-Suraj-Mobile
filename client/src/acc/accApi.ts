@@ -479,6 +479,9 @@ export const accApi = {
 
   analytics: (q: PeriodQuery) => apiRequest<{ data: AccAnalytics }>(`/acc/analytics${qs(q)}`),
 
+  /** Admin: wipe products, bills, purchases, suppliers and customers (groups stay). */
+  resetShop: (password: string) => post<Record<string, number>>("/acc/reset", { password, confirm: "CLEAR" }),
+
   pdf: {
     stock: (q: { filter?: string; categoryId?: string; cost?: boolean }) =>
       downloadAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf"),

@@ -11772,3 +11772,119 @@ html.dark .acc {
   width: 15px;
   height: 15px;
 }
+
+/* Settings: Start fresh */
+.acc .acc-reset-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  border-color: color-mix(in srgb, var(--a-red) 25%, var(--a-line));
+}
+
+.acc-reset-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--a-red) 10%, transparent);
+  color: var(--a-red);
+}
+
+.acc-reset-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.acc-reset-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.acc-reset-text strong {
+  font-size: 15px;
+}
+
+.acc-reset-text small {
+  color: var(--a-muted);
+  font-size: 12.5px;
+}
+
+.acc .acc-btn.is-danger-solid {
+  border-color: transparent;
+  background: var(--a-red);
+  color: #fff;
+}
+
+.acc-reset-body {
+  display: grid;
+  gap: 12px;
+}
+
+.acc-reset-warn {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--a-red) 9%, transparent);
+  color: var(--a-red);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.acc-reset-warn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.acc-reset-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.acc-reset-lists p {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.acc-reset-lists p.is-red { color: var(--a-red); }
+.acc-reset-lists p.is-green { color: var(--a-green, #16a34a); }
+
+.acc-reset-lists ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--a-ink);
+  font-size: 13px;
+}
+
+.acc-reset-field {
+  display: grid;
+  gap: 5px;
+}
+
+.acc-reset-field > span {
+  color: var(--a-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.acc .acc-reset-field input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-size: 15px;
+}
