@@ -11888,3 +11888,9 @@ html.dark .acc {
   color: var(--a-ink);
   font-size: 15px;
 }
+
+/* Add stock sheet: suggestion picked with ↑ ↓ */
+.acc .acc-sheet-suggestions button.is-active {
+  background: color-mix(in srgb, var(--a-accent) 14%, var(--a-card));
+  box-shadow: inset 3px 0 0 var(--a-accent);
+}

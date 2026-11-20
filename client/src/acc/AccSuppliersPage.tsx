@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Archive, Check, ChevronDown, FileDown, Info, Loader2, Plus, Search, Share2, Trash2, Wallet } from "lucide-react";
@@ -854,6 +854,25 @@ function BulkStockSheet({
   onLines: React.Dispatch<React.SetStateAction<InLine[]>>;
 }) {
   const [suggestions, setSuggestions] = useState<{ row: number; kind: "brand" | "product" } | null>(null);
+  /** Suggestion picked with ↑ ↓ (−1 = none yet). */
+  const [hi, setHi] = useState(-1);
+  useEffect(() => setHi(-1), [suggestions?.row, suggestions?.kind]);
+
+  /** ↑ ↓ move through an open suggestion list, Esc closes it. Returns true when handled. */
+  function listKeys(event: ReactKeyboardEvent, count: number) {
+    if (!count) return false;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setHi((cur) => (event.key === "ArrowDown" ? (cur + 1) % count : cur <= 0 ? count - 1 : cur - 1));
+      return true;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSuggestions(null);
+      return true;
+    }
+    return false;
+  }
   const [categoryRow, setCategoryRow] = useState<number | null>(null);
   const [deleteLineKey, setDeleteLineKey] = useState<string | null>(null);
   const categoryPickerRef = useRef<HTMLDivElement>(null);
@@ -986,26 +1005,38 @@ function BulkStockSheet({
                     value={draft.brand}
                     placeholder="Local"
                     autoComplete="off"
-                    onFocus={(event) => event.currentTarget.select()}
+                    onFocus={(event) => {
+                      event.currentTarget.select();
+                      setSuggestions({ row: rowIndex, kind: "brand" });
+                    }}
                     onChange={(event) => {
+                      setHi(-1);
                       changeDraft(rowIndex, { brand: event.target.value }, true);
                       setSuggestions({ row: rowIndex, kind: "brand" });
                     }}
                     onBlur={() => setSuggestions(null)}
                     onKeyDown={(event) => {
+                      const open = suggestions?.row === rowIndex && suggestions.kind === "brand" ? brandMatches.length : 0;
+                      if (listKeys(event, open)) return;
                       if (event.key === "Enter") {
                         event.preventDefault();
+                        if (open && hi >= 0 && brandMatches[hi]) changeDraft(rowIndex, { brand: brandMatches[hi] }, true);
+                        setSuggestions(null);
                         focusCell(rowIndex, 1);
                       }
                     }}
+                    onClick={() => setSuggestions({ row: rowIndex, kind: "brand" })}
                     aria-label={`Row ${rowIndex + 1} brand`}
                   />
                   {suggestions?.row === rowIndex && suggestions.kind === "brand" && brandMatches.length ? (
                     <ul className="acc-sheet-suggestions">
-                      {brandMatches.map((brand) => (
+                      {brandMatches.map((brand, i) => (
                         <li key={brand}>
                           <button
                             type="button"
+                            tabIndex={-1}
+                            className={clsx(hi === i && "is-active")}
+                            ref={hi === i ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                             onPointerDown={(event) => {
                               event.preventDefault();
                               changeDraft(rowIndex, { brand }, true);
@@ -1027,15 +1058,18 @@ function BulkStockSheet({
                     placeholder="Type product name"
                     autoComplete="off"
                     onChange={(event) => {
+                      setHi(-1);
                       changeDraft(rowIndex, { name: event.target.value }, true);
                       setSuggestions({ row: rowIndex, kind: "product" });
                     }}
                     onFocus={() => productQuery && setSuggestions({ row: rowIndex, kind: "product" })}
                     onBlur={() => setSuggestions(null)}
                     onKeyDown={(event) => {
+                      const open = suggestions?.row === rowIndex && suggestions.kind === "product" ? productMatches.length : 0;
+                      if (listKeys(event, open)) return;
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        if (productMatches.length) chooseProduct(rowIndex, productMatches[0]);
+                        if (open) chooseProduct(rowIndex, productMatches[hi >= 0 ? hi : 0]);
                         else focusCell(rowIndex, 2);
                       }
                     }}
@@ -1044,9 +1078,14 @@ function BulkStockSheet({
                   {line.product ? <small className="acc-sheet-status is-existing">Existing · {line.product.stockQty} in stock</small> : draft.name.trim() ? <small className="acc-sheet-status">New product</small> : null}
                   {suggestions?.row === rowIndex && suggestions.kind === "product" && productMatches.length ? (
                     <ul className="acc-sheet-suggestions">
-                      {productMatches.map((product) => (
+                      {productMatches.map((product, i) => (
                         <li key={product.id}>
-                          <button type="button" onPointerDown={(event) => { event.preventDefault(); chooseProduct(rowIndex, product); }}>
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            className={clsx(hi === i && "is-active")}
+                            ref={hi === i ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                            onPointerDown={(event) => { event.preventDefault(); chooseProduct(rowIndex, product); }}>
                             <span><b>{product.name}</b><small>{product.brand || "Local"} · {product.categoryName}</small></span>
                             <StockBadge qty={product.stockQty} low={product.lowStockAt} />
                           </button>
