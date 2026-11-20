@@ -83,11 +83,8 @@ async function ensureCategories() {
     return;
   }
   await swapMemoryCardForNeckband();
-  await Promise.all(
-    DEFAULT_ACC_CATEGORIES.map((c, i) =>
-      prisma.accCategory.updateMany({ where: { name: c.name }, data: { drillBy: c.drillBy, icon: c.icon, sortOrder: i } }),
-    ),
-  );
+  // Existing categories keep the order, icon and Types/Brands choice set in
+  // Settings › Categories (no reset to the starter values on every load).
 }
 
 /**

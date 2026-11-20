@@ -44,7 +44,7 @@ import { AccSalesPage } from "./acc/AccSalesPage";
 import { AccDuesPage, AccCustomerPage } from "./acc/AccDuesPage";
 import { AccAnalyticsPage } from "./acc/AccAnalyticsPage";
 import { AccOldDuePage } from "./acc/AccOldDuePage";
-import { AccSettingsPage } from "./acc/AccSettingsPage";
+import { AccCategoriesPage, AccGroupsSettingsPage, AccSettingsPage } from "./acc/AccSettingsPage";
 
 export default function App() {
   return (
@@ -91,6 +91,8 @@ export default function App() {
                       <Route path="dues" element={<AccDuesPage />} />
                       <Route path="dues/old" element={<AccOldDuePage />} />
                       <Route path="settings" element={<AccSettingsPage />} />
+                      <Route path="settings/groups" element={<AccGroupsSettingsPage />} />
+                      <Route path="settings/categories" element={<AccCategoriesPage />} />
                       <Route path="staff" element={<StaffPage />} />
                       <Route path="staff/:id/money" element={<StaffMoneyPage />} />
                       <Route path="dues/:id" element={<AccCustomerPage />} />

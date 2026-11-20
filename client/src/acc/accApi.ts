@@ -381,7 +381,7 @@ export const accApi = {
   catalog: () => apiRequest<{ data: AccCatalog }>("/acc/catalog"),
   createCategory: (body: { name: string; drillBy: "TYPE" | "BRAND"; icon: string }) =>
     post<AccCategory>("/acc/categories", body),
-  updateCategory: (id: string, body: { name: string; drillBy: "TYPE" | "BRAND"; icon: string }) =>
+  updateCategory: (id: string, body: { name: string; drillBy: "TYPE" | "BRAND"; icon: string; sortOrder?: number }) =>
     put<AccCategory>(`/acc/categories/${id}`, body),
   deleteCategory: (id: string) => apiRequest(`/acc/categories/${id}`, { method: "DELETE" }),
 
