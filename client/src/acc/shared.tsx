@@ -27,6 +27,7 @@ import {
   Speaker,
   Tablet,
   Usb,
+  Plug2,
   Watch,
   X,
 } from "lucide-react";
@@ -142,6 +143,7 @@ export const CATEGORY_ICONS = {
   watch: Watch,
   memory: MemoryStick,
   usb: Usb,
+  connector: Plug2,
   tablet: Tablet,
   camera: Camera,
   mic: Mic,
@@ -167,6 +169,7 @@ const ICON_TONES: Record<keyof typeof CATEGORY_ICONS, [string, string, string]> 
   watch: ["#c7d2fe", "#6366f1", "#312e81"],
   memory: ["#99f6e4", "#14b8a6", "#134e4a"],
   usb: ["#bfdbfe", "#3b82f6", "#1e3a8a"],
+  connector: ["#e0e7ff", "#818cf8", "#312e81"],
   tablet: ["#f5d0fe", "#d946ef", "#701a75"],
   camera: ["#fecaca", "#ef4444", "#7f1d1d"],
   mic: ["#fbcfe8", "#ec4899", "#831843"],

@@ -312,6 +312,42 @@ const ART: Record<string, Draw> = {
     </>
   ),
 
+  /* Connector / OTG adapter: USB-A socket on top, Type-C plug below */
+  connector: (u) => (
+    <>
+      <defs>
+        <linearGradient id={u("body")} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#a5b4fc" />
+          <stop offset="0.5" stopColor="#4f46e5" />
+          <stop offset="1" stopColor="#1e1b4b" />
+        </linearGradient>
+        {metal(u)}
+        <linearGradient id={u("plug")} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#9ca3af" />
+          <stop offset="0.45" stopColor="#f9fafb" />
+          <stop offset="1" stopColor="#6b7280" />
+        </linearGradient>
+      </defs>
+      {ground}
+      {/* USB-A socket (big metal mouth with blue tongue) */}
+      <rect x="15" y="4" width="34" height="17" rx="2.4" fill={`url(#${u("metal")})`} />
+      <rect x="18" y="7.5" width="28" height="10" rx="1.4" fill="#0f172a" />
+      <rect x="20.5" y="9" width="23" height="4" rx="0.8" fill="#3b82f6" />
+      <rect x="23" y="14.6" width="3" height="1.6" rx="0.4" fill="#cbd5e1" />
+      <rect x="30.5" y="14.6" width="3" height="1.6" rx="0.4" fill="#cbd5e1" />
+      <rect x="38" y="14.6" width="3" height="1.6" rx="0.4" fill="#cbd5e1" />
+      {/* body */}
+      <path d="M13 19 H51 V33 Q51 41 43 41 H21 Q13 41 13 33 Z" fill={`url(#${u("body")})`} />
+      <rect x="16" y="21.5" width="3" height="14" rx="1.5" fill="#fff" opacity="0.3" />
+      <text x="32" y="34" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fff" fontFamily="Inter, Arial, sans-serif">OTG</text>
+      {/* Type-C plug */}
+      <rect x="24" y="40" width="16" height="4" rx="1" fill="#1e1b4b" />
+      <rect x="25" y="43" width="14" height="14" rx="3.5" fill={`url(#${u("plug")})`} />
+      <rect x="27.5" y="47" width="9" height="1.4" rx="0.7" fill="#6b7280" />
+      <rect x="27.5" y="51" width="9" height="1.4" rx="0.7" fill="#6b7280" />
+    </>
+  ),
+
   /* Pen drive */
   usb: (u) => (
     <>
