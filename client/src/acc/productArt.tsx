@@ -348,6 +348,39 @@ const ART: Record<string, Draw> = {
     </>
   ),
 
+  /* Card reader: USB plug on top, body with a micro SD card going in */
+  cardreader: (u) => (
+    <>
+      <defs>
+        <linearGradient id={u("body")} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fdba74" />
+          <stop offset="0.5" stopColor="#ea580c" />
+          <stop offset="1" stopColor="#7c2d12" />
+        </linearGradient>
+        {metal(u)}
+        <linearGradient id={u("sd")} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#374151" />
+          <stop offset="1" stopColor="#030712" />
+        </linearGradient>
+      </defs>
+      {ground}
+      {/* USB-A plug */}
+      <rect x="22" y="4" width="20" height="14" rx="1.6" fill={`url(#${u("metal")})`} />
+      <rect x="26" y="8" width="4" height="3.4" fill="#374151" />
+      <rect x="34" y="8" width="4" height="3.4" fill="#374151" />
+      {/* body */}
+      <rect x="15" y="16" width="34" height="32" rx="7" fill={`url(#${u("body")})`} />
+      <rect x="18" y="19" width="3" height="24" rx="1.5" fill="#fff" opacity="0.28" />
+      <circle cx="42.5" cy="22.5" r="1.6" fill="#86efac" />
+      {/* card slot + micro SD card half inside */}
+      <rect x="21" y="40" width="22" height="3" rx="1.5" fill="#1c0a03" />
+      <path d="M24 41 H37 L40 44 V58 H24 Z" fill={`url(#${u("sd")})`} />
+      <rect x="26" y="49" width="12" height="7" rx="1" fill="#14b8a6" />
+      <text x="32" y="54.6" textAnchor="middle" fontSize="4.2" fontWeight="800" fill="#fff" fontFamily="Inter, Arial, sans-serif">SD</text>
+      <text x="32" y="33.5" textAnchor="middle" fontSize="5.6" fontWeight="800" fill="#fff" fontFamily="Inter, Arial, sans-serif">READER</text>
+    </>
+  ),
+
   /* Pen drive */
   usb: (u) => (
     <>

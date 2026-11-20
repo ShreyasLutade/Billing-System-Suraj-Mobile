@@ -28,6 +28,7 @@ import {
   Tablet,
   Usb,
   Plug2,
+  HardDriveDownload,
   Watch,
   X,
 } from "lucide-react";
@@ -144,6 +145,7 @@ export const CATEGORY_ICONS = {
   memory: MemoryStick,
   usb: Usb,
   connector: Plug2,
+  cardreader: HardDriveDownload,
   tablet: Tablet,
   camera: Camera,
   mic: Mic,
@@ -170,6 +172,7 @@ const ICON_TONES: Record<keyof typeof CATEGORY_ICONS, [string, string, string]> 
   memory: ["#99f6e4", "#14b8a6", "#134e4a"],
   usb: ["#bfdbfe", "#3b82f6", "#1e3a8a"],
   connector: ["#e0e7ff", "#818cf8", "#312e81"],
+  cardreader: ["#ffedd5", "#fb923c", "#7c2d12"],
   tablet: ["#f5d0fe", "#d946ef", "#701a75"],
   camera: ["#fecaca", "#ef4444", "#7f1d1d"],
   mic: ["#fbcfe8", "#ec4899", "#831843"],
