@@ -232,6 +232,8 @@ export type AccSupplierDetail = {
     total: number;
     note: string;
     createdByName: string | null;
+    /** Opening balance entry ("Previous pending amount"), no items. */
+    previousDue?: boolean;
     pieces: number;
     items: Array<{ productId: string; categoryName: string; name: string; qty: number; unitCost: number; amount: number }>;
   }>;
@@ -240,6 +242,7 @@ export type AccSupplierDetail = {
   statement: Array<{
     id: string;
     kind: "PURCHASE" | "PAYMENT";
+    previousDue?: boolean;
     date: string;
     detail: string;
     reference: string;
@@ -462,6 +465,8 @@ export const accApi = {
     billNo?: string;
     note?: string;
     paidNow?: number;
+    /** Money already owed to this supplier from before (opening balance). */
+    previousDue?: number;
     paidMethod?: string;
     /** These pieces go to the godown instead of the shop. */
     toGodown?: boolean;

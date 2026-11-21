@@ -533,6 +533,9 @@ export function AccStockInPage() {
   const [busy, setBusy] = useState(false);
   /** Old stock already in the shop: no supplier and nothing to pay. */
   const [oldStock, setOldStock] = useState(false);
+  /** Money already owed to this supplier before this app (opening balance). */
+  const [prevOn, setPrevOn] = useState(false);
+  const [prevDue, setPrevDue] = useState("");
 
   useEffect(() => {
     accApi
@@ -571,6 +574,7 @@ export function AccStockInPage() {
   const pieces = enteredLines.reduce((a, l) => a + (Math.floor(Number(l.qty)) || 0), 0);
   const paidNow = Math.min(Number(paid) || 0, total);
   const hasSupplier = supplierMode === "NEW" || Boolean(supplierId);
+  const previousDue = !oldStock && prevOn ? Math.max(Number(prevDue) || 0, 0) : 0;
 
   function choosePayment(nextMethod: "CASH" | "UPI") {
     setMethod(nextMethod);
@@ -652,6 +656,10 @@ export function AccStockInPage() {
       toast("Paid amount cannot be more than the purchase total", { tone: "error" });
       return;
     }
+    if (!oldStock && prevOn && !(previousDue > 0)) {
+      focusInvalid("[data-prev-due]", "Enter the previous pending amount, or turn it off");
+      return;
+    }
     setBusy(true);
     try {
       await accApi.createPurchase({
@@ -662,6 +670,7 @@ export function AccStockInPage() {
                 ? { supplier: { ...newSupplier, name: newSupplier.name.trim() } }
                 : { supplierId }),
               paidNow,
+              previousDue,
             }),
         paidMethod: method,
         toGodown: godown && toGodown,
@@ -808,12 +817,49 @@ export function AccStockInPage() {
               />
             </div>
             ) : null}
+            {!oldStock ? (
+              <div className={clsx("acc-prev-due", prevOn && "is-on")}>
+                <label className="acc-prev-due-head">
+                  <input type="checkbox" checked={prevOn} onChange={(e) => setPrevOn(e.target.checked)} />
+                  <span>
+                    <b>Add previous pending amount</b>
+                    <small>Money you already owed this supplier before this app (opening balance)</small>
+                  </span>
+                </label>
+                {prevOn ? (
+                  <div className="acc-payment-amount">
+                    <span>Previous pending amount</span>
+                    <label>
+                      <b>₹</b>
+                      <input
+                        data-prev-due
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={prevDue}
+                        onChange={(e) => setPrevDue(e.target.value)}
+                        placeholder="e.g. 15000"
+                        aria-label="Previous pending amount"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {oldStock ? (
               <p className="acc-hint">Not added to any supplier's balance. Stock value counts it.</p>
-            ) : total > 0 ? (
-              <div className={clsx("acc-payment-result", total - paidNow > 0 ? "is-due" : "is-paid")}>
-                <span>{total - paidNow > 0 ? "Amount due to supplier" : "Fully paid"}</span>
-                <b>{inr(Math.max(total - paidNow, 0))}</b>
+            ) : total > 0 || previousDue > 0 ? (
+              <div className={clsx("acc-payment-result", total - paidNow + previousDue > 0 ? "is-due" : "is-paid")}>
+                <span>
+                  {total - paidNow + previousDue > 0 ? "Amount due to supplier" : "Fully paid"}
+                  {previousDue > 0 ? (
+                    <small className="acc-prev-due-split">
+                      This purchase {inr(Math.max(total - paidNow, 0))} + previous {inr(previousDue)}
+                    </small>
+                  ) : null}
+                </span>
+                <b>{inr(Math.max(total - paidNow, 0) + previousDue)}</b>
               </div>
             ) : null}
             {godown ? (

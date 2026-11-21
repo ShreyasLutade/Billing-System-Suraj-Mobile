@@ -8,6 +8,9 @@ import { istDateString } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfSection } from "../../services/accPdf";
 import { money } from "../../services/pdf";
 
+/** Note on the opening-balance entry ("Previous pending amount"). */
+const PREVIOUS_DUE_NOTE = "Previous pending amount";
+
 export const accSuppliersRouter = Router();
 
 function badRequest(res: import("express").Response, error: z.ZodError) {
@@ -186,7 +189,10 @@ async function supplierAccount(id: string) {
       date: p.purchaseDate,
       kind: "PURCHASE" as const,
       id: p.id,
-      detail: `${p.items.length} product${p.items.length === 1 ? "" : "s"} · ${p.items.reduce((a, i) => a + i.qty, 0)} pcs`,
+      previousDue: !p.items.length,
+      detail: p.items.length
+        ? `${p.items.length} product${p.items.length === 1 ? "" : "s"} · ${p.items.reduce((a, i) => a + i.qty, 0)} pcs`
+        : p.note || PREVIOUS_DUE_NOTE,
       reference: p.billNo,
       debit: p.total,
       credit: 0,
@@ -194,6 +200,7 @@ async function supplierAccount(id: string) {
     ...supplier.payments.map((p) => ({
       date: p.paidAt,
       kind: "PAYMENT" as const,
+      previousDue: false,
       id: p.id,
       detail: [`Paid by ${PAY_METHOD[p.method] || p.method}`, p.note].filter(Boolean).join(" · "),
       reference: p.reference,
@@ -227,6 +234,7 @@ async function supplierAccount(id: string) {
       total: p.total,
       note: p.note,
       createdByName: p.createdByName,
+      previousDue: !p.items.length,
       pieces: p.items.reduce((a, i) => a + i.qty, 0),
       items: p.items.map((i) => ({
         productId: i.productId,
@@ -377,6 +385,8 @@ const purchaseSchema = z.object({
   billNo: z.string().trim().max(40).default(""),
   note: z.string().trim().max(300).default(""),
   paidNow: z.coerce.number().min(0).max(100_000_000).default(0),
+  /** Money already owed to this supplier from before (added once, as an opening balance). */
+  previousDue: z.coerce.number().min(0).max(100_000_000).default(0),
   /** Ticked "Add to godown": these pieces go to the godown, not the shop. */
   toGodown: z.boolean().default(false),
   paidMethod: z.enum(["CASH", "UPI", "BANK", "CHEQUE"]).default("CASH"),
@@ -488,6 +498,18 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
             unitCost: item.unitCost,
             refId: created.id,
             note: input.toGodown ? "To godown" : null,
+            createdByName: by,
+          },
+        });
+      }
+      // Previous pending amount: an entry with no items, dated just before this purchase.
+      if (supplierId && input.previousDue > 0) {
+        await tx.accPurchase.create({
+          data: {
+            supplierId,
+            total: round2(input.previousDue),
+            note: PREVIOUS_DUE_NOTE,
+            purchaseDate: new Date(created.purchaseDate.getTime() - 1000),
             createdByName: by,
           },
         });

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { AlertCircle, Check, CheckCircle2, ChevronDown, Loader2, PackagePlus, PencilLine, Phone, Search, Trash2, Wallet } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, History, Loader2, PackagePlus, PencilLine, Phone, Search, Trash2, Wallet } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { SegregateLink } from "./AccCovers";
 import { DangerConfirmModal } from "../components/RemoveConfirmModals";
@@ -110,7 +110,7 @@ export function AccSupplierPage() {
         <div>
           <small>Purchases</small>
           <b>
-            {data.purchases.length} <span className="acc-stat-sub">· {data.pieces} pcs</span>
+            {data.purchases.filter((p) => !p.previousDue).length} <span className="acc-stat-sub">· {data.pieces} pcs</span>
           </b>
         </div>
       </div>
@@ -145,12 +145,12 @@ export function AccSupplierPage() {
             <ul className="acc-tl">
               {data.statement.map((e) => (
                 <li key={`${e.kind}-${e.id}`} className={e.kind === "PURCHASE" ? "is-in" : "is-out"}>
-                  <span className="acc-tl-icon">{e.kind === "PURCHASE" ? <PackagePlus /> : <Wallet />}</span>
+                  <span className="acc-tl-icon">{e.kind === "PURCHASE" ? e.previousDue ? <History /> : <PackagePlus /> : <Wallet />}</span>
                   <span className="acc-tl-text">
-                    <strong>{e.kind === "PURCHASE" ? "Stock bought" : "Payment made"}</strong>
+                    <strong>{e.previousDue ? "Previous pending amount" : e.kind === "PURCHASE" ? "Stock bought" : "Payment made"}</strong>
                     <small>
                       {shortDate(e.date)}
-                      {e.detail ? ` · ${e.detail}` : ""}
+                      {e.detail && !e.previousDue ? ` · ${e.detail}` : e.previousDue ? " · Opening balance" : ""}
                       {e.reference ? ` · Ref ${e.reference}` : ""}
                     </small>
                   </span>
@@ -185,7 +185,7 @@ export function AccSupplierPage() {
                     <span>
                       <strong>{shortDate(p.purchaseDate)}</strong>
                       <small>
-                        {plural(p.items.length, "product")} · {p.pieces} pcs
+                        {p.previousDue ? "Previous pending amount · opening balance" : `${plural(p.items.length, "product")} · ${p.pieces} pcs`}
                         {p.billNo ? ` · Bill ${p.billNo}` : ""}
                         {p.createdByName ? ` · ${p.createdByName}` : ""}
                       </small>
