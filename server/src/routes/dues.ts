@@ -14,6 +14,7 @@ import {
   toDateFilter,
 } from "../lib/period";
 import { buildDueStatement, getCustomerDue } from "../services/customerDue";
+import { outstandingCharges, splitDuePayment } from "../lib/dueCharges";
 
 export const duesRouter = Router();
 
@@ -493,6 +494,13 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
     }
 
     const remaining = Number((currentDue - paidAmount).toFixed(2));
+    // Bill's own due first; any extra clears "You gave" amounts (kept off
+    // the bill's cash / online / card).
+    const { billPart, chargePart } = splitDuePayment(
+      paidAmount,
+      currentDue,
+      await outstandingCharges(prisma, bill.id),
+    );
 
     const paidAt = new Date();
     const updated = await prisma.bill.update({
@@ -511,15 +519,15 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
             : bill.dueDate,
         cashAmount:
           method === "cash"
-            ? Number((bill.cashAmount + paidAmount).toFixed(2))
+            ? Number((bill.cashAmount + billPart).toFixed(2))
             : bill.cashAmount,
         onlineAmount:
           method === "online"
-            ? Number((bill.onlineAmount + paidAmount).toFixed(2))
+            ? Number((bill.onlineAmount + billPart).toFixed(2))
             : bill.onlineAmount,
         cardAmount:
           method === "card"
-            ? Number((bill.cardAmount + paidAmount).toFixed(2))
+            ? Number((bill.cardAmount + billPart).toFixed(2))
             : bill.cardAmount,
         duePayments: {
           create: {
@@ -527,6 +535,7 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
             method,
             kind: isFull ? "full" : "partial",
             paidAt,
+            chargePart,
             dueDateBefore:
               !isFull && parsed.data.nextDueDate ? bill.dueDate : null,
           },
@@ -584,14 +593,20 @@ duesRouter.delete(
         res.status(404).json({ error: "Payment not found" });
         return;
       }
-      if (bill.duePayments.at(-1)?.id !== payment.id) {
-        res.status(400).json({ error: "Only the latest payment can be undone" });
+      const laterCharge = await prisma.dueCharge.findFirst({
+        where: { billId: bill.id, givenAt: { gt: payment.paidAt } },
+        select: { id: true },
+      });
+      if (bill.duePayments.at(-1)?.id !== payment.id || laterCharge) {
+        res.status(400).json({ error: "Only the latest entry can be undone" });
         return;
       }
 
       const round = (value: number) => Number(value.toFixed(2));
       const takeBack = (total: number, method: string) =>
-        payment.method === method ? round(Math.max(total - payment.amount, 0)) : total;
+        payment.method === method
+          ? round(Math.max(total - (payment.amount - payment.chargePart), 0))
+          : total;
       const cashAmount = takeBack(bill.cashAmount, "cash");
       const onlineAmount = takeBack(bill.onlineAmount, "online");
       const cardAmount = takeBack(bill.cardAmount, "card");
@@ -623,3 +638,150 @@ duesRouter.delete(
     }
   },
 );
+
+const giveSchema = z.object({
+  amount: z.number().positive().max(10_000_000),
+  note: z.string().trim().max(200).optional().nullable(),
+  /** New "collect by" date (YYYY-MM-DD), optional. */
+  dueDate: z.string().optional().nullable(),
+});
+
+/**
+ * "You gave": money given to (or an amount added for) the customer on this
+ * due without a new bill, e.g. cash lent or an old balance. It raises what
+ * the customer owes; the bill's own totals stay as they are.
+ */
+duesRouter.post("/:id/charges", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = giveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Enter the amount you gave", details: parsed.error.flatten() });
+      return;
+    }
+    const bill = await prisma.bill.findUnique({ where: { id: req.params.id } });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    if (bill.withGst) {
+      res.status(400).json({ error: "GST invoices don't have dues" });
+      return;
+    }
+
+    const amount = Number(parsed.data.amount.toFixed(2));
+    const pendingBefore = bill.dueSettled ? 0 : Math.max(bill.dueAmount, 0);
+    const newDate = parsed.data.dueDate ? parseDateInput(parsed.data.dueDate) : null;
+    const paidSoFar =
+      bill.cashAmount + bill.onlineAmount + bill.cardAmount + bill.financeAmount;
+
+    await prisma.$transaction([
+      prisma.dueCharge.create({
+        data: {
+          billId: bill.id,
+          amount,
+          note: parsed.data.note?.trim() || null,
+          givenAt: new Date(),
+          dueDateBefore: bill.dueDate,
+          createdByName: req.user?.name ?? null,
+        },
+      }),
+      prisma.bill.update({
+        where: { id: bill.id },
+        data: {
+          dueAmount: Number((pendingBefore + amount).toFixed(2)),
+          dueSettled: false,
+          isPartialPaid: paidSoFar > 0,
+          ...(newDate ? { dueDate: newDate } : {}),
+        },
+      }),
+    ]);
+
+    res.json({ data: await getCustomerDue(bill.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Undo the latest "You gave" (only while nothing came after it). */
+duesRouter.delete("/:id/charges/:chargeId", requireAdmin, async (req, res, next) => {
+  try {
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      include: {
+        dueCharges: { orderBy: { givenAt: "asc" } },
+        duePayments: { orderBy: { paidAt: "asc" } },
+      },
+    });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    const charge = bill.dueCharges.find((c) => c.id === req.params.chargeId);
+    if (!charge) {
+      res.status(404).json({ error: "Entry not found" });
+      return;
+    }
+    const lastPayment = bill.duePayments.at(-1);
+    if (
+      bill.dueCharges.at(-1)?.id !== charge.id ||
+      (lastPayment && lastPayment.paidAt > charge.givenAt)
+    ) {
+      res.status(400).json({ error: "Only the latest entry can be undone" });
+      return;
+    }
+
+    const pending = bill.dueSettled ? 0 : Math.max(bill.dueAmount, 0);
+    const left = Number(Math.max(pending - charge.amount, 0).toFixed(2));
+    const cleared = left <= 0.005;
+
+    await prisma.$transaction([
+      prisma.dueCharge.delete({ where: { id: charge.id } }),
+      prisma.bill.update({
+        where: { id: bill.id },
+        data: {
+          dueAmount: cleared ? 0 : left,
+          dueSettled: cleared && bill.duePayments.length > 0,
+          isPartialPaid: cleared
+            ? false
+            : bill.cashAmount + bill.onlineAmount + bill.cardAmount + bill.financeAmount > 0,
+          dueDate: charge.dueDateBefore,
+          ...(cleared && lastPayment
+            ? { dueSettledMethod: lastPayment.method, dueSettledAt: lastPayment.paidAt }
+            : {}),
+        },
+      }),
+    ]);
+
+    res.json({ data: await getCustomerDue(bill.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Change (or clear) the date the customer promised to pay by. */
+duesRouter.patch("/:id/due-date", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({ dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Pick a valid date" });
+      return;
+    }
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, withGst: true },
+    });
+    if (!bill || bill.withGst) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    await prisma.bill.update({
+      where: { id: bill.id },
+      data: { dueDate: parsed.data.dueDate ? parseDateInput(parsed.data.dueDate) : null },
+    });
+    res.json({ data: await getCustomerDue(bill.id) });
+  } catch (error) {
+    next(error);
+  }
+});

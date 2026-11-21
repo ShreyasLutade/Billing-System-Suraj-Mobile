@@ -109,6 +109,8 @@ model Bill {
   updatedAt         DateTime         @updatedAt
   items             BillItem[]
   duePayments       DuePayment[]
+  /// "You gave" entries added on the due page (money given / added without a new bill)
+  dueCharges        DueCharge[]
   financeCompany    FinanceCompany?  @relation(fields: [financeCompanyId], references: [id])
 
   @@index([billDate])
@@ -130,10 +132,29 @@ model DuePayment {
   note      String?
   /// Promised date before this payment moved it (so Undo can put it back).
   dueDateBefore DateTime?
+  /// Part of this payment that cleared "You gave" amounts (kept off the bill's
+  /// cash / online / card, which only ever hold money paid against the bill).
+  chargePart Float @default(0)
   bill      Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
 
   @@index([billId])
   @@index([paidAt])
+}
+
+/// "You gave" on a due: money given to (or an amount added for) the customer
+/// on top of the bill, e.g. cash lent or an old balance. Raises the bill's due.
+model DueCharge {
+  id            String   @id @default(cuid())
+  billId        String
+  amount        Float
+  note          String?
+  givenAt       DateTime @default(now())
+  /// Promised date before this entry moved it (so Undo can put it back).
+  dueDateBefore DateTime?
+  createdByName String?
+  bill          Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
 }
 
 model BillItem {

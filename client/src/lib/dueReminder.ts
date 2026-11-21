@@ -13,8 +13,12 @@ export function whatsappNumber(phone: string) {
   return null;
 }
 
+type ReminderDue = Pick<DueItem, "customerName" | "customerPhone" | "dueAmount"> & {
+  productLabels?: string[];
+};
+
 /** Short, polite due reminder: product and pending amount (WhatsApp *bold*). */
-export function dueReminderMessage(due: DueItem) {
+export function dueReminderMessage(due: ReminderDue) {
   const products = (due.productLabels ?? []).filter(Boolean);
   const product = products.length
     ? `${products[0]}${products.length > 1 ? ` + ${products.length - 1} more` : ""}`
@@ -40,7 +44,7 @@ export function dueReminderMessage(due: DueItem) {
 }
 
 /** Opens the customer's WhatsApp chat with the reminder typed in, or null. */
-export function dueReminderLink(due: DueItem) {
+export function dueReminderLink(due: ReminderDue) {
   const number = whatsappNumber(due.customerPhone);
   if (!number) return null;
   return `https://wa.me/${number}?text=${encodeURIComponent(dueReminderMessage(due))}`;

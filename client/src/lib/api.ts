@@ -842,6 +842,25 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  /** "You gave": add money given / owed on this due without a new bill. */
+  addDueCharge: (
+    id: string,
+    payload: { amount: number; note?: string | null; dueDate?: string | null },
+  ) =>
+    request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}/charges`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  undoDueCharge: (id: string, chargeId: string) =>
+    request<{ data: CustomerDueDetail }>(
+      `/dues/${encodeURIComponent(id)}/charges/${encodeURIComponent(chargeId)}`,
+      { method: "DELETE" },
+    ),
+  setDueDate: (id: string, dueDate: string | null) =>
+    request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}/due-date`, {
+      method: "PATCH",
+      body: JSON.stringify({ dueDate }),
+    }),
   /** Undo the latest payment received on a due (admin). */
   undoDuePayment: (id: string, paymentId: string) =>
     request<{ data: CustomerDueDetail }>(

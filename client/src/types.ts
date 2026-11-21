@@ -657,6 +657,22 @@ export type CustomerDueDetail = {
     balanceAfter: number;
     delayDays: number | null;
   }>;
+  /** Left unpaid when the bill was made. */
+  creditAtSale: number;
+  /** All "You gave" entries added later. */
+  givenTotal: number;
+  /** Ledger, oldest first: the bill, then "You gave" / "You got" by date. */
+  entries: Array<{
+    id: string;
+    kind: "bill" | "gave" | "got";
+    date: string;
+    amount: number;
+    note: string | null;
+    method: string | null;
+    methodLabel: string | null;
+    delayDays: number | null;
+    balanceAfter: number;
+  }>;
 };
 
 export type DuesSummary = {

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type {
   Bill,
   BillItem,
+  DueCharge,
   DuePayment,
   ProductReturn,
   Purchase,
@@ -52,6 +53,8 @@ type BillPayload = {
   bill: Bill;
   items: BillItem[];
   duePayments: DuePayment[];
+  /** "You gave" entries (older bin entries don't have them). */
+  dueCharges?: DueCharge[];
   /** delete: units removed from stock with the bill. */
   soldStock: StockSnap | null;
   /** return: units before they became second-hand stock under the customer. */
@@ -152,9 +155,10 @@ export async function binBill(
 ) {
   const bill = await tx.bill.findUnique({ where: { id: billId } });
   if (!bill) return;
-  const [items, duePayments] = await Promise.all([
+  const [items, duePayments, dueCharges] = await Promise.all([
     tx.billItem.findMany({ where: { billId } }),
     tx.duePayment.findMany({ where: { billId } }),
+    tx.dueCharge.findMany({ where: { billId } }),
   ]);
   const stockIds = items.map((i) => i.stockItemId).filter((id): id is string => Boolean(id));
 
@@ -183,6 +187,7 @@ export async function binBill(
     bill,
     items,
     duePayments,
+    dueCharges,
     soldStock: mode === "delete" ? await snapshotStock(tx, stockIds, billId) : null,
     returnedStock: mode === "return" ? await snapshotStock(tx, stockIds, billId) : null,
     releasedStockIds: mode === "restock" ? stockIds : [],
@@ -428,6 +433,7 @@ async function restoreBill(tx: Tx, p: BillPayload) {
     });
   }
   for (const pay of p.duePayments) await tx.duePayment.create({ data: pay });
+  for (const charge of p.dueCharges ?? []) await tx.dueCharge.create({ data: charge });
   return `/bills/${p.bill.id}`;
 }
 

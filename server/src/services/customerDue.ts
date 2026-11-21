@@ -49,32 +49,97 @@ export async function getCustomerDue(billId: string) {
         },
       },
       duePayments: { orderBy: { paidAt: "asc" } },
+      dueCharges: { orderBy: { givenAt: "asc" } },
     },
   });
   if (!bill) return null;
 
   const pending = bill.dueSettled ? 0 : round2(Math.max(bill.dueAmount, 0));
   const paidTotal = round2(bill.duePayments.reduce((sum, p) => sum + p.amount, 0));
+  const givenTotal = round2(bill.dueCharges.reduce((sum, c) => sum + c.amount, 0));
+  /** Everything the customer ever owed on this due (bill credit + "You gave"). */
   const originalDue = round2(pending + paidTotal);
+  /** Left unpaid when the bill was made. */
+  const creditAtSale = round2(Math.max(originalDue - givenTotal, 0));
   const settled = originalDue > 0 && pending <= 0.005;
   const now = new Date();
 
-  let balance = originalDue;
-  const payments = bill.duePayments.map((payment) => {
-    balance = round2(balance - payment.amount);
-    return {
-      id: payment.id,
-      paidAt: payment.paidAt.toISOString(),
-      amount: round2(payment.amount),
-      method: payment.method,
-      methodLabel: methodLabel(payment.method),
-      kind: payment.kind,
-      note: payment.note,
-      balanceAfter: Math.max(balance, 0),
+  const products = bill.items.map((item) => ({
+    label: [item.productName, item.color, item.storage, item.ram]
+      .filter(Boolean)
+      .join(" "),
+    ids: [item.imei1, item.imei2, item.serialNumber].filter(
+      (value): value is string => Boolean(value),
+    ),
+  }));
+
+  // One ledger, oldest first: the bill, then "You gave" / "You got" by date.
+  type Entry = {
+    id: string;
+    kind: "bill" | "gave" | "got";
+    date: Date;
+    amount: number;
+    note: string | null;
+    method: string | null;
+    methodLabel: string | null;
+    delayDays: number | null;
+  };
+  const moves: Entry[] = [
+    ...bill.dueCharges.map((c) => ({
+      id: c.id,
+      kind: "gave" as const,
+      date: c.givenAt,
+      amount: round2(c.amount),
+      note: c.note,
+      method: null,
+      methodLabel: null,
+      delayDays: null,
+    })),
+    ...bill.duePayments.map((p) => ({
+      id: p.id,
+      kind: "got" as const,
+      date: p.paidAt,
+      amount: round2(p.amount),
+      note: p.note,
+      method: p.method,
+      methodLabel: methodLabel(p.method),
       /** Days after the promised due date (0 or less = on time). */
-      delayDays: bill.dueDate ? daysBetween(bill.dueDate, payment.paidAt) : null,
-    };
-  });
+      delayDays: bill.dueDate ? daysBetween(bill.dueDate, p.paidAt) : null,
+    })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let balance = creditAtSale;
+  const entries = [
+    {
+      id: bill.id,
+      kind: "bill" as const,
+      date: bill.billDate.toISOString(),
+      amount: creditAtSale,
+      note: null,
+      method: null,
+      methodLabel: null,
+      delayDays: null,
+      balanceAfter: creditAtSale,
+    },
+    ...moves.map((entry) => {
+      balance = round2(balance + (entry.kind === "gave" ? entry.amount : -entry.amount));
+      return { ...entry, date: entry.date.toISOString(), balanceAfter: Math.max(balance, 0) };
+    }),
+  ];
+
+  const payments = entries
+    .filter((e) => e.kind === "got")
+    .map((e) => ({
+      id: e.id,
+      paidAt: e.date,
+      amount: e.amount,
+      method: e.method ?? "na",
+      methodLabel: e.methodLabel ?? "",
+      kind: bill.duePayments.find((p) => p.id === e.id)?.kind ?? "partial",
+      note: e.note,
+      balanceAfter: e.balanceAfter,
+      delayDays: e.delayDays,
+    }));
 
   const lastPaidAt = bill.duePayments.at(-1)?.paidAt ?? null;
   // Still pending: late by today. Cleared: late by the day it was cleared.
@@ -91,15 +156,10 @@ export async function getCustomerDue(billId: string) {
     customerAddress: bill.customerAddress,
     billDate: bill.billDate.toISOString(),
     billTotal: round2(bill.payableAmount || bill.grandTotal),
-    products: bill.items.map((item) => ({
-      label: [item.productName, item.color, item.storage, item.ram]
-        .filter(Boolean)
-        .join(" "),
-      ids: [item.imei1, item.imei2, item.serialNumber].filter(
-        (value): value is string => Boolean(value),
-      ),
-    })),
+    products,
     originalDue,
+    creditAtSale,
+    givenTotal,
     paidTotal,
     pending,
     settled,
@@ -107,6 +167,7 @@ export async function getCustomerDue(billId: string) {
     settledAt: settled && lastPaidAt ? lastPaidAt.toISOString() : null,
     delayDays,
     payments,
+    entries,
   };
 }
 
@@ -162,33 +223,47 @@ export async function buildDueStatement(billId: string) {
   const due = await getCustomerDue(billId);
   if (!due) return null;
 
-  const rows: Row[] = [
-    {
-      date: new Date(due.billDate),
-      particulars: `Purchase · Bill ${due.invoiceNumber}`,
-      detail: [
-        due.products.map((p) => p.label).join(", "),
-        `Bill total ${rupees(due.billTotal)}`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      due: due.originalDue,
-      paid: 0,
-      balance: due.originalDue,
-      delay: "",
-      delayColor: COLORS.muted,
-    },
-    ...due.payments.map((p) => ({
-      date: new Date(p.paidAt),
-      particulars: `${p.kind === "full" || p.balanceAfter <= 0 ? "Paid in full" : "Part payment"} · ${p.methodLabel}`,
-      detail: p.note || "",
+  const rows: Row[] = due.entries.map((entry) => {
+    if (entry.kind === "bill") {
+      return {
+        date: new Date(entry.date),
+        particulars: `Purchase · Bill ${due.invoiceNumber}`,
+        detail: [
+          due.products.map((p) => p.label).join(", "),
+          `Bill total ${rupees(due.billTotal)}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        due: entry.amount,
+        paid: 0,
+        balance: entry.balanceAfter,
+        delay: "",
+        delayColor: COLORS.muted,
+      };
+    }
+    if (entry.kind === "gave") {
+      return {
+        date: new Date(entry.date),
+        particulars: "Given / added",
+        detail: entry.note || "",
+        due: entry.amount,
+        paid: 0,
+        balance: entry.balanceAfter,
+        delay: "",
+        delayColor: COLORS.muted,
+      };
+    }
+    return {
+      date: new Date(entry.date),
+      particulars: `${entry.balanceAfter <= 0 ? "Paid in full" : "Part payment"} · ${entry.methodLabel}`,
+      detail: entry.note || "",
       due: 0,
-      paid: p.amount,
-      balance: p.balanceAfter,
-      delay: delayText(p.delayDays),
-      delayColor: p.delayDays !== null && p.delayDays > 0 ? RED : GREEN,
-    })),
-  ];
+      paid: entry.amount,
+      balance: entry.balanceAfter,
+      delay: delayText(entry.delayDays),
+      delayColor: entry.delayDays !== null && entry.delayDays > 0 ? RED : GREEN,
+    };
+  });
 
   const pdf = await renderStatement(due, rows);
   const safeName = due.customerName.replace(/[^\w.-]+/g, "_").slice(0, 40) || "customer";

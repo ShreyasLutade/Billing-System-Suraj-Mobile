@@ -12,6 +12,7 @@ import {
   toDateFilter,
 } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
+import { outstandingCharges, splitDuePayment } from "../lib/dueCharges";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { upsertCustomerProfile } from "../services/customers";
 import {
@@ -1108,7 +1109,13 @@ billsRouter.put("/:id", async (req, res, next) => {
     }
 
     const input = parsed.data;
-    const totals = totalsForPersist(input, computeBillTotals(input));
+    const billTotals = totalsForPersist(input, computeBillTotals(input));
+    // "You gave" amounts still owed stay on the due after an edit.
+    const owedExtra = input.withGst ? 0 : await outstandingCharges(prisma, existing.id);
+    const totals = {
+      ...billTotals,
+      dueAmount: Number((billTotals.dueAmount + owedExtra).toFixed(2)),
+    };
 
     const bill = await prisma.$transaction(async (tx) => {
       let financeCompanyId: string | null = null;
@@ -1450,7 +1457,13 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
       return;
     }
 
-    const pdf = await buildInvoicePdf(bill);
+    // The invoice shows the bill's own due, not "You gave" amounts.
+    const extra = bill.withGst ? 0 : await outstandingCharges(prisma, bill.id);
+    const pdf = await buildInvoicePdf(
+      extra > 0
+        ? { ...bill, dueAmount: Math.max(Number((bill.dueAmount - extra).toFixed(2)), 0) }
+        : bill,
+    );
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
@@ -1559,6 +1572,11 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
     }
 
     const due = bill.dueAmount;
+    const { billPart, chargePart } = splitDuePayment(
+      due,
+      due,
+      await outstandingCharges(prisma, bill.id),
+    );
     const paidAt = new Date();
     const updated = await prisma.bill.update({
       where: { id: bill.id },
@@ -1570,15 +1588,15 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
         isPartialPaid: false,
         cashAmount:
           method === "cash"
-            ? Number((bill.cashAmount + due).toFixed(2))
+            ? Number((bill.cashAmount + billPart).toFixed(2))
             : bill.cashAmount,
         onlineAmount:
           method === "online"
-            ? Number((bill.onlineAmount + due).toFixed(2))
+            ? Number((bill.onlineAmount + billPart).toFixed(2))
             : bill.onlineAmount,
         cardAmount:
           method === "card"
-            ? Number((bill.cardAmount + due).toFixed(2))
+            ? Number((bill.cardAmount + billPart).toFixed(2))
             : bill.cardAmount,
         duePayments: {
           create: {
@@ -1586,6 +1604,7 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
             method,
             kind: "full",
             paidAt,
+            chargePart,
           },
         },
       },

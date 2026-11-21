@@ -83,7 +83,7 @@ type BillRow = {
   items: BillItemRow[];
   /** Dues paid later. Settling a due also adds it to the bill's cash /
    *  online / card, so these are taken back out to get what was paid at sale. */
-  duePayments?: Array<{ amount: number; method: string }>;
+  duePayments?: Array<{ amount: number; method: string; chargePart?: number }>;
 };
 
 type PayMethod = "cash" | "online" | "card";
@@ -106,7 +106,8 @@ function paidAtSale(bill: BillRow) {
   const later = { cash: 0, online: 0, card: 0 };
   for (const payment of bill.duePayments ?? []) {
     if (payment.method === "cash" || payment.method === "online" || payment.method === "card") {
-      later[payment.method] += Number(payment.amount || 0);
+      // Only the part paid against the bill went on its cash / online / card.
+      later[payment.method] += Number(payment.amount || 0) - Number(payment.chargePart || 0);
     }
   }
   return {
@@ -420,7 +421,7 @@ async function loadPeriodBills(
           stockItem: { select: { purchasePrice: true } },
         },
       },
-      duePayments: { select: { amount: true, method: true } },
+      duePayments: { select: { amount: true, method: true, chargePart: true } },
     },
   });
 }
