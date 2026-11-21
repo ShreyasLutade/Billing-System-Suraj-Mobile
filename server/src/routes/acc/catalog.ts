@@ -469,7 +469,13 @@ async function replaceModels(
 /** Split a product's stock by phone model (for the record only). */
 accCatalogRouter.put("/products/:id/models", async (req, res, next) => {
   try {
-    const parsed = z.object({ models: modelRows }).safeParse(req.body);
+    const parsed = z
+      .object({
+        models: modelRows,
+        /** Models renamed on the split page: their box places follow the new name. */
+        renames: z.array(z.object({ from: z.string().max(80), to: z.string().trim().min(1).max(80) })).max(500).default([]),
+      })
+      .safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
     const rows = cleanModels(parsed.data.models);
     const product = await prisma.$transaction(async (tx) => {
@@ -482,6 +488,15 @@ accCatalogRouter.put("/products/:id/models", async (req, res, next) => {
         );
       }
       await replaceModels(tx, current.id, rows);
+      for (const { from, to } of parsed.data.renames) {
+        if (!from || from === to) continue;
+        const placed = await tx.accBoxItem.findMany({ where: { productId: current.id, model: from } });
+        for (const item of placed) {
+          const clash = await tx.accBoxItem.findFirst({ where: { boxId: item.boxId, productId: current.id, model: to } });
+          if (clash) await tx.accBoxItem.delete({ where: { id: item.id } });
+          else await tx.accBoxItem.update({ where: { id: item.id }, data: { model: to } });
+        }
+      }
       return tx.accProduct.findUniqueOrThrow({ where: { id: current.id }, include: productInclude });
     });
     res.json({ data: serializeProduct(product) });

@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useAuth } from "../auth/AuthContext";
-import { Boxes, Check, FileDown, Grid3x3, Loader2, Minus, PackageOpen, Plus, Search, Share2, Smartphone, SquarePlus, Trash2, X } from "lucide-react";
+import { Boxes, Check, FileDown, Grid3x3, Loader2, Minus, PackageOpen, PencilLine, Plus, Search, Share2, Smartphone, SquarePlus, Trash2, X } from "lucide-react";
 import { BackLink } from "../components/ui";
 import { accApi, type AccBox, type AccProduct } from "./accApi";
 import { COMMON_PHONE_BRANDS, Sheet, errorText, patchCatalogProduct, plural, toast, useAccCatalog } from "./shared";
@@ -158,6 +158,29 @@ export function AccSegregatePage() {
     setDraftQty(1);
   }
 
+  /** Row being renamed and the name being typed. */
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+
+  function startRename(r: Row) {
+    setRenaming(r.id);
+    setNewName(r.model);
+  }
+
+  function finishRename() {
+    if (!renaming || !rows) return;
+    const name = newName.trim().replace(/\s+/g, " ");
+    if (name) {
+      const clash = rows.find((r) => r.id !== renaming && r.model.toLowerCase() === name.toLowerCase());
+      if (clash) {
+        toast(`${clash.model} is already in the list`, { tone: "error" });
+        return;
+      }
+      setRows(rows.map((r) => (r.id === renaming ? { ...r, model: name } : r)));
+    }
+    setRenaming(null);
+  }
+
   const setQty = (rid: string, qty: number) =>
     setRows((cur) => (cur ?? []).map((r) => (r.id === rid ? { ...r, qty: Math.max(0, Math.min(qty, r.qty + Math.max(left, 0))) } : r)));
 
@@ -166,7 +189,13 @@ export function AccSegregatePage() {
     if (left < 0) return void toast(`Only ${total} pieces in stock`, { tone: "error" });
     setBusy(true);
     try {
-      const { data } = await accApi.setProductModels(product.id, rows.filter((r) => r.qty > 0).map((r) => ({ model: r.model, qty: r.qty })));
+      const saved = new Set(product.models.map((m) => m.model));
+      const renames = rows.filter((r) => saved.has(r.id) && r.id !== r.model).map((r) => ({ from: r.id, to: r.model }));
+      const { data } = await accApi.setProductModels(
+        product.id,
+        rows.filter((r) => r.qty > 0).map((r) => ({ model: r.model, qty: r.qty })),
+        renames,
+      );
       patchCatalogProduct(data);
       toast(`Saved · ${sorted} split, ${left} left as ${product.name}`);
       navigate(-1);
@@ -277,18 +306,51 @@ export function AccSegregatePage() {
         </div>
       </section>
 
-      <ul className="acc-seg-list">
+      <ul className="acc-seg-list is-compact">
         <AnimatePresence initial={false}>
           {rows.map((r) => (
             <motion.li key={r.id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 40 }}>
-              <span className="acc-seg-model">
-                <Smartphone aria-hidden />
-                <strong>{r.model}</strong>
-              </span>
-              <Stepper value={r.qty} onChange={(v) => setQty(r.id, v)} max={r.qty + Math.max(left, 0)} min={0} />
-              <button type="button" className="acc-seg-del" onClick={() => setRows(rows.filter((x) => x.id !== r.id))} aria-label={`Remove ${r.model}`}>
-                <Trash2 />
-              </button>
+              {renaming === r.id ? (
+                <span className="acc-seg-rename">
+                  <input
+                    data-keep-case
+                    autoFocus
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        finishRename();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        setRenaming(null);
+                      }
+                    }}
+                    aria-label={`New name for ${r.model}`}
+                  />
+                  <button type="button" className="acc-seg-ok" onClick={finishRename} aria-label="Save name">
+                    <Check />
+                  </button>
+                </span>
+              ) : (
+                <span className="acc-seg-model">
+                  <strong>{r.model}</strong>
+                </span>
+              )}
+              {renaming === r.id ? null : (
+                <>
+                  <Stepper value={r.qty} onChange={(v) => setQty(r.id, v)} max={r.qty + Math.max(left, 0)} min={0} />
+                  <span className="acc-seg-acts">
+                    <button type="button" className="acc-seg-edit" onClick={() => startRename(r)} aria-label={`Rename ${r.model}`}>
+                      <PencilLine />
+                    </button>
+                    <button type="button" className="acc-seg-del" onClick={() => setRows(rows.filter((x) => x.id !== r.id))} aria-label={`Remove ${r.model}`}>
+                      <Trash2 />
+                    </button>
+                  </span>
+                </>
+              )}
             </motion.li>
           ))}
         </AnimatePresence>

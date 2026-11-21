@@ -12041,3 +12041,111 @@ html.dark .acc {
   font-weight: 800;
   text-align: center;
 }
+
+/* Split by model: one compact list (rows with dividers, small stepper) */
+.acc .acc-seg-list.is-compact {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--a-line);
+  border-radius: 16px;
+  background: var(--a-card);
+}
+
+.acc .acc-seg-list.is-compact > li {
+  min-height: 48px;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.acc .acc-seg-list.is-compact > li + li {
+  border-top: 1px solid var(--a-line);
+}
+
+.acc .acc-seg-list.is-compact > li.is-rest {
+  border-style: solid;
+  background: var(--a-field);
+}
+
+.acc .acc-seg-list.is-compact .acc-seg-model strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.acc .acc-seg-list.is-compact .acc-stepper {
+  grid-template-columns: 30px 40px 30px;
+  border-radius: 10px;
+}
+
+.acc .acc-seg-list.is-compact .acc-stepper button,
+.acc .acc-seg-list.is-compact .acc-stepper input {
+  height: 32px;
+  font-size: 14px;
+}
+
+.acc-seg-acts {
+  display: flex;
+  flex: none;
+  gap: 0;
+}
+
+.acc .acc-seg-list.is-compact .acc-seg-del,
+.acc .acc-seg-edit,
+.acc .acc-seg-ok {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  cursor: pointer;
+}
+
+.acc .acc-seg-edit {
+  color: var(--a-muted);
+}
+
+.acc .acc-seg-edit:hover {
+  background: var(--a-field);
+  color: var(--a-accent);
+}
+
+.acc .acc-seg-list.is-compact .acc-seg-del {
+  color: color-mix(in srgb, var(--a-red) 75%, var(--a-muted));
+}
+
+.acc-seg-edit svg,
+.acc-seg-ok svg {
+  width: 16px;
+  height: 16px;
+}
+
+.acc-seg-rename {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc .acc-seg-rename input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--a-accent);
+  border-radius: 10px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.acc .acc-seg-ok {
+  background: var(--grad);
+  color: #fff;
+}

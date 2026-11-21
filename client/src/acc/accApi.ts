@@ -402,7 +402,8 @@ export const accApi = {
   editStock: (id: string, setTo: number) => post<AccProduct>(`/acc/products/${id}/adjust`, { setTo, note: "", edit: true }),
   deleteProduct: (id: string) => apiRequest(`/acc/products/${id}`, { method: "DELETE" }),
   productHistory: (id: string) => apiRequest<{ data: AccStockMove[] }>(`/acc/products/${id}/history`),
-  setProductModels: (id: string, models: AccModelQty[]) => put<AccProduct>(`/acc/products/${id}/models`, { models }),
+  setProductModels: (id: string, models: AccModelQty[], renames: Array<{ from: string; to: string }> = []) =>
+    put<AccProduct>(`/acc/products/${id}/models`, { models, renames }),
   /** Cover boxes (A1…G4 and any added grids / single boxes) with what's in them. */
   boxes: () => apiRequest<{ data: AccBox[] }>("/acc/boxes"),
   addBoxGrid: (rows: number, cols: number) => post<AccBox[]>("/acc/boxes/grid", { rows, cols }),
