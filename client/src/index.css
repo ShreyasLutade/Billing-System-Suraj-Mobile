@@ -2651,3 +2651,23 @@ html.dark .fx-light-teal {
     display: none;
   }
 }
+
+/* Due sheets: compact fields; iPhone gives date inputs their own minimum
+   width and centred text, which pushed the box past the sheet's edge. */
+.sheet-field {
+  min-height: 44px;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+.sheet-date {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+.sheet-date::-webkit-date-and-time-value {
+  text-align: left;
+}

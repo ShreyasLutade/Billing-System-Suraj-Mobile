@@ -15,6 +15,7 @@ import {
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { useFixedBottomBar } from "../hooks/useFixedBottomBar";
+import { useVisualViewportStyle } from "../hooks/useVisualViewport";
 import { EmptyState, LoadingBlock, BackLink } from "../components/ui";
 import { WhatsAppIcon } from "../components/WhatsAppIcon";
 import { api, formatINR, round2 } from "../lib/api";
@@ -564,7 +565,12 @@ function EntryRow({
   );
 }
 
-/** Bottom sheet frame shared by the You gave / You got / Date / Undo sheets. */
+/**
+ * Bottom sheet shared by the You gave / You got / Date / Undo sheets. On a
+ * phone it sits flush on the bottom edge, and while the keyboard is open it
+ * follows the visible area so it rests right on top of the keyboard (and
+ * scrolls inside if it doesn't fit).
+ */
 function Sheet({
   labelledBy,
   busy,
@@ -576,9 +582,13 @@ function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const viewport = useVisualViewportStyle(true);
+  const keyboardOpen =
+    typeof viewport?.height === "number" && viewport.height < window.innerHeight - 120;
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
+      className="fixed inset-x-0 top-0 z-50 flex h-[100dvh] items-end justify-center bg-ink-950/45 sm:items-center sm:p-4"
+      style={viewport}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -588,12 +598,18 @@ function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        initial={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: 32 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 16 }}
-        className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-5 shadow-lift dark:border-white/10 dark:bg-surface-elevated"
+        exit={{ opacity: 0, y: 24 }}
+        transition={{ type: "spring", stiffness: 420, damping: 36 }}
+        className="max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border border-b-0 border-white/70 bg-white px-4 pt-2 shadow-lift dark:border-white/10 dark:bg-surface-elevated sm:rounded-3xl sm:border-b sm:px-5 sm:pb-5 sm:pt-5"
+        style={{
+          paddingBottom: keyboardOpen ? 12 : "calc(16px + env(safe-area-inset-bottom))",
+        }}
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Grab handle (phones). */}
+        <div className="mx-auto mb-2.5 h-1 w-10 rounded-full bg-ink-900/15 dark:bg-white/20 sm:hidden" aria-hidden />
         {children}
       </motion.div>
     </motion.div>
@@ -616,25 +632,25 @@ function SheetHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="mb-3 flex items-start justify-between gap-3">
+    <div className="mb-2.5 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className={clsx("text-[11px] font-bold uppercase tracking-[0.14em]", eyebrowClass)}>{eyebrow}</p>
-        <h2 id={id} className="mt-0.5 truncate font-display text-lg font-bold text-ink-900">
+        <p className={clsx("text-[10.5px] font-bold uppercase tracking-[0.14em]", eyebrowClass)}>{eyebrow}</p>
+        <h2 id={id} className="truncate font-display text-[17px] font-bold leading-tight text-ink-900">
           {due.customerName}
+          <span className="ml-1.5 text-[13px] font-semibold text-ink-400">
+            · Bal{" "}
+            <span className="tabular-nums text-ink-700 dark:text-ink-800">{formatRupees(due.pending)}</span>
+          </span>
         </h2>
-        <p className="text-sm text-ink-500">
-          Balance{" "}
-          <span className="font-semibold tabular-nums text-ink-900">{formatRupees(due.pending)}</span>
-        </p>
       </div>
       <button
         type="button"
-        className="rounded-xl p-2 text-ink-500 hover:bg-ink-50 dark:hover:bg-white/10"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink-900/[0.05] text-ink-500 transition hover:bg-ink-900/10 dark:bg-white/10"
         onClick={onClose}
         disabled={busy}
         aria-label="Close"
       >
-        <X className="h-5 w-5" />
+        <X className="h-[18px] w-[18px]" />
       </button>
     </div>
   );
@@ -668,7 +684,7 @@ function AmountField({
     <label
       htmlFor={id}
       className={clsx(
-        "flex items-center gap-1.5 rounded-2xl border-[1.5px] bg-white px-3.5 py-2 dark:bg-surface",
+        "flex items-center gap-1.5 rounded-2xl border-[1.5px] bg-white px-3.5 py-1.5 dark:bg-surface",
         invalid
           ? "border-rose-500"
           : tone === "gave"
@@ -684,6 +700,8 @@ function AmountField({
         inputMode="decimal"
         min={0.01}
         step="0.01"
+        autoComplete="off"
+        enterKeyHint="done"
         value={value}
         autoFocus
         placeholder={placeholder ?? "0"}
@@ -785,7 +803,7 @@ function GotSheet({
               : "Due will be fully cleared"}
       </p>
 
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="mt-1 grid grid-cols-3 gap-2">
         {METHODS.map((option) => (
           <button
             key={option.value}
@@ -810,7 +828,7 @@ function GotSheet({
 
       <button
         type="button"
-        className="mt-4 h-12 w-full rounded-2xl bg-[#0E9E76] text-[15px] font-bold text-white transition hover:bg-[#0C8C69] disabled:opacity-60"
+        className="mt-3 h-12 w-full rounded-2xl bg-[#0E9E76] text-[15px] font-bold text-white transition hover:bg-[#0C8C69] disabled:opacity-60"
         disabled={saving || tooMuch}
         onClick={() => void save()}
       >
@@ -885,38 +903,44 @@ function GaveSheet({
             <b className="tabular-nums text-rose-600 dark:text-rose-400">{formatRupees(after)}</b>
           </>
         ) : (
-          "Cash given, repair, old balance… added to what he owes"
+          "Added to what he owes"
         )}
       </p>
 
-      <label className="label mt-2" htmlFor="due-gave-note">
-        Note
-      </label>
-      <input
-        id="due-gave-note"
-        className="field"
-        maxLength={200}
-        value={note}
-        placeholder="e.g. Cash lent, old balance"
-        onChange={(event) => setNote(event.target.value)}
-      />
-
-      <label className="label mt-3" htmlFor="due-gave-date">
-        Collect by (optional)
-      </label>
-      <input
-        id="due-gave-date"
-        className="field"
-        type="date"
-        value={dueDate}
-        onChange={(event) => setDueDate(event.target.value)}
-      />
+      <div className="mt-1 grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
+        <label className="min-w-0">
+          <span className="mb-1 block text-[10.5px] font-bold uppercase tracking-[0.12em] text-ink-400">
+            Note
+          </span>
+          <input
+            id="due-gave-note"
+            className="field sheet-field"
+            maxLength={200}
+            autoComplete="off"
+            value={note}
+            placeholder="Cash lent, repair…"
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
+        <label className="min-w-0">
+          <span className="mb-1 block text-[10.5px] font-bold uppercase tracking-[0.12em] text-ink-400">
+            Collect by
+          </span>
+          <input
+            id="due-gave-date"
+            className="field sheet-field sheet-date"
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+        </label>
+      </div>
 
       <ErrorNote error={error} />
 
       <button
         type="button"
-        className="mt-4 h-12 w-full rounded-2xl bg-[#D93A3F] text-[15px] font-bold text-white transition hover:bg-[#C5333A] disabled:opacity-60"
+        className="mt-3 h-12 w-full rounded-2xl bg-[#D93A3F] text-[15px] font-bold text-white transition hover:bg-[#C5333A] disabled:opacity-60"
         disabled={saving}
         onClick={() => void save()}
       >
@@ -963,7 +987,7 @@ function DateSheet({
         onClose={onClose}
       />
       <input
-        className="field"
+        className="field sheet-field sheet-date"
         type="date"
         value={value}
         aria-label="Collect by date"
