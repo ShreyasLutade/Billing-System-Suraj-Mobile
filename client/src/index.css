@@ -2551,16 +2551,11 @@ html.dark .fx-light-teal {
 .fx-aurora {
   position: absolute;
   inset: -60%;
-  background: conic-gradient(
-    from 0deg at 50% 50%,
-    transparent 0deg,
-    rgba(255, 168, 0, 0.14) 60deg,
-    transparent 120deg,
-    rgba(59, 130, 246, 0.16) 200deg,
-    transparent 260deg,
-    rgba(45, 212, 191, 0.12) 320deg,
-    transparent 360deg
-  );
+  /* Soft blobs (no centre point) turning slowly. */
+  background:
+    radial-gradient(38% 32% at 30% 36%, rgba(59, 130, 246, 0.2), transparent 70%),
+    radial-gradient(34% 30% at 70% 64%, rgba(45, 212, 191, 0.14), transparent 70%),
+    radial-gradient(30% 28% at 66% 28%, rgba(255, 168, 0, 0.14), transparent 70%);
   animation: fx-spin 24s linear infinite;
   will-change: transform;
 }

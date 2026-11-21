@@ -733,14 +733,19 @@ function previousComparableRange(
     const day = subDays(now, 2);
     return { from: startOfDay(day), to: endOfDay(day) };
   }
-  if (period === "week" && current.from && current.to) {
+  // This week / month only has data up to today, so compare it with the
+  // same days of the previous week / month (not the whole of it).
+  if (period === "week" && current.from) {
     return {
       from: subWeeks(current.from, 1),
-      to: subWeeks(current.to, 1),
+      to: endOfDay(subWeeks(now, 1)),
     };
   }
-  if (period === "month") {
-    return getPeriodRange("month", subMonths(now, 1));
+  if (period === "month" && current.from) {
+    return {
+      from: subMonths(current.from, 1),
+      to: endOfDay(subMonths(now, 1)),
+    };
   }
   return null;
 }
@@ -782,9 +787,9 @@ analyticsRouter.get("/summary", async (req, res, next) => {
         ).summary;
         const label =
           period === "month"
-            ? "vs last month"
+            ? "vs same days last month"
             : period === "week"
-              ? "vs last week"
+              ? "vs same days last week"
               : "vs prior day";
 
         const mixTotalChangePct = percentChange(
