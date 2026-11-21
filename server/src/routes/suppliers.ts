@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { latestBillLines } from "../lib/latestBillLines";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
@@ -152,19 +153,16 @@ suppliersRouter.get("/mobiles", async (req, res, next) => {
           },
         },
         productReturn: { select: { createdAt: true } },
-        billItems: {
-          select: { bill: { select: { id: true, invoiceNumber: true } } },
-          orderBy: { bill: { billDate: "desc" } },
-          take: 1,
-        },
       },
       orderBy: { createdAt: "desc" },
     });
+    // Latest sale per unit, loaded on its own (see latestBillLines).
+    const sales = await latestBillLines(items.map((item) => item.id));
 
     const data = items.map((item) => {
       const purchase = item.purchaseItem?.purchase || null;
       const supplier = item.supplier || purchase?.supplier || null;
-      const bill = item.billItems[0]?.bill || null;
+      const bill = sales.get(item.id)?.bill || null;
       return {
         id: item.id,
         mobileName: item.mobileName,

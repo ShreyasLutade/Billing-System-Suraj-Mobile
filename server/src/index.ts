@@ -127,10 +127,14 @@ app.use(
     const known =
       message === "FINANCE_COMPANY_NOT_FOUND"
         ? "Selected finance company was not found"
-        : message.startsWith("Unknown argument") ||
-            message.includes("Invalid `prisma")
+        : // Only a missing column / argument means the database is behind
+          // the code; other Prisma errors are not about the schema.
+          message.startsWith("Unknown argument") ||
+            /column .* does not exist|Unknown (field|arg)/i.test(message)
           ? "Database is out of date. Restart the API after schema changes."
-          : null;
+          : message.includes("Invalid `prisma")
+            ? "Something went wrong loading this. Please try again."
+            : null;
     res.status(500).json({
       error: known || "Internal server error",
       ...(process.env.NODE_ENV !== "production" && !known

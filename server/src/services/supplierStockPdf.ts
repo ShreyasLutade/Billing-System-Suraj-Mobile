@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import { format } from "date-fns";
 import { prisma } from "../lib/prisma";
+import { latestBillLines } from "../lib/latestBillLines";
 import {
   COLORS,
   FONT,
@@ -93,26 +94,17 @@ export async function buildSupplierMobilesPdf(
     },
     include: {
       purchaseItem: { select: { purchase: { select: { purchaseDate: true } } } },
-      billItems: {
-        orderBy: { bill: { billDate: "desc" } },
-        take: 1,
-        select: {
-          rate: true,
-          amount: true,
-          bill: {
-            select: { invoiceNumber: true, billDate: true, customerName: true, customerPhone: true },
-          },
-        },
-      },
       productReturn: { select: { kind: true } },
       replacementFor: { select: { billId: true, invoiceNumber: true, customerName: true, createdAt: true } },
     },
     orderBy: [{ createdAt: "asc" }, { mobileName: "asc" }],
   });
+  // Latest sale per unit, loaded on its own (see latestBillLines).
+  const sales = await latestBillLines(items.map((item) => item.id));
 
   // Units given as replacements have no bill line; show the bill they replaced on.
   const swapBillIds = items
-    .map((i) => (i.billItems[0] ? null : i.replacementFor?.billId))
+    .map((i) => (sales.has(i.id) ? null : i.replacementFor?.billId))
     .filter((id): id is string => Boolean(id));
   const swapBills = new Map(
     (
@@ -131,7 +123,7 @@ export async function buildSupplierMobilesPdf(
   let totalMargin = 0;
 
   const rows: Row[] = items.map((item) => {
-    const line = item.billItems[0] ?? null;
+    const line = sales.get(item.id) ?? null;
     const swap = !line ? item.replacementFor : null;
     const cost = round2(item.purchasePrice || 0);
     const sale = line ? round2(line.amount ?? line.rate) : null;
