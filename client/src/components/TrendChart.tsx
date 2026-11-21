@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
 import { EASE_OUT, SPRING } from "../lib/motion";
@@ -73,6 +73,9 @@ export function TrendChart({
   selected,
   highlight,
   onSelect,
+  pinned,
+  onDismiss,
+  tipPlacement = "column",
   formatAxis,
   tooltip,
   labelEvery = 1,
@@ -86,6 +89,13 @@ export function TrendChart({
   /** A column to mark (e.g. best day) when nothing is selected. */
   highlight?: number | null;
   onSelect?: (index: number) => void;
+  /** Column whose readout stays open (tap to show), until `onDismiss`. */
+  pinned?: number | null;
+  /** Called on a tap outside the chart while a readout is pinned. */
+  onDismiss?: () => void;
+  /** "column": next to the column; "corner": top corner on the other side
+   *  (for short charts with a big readout, so the bar stays visible). */
+  tipPlacement?: "column" | "corner";
   formatAxis: (value: number) => string;
   tooltip: (index: number) => ReactNode;
   labelEvery?: number;
@@ -121,8 +131,21 @@ export function TrendChart({
   const linePoints = hasLine
     ? points.map((p, i) => ({ x: i * slot + slot / 2, y: y(p.line ?? 0) }))
     : [];
-  const focus = selected ?? highlight ?? null;
-  const shownTip = hover;
+  /** Highest point of a column (bar top or line dot), for the readout. */
+  const tipAnchor = (i: number) =>
+    Math.min(y(points[i].value), points[i].line != null ? y(points[i].line ?? 0) : height);
+  const focus = pinned ?? selected ?? highlight ?? null;
+  const shownTip = hover ?? pinned ?? null;
+
+  // Tap anywhere else closes a pinned readout.
+  useEffect(() => {
+    if (pinned == null || !onDismiss) return;
+    const close = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) onDismiss();
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [pinned, onDismiss]);
 
   return (
     <div
@@ -241,19 +264,22 @@ export function TrendChart({
             <motion.div
               key="tip"
               className="pointer-events-none absolute z-20 whitespace-nowrap rounded-xl border border-[#E7EAF0] bg-white px-3 py-2 text-left shadow-lift dark:border-[rgb(var(--color-line))] dark:bg-surface-elevated"
-              style={{
+              style={
+                tipPlacement === "corner"
+                  ? shownTip * slot + slot / 2 < plotW / 2
+                    ? { right: 0, top: -4 }
+                    : { left: 0, top: -4 }
+                  : {
                 // Left half: grow to the right of the column; right half: to the left.
                 ...(shownTip * slot + slot / 2 < plotW / 2
                   ? { left: Math.max(shownTip * slot + slot / 2 - 20, -AXIS + 4) }
                   : { right: Math.max(plotW - (shownTip * slot + slot / 2) - 20, 0) }),
-                top: Math.max(
-                  Math.min(
-                    y(points[shownTip].value),
-                    points[shownTip].line != null ? y(points[shownTip].line ?? 0) : height,
-                  ) - 64,
-                  -8,
-                ),
-              }}
+                // Above the bar when there is room, otherwise just below its top.
+                ...(tipAnchor(shownTip) >= 90
+                  ? { bottom: height - tipAnchor(shownTip) + 8 }
+                  : { top: tipAnchor(shownTip) + 10 }),
+                    }
+              }
               initial={{ opacity: 0, y: 6, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.98 }}
@@ -268,7 +294,9 @@ export function TrendChart({
       {/* X labels */}
       <div className="pointer-events-none absolute" style={{ left: AXIS, width: plotW, top: height + 6 }}>
         {points.map((p, i) =>
-          i % labelEvery === 0 || i === focus ? (
+          // Every n-th label, plus the focused one (a neighbour of it hides
+          // so the two don't run together).
+          i === focus || (i % labelEvery === 0 && (focus == null || labelEvery === 1 || Math.abs(i - focus) > 1)) ? (
             <span
               key={p.key}
               className={clsx(

@@ -51,6 +51,38 @@ function Key({ kind }: { kind: "bar" | "line" }) {
   );
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Info card for one day of the day-by-day chart: sales, profit, more. */
+function DayCard({ day }: { day: MonthlyTrend["months"][number]["days"][number] }) {
+  const [y, m, d] = day.date.split("-").map(Number);
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const margin = day.sales > 0 ? (day.profit / day.sales) * 100 : null;
+  const row = (label: string, value: string, tone = "text-ink-900") => (
+    <p className="flex items-baseline justify-between gap-4">
+      <span className="text-[11px] font-medium text-ink-500">{label}</span>
+      <span className={clsx("text-[13px] font-bold tabular-nums", tone)}>{value}</span>
+    </p>
+  );
+  return (
+    <div className="min-w-[10.5rem]">
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-ink-400">
+        {weekday}, {d} {monthShort(day.date.slice(0, 7))}
+      </p>
+      {row("Sales", formatRupees(day.sales))}
+      {row(
+        "Profit",
+        `${formatRupees(day.profit)}${margin != null ? ` · ${margin.toFixed(1)}%` : ""}`,
+        day.profit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+      )}
+      {row("Collected", formatRupees(day.collected))}
+      <p className="mt-1 border-t border-[#EEF1F5] pt-1 text-[11px] text-ink-500 dark:border-[rgb(var(--color-line))]">
+        {day.bills} bill{day.bills === 1 ? "" : "s"} · {day.phones} phone{day.phones === 1 ? "" : "s"}
+      </p>
+    </div>
+  );
+}
+
 export function AnalyticsTrendPage() {
   const location = useLocation();
   const from = readFromState(location.state);
@@ -60,6 +92,8 @@ export function AnalyticsTrendPage() {
   const [selected, setSelected] = useState<number | null>(null);
   /** -1 = moved to an older month, 1 = newer (for the slide direction). */
   const [direction, setDirection] = useState(0);
+  /** Day whose info card is open in the day-by-day chart. */
+  const [pinnedDay, setPinnedDay] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -82,6 +116,11 @@ export function AnalyticsTrendPage() {
   const index = selected ?? months.length - 1;
   const month = months[index];
   const previous = index > 0 ? months[index - 1] : null;
+
+  // A new month or metric closes the day card.
+  useEffect(() => {
+    setPinnedDay(null);
+  }, [selected, metric]);
 
   function select(next: number) {
     if (next < 0 || next >= months.length || next === index) return;
@@ -430,21 +469,18 @@ export function AnalyticsTrendPage() {
             {dayPoints.some((p) => p.value !== 0) ? (
               <TrendChart
                 points={dayPoints}
-                height={120}
+                height={140}
                 barMax={10}
                 highlight={bestDayIndex}
+                pinned={pinnedDay}
+                onSelect={(i) => setPinnedDay((open) => (open === i ? null : i))}
+                onDismiss={() => setPinnedDay(null)}
+                tipPlacement="corner"
                 animationKey={`${month.key}|${metric}`}
                 stagger={0.012}
                 labelEvery={7}
                 formatAxis={(v) => formatAxis(v, metric)}
-                tooltip={(i) => (
-                  <>
-                    <p className="text-[10.5px] font-semibold text-ink-500">{dayPoints[i].title.split(":")[0]}</p>
-                    <p className="mt-0.5 text-sm font-bold tabular-nums text-ink-900">
-                      {formatMetric(dayPoints[i].value, metric)}
-                    </p>
-                  </>
-                )}
+                tooltip={(i) => <DayCard day={month.days[i]} />}
               />
             ) : (
               <p className="px-1 py-6 text-center text-sm text-ink-500">No sales in this month.</p>
