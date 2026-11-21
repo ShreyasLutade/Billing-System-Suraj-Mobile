@@ -2380,3 +2380,66 @@ html.dark .due-paid-fill::after {
 html.dark .due-timeline-item:not(:last-child)::before {
   background: repeating-linear-gradient(to bottom, rgb(var(--color-line-strong)) 0 4px, transparent 4px 8px);
 }
+
+/* ------------------------------------------------------------------
+ * Analytics motion + monthly trend chart.
+ * Chart colours validated for colour-blind separation (light & dark).
+ * ------------------------------------------------------------------ */
+:root {
+  --trend-sales: #2a78d6;
+  --trend-sales-soft: rgba(42, 120, 214, 0.22);
+  --trend-profit: #1baf7a;
+  --trend-grid: #eef1f5;
+  --trend-axis: #c9d0db;
+  --trend-surface: #ffffff;
+}
+html.dark {
+  --trend-sales: #3987e5;
+  --trend-sales-soft: rgba(57, 135, 229, 0.28);
+  --trend-profit: #199e70;
+  --trend-grid: rgb(var(--color-line));
+  --trend-axis: rgb(var(--color-line-strong));
+  --trend-surface: rgb(var(--color-surface));
+}
+
+.trend-skeleton {
+  background: linear-gradient(100deg, rgba(11, 31, 51, 0.05) 30%, rgba(11, 31, 51, 0.11) 50%, rgba(11, 31, 51, 0.05) 70%);
+  background-size: 220% 100%;
+  animation: trend-shimmer 1.3s ease-in-out infinite;
+}
+html.dark .trend-skeleton {
+  background-image: linear-gradient(100deg, rgba(255, 255, 255, 0.04) 30%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 70%);
+}
+@keyframes trend-shimmer {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+/* Analytics cards press in under the finger and lift a little on hover. */
+.analytics-motion .interactive-card {
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    background-color 0.2s ease;
+}
+.analytics-motion .interactive-card:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .analytics-motion .interactive-card:hover {
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trend-skeleton {
+    animation: none;
+  }
+  .analytics-motion .interactive-card:active,
+  .analytics-motion .interactive-card:hover {
+    transform: none;
+  }
+}

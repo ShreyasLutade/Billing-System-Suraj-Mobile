@@ -53,6 +53,10 @@ import {
   type PaymentMode,
 } from "../lib/analyticsNav";
 import { MIX, mixSurface } from "../lib/analyticsMix";
+import { motion } from "framer-motion";
+import { AnimatedNumber } from "../components/AnimatedNumber";
+import { TrendCard } from "../components/TrendCard";
+import { riseIn } from "../lib/motion";
 import { useTheme } from "../theme/ThemeContext";
 
 const AVATAR_COLORS = [
@@ -476,6 +480,7 @@ export function AnalyticsPage() {
       <div className="mb-5 sm:mb-6">
         <PeriodFilter
           allowCustom
+          pillId="analytics-period"
           value={period}
           onChange={setPeriod}
           customFrom={customFrom}
@@ -492,7 +497,13 @@ export function AnalyticsPage() {
 
       {data && summary && !loading ? (
         <>
-          <section className="mb-4 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={0}
+            className="mb-4 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
             {/* Hero — total collected + payment mix */}
             <div className="relative overflow-hidden rounded-[1.125rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_55%)] p-6 text-white shadow-lift sm:p-7">
               <div
@@ -517,7 +528,7 @@ export function AnalyticsPage() {
                   ) : null}
                 </div>
                 <p className="mt-2.5 font-display text-[clamp(2.125rem,6vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
-                  {formatINR(summary.collected)}
+                  <AnimatedNumber value={summary.collected} format={formatINR} duration={1.3} />
                 </p>
                 <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div>
@@ -532,7 +543,7 @@ export function AnalyticsPage() {
                             : "text-orange-300"
                         }`}
                       >
-                        {formatINR(profitAmount)}
+                        <AnimatedNumber value={profitAmount} format={formatINR} />
                       </p>
                       {profitMarginPct != null ? (
                         <span
@@ -554,14 +565,18 @@ export function AnalyticsPage() {
                       Revenue
                     </p>
                     <p className="mt-1 font-display text-xl font-bold leading-none tabular-nums text-white sm:text-2xl">
-                      {formatINR(revenueAmount)}
+                      <AnimatedNumber value={revenueAmount} format={formatINR} />
                     </p>
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#A9B6CC]">
                   <span>
                     Across{" "}
-                    <b className="font-semibold text-white">{summary.bills}</b>{" "}
+                    <AnimatedNumber
+                      value={summary.bills}
+                      format={(v) => String(Math.round(v))}
+                      className="font-semibold text-white"
+                    />{" "}
                     bill{summary.bills === 1 ? "" : "s"}
                   </span>
                   {change && data.vsPrevious.label ? (
@@ -644,7 +659,7 @@ export function AnalyticsPage() {
                 Total outstanding
               </p>
               <p className="mt-3.5 font-display text-[2.375rem] font-bold leading-none tracking-tight text-ink-900 tabular-nums">
-                {formatINR(data.outstandingDue.amount)}
+                <AnimatedNumber value={data.outstandingDue.amount} format={formatINR} />
               </p>
               <span
                 className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
@@ -701,10 +716,26 @@ export function AnalyticsPage() {
                 </div>
               </div>
             </div>
-          </section>
+          </motion.section>
+
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={1}
+            className="mb-4 sm:mb-6" aria-label="Monthly trend">
+            <TrendCard />
+          </motion.section>
 
           {/* KPI cards */}
-          <section
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={2}
+           
             className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-8 sm:gap-4 xl:grid-cols-5"
             aria-label="Payment breakdown"
           >
@@ -747,14 +778,20 @@ export function AnalyticsPage() {
                     {kpi.name}
                   </p>
                   <p className="font-display text-[1.05rem] font-bold leading-tight tracking-tight text-ink-900 tabular-nums sm:text-2xl">
-                    {formatINR(kpi.value)}
+                    <AnimatedNumber value={kpi.value} format={formatINR} />
                   </p>
                 </Link>
               );
             })}
-          </section>
+          </motion.section>
 
-          <section className="mb-6" aria-label="Pending items">
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={3}
+            className="mb-6" aria-label="Pending items">
             <Link
               to="/analytics/pending-items"
               state={fromState(location)}
@@ -791,9 +828,15 @@ export function AnalyticsPage() {
                 View →
               </span>
             </Link>
-          </section>
+          </motion.section>
 
-          <section className="mb-6" aria-label="Exchange mobiles">
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={4}
+            className="mb-6" aria-label="Exchange mobiles">
             <Link
               to={analyticsExchangesPath(period, customFrom, customTo)}
               state={fromState(location)}
@@ -826,9 +869,15 @@ export function AnalyticsPage() {
                 View →
               </span>
             </Link>
-          </section>
+          </motion.section>
 
-          <section className="mb-6" aria-label="Purchase history">
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={4}
+            className="mb-6" aria-label="Purchase history">
             <Link
               to={analyticsPurchasesPath(period, customFrom, customTo)}
               state={fromState(location)}
@@ -861,9 +910,15 @@ export function AnalyticsPage() {
                 View →
               </span>
             </Link>
-          </section>
+          </motion.section>
 
-          <section className="mb-6" aria-label="Money given to customers">
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={4}
+            className="mb-6" aria-label="Money given to customers">
             <Link
               to={analyticsCustomerPayoutsPath(period, customFrom, customTo)}
               state={fromState(location)}
@@ -893,9 +948,15 @@ export function AnalyticsPage() {
                 View →
               </span>
             </Link>
-          </section>
+          </motion.section>
 
-          <section
+          <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={4}
+           
             className="mb-6 overflow-hidden rounded-[1.125rem] border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-soft sm:mb-8 sm:p-6"
             aria-label="Accessories revenue"
           >
@@ -928,7 +989,7 @@ export function AnalyticsPage() {
                 </p>
               </div>
             </div>
-          </section>
+          </motion.section>
 
           {/* Period bills */}
           <div className="mb-3.5 flex flex-wrap items-end justify-between gap-3">
@@ -1059,7 +1120,13 @@ export function AnalyticsPage() {
               description="Bills created in the selected timeline will show here with cost and selling price."
             />
           ) : (
-            <section
+            <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={4}
+           
               className="overflow-hidden rounded-2xl border border-ink-100/80 bg-white/90 shadow-soft"
               aria-label={`Bills for ${data.periodLabel}`}
             >
@@ -1239,7 +1306,7 @@ export function AnalyticsPage() {
                   </div>
                 </div>
               </div>
-            </section>
+            </motion.section>
           )}
         </>
       ) : null}

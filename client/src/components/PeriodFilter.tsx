@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { format } from "date-fns";
 import type { ReactNode } from "react";
+import { motion } from "framer-motion";
+import { SPRING } from "../lib/motion";
 
 export const ACTIVITY_PERIOD_OPTIONS = [
   { value: "all", label: "All time" },
@@ -49,6 +51,8 @@ type PeriodFilterProps =
       value: AnalyticsPeriodValue;
       onChange: (value: AnalyticsPeriodValue) => void;
       allowCustom: true;
+      /** Set to slide the highlight between options (unique per page). */
+      pillId?: string;
       customFrom: string;
       customTo: string;
       onCustomFromChange: (value: string) => void;
@@ -76,6 +80,7 @@ export function PeriodFilter(props: PeriodFilterProps) {
       <div className="w-full max-w-xl">
         <PeriodChipRow
           compact
+          pillId={props.pillId}
           options={ACTIVITY_PERIOD_SHORT}
           value={props.value === "custom" ? null : props.value}
           onChange={(value) => props.onChange(value)}
@@ -159,12 +164,15 @@ export function PeriodChipRow<T extends string>({
   onChange,
   trailing,
   compact = false,
+  pillId,
 }: {
   options: ReadonlyArray<{ value: T; label: string }>;
   value: T | null;
   onChange: (value: T) => void;
   trailing?: ReactNode;
   compact?: boolean;
+  /** Slide one highlight between options instead of recolouring them. */
+  pillId?: string;
 }) {
   return (
     <div
@@ -194,11 +202,23 @@ export function PeriodChipRow<T extends string>({
               ? "min-w-0 flex-1 rounded-lg px-1.5 py-2 text-center text-[11px] sm:rounded-xl sm:px-2 sm:text-xs"
               : "shrink-0 rounded-xl px-3 py-2 text-xs sm:px-4 sm:text-sm",
             value === option.value
-              ? "segment-on"
+              ? pillId
+                ? "relative isolate text-[#1f1600]"
+                : "segment-on"
               : "segment-off",
           )}
           onClick={() => onChange(option.value)}
         >
+          {pillId && value === option.value ? (
+            <motion.span
+              layoutId={pillId}
+              className={clsx(
+                "segment-on absolute inset-0 -z-10",
+                compact ? "rounded-lg sm:rounded-xl" : "rounded-xl",
+              )}
+              transition={SPRING}
+            />
+          ) : null}
           {option.label}
         </button>
       ))}

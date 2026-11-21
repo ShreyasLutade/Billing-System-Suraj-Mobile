@@ -282,6 +282,28 @@ export type AnalyticsExchangeItem = {
   status: string;
 };
 
+/** One day (or month) of the Analytics monthly trend. */
+export type TrendTotals = {
+  sales: number;
+  profit: number;
+  collected: number;
+  bills: number;
+  phones: number;
+};
+
+export type TrendMonth = TrendTotals & {
+  /** "2026-11" */
+  key: string;
+  days: Array<TrendTotals & { date: string }>;
+};
+
+export type MonthlyTrend = {
+  /** India date today, "2026-11-21". */
+  today: string;
+  /** Oldest first, the current month last. */
+  months: TrendMonth[];
+};
+
 /** An exchange mobile on the Exchange page (everyone; no prices). */
 export type ExchangeMobile = Omit<AnalyticsExchangeItem, "purchaseId" | "supplierId" | "value">;
 

@@ -8,6 +8,7 @@ import {
   subWeeks,
 } from "date-fns";
 import { prisma } from "../lib/prisma";
+import { endOfDayIST, istDateString } from "../lib/ist";
 import {
   getPeriodRange,
   isActivityPeriod,
@@ -1035,6 +1036,107 @@ analyticsRouter.get("/customer-payouts/pdf", async (req, res, next) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+type TrendTotals = {
+  sales: number;
+  profit: number;
+  collected: number;
+  bills: number;
+  phones: number;
+};
+
+function addTotals(into: TrendTotals, add: TrendTotals) {
+  into.sales = round2(into.sales + add.sales);
+  into.profit = round2(into.profit + add.profit);
+  into.collected = round2(into.collected + add.collected);
+  into.bills += add.bills;
+  into.phones += add.phones;
+}
+
+function emptyTotals(): TrendTotals {
+  return { sales: 0, profit: 0, collected: 0, bills: 0, phones: 0 };
+}
+
+/**
+ * Month-by-month (and day-by-day) trend for the last `months` months, by
+ * India date. Same maths as the summary: sales and profit include Replace /
+ * Return adjustments, collected includes dues paid that day.
+ */
+analyticsRouter.get("/monthly", async (req, res, next) => {
+  try {
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const now = new Date();
+    const today = istDateString(now);
+    const [thisYear, thisMonth] = today.split("-").map(Number);
+    const monthKeys: string[] = [];
+    for (let i = months - 1; i >= 0; i -= 1) {
+      const d = new Date(Date.UTC(thisYear, thisMonth - 1 - i, 1));
+      monthKeys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+    }
+    const filter = {
+      gte: new Date(`${monthKeys[0]}-01T00:00:00.000+05:30`),
+      lte: endOfDayIST(now),
+    };
+
+    const [bills, returns, collections] = await Promise.all([
+      loadPeriodBills(filter),
+      loadReturns(filter),
+      loadDueCollections(filter),
+    ]);
+
+    const billsByDay = new Map<string, BillRow[]>();
+    for (const bill of bills) {
+      const day = istDateString(bill.billDate);
+      billsByDay.set(day, [...(billsByDay.get(day) ?? []), bill]);
+    }
+    const collectionsByDay = new Map<string, DueCollection[]>();
+    for (const row of collections) {
+      const day = istDateString(row.paidAt);
+      collectionsByDay.set(day, [...(collectionsByDay.get(day) ?? []), row]);
+    }
+    const returnsByDay = new Map<string, { sales: number; profit: number }>();
+    for (const row of returns.billRows) {
+      if (row.kind !== "RETURNED") continue;
+      const day = istDateString(new Date(row.billDate));
+      const acc = returnsByDay.get(day) ?? { sales: 0, profit: 0 };
+      acc.sales += row.sellingPrice;
+      acc.profit += row.profit;
+      returnsByDay.set(day, acc);
+    }
+
+    const result = monthKeys.map((key) => {
+      const [year, month] = key.split("-").map(Number);
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const total = emptyTotals();
+      const days: Array<TrendTotals & { date: string }> = [];
+      for (let d = 1; d <= daysInMonth; d += 1) {
+        const date = `${key}-${String(d).padStart(2, "0")}`;
+        if (date > today) break;
+        const dayBills = billsByDay.get(date) ?? [];
+        const dayCollections = collectionsByDay.get(date) ?? [];
+        const adjust = returnsByDay.get(date) ?? { sales: 0, profit: 0 };
+        const summary = summarizeBills(dayBills, dayCollections);
+        const totals: TrendTotals = {
+          sales: round2(summary.sales + adjust.sales),
+          profit: round2(summary.profit + adjust.profit),
+          collected: summary.collected,
+          bills: summary.bills,
+          phones: dayBills.reduce(
+            (sum, bill) => sum + bill.items.filter(isStockMobile).length,
+            0,
+          ),
+        };
+        addTotals(total, totals);
+        days.push({ date, ...totals });
+      }
+      return { key, ...total, days };
+    });
+
+    res.json({ data: { today, months: result } });
   } catch (error) {
     next(error);
   }

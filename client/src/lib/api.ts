@@ -1,4 +1,5 @@
 import type {
+  MonthlyTrend,
   ExchangeMobilesSummary,
   AnalyticsCustomerPayoutsSummary,
   AnalyticsExchangesSummary,
@@ -296,6 +297,9 @@ export const api = {
     request<{ data: ExchangeMobilesSummary }>(
       `/exchanges?period=${encodeURIComponent(period)}`,
     ),
+  /** Last 12 months, month by month and day by day (admin). */
+  analyticsMonthly: (months = 12) =>
+    request<{ data: MonthlyTrend }>(`/analytics/monthly?months=${months}`),
   analyticsExchanges: (
     period: string = "all",
     options?: { from?: string; to?: string },
