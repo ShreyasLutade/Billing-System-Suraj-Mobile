@@ -10,7 +10,7 @@ import {
   SearchClearButton,
 } from "../components/ui";
 import { useSessionState } from "../hooks/useSessionState";
-import { fromState } from "../lib/navMemory";
+import { fromState, readFromState } from "../lib/navMemory";
 import { api } from "../lib/api";
 import {
   EXCHANGE_ACCESSORIES,
@@ -178,7 +178,7 @@ export function AnalyticsPendingItemsPage() {
 
   return (
     <div>
-      <BackLink to="/analytics" state={fromState(location)}>
+      <BackLink to={readFromState(location.state) ?? "/analytics"} state={fromState(location)}>
         Back to analytics
       </BackLink>
 

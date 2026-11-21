@@ -304,6 +304,31 @@ export type MonthlyTrend = {
   months: TrendMonth[];
 };
 
+/** A phone sold (or a Replace / Return entry), for the staff Analytics page: no cost or profit. */
+export type StaffSaleRow = {
+  /** Bill to open. */
+  id: string;
+  entryId: string;
+  kind: "SALE" | "REPLACED" | "RETURNED";
+  refundMethod: "cash" | "online" | null;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  billDate: string;
+  productLabel: string;
+  /** What the customer paid for the phone (negative for a refund). */
+  sellingPrice: number;
+  exchangeValue: number;
+};
+
+export type StaffSalesSummary = {
+  period: "today" | "yesterday" | "all";
+  periodLabel: string;
+  soldCount: number;
+  soldTotal: number;
+  items: StaffSaleRow[];
+};
+
 /** An exchange mobile on the Exchange page (everyone; no prices). */
 export type ExchangeMobile = Omit<AnalyticsExchangeItem, "purchaseId" | "supplierId" | "value">;
 

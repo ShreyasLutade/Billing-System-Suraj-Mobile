@@ -10,6 +10,7 @@ import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
 import { AnalyticsCustomerPayoutsPage } from "./pages/AnalyticsCustomerPayoutsPage";
 import { ExchangesPage } from "./pages/ExchangesPage";
 import { AnalyticsTrendPage } from "./pages/AnalyticsTrendPage";
+import { StaffAnalyticsPage } from "./pages/StaffAnalyticsPage";
 import { AnalyticsMotionLayout } from "./components/AnalyticsMotionLayout";
 import { AnalyticsPendingItemsPage } from "./pages/AnalyticsPendingItemsPage";
 import { BackupPage } from "./pages/BackupPage";
@@ -62,7 +63,13 @@ export default function App() {
                   element={<PurchaseDetailPage />}
                 />
                 <Route path="suppliers/:id" element={<SupplierDetailPage />} />
-                <Route path="exchanges" element={<ExchangesPage />} />
+                {/* Staff Analytics: exchange, pending items, phones sold (no cost / profit). */}
+                <Route path="staff-analytics" element={<AnalyticsMotionLayout />}>
+                  <Route index element={<StaffAnalyticsPage />} />
+                  <Route path="exchanges" element={<ExchangesPage />} />
+                  <Route path="pending-items" element={<AnalyticsPendingItemsPage />} />
+                </Route>
+                <Route path="exchanges" element={<Navigate to="/staff-analytics/exchanges" replace />} />
                 <Route element={<RequireAdmin />}>
                   {/* Analytics pages zoom in / out of each other. */}
                   <Route path="analytics" element={<AnalyticsMotionLayout />}>

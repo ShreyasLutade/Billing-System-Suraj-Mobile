@@ -23,6 +23,7 @@ import { startRecycleBinPurge } from "./services/recycleBin";
 import { recycleBinRouter } from "./routes/recycleBin";
 import { productReturnsRouter } from "./routes/productReturns";
 import { exchangesRouter } from "./routes/exchanges";
+import { salesRouter } from "./routes/sales";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
 import { ensurePhoneModelsSeeded } from "./services/phoneModels";
@@ -94,6 +95,7 @@ app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
 app.use("/api/recycle-bin", requireAuth, requireAdmin, recycleBinRouter);
 app.use("/api/returns", requireAuth, productReturnsRouter);
 app.use("/api/exchanges", requireAuth, exchangesRouter);
+app.use("/api/sales", requireAuth, salesRouter);
 
 if (!serveClient) {
   app.get("/", (_req, res) => {

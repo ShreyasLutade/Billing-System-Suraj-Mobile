@@ -516,6 +516,17 @@ async function loadReturns(dateFilter: ReturnType<typeof toDateFilter>) {
   };
 }
 
+/** Phones sold (and Replace / Return entries) in the period, newest first. */
+export async function loadSoldRows(dateFilter: ReturnType<typeof toDateFilter>) {
+  const [bills, returns] = await Promise.all([
+    loadPeriodBills(dateFilter),
+    loadReturns(dateFilter),
+  ]);
+  return [...mapPeriodBills(bills), ...returns.billRows].sort((a, b) =>
+    b.billDate.localeCompare(a.billDate),
+  );
+}
+
 async function analyzePeriod(
   billDateFilter: ReturnType<typeof toDateFilter>,
 ) {

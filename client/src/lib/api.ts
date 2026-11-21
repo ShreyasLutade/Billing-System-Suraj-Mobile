@@ -1,4 +1,5 @@
 import type {
+  StaffSalesSummary,
   MonthlyTrend,
   ExchangeMobilesSummary,
   AnalyticsCustomerPayoutsSummary,
@@ -292,6 +293,9 @@ export const api = {
       `/bills/${billId}/exchange-accessories`,
       { method: "PATCH", body: JSON.stringify(payload) },
     ),
+  /** Phones sold in a period with selling prices only (staff Analytics). */
+  listSales: (period: "today" | "yesterday" | "all") =>
+    request<{ data: StaffSalesSummary }>(`/sales?period=${encodeURIComponent(period)}`),
   /** Exchange mobiles taken in (staff and admin; no prices). */
   listExchangeMobiles: (period: "today" | "yesterday" | "all") =>
     request<{ data: ExchangeMobilesSummary }>(

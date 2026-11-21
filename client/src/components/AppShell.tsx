@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowDownUp,
   ArrowUp,
   BarChart3,
   FilePlus2,
@@ -103,10 +102,10 @@ export function AppShell() {
     { to: "/dues", label: "Dues", icon: Wallet },
     { to: "/stock", label: "Stock", icon: Package },
     { to: "/suppliers", label: "Suppliers", icon: Truck },
-    // Staff get Exchange (no prices) where admins have Analytics.
+    // Staff get their own Analytics (no cost / profit) where admins have theirs.
     isAdmin
       ? { to: "/analytics", label: "Analytics", icon: BarChart3 }
-      : { to: "/exchanges", label: "Exchange", icon: ArrowDownUp },
+      : { to: "/staff-analytics", label: "Analytics", icon: BarChart3 },
   ];
 
   function onMainNavClick() {

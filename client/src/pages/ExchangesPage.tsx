@@ -4,11 +4,11 @@ import { format } from "date-fns";
 import { ArrowDownUp, Search } from "lucide-react";
 import clsx from "clsx";
 import { PeriodChipRow } from "../components/PeriodFilter";
-import { EmptyState, LoadingBlock, SearchClearButton } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
-import { fromState } from "../lib/navMemory";
+import { fromState, readFromState } from "../lib/navMemory";
 import { api, formatStockUnitId } from "../lib/api";
 import type { ExchangeMobile, ExchangeMobilesSummary } from "../types";
 import { MIX, mixSurface } from "../lib/analyticsMix";
@@ -120,6 +120,9 @@ export function ExchangesPage() {
 
   return (
     <div>
+      <BackLink to={readFromState(location.state) ?? "/staff-analytics"} className="mb-3">
+        Back to analytics
+      </BackLink>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
