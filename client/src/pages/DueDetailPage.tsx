@@ -576,13 +576,19 @@ function Sheet({
   busy,
   onClose,
   children,
+  place = "bottom",
 }: {
   labelledBy: string;
   busy: boolean;
   onClose: () => void;
   children: ReactNode;
+  /** "top": card under the header, for sheets you type in. The keyboard
+   *  then opens below it, so iPhone never has to push the page up (iOS 26
+   *  sometimes doesn't put it back, leaving a blank area). */
+  place?: "top" | "bottom";
 }) {
-  const viewport = useVisualViewportStyle(true);
+  const top = place === "top";
+  const viewport = useVisualViewportStyle(!top);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const isPresent = useIsPresent();
 
@@ -593,6 +599,27 @@ function Sheet({
     const active = document.activeElement as HTMLElement | null;
     if (active && dialogRef.current?.contains(active)) active.blur();
   }, [isPresent]);
+
+  // Keyboard closed while the sheet stays open (e.g. tapping the date box):
+  // if iPhone left the page shifted, put it back once nobody is typing.
+  useEffect(() => {
+    let timer = 0;
+    const onFocusOut = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const el = document.activeElement;
+        const typing =
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLInputElement && !["date", "button", "checkbox", "radio"].includes(el.type));
+        if (!typing && (window.scrollX || window.scrollY)) window.scrollTo(0, 0);
+      }, 300);
+    };
+    document.addEventListener("focusout", onFocusOut, true);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("focusout", onFocusOut, true);
+    };
+  }, []);
 
   // After it's gone: iPhone can leave the page shifted / the old keyboard
   // area blank. The page itself never scrolls (only <main> does), so put it
@@ -618,8 +645,13 @@ function Sheet({
     typeof viewport?.height === "number" && viewport.height < window.innerHeight - 120;
   return (
     <motion.div
-      className="fixed inset-x-0 top-0 z-50 flex h-[100dvh] items-end justify-center bg-ink-950/45 sm:items-center sm:p-4"
-      style={viewport}
+      className={clsx(
+        "fixed inset-x-0 top-0 z-50 flex h-[100dvh] justify-center bg-ink-950/45 sm:items-center sm:p-4",
+        top
+          ? "items-start px-3 pt-[calc(env(safe-area-inset-top)+4.75rem)]"
+          : "items-end",
+      )}
+      style={top ? undefined : viewport}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -630,18 +662,27 @@ function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        initial={{ opacity: 0, y: 32 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: top ? -16 : 32, scale: top ? 0.98 : 1 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: top ? -12 : 24, scale: top ? 0.98 : 1 }}
         transition={{ type: "spring", stiffness: 420, damping: 36 }}
-        className="max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border border-b-0 border-white/70 bg-white px-4 pt-2 shadow-lift dark:border-white/10 dark:bg-surface-elevated sm:rounded-3xl sm:border-b sm:px-5 sm:pb-5 sm:pt-5"
-        style={{
-          paddingBottom: keyboardOpen ? 12 : "calc(16px + env(safe-area-inset-bottom))",
-        }}
+        className={clsx(
+          "w-full max-w-md overflow-y-auto overscroll-contain border border-white/70 bg-white shadow-lift dark:border-white/10 dark:bg-surface-elevated sm:rounded-3xl sm:border-b sm:px-5 sm:pb-5 sm:pt-5",
+          top
+            ? "max-h-[calc(100dvh-6rem)] rounded-3xl px-4 pb-4 pt-3.5"
+            : "max-h-full rounded-t-[28px] border-b-0 px-4 pt-2",
+        )}
+        style={
+          top
+            ? undefined
+            : { paddingBottom: keyboardOpen ? 12 : "calc(16px + env(safe-area-inset-bottom))" }
+        }
         onClick={(event) => event.stopPropagation()}
       >
-        {/* Grab handle (phones). */}
-        <div className="mx-auto mb-2.5 h-1 w-10 rounded-full bg-ink-900/15 dark:bg-white/20 sm:hidden" aria-hidden />
+        {/* Grab handle (phones, bottom sheet). */}
+        {top ? null : (
+          <div className="mx-auto mb-2.5 h-1 w-10 rounded-full bg-ink-900/15 dark:bg-white/20 sm:hidden" aria-hidden />
+        )}
         {children}
       </motion.div>
     </motion.div>
@@ -800,7 +841,7 @@ function GotSheet({
   }
 
   return (
-    <Sheet labelledBy="due-got-title" busy={saving} onClose={onClose}>
+    <Sheet labelledBy="due-got-title" busy={saving} onClose={onClose} place="top">
       <SheetHeader
         id="due-got-title"
         eyebrow="You got"
@@ -910,7 +951,7 @@ function GaveSheet({
   }
 
   return (
-    <Sheet labelledBy="due-gave-title" busy={saving} onClose={onClose}>
+    <Sheet labelledBy="due-gave-title" busy={saving} onClose={onClose} place="top">
       <SheetHeader
         id="due-gave-title"
         eyebrow="You gave"
@@ -1009,7 +1050,7 @@ function DateSheet({
   }
 
   return (
-    <Sheet labelledBy="due-date-title" busy={saving} onClose={onClose}>
+    <Sheet labelledBy="due-date-title" busy={saving} onClose={onClose} place="top">
       <SheetHeader
         id="due-date-title"
         eyebrow="Collect by"
