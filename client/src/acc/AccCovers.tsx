@@ -158,6 +158,9 @@ export function AccSegregatePage() {
     setDraftQty(1);
   }
 
+  /** Phone bottom-bar height: the Save bar docks right on top of it. */
+  const navH = useBottomNavHeight();
+
   /** Row being renamed and the name being typed. */
   const [renaming, setRenaming] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
@@ -366,13 +369,36 @@ export function AccSegregatePage() {
         ) : null}
       </ul>
 
-      <div className="acc-seg-save">
+      <div className={clsx("acc-seg-save", navH > 0 && "is-docked")} style={navH > 0 ? { bottom: navH } : undefined}>
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || left < 0}>
           {busy ? <Loader2 className="acc-spin" /> : <Check />} Save · {sorted} split{left > 0 ? `, ${left} left` : ""}
         </button>
       </div>
     </div>
   );
+}
+
+/** Height of the phone's bottom tab bar (0 when hidden, e.g. laptop or keyboard open). */
+function useBottomNavHeight() {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>(".babu-mobile-nav");
+    if (!nav) return;
+    // (fixed elements have no offsetParent, so check the style instead)
+    const read = () => setH(getComputedStyle(nav).display === "none" ? 0 : Math.round(nav.getBoundingClientRect().height));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(nav);
+    const mo = new MutationObserver(read);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", read);
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", read);
+    };
+  }, []);
+  return h;
 }
 
 function Stepper({ value, onChange, max, min = 1 }: { value: number; onChange: (v: number) => void; max: number; min?: number }) {

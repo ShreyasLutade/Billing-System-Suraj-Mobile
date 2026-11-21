@@ -12149,3 +12149,31 @@ html.dark .acc {
   background: var(--grad);
   color: #fff;
 }
+
+/* Split by model: Save bar docked to the bottom (on phones right above the tab bar) */
+.acc .acc-seg-save {
+  bottom: 0;
+  margin: 0 -18px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--a-line);
+  background: color-mix(in srgb, var(--a-card) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.acc .acc-seg-save.is-docked {
+  position: fixed;
+  right: 0;
+  left: 0;
+  z-index: 30;
+  margin: 0;
+}
+
+.acc .acc-seg-save .acc-btn {
+  min-height: 46px;
+  box-shadow: none;
+}
+
+/* room so the last row isn't hidden under the docked bar */
+.acc-page:has(.acc-seg-save.is-docked) {
+  padding-bottom: 70px;
+}
