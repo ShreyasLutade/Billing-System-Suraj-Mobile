@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { BackLink } from "../components/ui";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendChart, type TrendPoint } from "../components/TrendChart";
+import { HeroSparkles } from "../components/AnalyticsBackdrop";
 import { formatRupees } from "../lib/dueStatus";
 import { readFromState } from "../lib/navMemory";
 import { SPRING, riseIn } from "../lib/motion";
@@ -215,7 +216,7 @@ export function AnalyticsTrendPage() {
         <>
           {/* Selected month: swipe left / right to move. */}
           <motion.section
-            className="relative mb-3 touch-pan-y overflow-hidden rounded-[1.125rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_60%)] p-5 text-white shadow-lift"
+            className="fx-sheen relative mb-3 touch-pan-y overflow-hidden rounded-[1.125rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_60%)] p-5 text-white shadow-lift"
             variants={riseIn}
             initial="hidden"
             animate="show"
@@ -226,6 +227,7 @@ export function AnalyticsTrendPage() {
             onDragEnd={onSwipe}
             aria-label={`${monthLong(month.key)} figures`}
           >
+            <HeroSparkles />
             <div
               aria-hidden
               className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 animate-float rounded-full opacity-60"

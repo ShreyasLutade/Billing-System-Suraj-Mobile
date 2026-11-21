@@ -2443,3 +2443,216 @@ html.dark .trend-skeleton {
     transform: none;
   }
 }
+
+/* ------------------------------------------------------------------
+ * Analytics ambience: aurora lights, glowing motes, hero stars + sheen,
+ * touch spotlight. Transform / opacity only; off with reduced motion.
+ * ------------------------------------------------------------------ */
+.fx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fx-light {
+  position: absolute;
+  width: 95vmax;
+  height: 95vmax;
+  border-radius: 50%;
+  will-change: transform;
+}
+.fx-light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, var(--fx-color) 0%, transparent 62%);
+  animation: fx-drift var(--fx-time) ease-in-out infinite alternate;
+}
+.fx-light-amber {
+  top: -42vmax;
+  left: -38vmax;
+  --fx-color: rgba(255, 168, 0, 0.22);
+  --fx-time: 17s;
+}
+.fx-light-blue {
+  top: 18%;
+  right: -48vmax;
+  --fx-color: rgba(59, 130, 246, 0.13);
+  --fx-time: 21s;
+}
+.fx-light-teal {
+  top: 64%;
+  left: -44vmax;
+  --fx-color: rgba(20, 184, 166, 0.11);
+  --fx-time: 25s;
+}
+html.dark .fx-light-amber {
+  --fx-color: rgba(255, 168, 0, 0.15);
+}
+html.dark .fx-light-blue {
+  --fx-color: rgba(59, 130, 246, 0.22);
+}
+html.dark .fx-light-teal {
+  --fx-color: rgba(45, 212, 191, 0.14);
+}
+@keyframes fx-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6vmax, 4vmax, 0) scale(1.12);
+  }
+}
+
+.fx-motes {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.fx-mote {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d6 0%, rgba(255, 184, 0, 0.85) 45%, transparent 72%);
+  box-shadow: 0 0 6px 2px rgba(255, 184, 0, 0.3);
+  opacity: 0;
+  animation-name: fx-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+.fx-mote-near {
+  background: radial-gradient(circle, #ffffff 0%, rgba(147, 197, 253, 0.85) 45%, transparent 72%);
+  box-shadow: 0 0 8px 2px rgba(96, 165, 250, 0.3);
+}
+@keyframes fx-rise {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate3d(16px, -55vh, 0);
+  }
+  88% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(-12px, -112vh, 0);
+    opacity: 0;
+  }
+}
+
+/* Hero cards: slow aurora, twinkling stars, a light sweep now and then. */
+.fx-aurora {
+  position: absolute;
+  inset: -60%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    rgba(255, 168, 0, 0.14) 60deg,
+    transparent 120deg,
+    rgba(59, 130, 246, 0.16) 200deg,
+    transparent 260deg,
+    rgba(45, 212, 191, 0.12) 320deg,
+    transparent 360deg
+  );
+  animation: fx-spin 24s linear infinite;
+  will-change: transform;
+}
+@keyframes fx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fx-star {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 6px 2px rgba(255, 214, 102, 0.8),
+    0 0 14px 4px rgba(255, 168, 0, 0.3);
+  opacity: 0;
+  animation: fx-twinkle 5.5s ease-in-out infinite;
+}
+.fx-star-small {
+  width: 3px;
+  height: 3px;
+}
+@keyframes fx-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  45% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+.fx-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.13) 47%,
+    rgba(255, 255, 255, 0.04) 54%,
+    transparent 64%
+  );
+  transform: translateX(-130%);
+  animation: fx-sheen 11s cubic-bezier(0.22, 1, 0.36, 1) 1.3s infinite;
+  pointer-events: none;
+}
+@keyframes fx-sheen {
+  0% {
+    transform: translateX(-130%);
+  }
+  16%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+/* Soft spotlight that follows the finger / mouse on Analytics cards. */
+@media (hover: hover) {
+  .analytics-motion .interactive-card:hover {
+    background-image: radial-gradient(
+      240px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(255, 184, 0, 0.16),
+      transparent 65%
+    );
+  }
+}
+.analytics-motion .interactive-card.fx-lit {
+  background-image: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 184, 0, 0.18),
+    transparent 65%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-mote,
+  .fx-star,
+  .fx-aurora,
+  .fx-light::before {
+    animation: none;
+  }
+  .fx-mote,
+  .fx-star,
+  .fx-sheen::after {
+    display: none;
+  }
+}

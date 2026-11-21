@@ -56,6 +56,7 @@ import { MIX, mixSurface } from "../lib/analyticsMix";
 import { motion } from "framer-motion";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendCard } from "../components/TrendCard";
+import { HeroSparkles } from "../components/AnalyticsBackdrop";
 import { riseIn } from "../lib/motion";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -505,7 +506,8 @@ export function AnalyticsPage() {
             custom={0}
             className="mb-4 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
             {/* Hero — total collected + payment mix */}
-            <div className="relative overflow-hidden rounded-[1.125rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_55%)] p-6 text-white shadow-lift sm:p-7">
+            <div className="fx-sheen relative overflow-hidden rounded-[1.125rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_55%)] p-6 text-white shadow-lift sm:p-7">
+              <HeroSparkles />
               <div
                 aria-hidden
                 className="pointer-events-none absolute inset-0 opacity-50"

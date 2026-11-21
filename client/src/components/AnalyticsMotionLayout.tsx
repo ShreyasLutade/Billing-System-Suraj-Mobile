@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { AnalyticsBackdrop } from "./AnalyticsBackdrop";
 import { useLocation, useOutlet } from "react-router-dom";
 import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
 
@@ -47,8 +48,23 @@ export function AnalyticsMotionLayout() {
     shown.current = { pathname: location.pathname, depth, direction };
   }, [location.pathname, depth, direction]);
 
+  /** Spotlight on the card under the finger / mouse (see .fx-lit in CSS). */
+  function spotlight(event: ReactPointerEvent<HTMLDivElement>) {
+    const card = (event.target as Element).closest<HTMLElement>(".interactive-card");
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+    card.style.setProperty("--my", `${event.clientY - rect.top}px`);
+    if (event.type === "pointerdown") {
+      card.classList.add("fx-lit");
+      window.setTimeout(() => card.classList.remove("fx-lit"), 650);
+    }
+  }
+
   return (
     <MotionConfig reducedMotion="user">
+      <AnalyticsBackdrop />
+      <div onPointerMove={spotlight} onPointerDown={spotlight}>
       <AnimatePresence
         mode="wait"
         custom={direction}
@@ -72,6 +88,7 @@ export function AnalyticsMotionLayout() {
           {outlet}
         </motion.div>
       </AnimatePresence>
+      </div>
     </MotionConfig>
   );
 }
