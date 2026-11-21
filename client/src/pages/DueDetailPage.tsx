@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useIsPresent } from "framer-motion";
 import {
   ArrowLeft,
   CalendarDays,
@@ -583,6 +583,37 @@ function Sheet({
   children: ReactNode;
 }) {
   const viewport = useVisualViewportStyle(true);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const isPresent = useIsPresent();
+
+  // Closing: drop the keyboard first (✕ / Save tapped while typing), so the
+  // phone gives the screen back before the sheet goes away.
+  useEffect(() => {
+    if (isPresent) return;
+    const active = document.activeElement as HTMLElement | null;
+    if (active && dialogRef.current?.contains(active)) active.blur();
+  }, [isPresent]);
+
+  // After it's gone: iPhone can leave the page shifted / the old keyboard
+  // area blank. The page itself never scrolls (only <main> does), so put it
+  // back at the top and let fixed bars re-measure.
+  useEffect(
+    () => () => {
+      const reset = () => {
+        if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      };
+      reset();
+      window.setTimeout(reset, 120);
+      window.setTimeout(() => {
+        reset();
+        window.dispatchEvent(new Event("resize"));
+      }, 450);
+    },
+    [],
+  );
+
   const keyboardOpen =
     typeof viewport?.height === "number" && viewport.height < window.innerHeight - 120;
   return (
@@ -595,6 +626,7 @@ function Sheet({
       onClick={() => !busy && onClose()}
     >
       <motion.div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
