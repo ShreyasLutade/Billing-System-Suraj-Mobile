@@ -375,13 +375,23 @@ accCatalogRouter.post("/products/:id/adjust", async (req, res, next) => {
       .object({
         setTo: z.coerce.number().int().min(0).max(1_000_000),
         note: text(200),
+        /** From the product edit page: the quantity may also go up (a correction). */
+        edit: z.boolean().default(false),
       })
       .safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
     const product = await prisma.$transaction(async (tx) => {
       const current = await tx.accProduct.findUniqueOrThrow({ where: { id: req.params.id } });
       const delta = parsed.data.setTo - current.stockQty;
-      if (delta > 0) {
+      if (parsed.data.edit) {
+        // Pieces already split by phone model can't be more than the stock.
+        const split = await tx.accProductModel.aggregate({ where: { productId: current.id }, _sum: { qty: true } });
+        const splitQty = split._sum.qty ?? 0;
+        if (parsed.data.setTo < splitQty) {
+          throw Object.assign(new Error(`${splitQty} pieces are split by model. Lower the split first, then the quantity.`), { status: 400 });
+        }
+      }
+      if (delta > 0 && !parsed.data.edit) {
         throw Object.assign(new Error(`A correction can only lower stock. ${NO_DIRECT_STOCK}.`), { status: 400 });
       }
       if (delta !== 0) {
@@ -391,7 +401,7 @@ accCatalogRouter.post("/products/:id/adjust", async (req, res, next) => {
             kind: "ADJUST",
             qty: delta,
             unitCost: current.purchasePrice,
-            note: parsed.data.note || null,
+            note: parsed.data.note || (parsed.data.edit ? "Quantity edited" : null),
             createdByName: req.user?.name || null,
           },
         });

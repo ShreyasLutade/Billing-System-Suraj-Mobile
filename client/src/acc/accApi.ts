@@ -398,6 +398,8 @@ export const accApi = {
       body: JSON.stringify({ isFavourite }),
     }),
   adjustStock: (id: string, setTo: number, note: string) => post<AccProduct>(`/acc/products/${id}/adjust`, { setTo, note }),
+  /** Product edit page: set the quantity (up or down), logged as a correction. */
+  editStock: (id: string, setTo: number) => post<AccProduct>(`/acc/products/${id}/adjust`, { setTo, note: "", edit: true }),
   deleteProduct: (id: string) => apiRequest(`/acc/products/${id}`, { method: "DELETE" }),
   productHistory: (id: string) => apiRequest<{ data: AccStockMove[] }>(`/acc/products/${id}/history`),
   setProductModels: (id: string, models: AccModelQty[]) => put<AccProduct>(`/acc/products/${id}/models`, { models }),

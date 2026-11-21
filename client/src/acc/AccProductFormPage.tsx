@@ -45,6 +45,10 @@ export function AccProductFormPage() {
   const [busy, setBusy] = useState(false);
   const [newCategory, setNewCategory] = useState(false);
   const [loaded, setLoaded] = useState(!editing);
+  /** Edit page: quantity in stock (as typed) and what it was when opened. */
+  const [qty, setQty] = useState("");
+  const [origQty, setOrigQty] = useState(0);
+  const [splitQty, setSplitQty] = useState(0);
 
   const products = catalog?.products ?? [];
   const categories = catalog?.categories ?? [];
@@ -73,6 +77,9 @@ export function AccProductFormPage() {
       isFavourite: p.isFavourite,
     });
     setModel(p.model);
+    setQty(String(Math.max(p.stockQty, 0)));
+    setOrigQty(p.stockQty);
+    setSplitQty(p.models.reduce((a, m) => a + Math.max(m.qty, 0), 0));
     setLoaded(true);
   }, [editing, loaded, catalog, id, navigate]);
 
@@ -108,8 +115,18 @@ export function AccProductFormPage() {
     setBusy(true);
     try {
       if (editing) {
+        const nextQty = Math.floor(Number(qty));
+        if (qty.trim() === "" || !(nextQty >= 0)) {
+          toast("Enter the quantity in stock", { tone: "error" });
+          return;
+        }
+        if (nextQty < splitQty) {
+          toast(`${splitQty} pieces are split by model. Lower the split first.`, { tone: "error" });
+          return;
+        }
         // Keep a typed name; an empty one is rebuilt from the fields.
         await accApi.updateProduct(id!, { ...form, model });
+        if (nextQty !== Math.max(origQty, 0)) await accApi.editStock(id!, nextQty);
         toast("Product saved");
         void refreshCatalog();
         navigate("/acc/stock");
@@ -340,6 +357,34 @@ export function AccProductFormPage() {
               </span>
               <i aria-hidden />
             </button>
+            {editing ? (
+              <label className="acc-field acc-qty-field">
+                <span>Quantity in stock</span>
+                <span className="acc-qty-edit">
+                  <button type="button" onClick={() => setQty(String(Math.max(0, (Math.floor(Number(qty)) || 0) - 1)))} aria-label="One less">
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
+                    aria-label="Quantity in stock"
+                  />
+                  <button type="button" onClick={() => setQty(String((Math.floor(Number(qty)) || 0) + 1))} aria-label="One more">
+                    +
+                  </button>
+                </span>
+                <small>
+                  {Number(qty) !== Math.max(origQty, 0) && qty !== ""
+                    ? `Was ${Math.max(origQty, 0)} pcs → now ${Math.floor(Number(qty))} pcs (saved as a stock correction)`
+                    : splitQty
+                      ? `${splitQty} pcs are split by phone model`
+                      : "Pieces in the shop right now"}
+                </small>
+              </label>
+            ) : null}
             <div className="acc-form-grid">
               <label className="acc-field">
                 <span>Low stock alert at</span>
