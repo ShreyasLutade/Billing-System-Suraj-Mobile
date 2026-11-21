@@ -314,14 +314,15 @@ export function AnalyticsTrendPage() {
               </AnimatePresence>
             </div>
 
-            <div className="relative mt-4 grid grid-cols-3 gap-2 border-t border-white/10 pt-3 text-center">
+            <div className="relative mt-4 grid grid-cols-3 gap-2 border-t border-white/10 pt-3 text-center [&>div]:min-w-0">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">Profit</p>
                 <AnimatedNumber
                   value={month.profit}
-                  format={compactINR}
+                  format={formatRupees}
+                  fit
                   className={clsx(
-                    "mt-0.5 block font-display text-base font-bold tabular-nums",
+                    "mt-0.5 font-display text-base font-bold tabular-nums",
                     month.profit >= 0 ? "text-[#5CE0AE]" : "text-orange-300",
                   )}
                 />
@@ -343,8 +344,9 @@ export function AnalyticsTrendPage() {
                 </p>
                 <AnimatedNumber
                   value={metric === "phones" ? month.sales : month.phones}
-                  format={(v) => (metric === "phones" ? compactINR(v) : String(Math.round(v)))}
-                  className="mt-0.5 block font-display text-base font-bold tabular-nums"
+                  format={(v) => (metric === "phones" ? formatRupees(v) : String(Math.round(v)))}
+                  fit
+                  className="mt-0.5 font-display text-base font-bold tabular-nums"
                 />
               </div>
             </div>
@@ -459,17 +461,18 @@ export function AnalyticsTrendPage() {
           >
             {[
               { label: "12 months", value: total },
-              { label: "Avg / month", value: total / activeMonths },
+              { label: "Avg / month", value: Math.round(total / activeMonths) },
               { label: best ? `Best · ${monthShort(best.key)}` : "Best month", value: best ? metricValue(best, metric) : 0 },
             ].map((tile) => (
-              <div key={tile.label} className="due-card px-3 py-2.5">
+              <div key={tile.label} className="due-card min-w-0 px-3 py-2.5">
                 <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-400">
                   {tile.label}
                 </p>
                 <AnimatedNumber
                   value={tile.value}
-                  format={(v) => (metric === "phones" ? String(Math.round(v)) : compactINR(v))}
-                  className="mt-0.5 block font-display text-[17px] font-bold tabular-nums text-ink-900"
+                  format={(v) => (metric === "phones" ? String(Math.round(v)) : formatRupees(v))}
+                  fit
+                  className="mt-0.5 font-display text-[17px] font-bold tabular-nums text-ink-900"
                 />
               </div>
             ))}
@@ -484,7 +487,7 @@ export function AnalyticsTrendPage() {
             viewport={{ once: true, amount: 0.15 }}
             custom={0}
           >
-            <div className="grid grid-cols-[1.1fr_1fr_1fr_0.7fr] gap-2 border-b border-[#E7EAF0] px-3.5 py-2.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-400 dark:border-[rgb(var(--color-line))]">
+            <div className="grid grid-cols-[0.75fr_1.25fr_1.15fr_0.55fr] gap-2 border-b border-[#E7EAF0] px-3.5 py-2.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-400 dark:border-[rgb(var(--color-line))]">
               <span>Month</span>
               <span className="text-right">Sales</span>
               <span className="text-right">Profit</span>
@@ -497,7 +500,7 @@ export function AnalyticsTrendPage() {
                 <button
                   key={m.key}
                   type="button"
-                  className="relative grid w-full grid-cols-[1.1fr_1fr_1fr_0.7fr] gap-2 px-3.5 py-2.5 text-left text-[13px] tabular-nums"
+                  className="relative grid w-full grid-cols-[0.75fr_1.25fr_1.15fr_0.55fr] gap-2 px-3.5 py-2.5 text-left text-[12.5px] tabular-nums"
                   onClick={() => {
                     select(i);
                     document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -513,14 +516,16 @@ export function AnalyticsTrendPage() {
                   <span className={clsx("relative font-semibold", on ? "text-ink-900" : "text-ink-700")}>
                     {monthShort(m.key)} {m.key.slice(2, 4)}
                   </span>
-                  <span className="relative text-right font-semibold text-ink-900">{compactINR(m.sales)}</span>
+                  <span className="relative whitespace-nowrap text-right font-semibold text-ink-900">
+                    {formatRupees(m.sales)}
+                  </span>
                   <span
                     className={clsx(
-                      "relative text-right font-semibold",
+                      "relative whitespace-nowrap text-right font-semibold",
                       m.profit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
                     )}
                   >
-                    {compactINR(m.profit)}
+                    {formatRupees(m.profit)}
                   </span>
                   <span className="relative text-right text-ink-700">{m.phones}</span>
                 </button>

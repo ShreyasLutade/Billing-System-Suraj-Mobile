@@ -61,7 +61,6 @@ import { TrendCard } from "../components/TrendCard";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
 import { riseIn } from "../lib/motion";
 import { formatRupees } from "../lib/dueStatus";
-import { compactINR } from "../lib/trend";
 import { useTheme } from "../theme/ThemeContext";
 
 const AVATAR_COLORS = [
@@ -646,15 +645,16 @@ export function AnalyticsPage() {
                     ].map((tile) => (
                       <div
                         key={tile.label}
-                        className="rounded-xl border border-white/10 bg-white/[0.06] px-2.5 py-2"
+                        className="min-w-0 rounded-xl border border-white/10 bg-white/[0.06] px-2.5 py-2"
                       >
                         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
                           {tile.label}
                         </p>
                         <AnimatedNumber
                           value={tile.value}
-                          format={tile.count ? (v) => String(Math.round(v)) : compactINR}
-                          className={clsx("mt-0.5 block font-display text-[17px] font-bold tabular-nums", tile.tone)}
+                          format={tile.count ? (v) => String(Math.round(v)) : formatRupees}
+                          fit
+                          className={clsx("mt-0.5 font-display text-[17px] font-bold tabular-nums", tile.tone)}
                         />
                         {tile.note ? (
                           <p className="text-[10px] font-semibold text-white/50">{tile.note}</p>
