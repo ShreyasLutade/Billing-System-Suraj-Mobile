@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   format,
@@ -20,8 +27,10 @@ import {
   ChevronDown,
   Clock3,
   CreditCard,
-  Headphones,
+  ChevronRight,
+  HandCoins,
   MonitorSmartphone,
+  Package,
   PackageOpen,
   ShoppingBag,
 } from "lucide-react";
@@ -30,7 +39,7 @@ import {
   PeriodFilter,
   type AnalyticsPeriodValue,
 } from "../components/PeriodFilter";
-import { EmptyState, LoadingBlock, PageHeader } from "../components/ui";
+import { EmptyState, PageHeader } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
@@ -38,12 +47,19 @@ import { api, formatINR } from "../lib/api";
 import type { AnalyticsSummary } from "../types";
 import { fromState } from "../lib/navMemory";
 import {
+  analyticsCustomerPayoutsPath,
   analyticsExchangesPath,
   analyticsPaymentsPath,
   analyticsPurchasesPath,
   type PaymentMode,
 } from "../lib/analyticsNav";
 import { MIX, mixSurface } from "../lib/analyticsMix";
+import { motion } from "framer-motion";
+import { AnimatedNumber } from "../components/AnimatedNumber";
+import { TrendCard } from "../components/TrendCard";
+import { HeroSparkles } from "../components/AnalyticsBackdrop";
+import { riseIn } from "../lib/motion";
+import { formatRupees } from "../lib/money";
 import { useTheme } from "../theme/ThemeContext";
 
 const AVATAR_COLORS = [
@@ -116,6 +132,84 @@ function initials(name: string) {
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
+/** One plain sentence for the headline card. */
+function summarySentence(
+  period: string,
+  label: string,
+  collected: number,
+  bills: number,
+  profit: number,
+) {
+  const when =
+    period === "all"
+      ? "Since you started"
+      : period === "custom"
+        ? `From ${label}`
+        : label;
+  if (bills === 0) {
+    return period === "all" ? "No bills yet." : `${when}: no bills yet.`;
+  }
+  return `${when}, you collected ${formatRupees(collected)} from ${bills} bill${
+    bills === 1 ? "" : "s"
+  } and made ${formatRupees(profit)} profit.`;
+}
+
+/** Small uppercase heading above a group of cards. */
+function SectionTitle({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
+      {hint ? <span className="text-[11px] font-medium text-ink-400">{hint}</span> : null}
+    </div>
+  );
+}
+
+/** A tappable row in a grouped card: icon · title + detail · value › */
+function InsightRow({
+  to,
+  icon: Icon,
+  colors,
+  dark,
+  title,
+  sub,
+  value,
+  alert = false,
+}: {
+  to: string;
+  icon: typeof Clock3;
+  colors: (typeof MIX)[keyof typeof MIX];
+  dark: boolean;
+  title: string;
+  sub: string;
+  value: ReactNode;
+  alert?: boolean;
+}) {
+  const location = useLocation();
+  return (
+    <Link
+      to={to}
+      state={fromState(location)}
+      className="interactive-card-row flex min-h-[60px] items-center gap-3 border-b border-[#EEF1F5] px-4 py-2.5 last:border-b-0 dark:border-[rgb(var(--color-line))]"
+    >
+      <span
+        className="relative grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+        style={mixSurface(colors, dark)}
+      >
+        <Icon className="h-4 w-4" strokeWidth={2.2} />
+        {alert ? (
+          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#E5484D] ring-2 ring-white dark:ring-[rgb(var(--color-surface))]" />
+        ) : null}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-ink-900">{title}</span>
+        <span className="block truncate text-xs text-ink-500">{sub}</span>
+      </span>
+      <span className="shrink-0 text-right text-sm font-bold tabular-nums text-ink-900">{value}</span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" aria-hidden />
+    </Link>
+  );
+}
+
 function formatShare(value: number) {
   return `${value.toFixed(1)}%`;
 }
@@ -180,13 +274,31 @@ function periodDateRangeLabel(
   return null;
 }
 
+/** Last summary shown, so coming back to Analytics shows it at once. */
+let lastSummary: { key: string; data: AnalyticsSummary } | null = null;
+
+/** Where the page was when a link on it was opened (cleared by the main nav). */
+const RETURN_KEY = "analytics.returnScroll";
+type ReturnScroll = { top: number; count: number };
+
+function readReturnScroll(): ReturnScroll | null {
+  try {
+    const raw = sessionStorage.getItem(RETURN_KEY);
+    return raw ? (JSON.parse(raw) as ReturnScroll) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The app's scrolling area (AppShell <main>). */
+function scroller() {
+  return document.querySelector("main");
+}
+
 export function AnalyticsPage() {
   const location = useLocation();
   const { theme } = useTheme();
   const dark = theme === "dark";
-  const [data, setData] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useSessionState<AnalyticsPeriodValue>(
     "analytics.period",
     "all",
@@ -196,6 +308,23 @@ export function AnalyticsPage() {
     "",
   );
   const [customTo, setCustomTo] = useSessionState("analytics.customTo", "");
+  const summaryKey = `${period}|${customFrom}|${customTo}`;
+  const [data, setData] = useState<AnalyticsSummary | null>(() =>
+    lastSummary?.key === summaryKey ? lastSummary.data : null,
+  );
+  const [loading, setLoading] = useState(() => lastSummary?.key !== summaryKey);
+  const [error, setError] = useState<string | null>(null);
+  const [returnScroll] = useState(readReturnScroll);
+  const restoredRef = useRef(false);
+
+  // Used once: a later visit (e.g. from the menu) starts at the top.
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(RETURN_KEY);
+    } catch {
+      // ignore
+    }
+  }, []);
   const [sortKey, setSortKey] = useSessionState<BillSortKey>(
     "analytics.sortKey",
     "date",
@@ -241,7 +370,10 @@ export function AnalyticsPage() {
     if (period === "custom" && !customRangeReady) return;
 
     let active = true;
-    setLoading(true);
+    // Same filter as last time: keep showing it and refresh quietly.
+    const cached = lastSummary?.key === summaryKey ? lastSummary.data : null;
+    if (cached) setData(cached);
+    else setLoading(true);
     (async () => {
       try {
         const response = await api.analytics(
@@ -254,6 +386,7 @@ export function AnalyticsPage() {
             : undefined,
         );
         if (active) {
+          lastSummary = { key: summaryKey, data: response.data };
           setData(response.data);
           setError(null);
         }
@@ -270,6 +403,8 @@ export function AnalyticsPage() {
     return () => {
       active = false;
     };
+    // summaryKey is built from period / customFrom / customTo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, customFrom, customTo, customRangeReady]);
 
   useEffect(() => {
@@ -301,7 +436,37 @@ export function AnalyticsPage() {
   const billsReveal = useInfiniteReveal(
     sortedBills,
     `${period}|${customFrom}|${customTo}|${sortKey}|${sortDir}|${sortedBills.length}`,
+    undefined,
+    returnScroll?.count,
   );
+
+  // Back from a bill (or any card) opened here: same place in the list.
+  useEffect(() => {
+    if (!returnScroll || restoredRef.current || !data || loading) return;
+    if (billsReveal.visibleCount < Math.min(returnScroll.count, sortedBills.length)) {
+      return;
+    }
+    restoredRef.current = true;
+    requestAnimationFrame(() => {
+      scroller()?.scrollTo({ top: returnScroll.top });
+    });
+  }, [returnScroll, data, loading, billsReveal.visibleCount, sortedBills.length]);
+
+  /** Remember the spot when a link on this page is opened. */
+  function rememberSpot(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!(event.target as Element).closest("a[href]")) return;
+    try {
+      sessionStorage.setItem(
+        RETURN_KEY,
+        JSON.stringify({
+          top: scroller()?.scrollTop ?? 0,
+          count: billsReveal.visibleCount,
+        } satisfies ReturnScroll),
+      );
+    } catch {
+      // Private mode / quota — ignore.
+    }
+  }
 
   const billTotals = useMemo(() => {
     return sortedBills.reduce(
@@ -388,7 +553,7 @@ export function AnalyticsPage() {
     : [];
 
   return (
-    <div>
+    <div onClickCapture={rememberSpot}>
       <PageHeader
         eyebrow="Insights"
         title="Analytics"
@@ -396,6 +561,7 @@ export function AnalyticsPage() {
       <div className="mb-5 sm:mb-6">
         <PeriodFilter
           allowCustom
+          pillId="analytics-period"
           value={period}
           onChange={setPeriod}
           customFrom={customFrom}
@@ -405,109 +571,113 @@ export function AnalyticsPage() {
         />
       </div>
 
-      {loading ? <LoadingBlock label="Calculating…" /> : null}
+      {loading ? (
+        <div className="space-y-3" aria-label="Loading analytics">
+          <div className="trend-skeleton h-[250px] rounded-[1.25rem]" />
+          <div className="trend-skeleton h-[300px] rounded-[20px]" />
+        </div>
+      ) : null}
       {error ? (
         <div className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</div>
       ) : null}
 
       {data && summary && !loading ? (
         <>
-          <section className="mb-4 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
-            {/* Hero — total collected + payment mix */}
-            <div className="relative overflow-hidden rounded-[1.125rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_55%)] p-6 text-white shadow-lift sm:p-7">
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 opacity-50"
-                style={{
-                  background:
-                    "radial-gradient(60% 90% at 92% 8%, rgba(26,186,255,.14), transparent 60%)",
-                }}
-              />
-              <div className="relative">
-                {/* Label left, date chip top-right — on one line, chip shrinks on phones. */}
-                <div className="flex items-start justify-between gap-2 sm:gap-3">
-                  <p className="min-w-0 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8EA0BC] sm:text-[11px] sm:tracking-[0.14em]">
-                    Total collected · {data.periodLabel.toLowerCase()}
-                  </p>
-                  {periodRangeLabel ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[12px]">
-                      <CalendarDays className="h-3 w-3 text-[#8EA0BC] sm:h-3.5 sm:w-3.5" aria-hidden />
-                      {periodRangeLabel}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-2.5 font-display text-[clamp(2.125rem,6vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
-                  {formatINR(summary.collected)}
-                </p>
-                <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
-                      Profit earned
+          <div className="lg:grid lg:grid-cols-[1.35fr_1fr] lg:items-start lg:gap-6">
+            <div>
+              {/* 1. Headline: money collected, in plain words */}
+              <motion.section
+                variants={riseIn}
+                initial="hidden"
+                animate="show"
+                custom={0}
+                className="fx-sheen relative mb-5 overflow-hidden rounded-[1.25rem] bg-[radial-gradient(120%_140%_at_0%_0%,#1B2740_0%,#0E1626_55%)] p-5 text-white shadow-lift sm:p-6"
+                aria-label="Summary"
+              >
+                <HeroSparkles />
+                <div className="relative">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="pt-0.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#8EA0BC] sm:text-[11px]">
+                      Money collected · {data.periodLabel.toLowerCase()}
                     </p>
-                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                      <p
-                        className={`font-display text-xl font-bold leading-none tabular-nums sm:text-2xl ${
-                          profitAmount >= 0
-                            ? "text-[#5CE0AE]"
-                            : "text-orange-300"
-                        }`}
-                      >
-                        {formatINR(profitAmount)}
-                      </p>
-                      {profitMarginPct != null ? (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
-                            profitMarginPct >= 0
-                              ? "bg-[#5CE0AE]/15 text-[#5CE0AE]"
-                              : "bg-orange-300/15 text-orange-300"
-                          }`}
-                          title="Profit as a share of mobile revenue"
-                        >
-                          {profitMarginPct >= 0 ? "+" : ""}
-                          {profitMarginPct.toFixed(1)}% margin
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
-                      Revenue
-                    </p>
-                    <p className="mt-1 font-display text-xl font-bold leading-none tabular-nums text-white sm:text-2xl">
-                      {formatINR(revenueAmount)}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#A9B6CC]">
-                  <span>
-                    Across{" "}
-                    <b className="font-semibold text-white">{summary.bills}</b>{" "}
-                    bill{summary.bills === 1 ? "" : "s"}
-                  </span>
-                  {change && data.vsPrevious.label ? (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span>
-                        <span
-                          className={
-                            change.up === true
-                              ? "font-semibold text-[#5CE0AE]"
-                              : change.up === false
-                                ? "font-semibold text-orange-300"
-                                : "font-semibold text-white"
-                          }
-                        >
-                          {change.text}
-                        </span>{" "}
-                        {data.vsPrevious.label}
+                    {periodRangeLabel ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 sm:text-[11.5px]">
+                        <CalendarDays className="h-3 w-3 text-[#8EA0BC]" aria-hidden />
+                        {periodRangeLabel}
                       </span>
-                    </>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 font-display text-[clamp(2.25rem,9vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
+                    <AnimatedNumber value={summary.collected} format={formatRupees} duration={1.3} />
+                  </p>
+                  {change && data.vsPrevious.label ? (
+                    <motion.span
+                      className={clsx(
+                        "mt-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-bold",
+                        change.up === true
+                          ? "bg-[#5CE0AE]/15 text-[#5CE0AE]"
+                          : change.up === false
+                            ? "bg-orange-300/15 text-orange-300"
+                            : "bg-white/10 text-white",
+                      )}
+                      initial={{ scale: 0.6, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 22, delay: 0.9 }}
+                    >
+                      {change.text} {data.vsPrevious.label}
+                    </motion.span>
                   ) : null}
-                </div>
+                  <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-[#C4CEDD]">
+                    {summarySentence(data.period, data.periodLabel, summary.collected, summary.bills, profitAmount)}
+                  </p>
 
-                <div className="mt-6">
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Sales", value: revenueAmount, tone: "text-white" },
+                      {
+                        label: "Profit",
+                        value: profitAmount,
+                        tone: profitAmount >= 0 ? "text-[#5CE0AE]" : "text-orange-300",
+                        note: profitMarginPct != null ? `${profitMarginPct.toFixed(1)}% margin` : null,
+                      },
+                      { label: "Bills", value: summary.bills, tone: "text-white", count: true },
+                    ].map((tile) => (
+                      <div
+                        key={tile.label}
+                        className="min-w-0 rounded-xl border border-white/10 bg-white/[0.06] px-2.5 py-2"
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
+                          {tile.label}
+                        </p>
+                        <AnimatedNumber
+                          value={tile.value}
+                          format={tile.count ? (v) => String(Math.round(v)) : formatRupees}
+                          fit
+                          className={clsx("mt-0.5 font-display text-[17px] font-bold tabular-nums", tile.tone)}
+                        />
+                        {tile.note ? (
+                          <p className="text-[10px] font-semibold text-white/50">{tile.note}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.section>
+
+              {/* 2. Where the money came from */}
+              <SectionTitle title="Where the money came from" hint="Tap for the bills" />
+              <motion.section
+                variants={riseIn}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.05 }}
+                custom={1}
+                className="due-card mb-6 overflow-hidden"
+                aria-label="Payment breakdown"
+              >
+                <div className="px-4 pb-1 pt-4">
                   <div
-                    className="flex h-3.5 overflow-hidden rounded-lg bg-white/10"
+                    className="flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-ink-900/[0.06] dark:bg-white/10"
                     role="img"
                     aria-label={`Payment mix: cash ${formatShare(shares?.cash ?? 0)}, online ${formatShare(shares?.online ?? 0)}, card ${formatShare(shares?.card ?? 0)}, finance ${formatShare(shares?.finance ?? 0)}, dues ${formatShare(shares?.due ?? 0)}`}
                   >
@@ -519,314 +689,257 @@ export function AnalyticsPage() {
                           style={{
                             width: `${seg.width}%`,
                             background: seg.color,
-                            animation:
-                              "analytics-mix-grow .9s cubic-bezier(.22,1,.36,1) forwards",
-                            animationDelay: `${0.05 + i * 0.09}s`,
+                            animation: "analytics-mix-grow .9s cubic-bezier(.22,1,.36,1) forwards",
+                            animationDelay: `${0.15 + i * 0.09}s`,
                           }}
                         />
                       ) : null,
                     )}
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-[#C4CEDD]">
-                    {(
-                      [
-                        ["Cash", MIX.cash.color, shares?.cash ?? 0],
-                        ["Online", MIX.online.color, shares?.online ?? 0],
-                        ["Card", MIX.card.color, shares?.card ?? 0],
-                        ["Finance", MIX.finance.color, shares?.finance ?? 0],
-                        ["Dues", MIX.due.color, shares?.due ?? 0],
-                      ] as const
-                    ).map(([label, color, share]) => (
-                      <div key={label} className="flex items-center gap-2">
-                        <span
-                          className="block h-2.5 w-2.5 shrink-0 rounded-[3px]"
-                          style={{ background: color }}
-                        />
-                        {label}{" "}
-                        <b className="font-semibold text-white">
-                          {formatShare(share)}
-                        </b>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              </div>
+                {kpis.map((kpi) => {
+                  const Icon = kpi.icon;
+                  return (
+                    <Link
+                      key={kpi.key}
+                      to={analyticsPaymentsPath(kpi.key as PaymentMode, period, customFrom, customTo)}
+                      state={fromState(location)}
+                      className="interactive-card-row flex min-h-[56px] items-center gap-3 border-b border-[#EEF1F5] px-4 py-2.5 last:border-b-0 dark:border-[rgb(var(--color-line))]"
+                    >
+                      <span
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+                        style={mixSurface(kpi.colors, dark)}
+                      >
+                        <Icon className="h-4 w-4" strokeWidth={2.2} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-ink-900">{kpi.name}</span>
+                          <AnimatedNumber
+                            value={kpi.value}
+                            format={formatRupees}
+                            className="shrink-0 text-sm font-bold tabular-nums text-ink-900"
+                          />
+                        </span>
+                        <span className="mt-1.5 flex items-center gap-2">
+                          <span className="h-1 flex-1 overflow-hidden rounded-full bg-ink-900/[0.06] dark:bg-white/10">
+                            <motion.span
+                              className="block h-full rounded-full"
+                              style={{ background: kpi.colors.color, originX: 0 }}
+                              initial={{ scaleX: 0 }}
+                              whileInView={{ scaleX: Math.min(kpi.share, 100) / 100 }}
+                              viewport={{ once: true }}
+                              transition={{ type: "spring", stiffness: 120, damping: 22, delay: 0.2 }}
+                            />
+                          </span>
+                          <span className="w-11 shrink-0 text-right text-[11px] font-semibold tabular-nums text-ink-500">
+                            {formatShare(kpi.share)}
+                          </span>
+                        </span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" aria-hidden />
+                    </Link>
+                  );
+                })}
+              </motion.section>
             </div>
 
-            {/* Outstanding + stock */}
-            <div className="relative flex flex-col overflow-hidden rounded-[1.125rem] border border-ink-100/80 bg-white/90 p-6 shadow-soft">
-              <div
-                aria-hidden
-                className="absolute bottom-0 left-0 top-0 w-1"
-                style={{ background: MIX.due.color }}
-              />
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
-                Total outstanding
-              </p>
-              <p className="mt-3.5 font-display text-[2.375rem] font-bold leading-none tracking-tight text-ink-900 tabular-nums">
-                {formatINR(data.outstandingDue.amount)}
-              </p>
-              <span
-                className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={mixSurface(MIX.due, dark)}
+            <div>
+              {/* 3. Trend */}
+              <SectionTitle title="Trend" />
+              <motion.section
+                variants={riseIn}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.05 }}
+                custom={2}
+                className="mb-6"
+                aria-label="Monthly trend"
               >
-                ● Pending across {data.outstandingDue.count} bill
-                {data.outstandingDue.count === 1 ? "" : "s"}
-              </span>
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-ink-100 pt-4 text-[13px] text-ink-500">
-                <span>
-                  {data.outstandingDue.oldestDueDays != null
-                    ? `Oldest due · ${data.outstandingDue.oldestDueDays} day${data.outstandingDue.oldestDueDays === 1 ? "" : "s"}`
-                    : "No overdue yet"}
-                </span>
-                <Link
+                <TrendCard />
+              </motion.section>
+
+              {/* 4. Needs attention */}
+              <SectionTitle title="Needs attention" />
+              <motion.section
+                variants={riseIn}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.05 }}
+                custom={3}
+                className="due-card mb-6 overflow-hidden"
+                aria-label="Needs attention"
+              >
+                <InsightRow
                   to="/dues"
-                  state={fromState(location)}
-                  className="font-semibold text-ink-900 transition hover:text-[#B76E00]"
-                >
-                  Collect now →
-                </Link>
+                  icon={Clock3}
+                  colors={MIX.due}
+                  dark={dark}
+                  title="Customer dues"
+                  alert={data.outstandingDue.amount > 0}
+                  sub={
+                    data.outstandingDue.count > 0
+                      ? `${data.outstandingDue.count} bill${data.outstandingDue.count === 1 ? "" : "s"}${
+                          data.outstandingDue.oldestDueDays != null
+                            ? ` · oldest ${data.outstandingDue.oldestDueDays} day${data.outstandingDue.oldestDueDays === 1 ? "" : "s"}`
+                            : ""
+                        }`
+                      : "Nothing pending"
+                  }
+                  value={<AnimatedNumber value={data.outstandingDue.amount} format={formatRupees} />}
+                />
+                <InsightRow
+                  to="/analytics/pending-items"
+                  icon={PackageOpen}
+                  colors={MIX.due}
+                  dark={dark}
+                  title="Pending items"
+                  alert={(pendingItems?.itemCount ?? 0) > 0}
+                  sub={
+                    pendingItems
+                      ? pendingItems.itemCount > 0
+                        ? `Box, charger, bill… from ${pendingItems.billCount} customer${pendingItems.billCount === 1 ? "" : "s"}`
+                        : "Nothing owed by customers"
+                      : "—"
+                  }
+                  value={pendingItems ? String(pendingItems.itemCount) : "—"}
+                />
+                <InsightRow
+                  to={analyticsCustomerPayoutsPath(period, customFrom, customTo)}
+                  icon={HandCoins}
+                  colors={MIX.due}
+                  dark={dark}
+                  title="Money given back"
+                  sub={`${data.customerPayouts?.count ?? 0} time${(data.customerPayouts?.count ?? 0) === 1 ? "" : "s"} · ${data.periodLabel.toLowerCase()}`}
+                  value={<AnimatedNumber value={data.customerPayouts?.value ?? 0} format={formatRupees} />}
+                />
+              </motion.section>
+
+              {/* 5. Stock & buying */}
+              <SectionTitle title="Stock & buying" />
+              <motion.section
+                variants={riseIn}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.05 }}
+                custom={4}
+                className="due-card mb-6 overflow-hidden"
+                aria-label="Stock and buying"
+              >
+                <InsightRow
+                  to="/stock"
+                  icon={Package}
+                  colors={MIX.online}
+                  dark={dark}
+                  title="Stock on hand"
+                  sub={`${data.stockOnHand?.count ?? 0} mobile${(data.stockOnHand?.count ?? 0) === 1 ? "" : "s"} available`}
+                  value={<AnimatedNumber value={data.stockOnHand?.value ?? 0} format={formatRupees} />}
+                />
+                <InsightRow
+                  to={analyticsPurchasesPath(period, customFrom, customTo)}
+                  icon={ShoppingBag}
+                  colors={MIX.purchase}
+                  dark={dark}
+                  title="Bought from suppliers"
+                  sub={`${data.purchaseHistory?.count ?? 0} mobile${(data.purchaseHistory?.count ?? 0) === 1 ? "" : "s"} · ${data.periodLabel.toLowerCase()}`}
+                  value={<AnimatedNumber value={data.purchaseHistory?.value ?? 0} format={formatRupees} />}
+                />
+                <InsightRow
+                  to={analyticsExchangesPath(period, customFrom, customTo)}
+                  icon={ArrowDownUp}
+                  colors={MIX.exchange}
+                  dark={dark}
+                  title="Exchange mobiles taken"
+                  sub={`${data.exchangeIntake?.count ?? 0} unit${(data.exchangeIntake?.count ?? 0) === 1 ? "" : "s"} · ${data.periodLabel.toLowerCase()}`}
+                  value={<AnimatedNumber value={data.exchangeIntake?.value ?? 0} format={formatRupees} />}
+                />
+              </motion.section>
+
+              {/* 6. What sold: phones vs accessories */}
+              <SectionTitle title="What sold" />
+              <motion.section
+                variants={riseIn}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.05 }}
+                custom={5}
+                className="due-card mb-6 px-4 py-3.5"
+                aria-label="What sold"
+              >
+                {(() => {
+                  const phones = Math.max(revenueAmount, 0);
+                  const accessories = Math.max(summary.accessoriesRevenue ?? 0, 0);
+                  const total = phones + accessories;
+                  const phoneShare = total > 0 ? (phones / total) * 100 : 0;
+                  return (
+                    <>
+                      <div className="flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-ink-900/[0.06] dark:bg-white/10">
+                        {total > 0 ? (
+                          <>
+                            <motion.span
+                              className="block h-full"
+                              style={{ width: `${phoneShare}%`, background: MIX.online.color, originX: 0 }}
+                              initial={{ scaleX: 0 }}
+                              whileInView={{ scaleX: 1 }}
+                              viewport={{ once: true }}
+                              transition={{ type: "spring", stiffness: 120, damping: 22, delay: 0.15 }}
+                            />
+                            <motion.span
+                              className="block h-full"
+                              style={{ width: `${100 - phoneShare}%`, background: MIX.finance.color, originX: 0 }}
+                              initial={{ scaleX: 0 }}
+                              whileInView={{ scaleX: 1 }}
+                              viewport={{ once: true }}
+                              transition={{ type: "spring", stiffness: 120, damping: 22, delay: 0.3 }}
+                            />
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">
+                            <span className="h-2 w-2 rounded-[3px]" style={{ background: MIX.online.color }} />
+                            Phones
+                          </p>
+                          <AnimatedNumber
+                            value={phones}
+                            format={formatRupees}
+                            className="mt-0.5 block font-display text-lg font-bold tabular-nums text-ink-900"
+                          />
+                          <p className="text-[11.5px] text-ink-500">
+                            {total > 0 ? `${phoneShare.toFixed(0)}% of sales` : "No sales"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">
+                            <span className="h-2 w-2 rounded-[3px]" style={{ background: MIX.finance.color }} />
+                            Accessories
+                          </p>
+                          <AnimatedNumber
+                            value={accessories}
+                            format={formatRupees}
+                            className="mt-0.5 block font-display text-lg font-bold tabular-nums text-ink-900"
+                          />
+                          <p className="text-[11.5px] text-ink-500">
+                            {summary.accessoriesSold ?? 0} item{(summary.accessoriesSold ?? 0) === 1 ? "" : "s"} sold
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </motion.section>
+            </div>
           </div>
-
-              <div className="mt-4 border-t border-ink-100 pt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
-                  Stock on hand
-                </p>
-                <div className="mt-3 flex items-end justify-between gap-3">
-                  <div>
-                    <p className="font-display text-2xl font-bold leading-none tracking-tight text-ink-900 tabular-nums">
-                      {data.stockOnHand?.count ?? 0}
-                    </p>
-                    <p className="mt-1 text-[13px] text-ink-500">
-                      mobile{(data.stockOnHand?.count ?? 0) === 1 ? "" : "s"}{" "}
-                      available
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-                      Total value
-                    </p>
-                    <p className="mt-1 font-display text-lg font-bold tabular-nums text-ink-900">
-                      {formatINR(data.stockOnHand?.value ?? 0)}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Link
-                    to="/stock"
-                    className="text-[13px] font-semibold text-ink-900 transition hover:text-tide-600"
-                  >
-                    View stock →
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* KPI cards */}
-          <section
-            className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-8 sm:gap-4 xl:grid-cols-5"
-            aria-label="Payment breakdown"
-          >
-            {kpis.map((kpi, index) => {
-              const Icon = kpi.icon;
-              const to = analyticsPaymentsPath(
-                kpi.key as PaymentMode,
-                period,
-                customFrom,
-                customTo,
-              );
-              return (
-                <Link
-                  key={kpi.key}
-                  to={to}
-                  state={fromState(location)}
-                  className={clsx(
-                    "interactive-card group rounded-2xl border border-ink-100/80 bg-white/90 p-3 shadow-soft sm:p-5",
-                    // Odd one out spans the row on 2-column layouts.
-                    index === kpis.length - 1 &&
-                      kpis.length % 2 === 1 &&
-                      "col-span-2 xl:col-span-1",
-                  )}
-                >
-                  <div className="mb-2 flex items-center justify-between sm:mb-4">
-                    <div
-                      className="grid h-7 w-7 place-items-center rounded-[8px] sm:h-[34px] sm:w-[34px] sm:rounded-[10px]"
-                      style={mixSurface(kpi.colors, dark)}
-                    >
-                      <Icon className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" strokeWidth={2.25} />
-                    </div>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[11px] font-bold sm:px-2.5 sm:text-xs"
-                      style={mixSurface(kpi.colors, dark)}
-                    >
-                      {formatShare(kpi.share)}
-                    </span>
-                  </div>
-                  <p className="mb-0.5 truncate text-[11.5px] font-medium text-ink-500 sm:mb-1 sm:text-[12.5px]">
-                    {kpi.name}
-                  </p>
-                  <p className="font-display text-[1.05rem] font-bold leading-tight tracking-tight text-ink-900 tabular-nums sm:text-2xl">
-                    {formatINR(kpi.value)}
-                  </p>
-                </Link>
-              );
-            })}
-          </section>
-
-          <section className="mb-6" aria-label="Pending items">
-            <Link
-              to="/analytics/pending-items"
-              state={fromState(location)}
-              className={clsx(
-                "interactive-card group flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-soft",
-                (pendingItems?.itemCount ?? 0) > 0
-                  ? "border-amber-200 bg-amber-50/80 dark:border-amber-500/30 dark:bg-amber-500/10"
-                  : "border-ink-100/80 bg-white/90",
-              )}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                  <PackageOpen className="h-4 w-4" strokeWidth={2.2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-                    Pending items
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-display text-lg font-bold tabular-nums text-ink-900">
-                      {pendingItems ? pendingItems.itemCount : "—"}
-                    </span>
-                    <span className="text-xs text-ink-500">
-                      {pendingItems
-                        ? pendingItems.itemCount > 0
-                          ? `· box, charger, bill… from ${pendingItems.billCount} customer${pendingItems.billCount === 1 ? "" : "s"}`
-                          : "· nothing owed by customers"
-                        : ""}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <span className="shrink-0 text-xs font-semibold text-ink-500 transition group-hover:text-tide-600">
-                View →
-              </span>
-            </Link>
-          </section>
-
-          <section className="mb-6" aria-label="Exchange mobiles">
-            <Link
-              to={analyticsExchangesPath(period, customFrom, customTo)}
-              state={fromState(location)}
-              className="interactive-card group flex items-center justify-between gap-3 rounded-2xl border border-ink-100/80 bg-white/90 px-4 py-3 shadow-soft"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
-                  style={mixSurface(MIX.exchange, dark)}
-                >
-                  <ArrowDownUp className="h-4 w-4" strokeWidth={2.2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-                    Exchange mobiles
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-display text-lg font-bold tabular-nums text-ink-900">
-                      {formatINR(data.exchangeIntake?.value ?? 0)}
-                    </span>
-                    <span className="text-xs text-ink-500">
-                      · {data.exchangeIntake?.count ?? 0} unit
-                      {(data.exchangeIntake?.count ?? 0) === 1 ? "" : "s"} ·{" "}
-                      {data.periodLabel}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <span className="shrink-0 text-xs font-semibold text-ink-500 transition group-hover:text-tide-600">
-                View →
-              </span>
-            </Link>
-          </section>
-
-          <section className="mb-6" aria-label="Purchase history">
-            <Link
-              to={analyticsPurchasesPath(period, customFrom, customTo)}
-              state={fromState(location)}
-              className="interactive-card group flex items-center justify-between gap-3 rounded-2xl border border-ink-100/80 bg-white/90 px-4 py-3 shadow-soft"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
-                  style={mixSurface(MIX.purchase, dark)}
-                >
-                  <ShoppingBag className="h-4 w-4" strokeWidth={2.2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-400">
-                    Purchase history
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-display text-lg font-bold tabular-nums text-ink-900">
-                      {formatINR(data.purchaseHistory?.value ?? 0)}
-                    </span>
-                    <span className="text-xs text-ink-500">
-                      · {data.purchaseHistory?.count ?? 0} mobile
-                      {(data.purchaseHistory?.count ?? 0) === 1 ? "" : "s"} ·{" "}
-                      {data.periodLabel}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <span className="shrink-0 text-xs font-semibold text-ink-500 transition group-hover:text-tide-600">
-                View →
-              </span>
-            </Link>
-          </section>
-
-          <section
-            className="mb-6 overflow-hidden rounded-[1.125rem] border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-soft sm:mb-8 sm:p-6"
-            aria-label="Accessories revenue"
-          >
-            <div className="flex items-center justify-between gap-3 sm:gap-5">
-              <div className="flex min-w-0 items-center gap-2.5 sm:items-start sm:gap-3.5">
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] sm:h-11 sm:w-11 sm:rounded-[12px]"
-                  style={mixSurface(MIX.online, dark)}
-                >
-                  <Headphones className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.1} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-400 sm:text-[11px] sm:tracking-[0.14em]">
-                    Accessories revenue
-                  </p>
-                  <p className="mt-0.5 font-display text-lg font-bold leading-tight tracking-tight text-ink-900 tabular-nums sm:mt-1.5 sm:text-[clamp(1.5rem,4vw,2rem)] sm:leading-none">
-                    {formatINR(summary.accessoriesRevenue ?? 0)}
-                  </p>
-                  <p className="mt-2 hidden text-[13px] text-ink-500 sm:block">
-                    Cases, glass, chargers, earphones & more
-                  </p>
-                </div>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-400 sm:text-[11px] sm:tracking-[0.12em]">
-                  Items sold
-                </p>
-                <p className="mt-0.5 font-display text-lg font-bold tabular-nums text-ink-900 sm:mt-1.5 sm:text-2xl">
-                  {summary.accessoriesSold ?? 0}
-                </p>
-              </div>
-            </div>
-          </section>
 
           {/* Period bills */}
           <div className="mb-3.5 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="font-display text-[19px] font-semibold text-ink-900">
-                Bills · {data.periodLabel}
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-400">
+                Phones sold · {data.periodLabel.toLowerCase()}
               </h2>
-              <p className="mt-0.5 text-[13px] text-ink-500">
-                Mobile cost vs selling price. Exchange is not deducted; cashback
-                is included. Accessories are counted separately above.
+              <p className="mt-1 text-[13px] text-ink-500">
+                Cost, selling price and profit for each phone. Tap one to open the bill.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -947,7 +1060,13 @@ export function AnalyticsPage() {
               description="Bills created in the selected timeline will show here with cost and selling price."
             />
           ) : (
-            <section
+            <motion.section
+            variants={riseIn}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.05 }}
+            custom={4}
+           
               className="overflow-hidden rounded-2xl border border-ink-100/80 bg-white/90 shadow-soft"
               aria-label={`Bills for ${data.periodLabel}`}
             >
@@ -1127,7 +1246,7 @@ export function AnalyticsPage() {
                   </div>
                 </div>
               </div>
-            </section>
+            </motion.section>
           )}
         </>
       ) : null}

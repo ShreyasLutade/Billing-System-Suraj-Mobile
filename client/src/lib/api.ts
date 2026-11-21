@@ -1,4 +1,6 @@
 import type {
+  AnalyticsCustomerPayoutsSummary,
+  MonthlyTrend,
   AnalyticsExchangesSummary,
   AnalyticsPurchasesSummary,
   AnalyticsSummary,
@@ -445,6 +447,9 @@ export const api = {
       `/bills/${billId}/exchange-accessories`,
       { method: "PATCH", body: JSON.stringify(payload) },
     ),
+  /** Last 12 months, month by month and day by day (admin). */
+  analyticsMonthly: (months = 12) =>
+    request<{ data: MonthlyTrend }>(`/analytics/monthly?months=${months}`),
   analyticsExchanges: (
     period: string = "all",
     options?: { from?: string; to?: string },
@@ -474,6 +479,61 @@ export const api = {
     return request<{ data: AnalyticsPurchasesSummary }>(
       `/analytics/purchases?${params.toString()}`,
     );
+  },
+  analyticsCustomerPayouts: (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    return request<{ data: AnalyticsCustomerPayoutsSummary }>(
+      `/analytics/customer-payouts?${params.toString()}`,
+    );
+  },
+  /** Download the "money given to customers" list as a PDF. */
+  downloadCustomerPayoutsPdf: async (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/analytics/customer-payouts/pdf?${params.toString()}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download PDF";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "money-given-to-customers.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   },
   listFinanceCompanies: () =>
     request<{ data: FinanceCompany[] }>("/finance-companies"),

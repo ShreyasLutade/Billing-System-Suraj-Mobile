@@ -220,6 +220,10 @@ export type AnalyticsSummary = {
     count: number;
     value: number;
   };
+  customerPayouts?: {
+    count: number;
+    value: number;
+  };
   /** Sales, plus Replace / Return entries made in the period. */
   periodBills: Array<{
     /** Bill to open. */
@@ -313,6 +317,56 @@ export type AnalyticsPurchasesSummary = {
   count: number;
   totalValue: number;
   items: AnalyticsPurchaseItem[];
+};
+
+/** One day (or month) of the Analytics monthly trend. */
+export type TrendTotals = {
+  sales: number;
+  profit: number;
+  collected: number;
+  bills: number;
+  phones: number;
+};
+
+export type TrendMonth = TrendTotals & {
+  /** "2026-11" */
+  key: string;
+  days: Array<TrendTotals & { date: string }>;
+};
+
+export type MonthlyTrend = {
+  /** India date today, "2026-11-21". */
+  today: string;
+  /** Oldest first, the current month last. */
+  months: TrendMonth[];
+};
+
+/** Money given back to a customer (Analytics → Money given to customers). */
+export type AnalyticsCustomerPayout = {
+  id: string;
+  /** Bill to open; null when the bill no longer exists. */
+  billId: string | null;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  date: string;
+  /** EXCHANGE: cash return / extra exchange value. RETURN: refund for a returned item. */
+  reason: "EXCHANGE" | "RETURN";
+  cashReturn: number;
+  extraExchange: number;
+  amount: number;
+  method: "cash" | "online" | null;
+  detail: string;
+};
+
+export type AnalyticsCustomerPayoutsSummary = {
+  period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
+  periodLabel: string;
+  from: string | null;
+  to: string | null;
+  count: number;
+  totalAmount: number;
+  items: AnalyticsCustomerPayout[];
 };
 
 export type FinanceCompany = {

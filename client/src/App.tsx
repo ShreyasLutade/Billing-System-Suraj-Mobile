@@ -9,6 +9,9 @@ import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
 import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
 import { AnalyticsPendingItemsPage } from "./pages/AnalyticsPendingItemsPage";
+import { AnalyticsTrendPage } from "./pages/AnalyticsTrendPage";
+import { AnalyticsCustomerPayoutsPage } from "./pages/AnalyticsCustomerPayoutsPage";
+import { AnalyticsMotionLayout } from "./components/AnalyticsMotionLayout";
 import { BackupPage } from "./pages/BackupPage";
 import { RecycleBinPage } from "./pages/RecycleBinPage";
 import { ManageUsersPage } from "./pages/ManageUsersPage";
@@ -130,23 +133,22 @@ export default function App() {
                   <Route element={<RequireAdmin />}>
                     <Route path="suppliers/:id/statement" element={<SupplierStatementPage />} />
                     <Route path="bills/replace" element={<ReplaceProductPage />} />
-                    <Route path="analytics" element={<AnalyticsPage />} />
-                    <Route
-                      path="analytics/payments"
-                      element={<AnalyticsPaymentsPage />}
-                    />
-                    <Route
-                      path="analytics/exchanges"
-                      element={<AnalyticsExchangesPage />}
-                    />
-                    <Route
-                      path="analytics/purchases"
-                      element={<AnalyticsPurchasesPage />}
-                    />
-                    <Route
-                      path="analytics/pending-items"
-                      element={<AnalyticsPendingItemsPage />}
-                    />
+                    {/* Analytics pages zoom in / out of each other. */}
+                    <Route path="analytics" element={<AnalyticsMotionLayout />}>
+                      <Route index element={<AnalyticsPage />} />
+                      <Route path="trend" element={<AnalyticsTrendPage />} />
+                      <Route path="payments" element={<AnalyticsPaymentsPage />} />
+                      <Route path="exchanges" element={<AnalyticsExchangesPage />} />
+                      <Route path="purchases" element={<AnalyticsPurchasesPage />} />
+                      <Route
+                        path="customer-payouts"
+                        element={<AnalyticsCustomerPayoutsPage />}
+                      />
+                      <Route
+                        path="pending-items"
+                        element={<AnalyticsPendingItemsPage />}
+                      />
+                    </Route>
                     <Route path="backup" element={<BackupPage />} />
                     <Route path="recycle-bin" element={<RecycleBinPage />} />
                     <Route path="users" element={<ManageUsersPage />} />

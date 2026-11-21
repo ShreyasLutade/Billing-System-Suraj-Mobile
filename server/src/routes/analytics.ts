@@ -8,6 +8,7 @@ import {
   subWeeks,
 } from "date-fns";
 import { prisma } from "../lib/prisma";
+import { endOfDayIST, istDateString } from "../lib/ist";
 import {
   getPeriodRange,
   isActivityPeriod,
@@ -19,6 +20,10 @@ import {
   type PeriodRange,
 } from "../lib/period";
 import { EXCHANGE_NOTE_PREFIX, RETURN_NOTE_PREFIX } from "../services/stockSync";
+import {
+  buildCustomerPayoutsPdf,
+  loadCustomerPayouts,
+} from "../services/customerPayouts";
 
 export const analyticsRouter = Router();
 
@@ -618,14 +623,19 @@ function previousComparableRange(
     const day = subDays(now, 2);
     return { from: startOfDay(day), to: endOfDay(day) };
   }
-  if (period === "week" && current.from && current.to) {
+  // This week / month only has data up to today, so compare it with the
+  // same days of the previous week / month (not the whole of it).
+  if (period === "week" && current.from) {
     return {
       from: subWeeks(current.from, 1),
-      to: subWeeks(current.to, 1),
+      to: endOfDay(subWeeks(now, 1)),
     };
   }
-  if (period === "month") {
-    return getPeriodRange("month", subMonths(now, 1));
+  if (period === "month" && current.from) {
+    return {
+      from: subMonths(current.from, 1),
+      to: endOfDay(subMonths(now, 1)),
+    };
   }
   return null;
 }
@@ -667,9 +677,9 @@ analyticsRouter.get("/summary", async (req, res, next) => {
         ).summary;
         const label =
           period === "month"
-            ? "vs last month"
+            ? "vs same days last month"
             : period === "week"
-              ? "vs last week"
+              ? "vs same days last week"
               : "vs prior day";
 
         const mixTotalChangePct = percentChange(
@@ -716,6 +726,9 @@ analyticsRouter.get("/summary", async (req, res, next) => {
       period === "all" ? undefined : billDateFilter,
     );
     const purchaseHistory = await loadPurchaseHistory(
+      period === "all" ? undefined : billDateFilter,
+    );
+    const customerPayouts = await loadCustomerPayouts(
       period === "all" ? undefined : billDateFilter,
     );
 
@@ -771,6 +784,10 @@ analyticsRouter.get("/summary", async (req, res, next) => {
         purchaseHistory: {
           count: purchaseHistory.count,
           value: purchaseHistory.totalValue,
+        },
+        customerPayouts: {
+          count: customerPayouts.count,
+          value: customerPayouts.totalAmount,
         },
         periodBills,
         paymentSources,
@@ -856,6 +873,158 @@ analyticsRouter.get("/purchases", async (req, res, next) => {
         items: history.items,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Period from ?period= or ?from=&to=, as the other analytics lists read it. */
+function readPeriodQuery(query: Record<string, unknown>) {
+  const customFrom = parseDayParam(query.from, false);
+  const customTo = parseDayParam(query.to, true);
+  const hasCustomRange = Boolean(customFrom || customTo);
+  const period: ActivityPeriod | "custom" = hasCustomRange
+    ? "custom"
+    : isActivityPeriod(query.period)
+      ? query.period
+      : "all";
+  const range: PeriodRange = hasCustomRange
+    ? { from: customFrom, to: customTo }
+    : getPeriodRange(period === "custom" ? "all" : period);
+  return {
+    period,
+    range,
+    dateFilter: period === "all" ? undefined : toDateFilter(range),
+    label:
+      period === "custom"
+        ? customPeriodLabel(customFrom, customTo)
+        : periodLabel(period),
+  };
+}
+
+/** Money given back to customers (exchange cash return / extra value, return refunds). */
+analyticsRouter.get("/customer-payouts", async (req, res, next) => {
+  try {
+    const { period, range, dateFilter, label } = readPeriodQuery(req.query);
+    const payouts = await loadCustomerPayouts(dateFilter);
+    res.json({
+      data: {
+        period,
+        periodLabel: label,
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+        count: payouts.count,
+        totalAmount: payouts.totalAmount,
+        items: payouts.items,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analyticsRouter.get("/customer-payouts/pdf", async (req, res, next) => {
+  try {
+    const { dateFilter, label } = readPeriodQuery(req.query);
+    const payouts = await loadCustomerPayouts(dateFilter);
+    const { pdf, filename } = await buildCustomerPayoutsPdf(payouts, label);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+type TrendTotals = {
+  sales: number;
+  profit: number;
+  collected: number;
+  bills: number;
+  phones: number;
+};
+
+function addTotals(into: TrendTotals, add: TrendTotals) {
+  into.sales = round2(into.sales + add.sales);
+  into.profit = round2(into.profit + add.profit);
+  into.collected = round2(into.collected + add.collected);
+  into.bills += add.bills;
+  into.phones += add.phones;
+}
+
+function emptyTotals(): TrendTotals {
+  return { sales: 0, profit: 0, collected: 0, bills: 0, phones: 0 };
+}
+
+/**
+ * Month-by-month (and day-by-day) trend for the last `months` months, by
+ * India date. Same maths as the summary: sales and profit include Replace /
+ * Return adjustments.
+ */
+analyticsRouter.get("/monthly", async (req, res, next) => {
+  try {
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const now = new Date();
+    const today = istDateString(now);
+    const [thisYear, thisMonth] = today.split("-").map(Number);
+    const monthKeys: string[] = [];
+    for (let i = months - 1; i >= 0; i -= 1) {
+      const d = new Date(Date.UTC(thisYear, thisMonth - 1 - i, 1));
+      monthKeys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+    }
+    const filter = {
+      gte: new Date(`${monthKeys[0]}-01T00:00:00.000+05:30`),
+      lte: endOfDayIST(now),
+    };
+
+    const [bills, returns] = await Promise.all([
+      loadPeriodBills(filter),
+      loadReturns(filter),
+    ]);
+
+    const billsByDay = new Map<string, BillRow[]>();
+    for (const bill of bills) {
+      const day = istDateString(bill.billDate);
+      billsByDay.set(day, [...(billsByDay.get(day) ?? []), bill]);
+    }
+    const returnsByDay = new Map<string, { sales: number; profit: number }>();
+    for (const row of returns.billRows) {
+      if (row.kind !== "RETURNED") continue;
+      const day = istDateString(new Date(row.billDate));
+      const acc = returnsByDay.get(day) ?? { sales: 0, profit: 0 };
+      acc.sales += row.sellingPrice;
+      acc.profit += row.profit;
+      returnsByDay.set(day, acc);
+    }
+
+    const result = monthKeys.map((key) => {
+      const [year, month] = key.split("-").map(Number);
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const total = emptyTotals();
+      const days: Array<TrendTotals & { date: string }> = [];
+      for (let d = 1; d <= daysInMonth; d += 1) {
+        const date = `${key}-${String(d).padStart(2, "0")}`;
+        if (date > today) break;
+        const dayBills = billsByDay.get(date) ?? [];
+        const adjust = returnsByDay.get(date) ?? { sales: 0, profit: 0 };
+        const summary = summarizeBills(dayBills);
+        const totals: TrendTotals = {
+          sales: round2(summary.sales + adjust.sales),
+          profit: round2(summary.profit + adjust.profit),
+          collected: summary.collected,
+          bills: summary.bills,
+          phones: dayBills.reduce(
+            (sum, bill) => sum + bill.items.filter(isStockMobile).length,
+            0,
+          ),
+        };
+        addTotals(total, totals);
+        days.push({ date, ...totals });
+      }
+      return { key, ...total, days };
+    });
+
+    res.json({ data: { today, months: result } });
   } catch (error) {
     next(error);
   }

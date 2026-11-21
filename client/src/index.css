@@ -3753,3 +3753,356 @@ html.kbd-nav :focus {
   outline: 2.5px solid #3b82f6 !important;
   outline-offset: -2.5px !important;
 }
+
+/* ------------------------------------------------------------------
+ * Cards used by Analytics (white card, optional coloured left stripe).
+ * ------------------------------------------------------------------ */
+/* Card with a coloured stripe on the left (set --due-accent). */
+.due-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid #e7eaf0;
+  background: #fff;
+  box-shadow: 0 6px 16px -8px rgba(11, 31, 51, 0.14);
+}
+html.dark .due-card {
+  border-color: rgb(var(--color-line));
+  background: rgb(var(--color-surface));
+  box-shadow: none;
+}
+/* Overdue dues: red tint, as on the old Dues page. */
+.due-card.due-card-overdue,
+html.dark .due-card.due-card-overdue {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.2);
+}
+.due-card-stripe::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--due-accent, #c9d0db);
+  z-index: 1;
+}
+
+/* Part-paid due: green fill up to the paid share, with a soft shine. */
+.due-paid-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Solid, so it reads green on red (overdue) cards too. */
+  background: linear-gradient(90deg, #e3f8ef, #c4eedb);
+  box-shadow: inset -2px 0 0 #34d399;
+  transition: width 0.4s ease;
+}
+.due-paid-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: translateX(-110%);
+  animation: due-paid-shine 3s ease-in-out infinite;
+}
+html.dark .due-paid-fill {
+  background: linear-gradient(90deg, #10302b, #12483a);
+  box-shadow: inset -2px 0 0 #10b981;
+}
+html.dark .due-paid-fill::after {
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+@keyframes due-paid-shine {
+  0% {
+    transform: translateX(-110%);
+  }
+  55%,
+  100% {
+    transform: translateX(230%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .due-paid-fill::after {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Analytics motion + monthly trend chart.
+ * Chart colours validated for colour-blind separation (light & dark).
+ * Glows use Babu blue (#1abaff) and indigo (#5d73b6).
+ * ------------------------------------------------------------------ */
+:root {
+  --trend-sales: #2a78d6;
+  --trend-sales-soft: rgba(42, 120, 214, 0.22);
+  --trend-profit: #1baf7a;
+  --trend-grid: #eef1f5;
+  --trend-axis: #c9d0db;
+  --trend-surface: #ffffff;
+}
+html.dark {
+  --trend-sales: #3987e5;
+  --trend-sales-soft: rgba(57, 135, 229, 0.28);
+  --trend-profit: #199e70;
+  --trend-grid: rgb(var(--color-line));
+  --trend-axis: rgb(var(--color-line-strong));
+  --trend-surface: rgb(var(--color-surface));
+}
+
+.trend-skeleton {
+  background: linear-gradient(100deg, rgba(11, 31, 51, 0.05) 30%, rgba(11, 31, 51, 0.11) 50%, rgba(11, 31, 51, 0.05) 70%);
+  background-size: 220% 100%;
+  animation: trend-shimmer 1.3s ease-in-out infinite;
+}
+html.dark .trend-skeleton {
+  background-image: linear-gradient(100deg, rgba(255, 255, 255, 0.04) 30%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 70%);
+}
+@keyframes trend-shimmer {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+/* Analytics cards press in under the finger and lift a little on hover. */
+.analytics-motion .interactive-card {
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    background-color 0.2s ease;
+}
+.analytics-motion .interactive-card:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .analytics-motion .interactive-card:hover {
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trend-skeleton {
+    animation: none;
+  }
+  .analytics-motion .interactive-card:active,
+  .analytics-motion .interactive-card:hover {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Analytics ambience: aurora lights, glowing motes, hero stars + sheen,
+ * touch spotlight. Transform / opacity only; off with reduced motion.
+ * ------------------------------------------------------------------ */
+/* Babu: the layer sits inside <main>, behind its content. */
+.fx-host {
+  isolation: isolate;
+}
+.fx-backdrop {
+  position: fixed;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fx-light {
+  position: absolute;
+  width: 95vmax;
+  height: 95vmax;
+  border-radius: 50%;
+  will-change: transform;
+}
+.fx-light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, var(--fx-color) 0%, transparent 62%);
+  animation: fx-drift var(--fx-time) ease-in-out infinite alternate;
+}
+.fx-light-amber {
+  top: -42vmax;
+  left: -38vmax;
+  --fx-color: rgba(26, 186, 255, 0.2);
+  --fx-time: 17s;
+}
+.fx-light-blue {
+  top: 18%;
+  right: -48vmax;
+  --fx-color: rgba(93, 115, 182, 0.16);
+  --fx-time: 21s;
+}
+.fx-light-teal {
+  top: 64%;
+  left: -44vmax;
+  --fx-color: rgba(20, 184, 166, 0.11);
+  --fx-time: 25s;
+}
+html.dark .fx-light-amber {
+  --fx-color: rgba(26, 186, 255, 0.14);
+}
+html.dark .fx-light-blue {
+  --fx-color: rgba(93, 115, 182, 0.26);
+}
+html.dark .fx-light-teal {
+  --fx-color: rgba(45, 212, 191, 0.14);
+}
+@keyframes fx-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6vmax, 4vmax, 0) scale(1.12);
+  }
+}
+
+.fx-motes {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.fx-mote {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e6f7ff 0%, rgba(26, 186, 255, 0.85) 45%, transparent 72%);
+  box-shadow: 0 0 6px 2px rgba(26, 186, 255, 0.3);
+  opacity: 0;
+  animation-name: fx-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+.fx-mote-near {
+  background: radial-gradient(circle, #ffffff 0%, rgba(165, 180, 252, 0.85) 45%, transparent 72%);
+  box-shadow: 0 0 8px 2px rgba(93, 115, 182, 0.35);
+}
+@keyframes fx-rise {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate3d(16px, -55vh, 0);
+  }
+  88% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(-12px, -112vh, 0);
+    opacity: 0;
+  }
+}
+
+/* Hero cards: slow aurora, twinkling stars, a light sweep now and then. */
+.fx-aurora {
+  position: absolute;
+  inset: -60%;
+  /* Soft blobs (no centre point) turning slowly. */
+  background:
+    radial-gradient(38% 32% at 30% 36%, rgba(59, 130, 246, 0.2), transparent 70%),
+    radial-gradient(34% 30% at 70% 64%, rgba(45, 212, 191, 0.14), transparent 70%),
+    radial-gradient(30% 28% at 66% 28%, rgba(26, 186, 255, 0.16), transparent 70%);
+  animation: fx-spin 24s linear infinite;
+  will-change: transform;
+}
+@keyframes fx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fx-star {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 6px 2px rgba(127, 207, 255, 0.8),
+    0 0 14px 4px rgba(26, 186, 255, 0.3);
+  opacity: 0;
+  animation: fx-twinkle 5.5s ease-in-out infinite;
+}
+.fx-star-small {
+  width: 3px;
+  height: 3px;
+}
+@keyframes fx-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  45% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+.fx-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.13) 47%,
+    rgba(255, 255, 255, 0.04) 54%,
+    transparent 64%
+  );
+  transform: translateX(-130%);
+  animation: fx-sheen 11s cubic-bezier(0.22, 1, 0.36, 1) 1.3s infinite;
+  pointer-events: none;
+}
+@keyframes fx-sheen {
+  0% {
+    transform: translateX(-130%);
+  }
+  16%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+/* Soft spotlight that follows the finger / mouse on Analytics cards. */
+@media (hover: hover) {
+  .analytics-motion .interactive-card:hover {
+    background-image: radial-gradient(
+      240px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(26, 186, 255, 0.14),
+      transparent 65%
+    );
+  }
+}
+.analytics-motion .interactive-card.fx-lit {
+  background-image: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(26, 186, 255, 0.16),
+    transparent 65%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-mote,
+  .fx-star,
+  .fx-aurora,
+  .fx-light::before {
+    animation: none;
+  }
+  .fx-mote,
+  .fx-star,
+  .fx-sheen::after {
+    display: none;
+  }
+}

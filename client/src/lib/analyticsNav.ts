@@ -45,3 +45,12 @@ export function analyticsPurchasesPath(
   const params = periodSearchParams(period, customFrom, customTo);
   return `/analytics/purchases?${params.toString()}`;
 }
+
+export function analyticsCustomerPayoutsPath(
+  period: AnalyticsPeriodValue,
+  customFrom = "",
+  customTo = "",
+) {
+  const params = periodSearchParams(period, customFrom, customTo);
+  return `/analytics/customer-payouts?${params.toString()}`;
+}
