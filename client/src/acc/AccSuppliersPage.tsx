@@ -823,7 +823,7 @@ export function AccStockInPage() {
                   <input type="checkbox" checked={prevOn} onChange={(e) => setPrevOn(e.target.checked)} />
                   <span>
                     <b>Add previous pending amount</b>
-                    <small>Money you already owed this supplier before this app (opening balance)</small>
+                    <small>Old due to this supplier</small>
                   </span>
                 </label>
                 {prevOn ? (

@@ -11997,9 +11997,11 @@ html.dark .acc {
 }
 
 .acc-prev-due-head small {
+  overflow: hidden;
   color: var(--a-muted);
   font-size: 12px;
-  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .acc-payment-result > span .acc-prev-due-split {
