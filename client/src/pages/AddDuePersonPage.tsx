@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { api, round2 } from "../lib/api";
 import { formatRupees } from "../lib/dueStatus";
+import { EntryDateChip, todayIST } from "../components/EntryDateChip";
 
 type Direction = "gave" | "got";
 type Method = "cash" | "online" | "na";
@@ -59,6 +60,7 @@ export function AddDuePersonPage() {
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [method, setMethod] = useState<Method>("cash");
+  const [entryDay, setEntryDay] = useState(todayIST);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [knownName, setKnownName] = useState<string | null>(null);
@@ -119,6 +121,7 @@ export function AddDuePersonPage() {
         method: direction === "got" ? method : undefined,
         note: note.trim() || null,
         dueDate: direction === "gave" && dueDate ? dueDate : null,
+        entryDate: entryDay,
       });
       (document.activeElement as HTMLElement | null)?.blur?.();
       const go = () =>
@@ -256,6 +259,14 @@ export function AddDuePersonPage() {
             {summary}
           </motion.p>
         </AnimatePresence>
+        <div className="relative mt-2.5">
+          <EntryDateChip
+            value={entryDay}
+            onChange={setEntryDay}
+            prefix={direction === "gave" ? "Given on" : "Got on"}
+            tone={direction}
+          />
+        </div>
       </section>
 
       {/* Person */}

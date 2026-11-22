@@ -20,6 +20,7 @@ import { useFixedBottomBar } from "../hooks/useFixedBottomBar";
 import { useVisualViewportStyle } from "../hooks/useVisualViewport";
 import { EmptyState, LoadingBlock, BackLink } from "../components/ui";
 import { WhatsAppIcon } from "../components/WhatsAppIcon";
+import { EntryDateChip, todayIST } from "../components/EntryDateChip";
 import { api, formatINR, round2 } from "../lib/api";
 import { formatRupees, initials, URGENCY_TONE, type DueUrgency } from "../lib/dueStatus";
 import { dueReminderLink } from "../lib/dueReminder";
@@ -925,6 +926,7 @@ function GotSheet({
 }) {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PayMethod | null>(null);
+  const [paidOn, setPaidOn] = useState(todayIST);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -949,6 +951,7 @@ function GotSheet({
         mode: "custom",
         method,
         amount: paid,
+        paidAt: paidOn,
       });
       await onSaved();
     } catch (err) {
@@ -994,6 +997,9 @@ function GotSheet({
                 : "Balance will be clear"}
       </p>
 
+      <div className="mb-2">
+        <EntryDateChip value={paidOn} onChange={setPaidOn} prefix="Got on" tone="got" />
+      </div>
       <div className="mt-1 grid grid-cols-3 gap-2">
         {METHODS.map((option) => (
           <button
@@ -1042,6 +1048,7 @@ function GaveSheet({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState(inputDate(due.settled ? null : due.dueDate));
+  const [givenOn, setGivenOn] = useState(todayIST);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1060,6 +1067,7 @@ function GaveSheet({
         amount: round2(value),
         note: note.trim() || null,
         dueDate: dueDate || null,
+        givenAt: givenOn,
       });
       onSaved(updated);
     } catch (err) {
@@ -1107,6 +1115,9 @@ function GaveSheet({
         )}
       </p>
 
+      <div className="mb-2">
+        <EntryDateChip value={givenOn} onChange={setGivenOn} prefix="Given on" tone="gave" />
+      </div>
       <div className="mt-1 grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
         <label className="min-w-0">
           <span className="mb-1 block text-[10.5px] font-bold uppercase tracking-[0.12em] text-ink-400">

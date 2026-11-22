@@ -840,6 +840,8 @@ export const api = {
       method: "cash" | "online" | "card" | "na";
       amount?: number;
       nextDueDate?: string | null;
+      /** Day it was received, YYYY-MM-DD (default today). */
+      paidAt?: string | null;
     },
   ) =>
     request<{ data: Bill }>(`/dues/${id}/settle`, {
@@ -855,6 +857,8 @@ export const api = {
     method?: "cash" | "online" | "card" | "na";
     note?: string | null;
     dueDate?: string | null;
+    /** Day it was given / received, YYYY-MM-DD (default today). */
+    entryDate?: string | null;
   }) =>
     request<{ data: CustomerDueDetail }>(`/dues/people`, {
       method: "POST",
@@ -863,7 +867,13 @@ export const api = {
   /** "You gave": add money given / owed on this due without a new bill. */
   addDueCharge: (
     id: string,
-    payload: { amount: number; note?: string | null; dueDate?: string | null },
+    payload: {
+      amount: number;
+      note?: string | null;
+      dueDate?: string | null;
+      /** Day it was given, YYYY-MM-DD (default today). */
+      givenAt?: string | null;
+    },
   ) =>
     request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}/charges`, {
       method: "POST",

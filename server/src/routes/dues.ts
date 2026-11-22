@@ -16,6 +16,7 @@ import {
 import { buildDueStatement, getCustomerDue } from "../services/customerDue";
 import { chargeBalance, splitDuePayment } from "../lib/dueCharges";
 import { upsertCustomerProfile } from "../services/customers";
+import { istDateString } from "../lib/ist";
 
 export const duesRouter = Router();
 
@@ -25,6 +26,23 @@ function parseDateInput(value: string) {
     return new Date(year, month - 1, day, 12, 0, 0);
   }
   return new Date(value);
+}
+
+const entryDateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .optional()
+  .nullable();
+
+/**
+ * When a You gave / You got happened (YYYY-MM-DD, IST). Today or nothing =
+ * now; an earlier day = midday that day. Null for a future day.
+ */
+function entryDate(value: string | null | undefined): Date | null {
+  const today = istDateString(new Date());
+  if (!value || value === today) return new Date();
+  if (value > today) return null;
+  return new Date(`${value}T12:00:00.000+05:30`);
 }
 
 const financeSlotsSchema = z.object({
@@ -510,6 +528,8 @@ const settleSchema = z
     method: z.enum(["cash", "online", "card", "na"]),
     amount: z.number().positive().optional(),
     nextDueDate: z.string().optional().nullable(),
+    /** Day the money was received (default today). */
+    paidAt: entryDateField,
   })
   .superRefine((data, ctx) => {
     if (data.mode === "custom") {
@@ -553,7 +573,11 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
       }
       const left = Number((balance - amount).toFixed(2));
       const cleared = Math.abs(left) < 0.005;
-      const paidAt = new Date();
+      const paidAt = entryDate(parsed.data.paidAt);
+      if (!paidAt) {
+        res.status(400).json({ error: "The date can't be in the future" });
+        return;
+      }
       await prisma.bill.update({
         where: { id: bill.id },
         data: {
@@ -607,7 +631,11 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
       await chargeBalance(prisma, bill.id),
     );
 
-    const paidAt = new Date();
+    const paidAt = entryDate(parsed.data.paidAt);
+    if (!paidAt) {
+      res.status(400).json({ error: "The date can't be in the future" });
+      return;
+    }
     const updated = await prisma.bill.update({
       where: { id: bill.id },
       data: {
@@ -772,6 +800,8 @@ const giveSchema = z.object({
   note: z.string().trim().max(200).optional().nullable(),
   /** New "collect by" date (YYYY-MM-DD), optional. */
   dueDate: z.string().optional().nullable(),
+  /** Day the money was given (default today). */
+  givenAt: entryDateField,
 });
 
 /**
@@ -796,6 +826,11 @@ duesRouter.post("/:id/charges", requireAdmin, async (req, res, next) => {
       return;
     }
 
+    const givenAt = entryDate(parsed.data.givenAt);
+    if (!givenAt) {
+      res.status(400).json({ error: "The date can't be in the future" });
+      return;
+    }
     const amount = Number(parsed.data.amount.toFixed(2));
     // Signed (below 0 = advance: they paid extra / first).
     const pendingBefore = bill.dueSettled ? 0 : bill.dueAmount;
@@ -810,7 +845,7 @@ duesRouter.post("/:id/charges", requireAdmin, async (req, res, next) => {
           billId: bill.id,
           amount,
           note: parsed.data.note?.trim() || null,
-          givenAt: new Date(),
+          givenAt,
           dueDateBefore: bill.dueDate,
           createdByName: req.user?.name ?? null,
         },
@@ -927,6 +962,8 @@ const personSchema = z.object({
   note: z.string().trim().max(200).optional().nullable(),
   /** "Collect by" date (YYYY-MM-DD) for money you gave. */
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  /** Day the money was given / received (default today). */
+  entryDate: entryDateField,
 });
 
 /**
@@ -945,9 +982,13 @@ duesRouter.post("/people", requireAdmin, async (req, res, next) => {
     const input = parsed.data;
     const amount = Number(input.amount.toFixed(2));
     const gave = input.direction === "gave";
-    const now = new Date();
+    const now = entryDate(input.entryDate);
+    if (!now) {
+      res.status(400).json({ error: "The date can't be in the future" });
+      return;
+    }
     const name = input.customerName.replace(/\s+/g, " ");
-    const invoiceNumber = `KH-${now.getTime().toString(36).toUpperCase()}${Math.floor(Math.random() * 1296)
+    const invoiceNumber = `KH-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 1296)
       .toString(36)
       .toUpperCase()
       .padStart(2, "0")}`;
