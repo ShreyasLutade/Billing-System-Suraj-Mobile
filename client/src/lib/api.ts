@@ -9,6 +9,7 @@ import type {
   AuthUser,
   Bill,
   CreateBillPayload,
+  ClearedDueItem,
   CustomerDueDetail,
   DuesSummary,
   ExchangeAccessory,
@@ -781,6 +782,9 @@ export const api = {
       `/purchases${query ? `?${query}` : ""}`,
     );
   },
+  /** Dues back to 0, matched by name / phone / invoice. */
+  searchClearedDues: (q: string, init?: RequestInit) =>
+    request<{ data: ClearedDueItem[] }>(`/dues/cleared?q=${encodeURIComponent(q)}`, init),
   listDues: (period: string = "all") =>
     request<{ data: DuesSummary }>(
       `/dues?period=${encodeURIComponent(period)}`,

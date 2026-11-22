@@ -14,6 +14,7 @@ import { differenceInCalendarDays, format } from "date-fns";
 import { AnimatePresence } from "framer-motion";
 import {
   Check,
+  CircleCheck,
   Clock3,
   Landmark,
   Lock,
@@ -56,6 +57,7 @@ import {
   type BillSearchScope,
 } from "../lib/billSearch";
 import type {
+  ClearedDueItem,
   DuesSummary,
   FinanceDueItem,
   FinanceDuesSummary,
@@ -388,6 +390,26 @@ export function DuesPage() {
   }, [filterOpen]);
 
   const searchQuery = query.trim();
+
+  // Searching also finds people whose due is back to 0 (not on the list).
+  const [cleared, setCleared] = useState<ClearedDueItem[]>([]);
+  useEffect(() => {
+    if (tab !== "customer" || searchQuery.length < 2) {
+      setCleared([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api
+        .searchClearedDues(searchQuery, { signal: controller.signal })
+        .then(({ data: rows }) => setCleared(rows))
+        .catch(() => undefined);
+    }, 280);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery, tab]);
   // Customer dues have no finance company, so "Finance" only applies on the Finance tab.
   const activeScope: BillSearchScope =
     tab === "customer" && searchScope === "finance" ? "all" : searchScope;
@@ -402,6 +424,7 @@ export function DuesPage() {
   // Khata entries below 0 (they paid first): listed apart as "You will give".
   const owedDues = filteredDues.filter((due) => due.dueAmount > 0);
   const advanceDues = filteredDues.filter((due) => due.dueAmount < 0);
+  const clearedShown = cleared.filter((row) => !showPrivateOnly || row.duePrivate);
   const filteredTotal = owedDues.reduce((sum, due) => sum + due.dueAmount, 0);
   const advanceTotal = round2(advanceDues.reduce((sum, due) => sum - due.dueAmount, 0));
   const searchMatchedFinance =
@@ -801,7 +824,7 @@ export function DuesPage() {
       ) : null}
 
       {tab === "customer" && data && !loading ? (
-        filteredDues.length === 0 ? (
+        filteredDues.length === 0 && clearedShown.length === 0 ? (
           <EmptyState
             title={query.trim() ? "No matching dues" : "No dues in this period"}
             description={
@@ -974,6 +997,14 @@ export function DuesPage() {
                 </Fragment>
               );
             })}
+            {clearedShown.length > 0 && !customerReveal.hasMore ? (
+              <ClearedDues
+                rows={clearedShown}
+                first={filteredDues.length === 0}
+                onOpen={(id) => navigate(`/dues/${id}`, { state: fromState(location) })}
+                isAdmin={isAdmin}
+              />
+            ) : null}
             <LoadMoreSentinel
               sentinelRef={customerReveal.sentinelRef}
               hasMore={customerReveal.hasMore}
@@ -1190,6 +1221,87 @@ export function DuesPage() {
           />
         ) : null}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/** Search results whose due is back to 0: tap to see every entry. */
+function ClearedDues({
+  rows,
+  first,
+  onOpen,
+  isAdmin,
+}: {
+  rows: ClearedDueItem[];
+  first: boolean;
+  onOpen: (id: string) => void;
+  isAdmin: boolean;
+}) {
+  return (
+    <div className={first ? "" : "mt-3"}>
+      <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
+        <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
+          <span className="h-2 w-2 rounded-full bg-ink-300" />
+          Cleared
+        </h2>
+        <span className="text-[12.5px] font-bold text-ink-400">
+          {rows.length} found
+        </span>
+      </div>
+      {rows.map((row) => {
+        const product = row.productLabels[0];
+        return (
+          <article
+            key={row.id}
+            role="link"
+            tabIndex={0}
+            className="due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5"
+            style={{ "--due-accent": "#C9D0DB" } as CSSProperties}
+            onClick={() => onOpen(row.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpen(row.id);
+              }
+            }}
+          >
+            <div className="relative flex items-center gap-2">
+              <div
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                aria-hidden
+              >
+                <CircleCheck className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <h3 className="truncate text-sm font-bold text-ink-900">{row.customerName}</h3>
+                  {isAdmin && row.duePrivate ? (
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-ink-400" strokeWidth={2.4} aria-label="Private due" />
+                  ) : null}
+                </div>
+                <p className="truncate text-xs text-ink-400">
+                  <span className="tabular-nums">{row.customerPhone}</span>
+                  <span className="text-ink-300"> · </span>
+                  {row.noPurchase ? (
+                    <span className="font-semibold text-indigo-600 dark:text-indigo-300">No bill</span>
+                  ) : (
+                    <span className="font-mono text-tide-600">{row.invoiceNumber}</span>
+                  )}
+                  {product ? <span className="text-ink-400"> · {product}</span> : null}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-[15px] font-bold tabular-nums tracking-tight text-ink-400">₹0</p>
+                <span className="mt-0.5 block h-5 text-[10px] font-bold uppercase leading-5 tracking-wide text-emerald-600 dark:text-emerald-400">
+                  {row.dueSettledAt
+                    ? `Cleared ${format(new Date(row.dueSettledAt), "d MMM")}`
+                    : "Cleared"}
+                </span>
+              </div>
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }

@@ -630,6 +630,20 @@ export type DueItem = {
   noPurchase?: boolean;
 };
 
+/** A due that's back to 0 (not on the list), found by search. */
+export type ClearedDueItem = {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  billDate: string;
+  dueSettledAt: string | null;
+  duePrivate: boolean;
+  noPurchase: boolean;
+  paidTotal: number;
+  productLabels: string[];
+};
+
 /** One customer due with its payment history (GET /dues/:id). */
 export type CustomerDueDetail = {
   id: string;

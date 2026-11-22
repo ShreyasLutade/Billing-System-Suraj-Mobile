@@ -55,19 +55,20 @@ export async function getCustomerDue(billId: string) {
   if (!bill) return null;
 
   const noPurchase = bill.noPurchase;
-  /** Signed: above 0 they owe you, below 0 (khata entries only) you owe them. */
+  /** Signed: above 0 they owe you, below 0 (advance) you owe them. */
   const balanceNow = bill.dueSettled ? 0 : round2(bill.dueAmount);
   const pending = round2(Math.max(balanceNow, 0));
   const advance = round2(Math.max(-balanceNow, 0));
   const paidTotal = round2(bill.duePayments.reduce((sum, p) => sum + p.amount, 0));
   const givenTotal = round2(bill.dueCharges.reduce((sum, c) => sum + c.amount, 0));
+  /** Left unpaid when the bill was made (0 for khata entries). Balance now
+   *  = credit at sale + "You gave" − everything received. */
+  const creditAtSale = noPurchase
+    ? 0
+    : round2(Math.max(balanceNow + paidTotal - givenTotal, 0));
   /** Everything the customer ever owed on this due (bill credit + "You gave"). */
-  const originalDue = noPurchase ? givenTotal : round2(pending + paidTotal);
-  /** Left unpaid when the bill was made (0 for khata entries). */
-  const creditAtSale = noPurchase ? 0 : round2(Math.max(originalDue - givenTotal, 0));
-  const settled = noPurchase
-    ? paidTotal + givenTotal > 0 && Math.abs(balanceNow) < 0.005
-    : originalDue > 0 && pending <= 0.005;
+  const originalDue = round2(creditAtSale + givenTotal);
+  const settled = originalDue + paidTotal > 0 && Math.abs(balanceNow) < 0.005;
   const now = new Date();
 
   const products = bill.items.map((item) => ({
@@ -134,7 +135,7 @@ export async function getCustomerDue(billId: string) {
       return {
         ...entry,
         date: entry.date.toISOString(),
-        balanceAfter: noPurchase ? balance : Math.max(balance, 0),
+        balanceAfter: balance,
       };
     }),
   ];

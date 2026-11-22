@@ -12,7 +12,7 @@ import {
   toDateFilter,
 } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
-import { outstandingCharges, splitDuePayment } from "../lib/dueCharges";
+import { chargeBalance, splitDuePayment } from "../lib/dueCharges";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { upsertCustomerProfile } from "../services/customers";
 import {
@@ -1111,8 +1111,9 @@ billsRouter.put("/:id", async (req, res, next) => {
 
     const input = parsed.data;
     const billTotals = totalsForPersist(input, computeBillTotals(input));
-    // "You gave" amounts still owed stay on the due after an edit.
-    const owedExtra = input.withGst ? 0 : await outstandingCharges(prisma, existing.id);
+    // "You gave" amounts still owed (or extra money kept as advance, below 0)
+    // stay on the due after an edit.
+    const owedExtra = input.withGst ? 0 : await chargeBalance(prisma, existing.id);
     const totals = {
       ...billTotals,
       dueAmount: Number((billTotals.dueAmount + owedExtra).toFixed(2)),
@@ -1277,7 +1278,7 @@ billsRouter.put("/:id", async (req, res, next) => {
             totals.dueAmount > 0 && input.dueDate
               ? parseDateInput(input.dueDate)
               : null,
-          dueSettled: totals.dueAmount <= 0,
+          dueSettled: Math.abs(totals.dueAmount) < 0.005,
           // Only admins can change it; staff edits keep what an admin chose.
           duePrivate:
             totals.dueAmount > 0 &&
@@ -1459,9 +1460,9 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
     }
 
     // The invoice shows the bill's own due, not "You gave" amounts.
-    const extra = bill.withGst ? 0 : await outstandingCharges(prisma, bill.id);
+    const extra = bill.withGst || bill.noPurchase ? 0 : await chargeBalance(prisma, bill.id);
     const pdf = await buildInvoicePdf(
-      extra > 0
+      extra !== 0
         ? { ...bill, dueAmount: Math.max(Number((bill.dueAmount - extra).toFixed(2)), 0) }
         : bill,
     );
@@ -1576,7 +1577,7 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
     const { billPart, chargePart } = splitDuePayment(
       due,
       due,
-      await outstandingCharges(prisma, bill.id),
+      await chargeBalance(prisma, bill.id),
     );
     const paidAt = new Date();
     const updated = await prisma.bill.update({

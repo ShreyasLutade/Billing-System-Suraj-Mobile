@@ -177,7 +177,9 @@ export function DueDetailPage() {
   const gaveCount = data.entries.filter((e) => e.kind === "gave").length;
 
   const dateLine = advance > 0
-    ? "They paid you first"
+    ? data.entries[0]?.kind === "got"
+      ? "They paid you first"
+      : "Extra money kept as advance"
     : data.settled
     ? data.settledAt
       ? `Cleared on ${formatDate(data.settledAt)}`
@@ -477,7 +479,6 @@ export function DueDetailPage() {
               <button
                 type="button"
                 className="h-11 rounded-xl bg-[#0E9E76] text-[14.5px] font-bold tracking-wide text-white shadow-[0_8px_18px_-10px_rgba(14,158,118,0.9)] transition hover:bg-[#0C8C69] disabled:opacity-45 disabled:shadow-none"
-                disabled={!owes && !data.noPurchase}
                 onClick={() => setSheet("got")}
               >
                 YOU GOT ₹
@@ -928,18 +929,12 @@ function GotSheet({
   const [error, setError] = useState<string | null>(null);
 
   const value = amount.trim() === "" ? null : Number(amount);
-  // Khata entries take any amount (over what's owed = you'll give it back).
-  const tooMuch = !due.noPurchase && value !== null && value > due.pending + 0.005;
-  const left =
-    value !== null && !tooMuch && value > 0 ? round2(signedBalance(due) - value) : null;
+  // Any amount: over what's owed is kept as advance (you'll give it back).
+  const left = value !== null && value > 0 ? round2(signedBalance(due) - value) : null;
 
   async function save() {
     if (value === null || !Number.isFinite(value) || value <= 0) {
       setError("Enter the amount you got");
-      return;
-    }
-    if (tooMuch) {
-      setError(`Amount can't be more than the pending ${formatINR(due.pending)}`);
       return;
     }
     if (!method) {
@@ -951,7 +946,7 @@ function GotSheet({
     try {
       const paid = round2(value);
       await api.settleDue(due.id, {
-        mode: !due.noPurchase && paid >= due.pending ? "full" : "custom",
+        mode: "custom",
         method,
         amount: paid,
       });
@@ -976,7 +971,6 @@ function GotSheet({
         id="due-got-amount"
         value={amount}
         tone="got"
-        invalid={tooMuch}
         placeholder={due.pending > 0 ? String(round2(due.pending)) : "0"}
         onChange={(next) => {
           setAmount(next);
@@ -986,17 +980,17 @@ function GotSheet({
       <p
         className={clsx(
           "mt-1.5 min-h-[18px] text-xs font-medium",
-          tooMuch ? "text-rose-600" : "text-ink-500",
+          left !== null && left < -0.005
+            ? "text-emerald-600 dark:text-emerald-400"
+            : "text-ink-500",
         )}
       >
-        {tooMuch
-          ? `More than the pending ${formatINR(due.pending)}`
-          : left === null
+        {left === null
             ? ""
             : left > 0.005
               ? `${formatINR(left)} will still be pending`
               : left < -0.005
-                ? `You'll give back ${formatINR(-left)}`
+                ? `${formatINR(-left)} extra kept as advance (you'll give)`
                 : "Balance will be clear"}
       </p>
 
@@ -1026,10 +1020,10 @@ function GotSheet({
       <button
         type="button"
         className="mt-3 h-12 w-full rounded-2xl bg-[#0E9E76] text-[15px] font-bold text-white transition hover:bg-[#0C8C69] disabled:opacity-60"
-        disabled={saving || tooMuch}
+        disabled={saving}
         onClick={() => void save()}
       >
-        {saving ? "Saving…" : value && value > 0 && !tooMuch ? `Save ${formatRupees(value)}` : "Save"}
+        {saving ? "Saving…" : value && value > 0 ? `Save ${formatRupees(value)}` : "Save"}
       </button>
     </Sheet>
   );
@@ -1238,9 +1232,7 @@ function UndoSheet({
   const [error, setError] = useState<string | null>(null);
   const got = entry.kind === "got";
   const balanceNow = signedBalance(due);
-  const pendingAfter = due.noPurchase
-    ? round2(balanceNow + (got ? entry.amount : -entry.amount))
-    : round2(Math.max(due.pending + (got ? entry.amount : -entry.amount), 0));
+  const pendingAfter = round2(balanceNow + (got ? entry.amount : -entry.amount));
   const what = got
     ? `${formatRupees(entry.amount)} ${entry.method === "na" || !entry.methodLabel ? "payment" : entry.methodLabel.toLowerCase()} on ${formatDate(entry.date)}`
     : `${formatRupees(entry.amount)} given on ${formatDate(entry.date)}`;
