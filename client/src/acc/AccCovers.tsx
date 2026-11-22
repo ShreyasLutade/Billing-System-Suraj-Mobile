@@ -127,8 +127,10 @@ export function AccSegregatePage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [draft, setDraft] = useState("");
   const [draftQty, setDraftQty] = useState(1);
-  /** Model suggestion list: open on every tap/click or typing; ↑ ↓ pick, Enter adds. */
+  /** Model suggestion list: a tap only puts the cursor in the box (keyboard opens);
+   *  the list shows once typing starts. ↑ ↓ pick, Enter adds. */
   const [focus, setFocus] = useState(false);
+  const modelInputRef = useRef<HTMLInputElement | null>(null);
   const [hi, setHi] = useState(-1);
   const addBoxRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -276,23 +278,30 @@ export function AccSegregatePage() {
 
       {/* Add a phone model */}
       <section className="acc-seg-add" ref={addBoxRef}>
-        <div className="acc-seg-input">
+        <div
+          className="acc-seg-input"
+          // Tapping anywhere in the box (icon, padding) puts the cursor in the input.
+          onClick={() => modelInputRef.current?.focus()}
+        >
           <Smartphone aria-hidden />
           <input
             data-keep-case
             className="bg-transparent"
             value={draft}
+            ref={modelInputRef}
             onChange={(e) => {
               setDraft(e.target.value);
-              setFocus(true);
+              setFocus(e.target.value.trim() !== "");
               setHi(-1);
             }}
-            onFocus={() => setFocus(true)}
-            onPointerDown={() => setFocus(true)}
-            onClick={() => setFocus(true)}
             onKeyDown={(e) => {
               const count = suggestions.length;
-              if (focus && count && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+              if (!focus && e.key === "ArrowDown" && count) {
+                // Laptop: ↓ opens the list without typing.
+                e.preventDefault();
+                setFocus(true);
+                setHi(0);
+              } else if (focus && count && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
                 e.preventDefault();
                 setHi((cur) => (e.key === "ArrowDown" ? (cur + 1) % count : cur <= 0 ? count - 1 : cur - 1));
               } else if (e.key === "Escape" && focus) {
@@ -312,13 +321,13 @@ export function AccSegregatePage() {
             aria-autocomplete="list"
           />
           {draft ? (
-            <button type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => { setDraft(""); setFocus(true); }} aria-label="Clear">
+            <button type="button" onPointerDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); setDraft(""); setFocus(false); modelInputRef.current?.focus(); }} aria-label="Clear">
               <X />
             </button>
           ) : null}
         </div>
         <AnimatePresence>
-          {focus && (suggestions.length || draft.trim()) ? (
+          {focus && (draft.trim() || hi >= 0) && (suggestions.length || draft.trim()) ? (
             <motion.ul className="acc-seg-suggest" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
               {suggestions.map((n, i) => (
                 <li key={n}>

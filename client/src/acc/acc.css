@@ -12231,3 +12231,21 @@ html.dark .acc {
     padding: 8px 9px;
   }
 }
+
+/* Model box: one clean focus ring on the whole box, none on the inner input */
+.acc .acc-seg-input:focus-within {
+  border-color: var(--a-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-accent) 18%, transparent);
+}
+
+.acc .acc-seg-input input:focus,
+.acc .acc-seg-input input:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.acc .acc-seg-input {
+  cursor: text;
+}
