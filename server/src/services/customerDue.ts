@@ -54,14 +54,20 @@ export async function getCustomerDue(billId: string) {
   });
   if (!bill) return null;
 
-  const pending = bill.dueSettled ? 0 : round2(Math.max(bill.dueAmount, 0));
+  const noPurchase = bill.noPurchase;
+  /** Signed: above 0 they owe you, below 0 (khata entries only) you owe them. */
+  const balanceNow = bill.dueSettled ? 0 : round2(bill.dueAmount);
+  const pending = round2(Math.max(balanceNow, 0));
+  const advance = round2(Math.max(-balanceNow, 0));
   const paidTotal = round2(bill.duePayments.reduce((sum, p) => sum + p.amount, 0));
   const givenTotal = round2(bill.dueCharges.reduce((sum, c) => sum + c.amount, 0));
   /** Everything the customer ever owed on this due (bill credit + "You gave"). */
-  const originalDue = round2(pending + paidTotal);
-  /** Left unpaid when the bill was made. */
-  const creditAtSale = round2(Math.max(originalDue - givenTotal, 0));
-  const settled = originalDue > 0 && pending <= 0.005;
+  const originalDue = noPurchase ? givenTotal : round2(pending + paidTotal);
+  /** Left unpaid when the bill was made (0 for khata entries). */
+  const creditAtSale = noPurchase ? 0 : round2(Math.max(originalDue - givenTotal, 0));
+  const settled = noPurchase
+    ? paidTotal + givenTotal > 0 && Math.abs(balanceNow) < 0.005
+    : originalDue > 0 && pending <= 0.005;
   const now = new Date();
 
   const products = bill.items.map((item) => ({
@@ -109,21 +115,27 @@ export async function getCustomerDue(billId: string) {
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   let balance = creditAtSale;
+  const billEntry = {
+    id: bill.id,
+    kind: "bill" as const,
+    date: bill.billDate.toISOString(),
+    amount: creditAtSale,
+    note: null,
+    method: null,
+    methodLabel: null,
+    delayDays: null,
+    balanceAfter: creditAtSale,
+  };
   const entries = [
-    {
-      id: bill.id,
-      kind: "bill" as const,
-      date: bill.billDate.toISOString(),
-      amount: creditAtSale,
-      note: null,
-      method: null,
-      methodLabel: null,
-      delayDays: null,
-      balanceAfter: creditAtSale,
-    },
+    // Khata entries have no bill: the ledger starts at the first entry.
+    ...(noPurchase ? [] : [billEntry]),
     ...moves.map((entry) => {
       balance = round2(balance + (entry.kind === "gave" ? entry.amount : -entry.amount));
-      return { ...entry, date: entry.date.toISOString(), balanceAfter: Math.max(balance, 0) };
+      return {
+        ...entry,
+        date: entry.date.toISOString(),
+        balanceAfter: noPurchase ? balance : Math.max(balance, 0),
+      };
     }),
   ];
 
@@ -150,6 +162,7 @@ export async function getCustomerDue(billId: string) {
   return {
     id: bill.id,
     duePrivate: bill.duePrivate,
+    noPurchase,
     invoiceNumber: bill.invoiceNumber,
     customerName: bill.customerName,
     customerPhone: bill.customerPhone,
@@ -162,6 +175,8 @@ export async function getCustomerDue(billId: string) {
     givenTotal,
     paidTotal,
     pending,
+    /** Khata entries: they paid more than they owe, you'll give this back. */
+    advance,
     settled,
     dueDate: bill.dueDate?.toISOString() ?? null,
     settledAt: settled && lastPaidAt ? lastPaidAt.toISOString() : null,
@@ -255,7 +270,9 @@ export async function buildDueStatement(billId: string) {
     }
     return {
       date: new Date(entry.date),
-      particulars: `${entry.balanceAfter <= 0 ? "Paid in full" : "Part payment"} · ${entry.methodLabel}`,
+      particulars: `${
+        due.noPurchase ? "Received" : entry.balanceAfter <= 0 ? "Paid in full" : "Part payment"
+      } · ${entry.methodLabel}`,
       detail: entry.note || "",
       due: 0,
       paid: entry.amount,
@@ -316,11 +333,14 @@ function drawCustomerAndSummary(doc: PDFKit.PDFDocument, y: number, due: Custome
     .fontSize(9)
     .fillColor(COLORS.muted)
     .text(
-      [
-        `Ph: ${due.customerPhone}`,
-        `Bill ${due.invoiceNumber}`,
-        `Purchased ${day(new Date(due.billDate))}`,
-      ].join("   ·   "),
+      (due.noPurchase
+        ? [`Ph: ${due.customerPhone}`, `Khata since ${day(new Date(due.billDate))}`]
+        : [
+            `Ph: ${due.customerPhone}`,
+            `Bill ${due.invoiceNumber}`,
+            `Purchased ${day(new Date(due.billDate))}`,
+          ]
+      ).join("   ·   "),
       M,
       doc.y + 2,
       { width: W },
@@ -357,11 +377,18 @@ function drawCustomerAndSummary(doc: PDFKit.PDFDocument, y: number, due: Custome
   y = Math.max(doc.y, y + 44) + 12;
 
   const boxes = [
-    { label: "Due amount", value: rupees(due.originalDue), fill: "#F4F4F5", color: COLORS.ink },
+    {
+      label: due.noPurchase ? "You gave" : "Due amount",
+      value: rupees(due.originalDue),
+      fill: "#F4F4F5",
+      color: COLORS.ink,
+    },
     { label: "Paid", value: rupees(due.paidTotal), fill: "#E7F8F1", color: GREEN },
-    due.settled
-      ? { label: "Status", value: "Settled", fill: "#E7F8F1", color: GREEN }
-      : { label: "Pending", value: rupees(due.pending), fill: "#FFF1F2", color: RED },
+    due.advance > 0
+      ? { label: "You'll give", value: rupees(due.advance), fill: "#E7F8F1", color: GREEN }
+      : due.settled
+        ? { label: "Status", value: "Settled", fill: "#E7F8F1", color: GREEN }
+        : { label: "Pending", value: rupees(due.pending), fill: "#FFF1F2", color: RED },
   ];
   const gap = 8;
   const bw = (W - gap * (boxes.length - 1)) / boxes.length;
@@ -453,7 +480,7 @@ function drawTotals(doc: PDFKit.PDFDocument, y: number, due: CustomerDue) {
     });
   put(2, money(due.originalDue), COLORS.ink);
   put(3, money(due.paidTotal), GREEN);
-  put(4, money(due.pending), due.pending > 0.005 ? RED : GREEN);
+  put(4, money(due.pending - due.advance), due.pending > 0.005 ? RED : GREEN);
   return y + h;
 }
 

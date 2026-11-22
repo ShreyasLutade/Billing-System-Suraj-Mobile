@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useIsPresent } from "framer-motion";
 import {
   ArrowLeft,
   CalendarDays,
+  Check,
   ChevronRight,
   Download,
   Lock,
   Phone,
+  Trash2,
   Undo2,
   X,
 } from "lucide-react";
@@ -52,6 +54,16 @@ function inputDate(value: string | null) {
   return new Date(value).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
+/** Signed balance: above 0 they owe you, below 0 you owe them. */
+function signedBalance(due: CustomerDueDetail) {
+  return round2(due.pending - (due.advance ?? 0));
+}
+
+/** "₹500" when they owe you, "You'll give ₹500" when you owe them. */
+function balanceText(balance: number) {
+  return balance < -0.005 ? `You'll give ${formatRupees(-balance)}` : formatRupees(balance);
+}
+
 function lateText(days: number | null) {
   if (days === null || days <= 0) return null;
   return `${days}d late`;
@@ -62,11 +74,17 @@ export function DueDetailPage() {
   const location = useLocation();
   const from = readFromState(location.state);
   const { isAdmin } = useAuth();
-  const [data, setData] = useState<CustomerDueDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  // Just added from the Dues "+": show it right away (the card morphs in).
+  const created = (location.state as { created?: CustomerDueDetail } | null)?.created;
+  const createdHere = created && created.id === id ? created : null;
+  const [justCreated] = useState(Boolean(createdHere));
+  const [data, setData] = useState<CustomerDueDetail | null>(createdHere);
+  const [loading, setLoading] = useState(!createdHere);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [sheet, setSheet] = useState<"got" | "gave" | "date" | null>(null);
+  const [sheet, setSheet] = useState<"got" | "gave" | "date" | "delete" | null>(null);
   /** Latest entry the admin is about to undo (confirm sheet open). */
   const [undoing, setUndoing] = useState<Entry | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -96,8 +114,9 @@ export function DueDetailPage() {
   }
 
   useEffect(() => {
-    setLoading(true);
+    if (!data || data.id !== id) setLoading(true);
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function downloadStatement() {
@@ -125,8 +144,10 @@ export function DueDetailPage() {
     );
   }
 
-  const late = !data.settled && data.delayDays !== null && data.delayDays > 0;
-  const urgency: DueUrgency = data.settled
+  const advance = data.advance ?? 0;
+  const owes = data.pending > 0.005;
+  const late = owes && data.delayDays !== null && data.delayDays > 0;
+  const urgency: DueUrgency = data.settled || advance > 0
     ? "upcoming"
     : late
       ? "overdue"
@@ -144,7 +165,7 @@ export function DueDetailPage() {
   // Only the newest "You gave" / "You got" can be undone (never the bill).
   const undoableId = newestFirst[0]?.kind !== "bill" ? newestFirst[0]?.id : null;
   const backText = from ? backLabel(from) : "Back to dues";
-  const reminder = data.settled
+  const reminder = !owes
     ? null
     : dueReminderLink({
         customerName: data.customerName,
@@ -155,14 +176,16 @@ export function DueDetailPage() {
   const gotCount = data.entries.filter((e) => e.kind === "got").length;
   const gaveCount = data.entries.filter((e) => e.kind === "gave").length;
 
-  const dateLine = data.settled
+  const dateLine = advance > 0
+    ? "They paid you first"
+    : data.settled
     ? data.settledAt
       ? `Cleared on ${formatDate(data.settledAt)}`
       : "Nothing pending"
     : data.dueDate
       ? `Collect by ${formatDate(data.dueDate)}`
       : "No collect-by date";
-  const dateStatus = data.settled
+  const dateStatus = !owes
     ? null
     : late
       ? `${data.delayDays} day${data.delayDays === 1 ? "" : "s"} late`
@@ -203,7 +226,7 @@ export function DueDetailPage() {
             label: "Date",
             icon: <CalendarDays className="h-[15px] w-[15px]" />,
             onClick: () => setSheet("date"),
-            disabled: data.settled,
+            disabled: !owes,
           },
         ]
       : []),
@@ -249,8 +272,24 @@ export function DueDetailPage() {
                 Private
               </span>
             ) : null}
+            {data.noPurchase ? (
+              <span className="rounded-full bg-indigo-500/10 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                No bill
+              </span>
+            ) : null}
           </p>
         </div>
+        {isAdmin && data.noPurchase ? (
+          <button
+            type="button"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#E7EAF0] bg-white text-rose-600 shadow-sm transition hover:border-rose-300 dark:border-[rgb(var(--color-line))] dark:bg-surface dark:text-rose-400"
+            aria-label={`Delete ${data.customerName}'s khata`}
+            title="Delete"
+            onClick={() => setSheet("delete")}
+          >
+            <Trash2 className="h-[17px] w-[17px]" />
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -260,22 +299,45 @@ export function DueDetailPage() {
       ) : null}
 
       {/* Balance + quick actions */}
-      <section className="due-card px-3.5 pb-3 pt-3.5">
+      <motion.section
+        className={clsx("due-card px-3.5 pb-3 pt-3.5", justCreated && "due-card-new")}
+        style={{ viewTransitionName: "due-hero" } as React.CSSProperties}
+        initial={justCreated ? { scale: 0.97 } : false}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.25 }}
+      >
         <div className="absolute inset-x-0 top-0 h-1" style={{ background: tone.accent }} aria-hidden />
+        {justCreated ? (
+          <motion.span
+            className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-[0_6px_14px_-6px_rgba(16,185,129,0.9)]"
+            initial={{ opacity: 0, scale: 0.4, y: -6 }}
+            animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.08, 1, 0.9], y: [-6, 0, 0, -4] }}
+            transition={{ duration: 2.6, times: [0, 0.14, 0.85, 1], delay: 0.35 }}
+          >
+            <Check className="h-3 w-3" strokeWidth={3} />
+            Added
+          </motion.span>
+        ) : null}
         <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-400">
-          {data.settled ? "Settled" : "You will get"}
+          {advance > 0 ? "You will give" : data.settled ? "Settled" : "You will get"}
         </p>
         <p
           className={clsx(
             "mt-px font-display text-[26px] font-bold leading-tight tracking-tight tabular-nums",
-            data.settled
+            data.settled || advance > 0
               ? "text-emerald-600 dark:text-emerald-400"
               : late
                 ? "text-rose-600 dark:text-rose-400"
                 : "text-ink-900",
           )}
         >
-          {data.settled ? "Fully paid" : formatRupees(data.pending)}
+          {advance > 0
+            ? formatRupees(advance)
+            : data.settled
+              ? data.noPurchase
+                ? "All clear"
+                : "Fully paid"
+              : formatRupees(data.pending)}
         </p>
         <p className="mt-0.5 text-[12.5px] text-ink-500">
           {dateLine}
@@ -341,14 +403,14 @@ export function DueDetailPage() {
             );
           })}
         </div>
-      </section>
+      </motion.section>
 
       {/* Entries, newest first, ending with the bill */}
       <div className="mb-1.5 mt-4 flex items-center justify-between gap-3 px-1">
         <h2 className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-400">Entries</h2>
         <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink-400">
           {[
-            "1 bill",
+            data.noPurchase ? null : "1 bill",
             gaveCount ? `${gaveCount} given` : null,
             `${gotCount} payment${gotCount === 1 ? "" : "s"}`,
           ]
@@ -415,7 +477,7 @@ export function DueDetailPage() {
               <button
                 type="button"
                 className="h-11 rounded-xl bg-[#0E9E76] text-[14.5px] font-bold tracking-wide text-white shadow-[0_8px_18px_-10px_rgba(14,158,118,0.9)] transition hover:bg-[#0C8C69] disabled:opacity-45 disabled:shadow-none"
-                disabled={data.settled}
+                disabled={!owes && !data.noPurchase}
                 onClick={() => setSheet("got")}
               >
                 YOU GOT ₹
@@ -456,6 +518,53 @@ export function DueDetailPage() {
               setData(updated);
             }}
           />
+        ) : null}
+        {sheet === "delete" && isAdmin ? (
+          <Sheet labelledBy="delete-khata-title" busy={deleting} onClose={() => setSheet(null)}>
+            <div className="mb-3 flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="delete-khata-title" className="font-display text-lg font-bold text-ink-900">
+                  Delete {data.customerName}'s khata?
+                </h2>
+                <p className="mt-0.5 text-sm text-ink-500">
+                  All its entries go to the Recycle bin. You can restore it from there.
+                </p>
+              </div>
+            </div>
+            <ErrorNote error={error} />
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="btn-secondary !py-2.5"
+                onClick={() => setSheet(null)}
+                disabled={deleting}
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  setError(null);
+                  try {
+                    await api.deleteBill(data.id, "delete");
+                    navigate("/dues", { replace: true });
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Could not delete");
+                    setDeleting(false);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </Sheet>
         ) : null}
         {undoing && isAdmin ? (
           <UndoSheet
@@ -525,12 +634,21 @@ function EntryRow({
         {detail ? <p className="truncate text-[11px] text-ink-500">{detail}</p> : null}
         <p className="flex flex-wrap items-center gap-x-1.5 text-[10.5px] text-ink-400">
           {isBill ? <span>Bill {formatRupees(due.billTotal)} ·</span> : null}
-          <span>
-            Bal{" "}
-            <span className="font-semibold tabular-nums text-ink-500">
-              {formatRupees(entry.balanceAfter)}
+          {entry.balanceAfter < -0.005 ? (
+            <span>
+              You'll give{" "}
+              <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {formatRupees(-entry.balanceAfter)}
+              </span>
             </span>
-          </span>
+          ) : (
+            <span>
+              Bal{" "}
+              <span className="font-semibold tabular-nums text-ink-500">
+                {formatRupees(entry.balanceAfter)}
+              </span>
+            </span>
+          )}
           {late ? <b className="font-bold text-rose-600 dark:text-rose-400">· {late}</b> : null}
           {onUndo ? (
             <button
@@ -712,7 +830,9 @@ function SheetHeader({
           {due.customerName}
           <span className="ml-1.5 text-[13px] font-semibold text-ink-400">
             · Bal{" "}
-            <span className="tabular-nums text-ink-700 dark:text-ink-800">{formatRupees(due.pending)}</span>
+            <span className="tabular-nums text-ink-700 dark:text-ink-800">
+              {balanceText(signedBalance(due))}
+            </span>
           </span>
         </h2>
       </div>
@@ -808,8 +928,10 @@ function GotSheet({
   const [error, setError] = useState<string | null>(null);
 
   const value = amount.trim() === "" ? null : Number(amount);
-  const tooMuch = value !== null && value > due.pending + 0.005;
-  const left = value !== null && !tooMuch && value > 0 ? round2(due.pending - value) : null;
+  // Khata entries take any amount (over what's owed = you'll give it back).
+  const tooMuch = !due.noPurchase && value !== null && value > due.pending + 0.005;
+  const left =
+    value !== null && !tooMuch && value > 0 ? round2(signedBalance(due) - value) : null;
 
   async function save() {
     if (value === null || !Number.isFinite(value) || value <= 0) {
@@ -829,7 +951,7 @@ function GotSheet({
     try {
       const paid = round2(value);
       await api.settleDue(due.id, {
-        mode: paid >= due.pending ? "full" : "custom",
+        mode: !due.noPurchase && paid >= due.pending ? "full" : "custom",
         method,
         amount: paid,
       });
@@ -855,7 +977,7 @@ function GotSheet({
         value={amount}
         tone="got"
         invalid={tooMuch}
-        placeholder={String(round2(due.pending))}
+        placeholder={due.pending > 0 ? String(round2(due.pending)) : "0"}
         onChange={(next) => {
           setAmount(next);
           setError(null);
@@ -871,9 +993,11 @@ function GotSheet({
           ? `More than the pending ${formatINR(due.pending)}`
           : left === null
             ? ""
-            : left > 0
+            : left > 0.005
               ? `${formatINR(left)} will still be pending`
-              : "Due will be fully cleared"}
+              : left < -0.005
+                ? `You'll give back ${formatINR(-left)}`
+                : "Balance will be clear"}
       </p>
 
       <div className="mt-1 grid grid-cols-3 gap-2">
@@ -928,7 +1052,7 @@ function GaveSheet({
   const [error, setError] = useState<string | null>(null);
 
   const value = amount.trim() === "" ? null : Number(amount);
-  const after = value !== null && value > 0 ? round2(due.pending + value) : null;
+  const after = value !== null && value > 0 ? round2(signedBalance(due) + value) : null;
 
   async function save() {
     if (value === null || !Number.isFinite(value) || value <= 0) {
@@ -973,7 +1097,16 @@ function GaveSheet({
         {after !== null ? (
           <>
             Balance becomes{" "}
-            <b className="tabular-nums text-rose-600 dark:text-rose-400">{formatRupees(after)}</b>
+            <b
+              className={clsx(
+                "tabular-nums",
+                after < -0.005
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-rose-600 dark:text-rose-400",
+              )}
+            >
+              {balanceText(after)}
+            </b>
           </>
         ) : (
           "Added to what he owes"
@@ -1104,7 +1237,10 @@ function UndoSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const got = entry.kind === "got";
-  const pendingAfter = round2(Math.max(due.pending + (got ? entry.amount : -entry.amount), 0));
+  const balanceNow = signedBalance(due);
+  const pendingAfter = due.noPurchase
+    ? round2(balanceNow + (got ? entry.amount : -entry.amount))
+    : round2(Math.max(due.pending + (got ? entry.amount : -entry.amount), 0));
   const what = got
     ? `${formatRupees(entry.amount)} ${entry.method === "na" || !entry.methodLabel ? "payment" : entry.methodLabel.toLowerCase()} on ${formatDate(entry.date)}`
     : `${formatRupees(entry.amount)} given on ${formatDate(entry.date)}`;
@@ -1143,7 +1279,7 @@ function UndoSheet({
       <div className="rounded-2xl bg-ink-900/[0.04] px-3.5 py-2.5 text-sm dark:bg-white/5">
         <p className="flex items-center justify-between gap-2">
           <span className="text-ink-500">Balance now</span>
-          <span className="font-semibold tabular-nums text-ink-900">{formatRupees(due.pending)}</span>
+          <span className="font-semibold tabular-nums text-ink-900">{balanceText(balanceNow)}</span>
         </p>
         <p className="mt-1 flex items-center justify-between gap-2">
           <span className="text-ink-500">Balance after undo</span>
@@ -1153,7 +1289,7 @@ function UndoSheet({
               got ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400",
             )}
           >
-            {formatRupees(pendingAfter)}
+            {balanceText(pendingAfter)}
           </span>
         </p>
       </div>

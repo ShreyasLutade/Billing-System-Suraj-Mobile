@@ -98,6 +98,10 @@ model Bill {
   dueSettled        Boolean          @default(false)
   /// Admin-only due: hidden from staff on the dues page
   duePrivate        Boolean          @default(false)
+  /// Khata entry with no purchase (added from the Dues page "+"): no items,
+  /// totals 0, kept out of bills, sales and analytics. dueAmount can go below
+  /// 0 here (they paid first: you'll give it back).
+  noPurchase        Boolean          @default(false)
   dueSettledMethod  String?
   dueSettledAt      DateTime?
   isPartialPaid     Boolean          @default(false)

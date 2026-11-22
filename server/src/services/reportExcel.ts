@@ -27,7 +27,7 @@ async function fetchBills(scope: ReportScope, now = new Date()) {
       : undefined;
 
   return prisma.bill.findMany({
-    where,
+    where: { ...where, noPurchase: false },
     include: { items: true, duePayments: true },
     orderBy: { billDate: "asc" },
   });

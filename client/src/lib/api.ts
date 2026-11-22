@@ -842,6 +842,20 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  /** New khata entry without a purchase (Dues "+"). */
+  createDuePerson: (payload: {
+    customerName: string;
+    customerPhone: string;
+    direction: "gave" | "got";
+    amount: number;
+    method?: "cash" | "online" | "card" | "na";
+    note?: string | null;
+    dueDate?: string | null;
+  }) =>
+    request<{ data: CustomerDueDetail }>(`/dues/people`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   /** "You gave": add money given / owed on this due without a new bill. */
   addDueCharge: (
     id: string,

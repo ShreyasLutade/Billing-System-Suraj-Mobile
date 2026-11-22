@@ -349,7 +349,7 @@ async function loadDueCollections(
     where: {
       method: { in: ["cash", "online", "card"] },
       amount: { gt: 0 },
-      bill: { withGst: false },
+      bill: { withGst: false, noPurchase: false },
       ...(paidAtFilter ? { paidAt: paidAtFilter } : {}),
     },
     orderBy: { paidAt: "desc" },
@@ -389,6 +389,7 @@ async function loadPeriodBills(
   return prisma.bill.findMany({
     where: {
       withGst: false,
+      noPurchase: false,
       ...(billDateFilter ? { billDate: billDateFilter } : {}),
     },
     orderBy: [{ billDate: "desc" }, { createdAt: "desc" }],
@@ -818,6 +819,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
     const outstandingRows = await prisma.bill.findMany({
       where: {
         withGst: false,
+        noPurchase: false,
         dueAmount: { gt: 0 },
         dueSettled: false,
       },

@@ -625,12 +625,19 @@ export type DueItem = {
   productLabels?: string[];
   imeiNumbers?: string[];
   duePrivate?: boolean;
+  /** Khata entry with no purchase (added from the Dues "+"). Its dueAmount
+   *  can be below 0: they paid first, you'll give it back. */
+  noPurchase?: boolean;
 };
 
 /** One customer due with its payment history (GET /dues/:id). */
 export type CustomerDueDetail = {
   id: string;
   duePrivate?: boolean;
+  /** Khata entry with no purchase: no bill row, balance can go below 0. */
+  noPurchase?: boolean;
+  /** They paid more than they owe: you'll give this back (khata entries). */
+  advance?: number;
   invoiceNumber: string;
   customerName: string;
   customerPhone: string;
@@ -679,6 +686,8 @@ export type DuesSummary = {
   period: "today" | "tomorrow" | "yesterday" | "past_due" | "future_due" | "all";
   periodLabel: string;
   totalDue: number;
+  /** Khata entries that paid first: you'll give this back. */
+  totalAdvance?: number;
   count: number;
   dues: DueItem[];
 };

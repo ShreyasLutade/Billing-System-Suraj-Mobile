@@ -196,7 +196,9 @@ export async function binBill(
   await addEntry(
     tx,
     "BILL",
-    `Bill ${bill.invoiceNumber} · ${bill.customerName}`,
+    bill.noPurchase
+      ? `Khata · ${bill.customerName}`
+      : `Bill ${bill.invoiceNumber} · ${bill.customerName}`,
     [
       `${items.length} item${items.length === 1 ? "" : "s"}`,
       rupees(bill.grandTotal),
@@ -434,7 +436,7 @@ async function restoreBill(tx: Tx, p: BillPayload) {
   }
   for (const pay of p.duePayments) await tx.duePayment.create({ data: pay });
   for (const charge of p.dueCharges ?? []) await tx.dueCharge.create({ data: charge });
-  return `/bills/${p.bill.id}`;
+  return p.bill.noPurchase ? `/dues/${p.bill.id}` : `/bills/${p.bill.id}`;
 }
 
 async function restoreSupplier(tx: Tx, p: SupplierPayload) {

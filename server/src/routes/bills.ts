@@ -258,9 +258,10 @@ billsRouter.get("/", async (req, res, next) => {
       ? toDateFilter({ from: customFrom, to: customTo })
       : toDateFilter(getPeriodRange(period === "custom" ? "all" : period));
 
+    // Khata entries without a purchase live on the Dues page only.
     const where: Prisma.BillWhereInput = billDateFilter
-      ? { billDate: billDateFilter }
-      : {};
+      ? { billDate: billDateFilter, noPurchase: false }
+      : { noPurchase: false };
 
     if (req.query.withGst === "true") {
       where.withGst = true;

@@ -15,6 +15,7 @@ import {
 } from "../lib/period";
 import { buildDueStatement, getCustomerDue } from "../services/customerDue";
 import { outstandingCharges, splitDuePayment } from "../lib/dueCharges";
+import { upsertCustomerProfile } from "../services/customers";
 
 export const duesRouter = Router();
 
@@ -43,14 +44,19 @@ duesRouter.get("/", async (req, res, next) => {
 
     const where: Prisma.BillWhereInput = {
       withGst: false,
-      dueAmount: { gt: 0 },
+      // Khata entries (no purchase) can also be below 0: they paid first.
+      OR: [{ dueAmount: { gt: 0 } }, { noPurchase: true, dueAmount: { lt: 0 } }],
       dueSettled: false,
       ...(isAdmin ? {} : { duePrivate: false }),
       ...(dateFilter
         ? {
-            OR: [
-              { dueDate: dateFilter },
-              { AND: [{ dueDate: null }, { billDate: dateFilter }] },
+            AND: [
+              {
+                OR: [
+                  { dueDate: dateFilter },
+                  { AND: [{ dueDate: null }, { billDate: dateFilter }] },
+                ],
+              },
             ],
           }
         : {}),
@@ -71,6 +77,7 @@ duesRouter.get("/", async (req, res, next) => {
         payableAmount: true,
         isPartialPaid: true,
         duePrivate: true,
+        noPurchase: true,
         duePayments: { select: { amount: true } },
         items: {
           select: {
@@ -85,13 +92,16 @@ duesRouter.get("/", async (req, res, next) => {
       },
     });
 
-    const totalDue = dues.reduce((sum, bill) => sum + bill.dueAmount, 0);
+    const totalDue = dues.reduce((sum, bill) => sum + Math.max(bill.dueAmount, 0), 0);
+    const totalAdvance = dues.reduce((sum, bill) => sum + Math.max(-bill.dueAmount, 0), 0);
 
     res.json({
       data: {
         period,
         periodLabel: periodLabel(period),
         totalDue: Number(totalDue.toFixed(2)),
+        /** Khata entries that paid first: you'll give this back. */
+        totalAdvance: Number(totalAdvance.toFixed(2)),
         count: dues.length,
         dues: dues.map(({ items, duePayments, ...bill }) => ({
           ...bill,
@@ -464,6 +474,44 @@ duesRouter.patch("/:id/settle", requireAdmin, async (req, res, next) => {
       res.status(404).json({ error: "Bill not found" });
       return;
     }
+
+    // Khata entry (no purchase): any amount; above what's owed becomes an
+    // advance (balance below 0). No bill totals to touch.
+    if (bill.noPurchase) {
+      const balance = bill.dueSettled ? 0 : bill.dueAmount;
+      const amount = Number(
+        (parsed.data.mode === "full" ? Math.max(balance, 0) : parsed.data.amount || 0).toFixed(2),
+      );
+      if (amount <= 0) {
+        res.status(400).json({ error: "Enter the amount you got" });
+        return;
+      }
+      const left = Number((balance - amount).toFixed(2));
+      const cleared = Math.abs(left) < 0.005;
+      const paidAt = new Date();
+      await prisma.bill.update({
+        where: { id: bill.id },
+        data: {
+          dueAmount: cleared ? 0 : left,
+          dueSettled: cleared,
+          dueSettledMethod: parsed.data.method,
+          dueSettledAt: paidAt,
+          isPartialPaid: false,
+          duePayments: {
+            create: {
+              amount,
+              method: parsed.data.method,
+              kind: left <= 0.005 ? "full" : "partial",
+              paidAt,
+              chargePart: amount,
+            },
+          },
+        },
+      });
+      res.json({ data: await getCustomerDue(bill.id) });
+      return;
+    }
+
     if (bill.dueAmount <= 0 || bill.dueSettled) {
       res.status(400).json({ error: "This bill has no pending due" });
       return;
@@ -612,6 +660,25 @@ duesRouter.delete(
       const cardAmount = takeBack(bill.cardAmount, "card");
       const previous = bill.duePayments.at(-2) ?? null;
 
+      if (bill.noPurchase) {
+        const balance = round((bill.dueSettled ? 0 : bill.dueAmount) + payment.amount);
+        const cleared = Math.abs(balance) < 0.005;
+        await prisma.$transaction([
+          prisma.duePayment.delete({ where: { id: payment.id } }),
+          prisma.bill.update({
+            where: { id: bill.id },
+            data: {
+              dueAmount: cleared ? 0 : balance,
+              dueSettled: cleared,
+              dueSettledMethod: previous?.method ?? null,
+              dueSettledAt: previous?.paidAt ?? null,
+            },
+          }),
+        ]);
+        res.json({ data: await getCustomerDue(bill.id) });
+        return;
+      }
+
       await prisma.$transaction([
         prisma.duePayment.delete({ where: { id: payment.id } }),
         prisma.bill.update({
@@ -669,7 +736,13 @@ duesRouter.post("/:id/charges", requireAdmin, async (req, res, next) => {
     }
 
     const amount = Number(parsed.data.amount.toFixed(2));
-    const pendingBefore = bill.dueSettled ? 0 : Math.max(bill.dueAmount, 0);
+    // Khata entries keep the sign (below 0 = they paid first).
+    const pendingBefore = bill.dueSettled
+      ? 0
+      : bill.noPurchase
+        ? bill.dueAmount
+        : Math.max(bill.dueAmount, 0);
+    const pendingAfter = Number((pendingBefore + amount).toFixed(2));
     const newDate = parsed.data.dueDate ? parseDateInput(parsed.data.dueDate) : null;
     const paidSoFar =
       bill.cashAmount + bill.onlineAmount + bill.cardAmount + bill.financeAmount;
@@ -688,8 +761,8 @@ duesRouter.post("/:id/charges", requireAdmin, async (req, res, next) => {
       prisma.bill.update({
         where: { id: bill.id },
         data: {
-          dueAmount: Number((pendingBefore + amount).toFixed(2)),
-          dueSettled: false,
+          dueAmount: Math.abs(pendingAfter) < 0.005 ? 0 : pendingAfter,
+          dueSettled: Math.abs(pendingAfter) < 0.005,
           isPartialPaid: paidSoFar > 0,
           ...(newDate ? { dueDate: newDate } : {}),
         },
@@ -730,9 +803,15 @@ duesRouter.delete("/:id/charges/:chargeId", requireAdmin, async (req, res, next)
       return;
     }
 
-    const pending = bill.dueSettled ? 0 : Math.max(bill.dueAmount, 0);
-    const left = Number(Math.max(pending - charge.amount, 0).toFixed(2));
-    const cleared = left <= 0.005;
+    const pending = bill.dueSettled
+      ? 0
+      : bill.noPurchase
+        ? bill.dueAmount
+        : Math.max(bill.dueAmount, 0);
+    const left = bill.noPurchase
+      ? Number((pending - charge.amount).toFixed(2))
+      : Number(Math.max(pending - charge.amount, 0).toFixed(2));
+    const cleared = Math.abs(left) < 0.005;
 
     await prisma.$transaction([
       prisma.dueCharge.delete({ where: { id: charge.id } }),
@@ -740,7 +819,7 @@ duesRouter.delete("/:id/charges/:chargeId", requireAdmin, async (req, res, next)
         where: { id: bill.id },
         data: {
           dueAmount: cleared ? 0 : left,
-          dueSettled: cleared && bill.duePayments.length > 0,
+          dueSettled: cleared && (bill.noPurchase || bill.duePayments.length > 0),
           isPartialPaid: cleared
             ? false
             : bill.cashAmount + bill.onlineAmount + bill.cardAmount + bill.financeAmount > 0,
@@ -781,6 +860,98 @@ duesRouter.patch("/:id/due-date", requireAdmin, async (req, res, next) => {
       data: { dueDate: parsed.data.dueDate ? parseDateInput(parsed.data.dueDate) : null },
     });
     res.json({ data: await getCustomerDue(bill.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const personSchema = z.object({
+  customerName: z.string().trim().min(1, "Enter the name").max(80),
+  customerPhone: z.string().trim().regex(/^\d{10}$/, "Enter a 10-digit number"),
+  /** gave: you gave money (they owe you). got: they gave you money first. */
+  direction: z.enum(["gave", "got"]),
+  amount: z.number().positive().max(10_000_000),
+  /** For "got": how you received it. */
+  method: z.enum(["cash", "online", "card", "na"]).optional(),
+  note: z.string().trim().max(200).optional().nullable(),
+  /** "Collect by" date (YYYY-MM-DD) for money you gave. */
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+});
+
+/**
+ * New khata entry without a purchase (Dues page "+"): someone you gave money
+ * to, or who gave you money. Stored as a bill with no items and totals 0
+ * (noPurchase), so it gets the same due page: You gave / You got, undo, PDF.
+ */
+duesRouter.post("/people", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = personSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0]?.message;
+      res.status(400).json({ error: first || "Check the details", details: parsed.error.flatten() });
+      return;
+    }
+    const input = parsed.data;
+    const amount = Number(input.amount.toFixed(2));
+    const gave = input.direction === "gave";
+    const now = new Date();
+    const name = input.customerName.replace(/\s+/g, " ");
+    const invoiceNumber = `KH-${now.getTime().toString(36).toUpperCase()}${Math.floor(Math.random() * 1296)
+      .toString(36)
+      .toUpperCase()
+      .padStart(2, "0")}`;
+
+    const bill = await prisma.$transaction(async (tx) => {
+      const created = await tx.bill.create({
+        data: {
+          invoiceNumber,
+          billDate: now,
+          customerName: name,
+          customerPhone: input.customerPhone,
+          withGst: false,
+          noPurchase: true,
+          subtotal: 0,
+          gstAmount: 0,
+          grandTotal: 0,
+          payableAmount: 0,
+          dueAmount: gave ? amount : -amount,
+          dueSettled: false,
+          dueDate: gave && input.dueDate ? parseDateInput(input.dueDate) : null,
+          createdByUserId: req.user?.id ?? null,
+          createdByName: req.user?.name ?? null,
+          createdByRole: req.user?.role ?? null,
+          ...(gave
+            ? {
+                dueCharges: {
+                  create: {
+                    amount,
+                    note: input.note?.trim() || null,
+                    givenAt: now,
+                    createdByName: req.user?.name ?? null,
+                  },
+                },
+              }
+            : {
+                dueSettledMethod: input.method ?? "cash",
+                dueSettledAt: now,
+                duePayments: {
+                  create: {
+                    amount,
+                    method: input.method ?? "cash",
+                    kind: "full",
+                    paidAt: now,
+                    note: input.note?.trim() || null,
+                    chargePart: amount,
+                  },
+                },
+              }),
+        },
+      });
+      await upsertCustomerProfile(tx, { customerName: name, customerPhone: input.customerPhone });
+      return created;
+    });
+
+    res.status(201).json({ data: await getCustomerDue(bill.id) });
   } catch (error) {
     next(error);
   }

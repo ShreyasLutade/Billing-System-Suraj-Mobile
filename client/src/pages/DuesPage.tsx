@@ -17,6 +17,7 @@ import {
   Clock3,
   Landmark,
   Lock,
+  Plus,
   Search,
   SlidersHorizontal,
   UserRound,
@@ -398,7 +399,11 @@ export function DuesPage() {
         matchesDueSearch(due, searchQuery, { scope: activeScope }),
     ) || [];
 
-  const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
+  // Khata entries below 0 (they paid first): listed apart as "You will give".
+  const owedDues = filteredDues.filter((due) => due.dueAmount > 0);
+  const advanceDues = filteredDues.filter((due) => due.dueAmount < 0);
+  const filteredTotal = owedDues.reduce((sum, due) => sum + due.dueAmount, 0);
+  const advanceTotal = round2(advanceDues.reduce((sum, due) => sum - due.dueAmount, 0));
   const searchMatchedFinance =
     financeData?.dues.filter((due) =>
       matchesDueSearch(due, searchQuery, {
@@ -429,18 +434,23 @@ export function DuesPage() {
     );
   }, [financeCompanyFilter, financeCompanyTotals, filteredFinanceDues]);
 
-  const statusRows = filteredDues.map((due) => ({
+  const statusRows = owedDues.map((due) => ({
     due,
     status: dueStatus(due.dueDate),
+    advance: false,
   }));
-  // Overdue first, then today, coming up, no date (server order kept inside).
-  const groupedDues = URGENCY_ORDER.flatMap((urgency) =>
-    statusRows.filter((row) => row.status.urgency === urgency),
-  );
+  // Overdue first, then today, coming up, no date (server order kept inside),
+  // then the people you owe.
+  const groupedDues = [
+    ...URGENCY_ORDER.flatMap((urgency) =>
+      statusRows.filter((row) => row.status.urgency === urgency),
+    ),
+    ...advanceDues.map((due) => ({ due, status: dueStatus(null), advance: true })),
+  ];
   const groupTotals = Object.fromEntries(
     URGENCY_ORDER.map((urgency) => [urgency, 0]),
   ) as Record<DueUrgency, number>;
-  for (const row of groupedDues) {
+  for (const row of statusRows) {
     groupTotals[row.status.urgency] = round2(
       groupTotals[row.status.urgency] + row.due.dueAmount,
     );
@@ -519,7 +529,20 @@ export function DuesPage() {
               : "Money finance companies still owe you"}
           </p>
         </div>
-        {from ? <BackLink to={from}>{backLabel(from)}</BackLink> : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {from ? <BackLink to={from}>{backLabel(from)}</BackLink> : null}
+          {isAdmin ? (
+            <button
+              type="button"
+              className="due-add-btn grid h-10 w-10 place-items-center rounded-full"
+              aria-label="Add money given or received (no purchase)"
+              title="Add to khata"
+              onClick={() => navigate("/dues/new")}
+            >
+              <Plus className="h-5 w-5" strokeWidth={2.6} />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {tab === "customer" ? (
@@ -527,9 +550,17 @@ export function DuesPage() {
           label={`Total to collect${period !== "all" && data ? ` · ${data.periodLabel}` : ""}`}
           amount={data ? customerTotal : null}
           side={
-            data
-              ? `${customerCount} open due${customerCount === 1 ? "" : "s"}`
-              : null
+            data ? (
+              <>
+                {customerCount} open due{customerCount === 1 ? "" : "s"}
+                {advanceTotal > 0 ? (
+                  <>
+                    <br />
+                    <span className="text-[#5CE0AE]">You'll give {formatRupees(advanceTotal)}</span>
+                  </>
+                ) : null}
+              </>
+            ) : null
           }
         >
           {data && customerTotal > 0 ? (
@@ -781,16 +812,18 @@ export function DuesPage() {
           />
         ) : (
           <div>
-            {customerReveal.visibleItems.map(({ due, status }, index) => {
-              const tone = URGENCY_TONE[status.urgency];
-              const overdue = status.urgency === "overdue";
-              const paid = round2(due.paidTotal ?? 0);
+            {customerReveal.visibleItems.map(({ due, status, advance }, index) => {
+              const tone = advance ? URGENCY_TONE.upcoming : URGENCY_TONE[status.urgency];
+              const overdue = !advance && status.urgency === "overdue";
+              // Khata entries: paid share means nothing when you owe them.
+              const paid = advance ? 0 : round2(due.paidTotal ?? 0);
+              const prev = customerReveal.visibleItems[index - 1];
               const startsGroup =
                 index === 0 ||
-                customerReveal.visibleItems[index - 1].status.urgency !==
-                  status.urgency;
+                prev.advance !== advance ||
+                prev.status.urgency !== status.urgency;
               const to = `/dues/${due.id}`;
-              const reminder = dueReminderLink(due);
+              const reminder = advance ? null : dueReminderLink(due);
               return (
                 <Fragment key={due.id}>
                   {startsGroup ? (
@@ -805,10 +838,15 @@ export function DuesPage() {
                           className="h-2 w-2 rounded-full"
                           style={{ background: tone.accent }}
                         />
-                        {GROUP_TITLE[status.urgency]}
+                        {advance ? "You will give" : GROUP_TITLE[status.urgency]}
                       </h2>
-                      <span className="text-[12.5px] font-bold tabular-nums text-ink-500">
-                        {formatRupees(groupTotals[status.urgency])}
+                      <span
+                        className={clsx(
+                          "text-[12.5px] font-bold tabular-nums",
+                          advance ? "text-emerald-600 dark:text-emerald-400" : "text-ink-500",
+                        )}
+                      >
+                        {formatRupees(advance ? advanceTotal : groupTotals[status.urgency])}
                       </span>
                     </div>
                   ) : null}
@@ -869,16 +907,33 @@ export function DuesPage() {
                         <p className="truncate text-xs text-ink-400">
                           <span className="tabular-nums">{due.customerPhone}</span>
                           <span className="text-ink-300"> · </span>
-                          <span className="font-mono text-tide-600">
-                            {due.invoiceNumber}
-                          </span>
+                          {due.noPurchase ? (
+                            <span className="font-semibold text-indigo-600 dark:text-indigo-300">
+                              No bill
+                            </span>
+                          ) : (
+                            <span className="font-mono text-tide-600">
+                              {due.invoiceNumber}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[15px] font-bold tabular-nums tracking-tight text-ink-900">
-                          {formatRupees(due.dueAmount)}
+                        <p
+                          className={clsx(
+                            "text-[15px] font-bold tabular-nums tracking-tight",
+                            advance
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-ink-900",
+                          )}
+                        >
+                          {formatRupees(Math.abs(due.dueAmount))}
                         </p>
-                        {status.urgency === "none" ? (
+                        {advance ? (
+                          <span className="mt-0.5 block h-5 text-[10px] font-bold uppercase leading-5 tracking-wide text-emerald-600 dark:text-emerald-400">
+                            You'll give
+                          </span>
+                        ) : status.urgency === "none" ? (
                           // Same height as the cards with a circle.
                           <span className="mt-0.5 block h-5" aria-hidden />
                         ) : (
