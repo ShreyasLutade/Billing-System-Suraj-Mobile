@@ -7,7 +7,7 @@ import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { api, round2 } from "../lib/api";
 import { formatRupees } from "../lib/dueStatus";
-import { EntryDateChip, todayIST } from "../components/EntryDateChip";
+import { EntryDateIcon, todayIST } from "../components/EntryDateIcon";
 
 type Direction = "gave" | "got";
 type Method = "cash" | "online" | "na";
@@ -223,11 +223,10 @@ export function AddDuePersonPage() {
           })}
         </div>
 
-        <label
-          htmlFor="khata-amount"
-          className="relative mt-3 flex items-center gap-1.5 border-b-2 border-ink-900/10 pb-1 transition-colors dark:border-white/10"
-        >
-          <span className={clsx("font-display text-[30px] font-bold", tone.text)}>₹</span>
+        <div className="relative mt-3 flex items-center gap-1.5 border-b-2 border-ink-900/10 pb-1 transition-colors dark:border-white/10">
+          <label htmlFor="khata-amount" className={clsx("font-display text-[30px] font-bold", tone.text)}>
+            ₹
+          </label>
           <input
             id="khata-amount"
             className={clsx(
@@ -246,7 +245,13 @@ export function AddDuePersonPage() {
               setError(null);
             }}
           />
-        </label>
+          <EntryDateIcon
+            value={entryDay}
+            onChange={setEntryDay}
+            prefix={direction === "gave" ? "Given on" : "Got on"}
+            tone={direction}
+          />
+        </div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.p
             key={`${direction}-${validAmount}`}
@@ -259,14 +264,6 @@ export function AddDuePersonPage() {
             {summary}
           </motion.p>
         </AnimatePresence>
-        <div className="relative mt-2.5">
-          <EntryDateChip
-            value={entryDay}
-            onChange={setEntryDay}
-            prefix={direction === "gave" ? "Given on" : "Got on"}
-            tone={direction}
-          />
-        </div>
       </section>
 
       {/* Person */}

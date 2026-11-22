@@ -20,7 +20,7 @@ import { useFixedBottomBar } from "../hooks/useFixedBottomBar";
 import { useVisualViewportStyle } from "../hooks/useVisualViewport";
 import { EmptyState, LoadingBlock, BackLink } from "../components/ui";
 import { WhatsAppIcon } from "../components/WhatsAppIcon";
-import { EntryDateChip, todayIST } from "../components/EntryDateChip";
+import { EntryDateIcon, todayIST } from "../components/EntryDateIcon";
 import { api, formatINR, round2 } from "../lib/api";
 import { formatRupees, initials, URGENCY_TONE, type DueUrgency } from "../lib/dueStatus";
 import { dueReminderLink } from "../lib/dueReminder";
@@ -867,6 +867,7 @@ function AmountField({
   tone,
   invalid,
   placeholder,
+  trailing,
 }: {
   id: string;
   value: string;
@@ -874,12 +875,14 @@ function AmountField({
   tone: "gave" | "got";
   invalid?: boolean;
   placeholder?: string;
+  /** Right side of the box (the date icon). */
+  trailing?: ReactNode;
 }) {
   return (
-    <label
-      htmlFor={id}
+    // A div (not a label): the date icon inside is its own control.
+    <div
       className={clsx(
-        "flex items-center gap-1.5 rounded-2xl border-[1.5px] bg-white px-3.5 py-1.5 dark:bg-surface",
+        "flex items-center gap-1.5 rounded-2xl border-[1.5px] bg-white py-1.5 pl-3.5 pr-1.5 dark:bg-surface",
         invalid
           ? "border-rose-500"
           : tone === "gave"
@@ -887,7 +890,9 @@ function AmountField({
             : "border-emerald-500/80 focus-within:border-emerald-500",
       )}
     >
-      <span className="font-display text-2xl font-bold text-ink-400">₹</span>
+      <label htmlFor={id} className="font-display text-2xl font-bold text-ink-400">
+        ₹
+      </label>
       <input
         id={id}
         className="w-full min-w-0 bg-transparent font-display text-2xl font-bold tabular-nums text-ink-900 outline-none placeholder:text-ink-300"
@@ -902,7 +907,8 @@ function AmountField({
         placeholder={placeholder ?? "0"}
         onChange={(event) => onChange(event.target.value)}
       />
-    </label>
+      {trailing}
+    </div>
   );
 }
 
@@ -974,6 +980,7 @@ function GotSheet({
         id="due-got-amount"
         value={amount}
         tone="got"
+        trailing={<EntryDateIcon value={paidOn} onChange={setPaidOn} prefix="Got on" tone="got" />}
         placeholder={due.pending > 0 ? String(round2(due.pending)) : "0"}
         onChange={(next) => {
           setAmount(next);
@@ -997,9 +1004,6 @@ function GotSheet({
                 : "Balance will be clear"}
       </p>
 
-      <div className="mb-2">
-        <EntryDateChip value={paidOn} onChange={setPaidOn} prefix="Got on" tone="got" />
-      </div>
       <div className="mt-1 grid grid-cols-3 gap-2">
         {METHODS.map((option) => (
           <button
@@ -1090,6 +1094,7 @@ function GaveSheet({
         id="due-gave-amount"
         value={amount}
         tone="gave"
+        trailing={<EntryDateIcon value={givenOn} onChange={setGivenOn} prefix="Given on" tone="gave" />}
         onChange={(next) => {
           setAmount(next);
           setError(null);
@@ -1115,9 +1120,6 @@ function GaveSheet({
         )}
       </p>
 
-      <div className="mb-2">
-        <EntryDateChip value={givenOn} onChange={setGivenOn} prefix="Given on" tone="gave" />
-      </div>
       <div className="mt-1 grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
         <label className="min-w-0">
           <span className="mb-1 block text-[10.5px] font-bold uppercase tracking-[0.12em] text-ink-400">

@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronDown } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import clsx from "clsx";
 
 /** Today in India as YYYY-MM-DD. */
@@ -24,16 +24,15 @@ function label(value: string) {
 }
 
 /**
- * "📅 Today ▾" chip for when money was given / received. Tapping opens the
- * phone's date picker (a hidden date input covers the chip); no future days.
+ * Calendar icon for the right side of an amount box. Today: just the icon;
+ * another day: icon + short date. Tapping opens the phone's date picker.
  */
-export function EntryDateChip({
+export function EntryDateIcon({
   value,
   onChange,
   prefix,
   tone,
 }: {
-  /** YYYY-MM-DD (today when empty). */
   value: string;
   onChange: (value: string) => void;
   prefix: string;
@@ -45,30 +44,31 @@ export function EntryDateChip({
   return (
     <label
       className={clsx(
-        "relative inline-flex h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-xl border px-2.5 text-[12.5px] font-bold transition",
+        "relative inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-xl transition",
+        custom ? "px-2.5" : "w-10",
         custom
           ? tone === "gave"
-            ? "border-rose-400/70 bg-rose-500/[0.07] text-rose-600 dark:text-rose-400"
-            : "border-emerald-500/70 bg-emerald-500/[0.08] text-emerald-700 dark:text-emerald-400"
-          : "border-ink-100 bg-white text-ink-800 dark:border-[rgb(var(--color-line))] dark:bg-surface",
+            ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          : "bg-ink-900/[0.05] text-ink-500 hover:text-ink-800 dark:bg-white/[0.07]",
       )}
+      title={`${prefix} ${label(current)}`}
     >
-      <CalendarDays className="h-4 w-4 shrink-0" strokeWidth={2.2} />
-      <span className="font-semibold text-ink-400">{prefix}</span>
-      <span className="truncate tabular-nums">{label(current)}</span>
-      <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" strokeWidth={2.6} />
+      <CalendarDays className="h-[18px] w-[18px] shrink-0" strokeWidth={2.2} />
+      {custom ? (
+        <span className="whitespace-nowrap text-[12px] font-bold tabular-nums">{label(current)}</span>
+      ) : null}
       <input
         type="date"
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        aria-label={`${prefix} date`}
+        aria-label={`${prefix} date: ${label(current)}`}
         max={today}
         value={current}
         onClick={(event) => {
-          // Desktop browsers only open the picker from its icon otherwise.
           try {
             (event.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
           } catch {
-            // ignore (already open / not allowed)
+            // ignore
           }
         }}
         onChange={(event) => {
