@@ -12177,3 +12177,57 @@ html.dark .acc {
 .acc-page:has(.acc-seg-save.is-docked) {
   padding-bottom: 70px;
 }
+
+/* Split by model: model list easy to tap on every phone + laptop */
+.acc .acc-seg-suggest {
+  z-index: 35;
+  max-height: min(52vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 16px 34px -14px rgba(15, 23, 42, 0.35);
+  -webkit-overflow-scrolling: touch;
+}
+
+.acc .acc-seg-suggest button {
+  min-height: 42px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.acc .acc-seg-suggest button.is-active {
+  background: color-mix(in srgb, var(--a-accent) 14%, var(--a-card));
+  box-shadow: inset 3px 0 0 var(--a-accent);
+}
+
+.acc .acc-seg-input input {
+  touch-action: manipulation;
+}
+
+/* Quick qty chips never run under the Add button */
+.acc .acc-seg-addrow {
+  flex-wrap: nowrap;
+}
+
+.acc .acc-seg-quick {
+  min-width: 0;
+  scrollbar-width: none;
+}
+
+.acc .acc-seg-quick::-webkit-scrollbar {
+  display: none;
+}
+
+.acc .acc-seg-addrow > .acc-btn {
+  flex: none;
+  padding-inline: 12px;
+}
+
+@media (max-width: 420px) {
+  .acc .acc-seg-quick button.is-20 {
+    display: none;
+  }
+
+  .acc .acc-seg-quick button {
+    padding: 8px 9px;
+  }
+}

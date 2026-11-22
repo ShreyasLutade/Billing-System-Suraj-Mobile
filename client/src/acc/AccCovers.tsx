@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
@@ -127,7 +127,20 @@ export function AccSegregatePage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [draft, setDraft] = useState("");
   const [draftQty, setDraftQty] = useState(1);
+  /** Model suggestion list: open on every tap/click or typing; ↑ ↓ pick, Enter adds. */
   const [focus, setFocus] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const addBoxRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    // Close when tapping anywhere outside the input + list (not on blur:
+    // phones blur at odd moments and the list used to vanish or not reopen).
+    const away = (e: PointerEvent) => {
+      if (!addBoxRef.current?.contains(e.target as Node)) setFocus(false);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [focus]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -143,8 +156,12 @@ export function AccSegregatePage() {
     const fromShop = new Set<string>();
     for (const p of catalog?.products ?? []) for (const m of p.models) fromShop.add(m.model);
     const all = [...fromShop, ...names, ...COMMON_PHONE_BRANDS].filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i);
+    const free = all.filter((n) => !used.has(n.toLowerCase()));
     const q = draft.trim().toLowerCase();
-    return all.filter((n) => !used.has(n.toLowerCase()) && (!q || n.toLowerCase().includes(q))).slice(0, 8);
+    // A model already picked: show it first, then the rest, so it's easy to switch.
+    const exact = free.find((n) => n.toLowerCase() === q);
+    if (exact) return [exact, ...free.filter((n) => n !== exact)].slice(0, 8);
+    return free.filter((n) => !q || n.toLowerCase().includes(q)).slice(0, 8);
   }, [catalog, names, rows, draft]);
 
   function add(name = draft) {
@@ -160,6 +177,15 @@ export function AccSegregatePage() {
 
   /** Phone bottom-bar height: the Save bar docks right on top of it. */
   const navH = useBottomNavHeight();
+
+  /** A model chosen from the list: fill it in and close the list so the quantity can be set. */
+  function pickModel(name: string) {
+    setDraft(name);
+    setFocus(false);
+    setHi(-1);
+    const el = document.activeElement as HTMLElement | null;
+    if (el && el.tagName === "INPUT") el.blur();
+  }
 
   /** Row being renamed and the name being typed. */
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -249,39 +275,80 @@ export function AccSegregatePage() {
       </section>
 
       {/* Add a phone model */}
-      <section className="acc-seg-add">
+      <section className="acc-seg-add" ref={addBoxRef}>
         <div className="acc-seg-input">
           <Smartphone aria-hidden />
           <input
             data-keep-case
             className="bg-transparent"
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); setFocus(true); }}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setFocus(true);
+              setHi(-1);
+            }}
             onFocus={() => setFocus(true)}
-            onBlur={() => setTimeout(() => setFocus(false), 150)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
+            onPointerDown={() => setFocus(true)}
+            onClick={() => setFocus(true)}
+            onKeyDown={(e) => {
+              const count = suggestions.length;
+              if (focus && count && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                e.preventDefault();
+                setHi((cur) => (e.key === "ArrowDown" ? (cur + 1) % count : cur <= 0 ? count - 1 : cur - 1));
+              } else if (e.key === "Escape" && focus) {
+                e.preventDefault();
+                setFocus(false);
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (focus && hi >= 0 && suggestions[hi]) pickModel(suggestions[hi]);
+                else add();
+              }
+            }}
             placeholder="Phone model, e.g. iPhone 15 Pro"
+            enterKeyHint="done"
+            autoComplete="off"
             disabled={left <= 0}
+            aria-expanded={focus}
+            aria-autocomplete="list"
           />
           {draft ? (
-            <button type="button" onClick={() => setDraft("")} aria-label="Clear">
+            <button type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => { setDraft(""); setFocus(true); }} aria-label="Clear">
               <X />
             </button>
           ) : null}
         </div>
         <AnimatePresence>
-          {focus && suggestions.length ? (
-            <motion.ul className="acc-seg-suggest" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              {suggestions.map((n) => (
+          {focus && (suggestions.length || draft.trim()) ? (
+            <motion.ul className="acc-seg-suggest" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
+              {suggestions.map((n, i) => (
                 <li key={n}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setDraft(n); setFocus(false); (document.activeElement as HTMLElement | null)?.blur(); }}>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className={clsx(hi === i && "is-active")}
+                    // Pick on touch/press itself (before any blur or keyboard closing on phones).
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      pickModel(n);
+                    }}
+                    onClick={() => pickModel(n)}
+                  >
                     {n}
                   </button>
                 </li>
               ))}
               {draft.trim() && !suggestions.some((n) => n.toLowerCase() === draft.trim().toLowerCase()) ? (
                 <li>
-                  <button type="button" className="is-new" onMouseDown={(e) => e.preventDefault()} onClick={() => add()}>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="is-new"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      add();
+                      setFocus(false);
+                    }}
+                  >
                     <Plus /> Add “{draft.trim()}” (saved for next time)
                   </button>
                 </li>
@@ -293,7 +360,7 @@ export function AccSegregatePage() {
           <Stepper value={draftQty} onChange={setDraftQty} max={Math.max(left, 1)} />
           <div className="acc-seg-quick">
             {[5, 10, 20].filter((n) => n < left).map((n) => (
-              <button key={n} type="button" onClick={() => setDraftQty(n)} className={clsx(draftQty === n && "is-on")}>
+              <button key={n} type="button" onClick={() => setDraftQty(n)} className={clsx(draftQty === n && "is-on", n === 20 && "is-20")}>
                 {n}
               </button>
             ))}
