@@ -10,6 +10,7 @@ import {
   Banknote,
   ImageOff,
   KeyRound,
+  Repeat,
   Smartphone,
   Loader2,
   Plus,
@@ -1075,6 +1076,8 @@ function MoneyTab({
         </div>
       </div>
 
+      <AutoSalaryCard person={person} today={today} onChanged={onChanged} />
+
       {/* Give money */}
       <section className="space-y-2.5 rounded-3xl border border-ink-100 bg-white p-3.5 shadow-sm dark:bg-surface-elevated">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Give money</p>
@@ -1170,6 +1173,11 @@ function MoneyTab({
                         {online ? <Smartphone className="h-3 w-3" /> : <Banknote className="h-3 w-3" />}
                         {online ? "Online" : "Cash"}
                       </span>
+                      {p.auto ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px text-[10px] font-semibold text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">
+                          <Repeat className="h-3 w-3" /> Auto
+                        </span>
+                      ) : null}
                     </p>
                     <p className="truncate text-xs text-ink-500">{[dayLabel(p.day), p.note].filter(Boolean).join(" · ")}</p>
                   </div>
@@ -1204,6 +1212,170 @@ function MoneyTab({
         ) : null}
       </section>
     </div>
+  );
+}
+
+function ordinal(n: number) {
+  const v = n % 100;
+  return `${n}${v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"}`;
+}
+
+/** The next date the auto salary will be added (yyyy-mm-dd → "1 Dec"). */
+function nextPayLabel(day: number, today: string) {
+  const [y, m, d] = today.split("-").map(Number);
+  const lastOf = (yy: number, mm: number) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  let yy = y;
+  let mm = m;
+  // Today's pay day is already added when the page loads, so the next one is next month.
+  if (Math.min(day, lastOf(yy, mm)) <= d) {
+    mm += 1;
+    if (mm > 12) {
+      mm = 1;
+      yy += 1;
+    }
+  }
+  const dd = Math.min(day, lastOf(yy, mm));
+  return new Date(Date.UTC(yy, mm - 1, dd)).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+/** Monthly salary added automatically on a chosen day. */
+function AutoSalaryCard({ person, today, onChanged }: { person: StaffMember; today: string; onChanged: () => void }) {
+  const saved = person.salary;
+  const [on, setOn] = useState(Boolean(saved?.auto));
+  const [amount, setAmount] = useState(saved?.amount ? String(saved.amount) : "");
+  const [day, setDay] = useState(saved?.day || 1);
+  const [mode, setMode] = useState<"CASH" | "ONLINE">(saved?.mode || "CASH");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOn(Boolean(saved?.auto));
+    setAmount(saved?.amount ? String(saved.amount) : "");
+    setDay(saved?.day || 1);
+    setMode(saved?.mode || "CASH");
+  }, [saved?.auto, saved?.amount, saved?.day, saved?.mode]);
+
+  const n = Number(amount) || 0;
+  const changed = on !== Boolean(saved?.auto) || (on && (n !== (saved?.amount || 0) || day !== (saved?.day || 1) || mode !== (saved?.mode || "CASH")));
+
+  async function save(nextOn = on) {
+    if (nextOn && !(n > 0)) return setError("Enter the monthly salary");
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setStaffSalary(person.id, { autoSalary: nextOn, salaryAmount: n, salaryDay: day, salaryMode: mode });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className={clsx("rounded-3xl border p-3.5 shadow-sm transition", on ? "border-violet-200 bg-violet-50/40 dark:border-violet-400/30 dark:bg-violet-400/5" : "border-ink-100 bg-white dark:bg-surface-elevated")}>
+      <div className="flex items-center gap-3">
+        <span className={clsx("grid h-9 w-9 shrink-0 place-items-center rounded-xl", on ? "bg-violet-500 text-white" : "bg-ink-50 text-ink-500 dark:bg-white/10")}>
+          <Repeat className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink-900">Auto salary</p>
+          <p className="truncate text-xs text-ink-500">
+            {saved?.auto
+              ? `₹${saved.amount.toLocaleString("en-IN")} on the ${ordinal(saved.day)} · next ${nextPayLabel(saved.day, today)}`
+              : "Add the salary every month by itself"}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label="Auto salary"
+          disabled={busy}
+          onClick={() => {
+            const next = !on;
+            setOn(next);
+            setError(null);
+            // Turning off saves right away; turning on waits for the amount.
+            if (!next && saved?.auto) void save(false);
+          }}
+          className={clsx("relative h-7 w-12 shrink-0 rounded-full transition", on ? "bg-violet-500" : "bg-ink-200 dark:bg-white/20")}
+        >
+          <span className={clsx("absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all", on ? "left-[22px]" : "left-0.5")} />
+        </button>
+      </div>
+
+      {on ? (
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-[1.3fr_1fr] gap-2">
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-100 bg-white px-3 focus-within:border-violet-400 dark:bg-white/5">
+              <span className="font-bold text-ink-400">₹</span>
+              <input
+                className="h-10 w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-ink-900 outline-none placeholder:text-sm placeholder:font-medium"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                placeholder="Monthly salary"
+                value={amount}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  setError(null);
+                }}
+                aria-label="Monthly salary"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-100 bg-white px-2.5 dark:bg-white/5">
+              <span className="text-xs font-semibold text-ink-500">Every</span>
+              <select
+                className="h-10 w-full min-w-0 bg-transparent text-sm font-semibold text-ink-900 outline-none"
+                value={day}
+                onChange={(e) => setDay(Number(e.target.value))}
+                aria-label="Day of the month"
+              >
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>
+                    {ordinal(d)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["CASH", "Cash", Banknote],
+                ["ONLINE", "Online", Smartphone],
+              ] as const
+            ).map(([m, label, Icon]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={clsx(
+                  "flex h-9 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold transition",
+                  mode === m ? "border-violet-400 bg-white text-violet-700 dark:bg-violet-400/10 dark:text-violet-300" : "border-ink-100 text-ink-500",
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-ink-500">
+            {n > 0
+              ? `₹${n.toLocaleString("en-IN")} is added as Salary on the ${ordinal(day)} of every month (${mode === "CASH" ? "cash" : "online"}). ${day > 28 ? "Short months use their last day. " : ""}Starts from today.`
+              : "Enter the monthly salary and the day to add it."}
+          </p>
+          {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+          {changed ? (
+            <button type="button" className="btn-primary w-full" disabled={busy} onClick={() => void save(true)}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {saved?.auto ? "Save changes" : "Turn on auto salary"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

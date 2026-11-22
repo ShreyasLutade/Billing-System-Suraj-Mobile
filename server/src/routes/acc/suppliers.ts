@@ -30,6 +30,14 @@ async function supplierRows() {
     }),
     prisma.accSupplierPayment.groupBy({ by: ["supplierId"], _sum: { amount: true }, _max: { paidAt: true } }),
   ]);
+  // Stock purchases only (an opening balance has no items and isn't a purchase).
+  const stockBuys = await prisma.accPurchase.groupBy({
+    by: ["supplierId"],
+    where: { supplierId: { not: null }, items: { some: {} } },
+    _count: true,
+    _max: { purchaseDate: true },
+  });
+  const sb = new Map(stockBuys.map((r) => [r.supplierId, r]));
   const b = new Map(bought.map((r) => [r.supplierId, r]));
   const p = new Map(paid.map((r) => [r.supplierId, r]));
   return suppliers.map((s) => {
@@ -44,8 +52,8 @@ async function supplierRows() {
       purchased,
       paid: paidTotal,
       balance: round2(purchased - paidTotal),
-      purchaseCount: b.get(s.id)?._count || 0,
-      lastPurchaseAt: b.get(s.id)?._max.purchaseDate || null,
+      purchaseCount: sb.get(s.id)?._count || 0,
+      lastPurchaseAt: sb.get(s.id)?._max.purchaseDate || null,
       lastPaymentAt: p.get(s.id)?._max.paidAt || null,
     };
   });
@@ -94,9 +102,23 @@ function clashResponse(res: import("express").Response, error: unknown) {
 
 accSuppliersRouter.post("/suppliers", async (req, res, next) => {
   try {
-    const parsed = supplierSchema.safeParse(req.body);
+    const parsed = supplierSchema
+      .extend({
+        /** Money already owed to this supplier when adding them (opening balance). */
+        openingBalance: z.coerce.number().min(0).max(100_000_000).default(0),
+      })
+      .safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
-    const supplier = await prisma.$transaction((tx) => saveSupplier(tx, parsed.data));
+    const { openingBalance, ...details } = parsed.data;
+    const supplier = await prisma.$transaction(async (tx) => {
+      const saved = await saveSupplier(tx, details);
+      if (openingBalance > 0) {
+        await tx.accPurchase.create({
+          data: { supplierId: saved.id, total: round2(openingBalance), note: PREVIOUS_DUE_NOTE, createdByName: req.user?.name || null },
+        });
+      }
+      return saved;
+    });
     res.status(201).json({ data: supplier });
   } catch (error) {
     if (!clashResponse(res, error)) next(error);

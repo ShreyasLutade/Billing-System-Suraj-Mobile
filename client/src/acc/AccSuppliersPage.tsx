@@ -40,6 +40,101 @@ function supplierProblem(input: AccSupplierInput, suppliers: AccSupplier[]) {
 }
 
 
+/** New supplier: name, mobile and (optional) the amount already owed to them. */
+function AddSupplierSheet({
+  open,
+  suppliers,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  suppliers: AccSupplier[];
+  onClose: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [opening, setOpening] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setName("");
+    setPhone("");
+    setOpening("");
+    setBusy(false);
+  }, [open]);
+
+  async function save() {
+    if (busy) return;
+    const problem = supplierProblem({ name, phone }, suppliers);
+    if (problem) return void toast(problem, { tone: "error" });
+    setBusy(true);
+    try {
+      const { data } = await accApi.createSupplier({
+        name: name.trim(),
+        phone: completePhone(phone),
+        openingBalance: Math.max(Number(opening) || 0, 0),
+      });
+      toast(Number(opening) > 0 ? `${name.trim()} added · opening balance ${inr(Number(opening))}` : `${name.trim()} added`);
+      onSaved(data.id);
+    } catch (err) {
+      toast(errorText(err), { tone: "error" });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onClose={() => !busy && onClose()}
+      title="Add supplier"
+      subtitle="Name, mobile and anything you already owe them"
+      footer={
+        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
+          {busy ? <Loader2 className="acc-spin" /> : <Check />} Save supplier
+        </button>
+      }
+    >
+      <div className="acc-add-supplier">
+        <label className="acc-field">
+          <span>Supplier name *</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Raju Traders" autoComplete="off" />
+        </label>
+        <label className="acc-field">
+          <span>Mobile number *</span>
+          <input
+            type="tel"
+            inputMode="numeric"
+            maxLength={14}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="10-digit mobile"
+            autoComplete="off"
+          />
+        </label>
+        <label className="acc-field">
+          <span>Opening balance (optional)</span>
+          <span className="acc-rupee-input">
+            <b>₹</b>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={opening}
+              onChange={(e) => setOpening(e.target.value)}
+              placeholder="0"
+              onKeyDown={(e) => e.key === "Enter" && void save()}
+            />
+          </span>
+          <small className="acc-field-hint">Old due to this supplier. Shows as “Previous pending amount” and adds to To pay.</small>
+        </label>
+      </div>
+    </Sheet>
+  );
+}
+
 type SortKey = "name" | "city" | "purchaseCount" | "purchased" | "paid" | "balance" | "lastPurchaseAt";
 
 /** Money first, so "to pay" is on screen without scrolling sideways. */
@@ -68,6 +163,7 @@ export function AccSuppliersPage() {
   const [list, setList] = useState<AccSupplier[] | null>(null);
   const [q, setQ] = useState("");
   const [paying, setPaying] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "balance", dir: -1 });
 
   useEffect(() => {
@@ -104,6 +200,9 @@ export function AccSuppliersPage() {
       <div className="acc-title-row">
         <h1>Suppliers</h1>
         <div className="acc-head-actions">
+          <button type="button" className="acc-btn" onClick={() => setAdding(true)}>
+            <Plus /> Add
+          </button>
           <button type="button" className="acc-btn is-primary" onClick={() => setPaying(true)}>
             <Wallet /> Pay supplier
           </button>
@@ -223,6 +322,15 @@ export function AccSuppliersPage() {
           {all.length ? null : "Suppliers are added on Add stock, with their first purchase."}
         </Empty>
       )}
+      <AddSupplierSheet
+        open={adding}
+        suppliers={all}
+        onClose={() => setAdding(false)}
+        onSaved={(id) => {
+          setAdding(false);
+          navigate(`/acc/suppliers/${id}`);
+        }}
+      />
       <PaySupplierModal
         open={paying}
         suppliers={paymentSuppliers}

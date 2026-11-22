@@ -455,7 +455,7 @@ export const accApi = {
       method: "DELETE",
     }),
   supplier: (id: string) => apiRequest<{ data: AccSupplierDetail }>(`/acc/suppliers/${id}`),
-  createSupplier: (body: AccSupplierInput) => post<{ id: string }>("/acc/suppliers", body),
+  createSupplier: (body: AccSupplierInput & { openingBalance?: number }) => post<{ id: string }>("/acc/suppliers", body),
   updateSupplier: (id: string, body: AccSupplierInput) => put<{ id: string }>(`/acc/suppliers/${id}`, body),
   paySupplier: (id: string, body: { amount: number; method: string; reference?: string; paidAt?: string; note?: string }) =>
     post(`/acc/suppliers/${id}/payments`, body),
@@ -500,9 +500,11 @@ export const accApi = {
     supplier: (id: string) => downloadAuthed(`/acc/suppliers/${id}/pdf`, "supplier-statement.pdf"),
     analytics: (q: PeriodQuery) => downloadAuthed(`/acc/analytics/pdf${qs(q)}`, "accessories-report.pdf"),
     boxes: (boxId?: string) => downloadAuthed(`/acc/boxes/pdf${qs({ boxId })}`, boxId ? "cover-box.pdf" : "cover-boxes.pdf"),
+    models: (productId: string) => downloadAuthed(`/acc/products/${productId}/models/pdf`, "cover-models.pdf"),
   },
   sharePdf: {
     boxes: (boxId?: string) => shareAuthed(`/acc/boxes/pdf${qs({ boxId })}`, boxId ? "cover-box.pdf" : "cover-boxes.pdf", "Cover boxes"),
+    models: (productId: string) => shareAuthed(`/acc/products/${productId}/models/pdf`, "cover-models.pdf", "Cover by model"),
     stock: (q: { filter?: string; categoryId?: string; cost?: boolean }) =>
       shareAuthed(`/acc/products/pdf${qs(q)}`, "accessories-stock.pdf", "Accessories stock"),
     sales: (q: PeriodQuery & { kind?: string; items?: boolean; q?: string; scope?: AccSaleSearchScope; void?: boolean }) =>

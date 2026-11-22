@@ -294,8 +294,11 @@ export type StaffPaymentRow = {
   kind: "ADVANCE" | "SALARY" | "OTHER";
   mode: "CASH" | "ONLINE";
   note: string;
+  /** Added by the auto salary. */
+  auto?: boolean;
   createdByName: string | null;
 };
+export type StaffSalary = { auto: boolean; amount: number; day: number; mode: "CASH" | "ONLINE"; since: string };
 export type StaffMember = {
   id: string;
   name: string;
@@ -304,6 +307,8 @@ export type StaffMember = {
   since: string;
   attendance: StaffMark[];
   payments: StaffPaymentRow[];
+  /** Admins only: monthly auto salary settings. */
+  salary?: StaffSalary;
 };
 
 export const api = {
@@ -321,6 +326,8 @@ export const api = {
     request<{ data: { photo: string | null } }>(`/staff/attendance/${attendanceId}/photo`),
   addStaffPayment: (id: string, body: { amount: number; day: string; kind: string; mode: string; note: string }) =>
     request<{ data: StaffPaymentRow }>(`/staff/${id}/payments`, { method: "POST", body: JSON.stringify(body) }),
+  setStaffSalary: (id: string, body: { autoSalary: boolean; salaryAmount: number; salaryDay: number; salaryMode: "CASH" | "ONLINE" }) =>
+    request<{ data: { saved: boolean } }>(`/staff/${id}/salary`, { method: "PUT", body: JSON.stringify(body) }),
   deleteStaffPayment: (paymentId: string) =>
     request<{ data: unknown }>(`/staff/payments/${paymentId}`, { method: "DELETE" }),
 

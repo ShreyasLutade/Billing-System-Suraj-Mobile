@@ -262,3 +262,55 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * One cover product split by phone model as a PDF: each model with its
+ * pieces and the boxes it is kept in, plus the pieces not split yet.
+ */
+accBoxesRouter.get("/products/:id/models/pdf", async (req, res, next) => {
+  try {
+    const product = await prisma.accProduct.findUnique({
+      where: { id: req.params.id },
+      include: { category: { select: { name: true } }, models: true, boxItems: { include: { box: { select: { code: true } } } } },
+    });
+    if (!product) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+    const where = new Map<string, string[]>();
+    for (const i of product.boxItems) where.set(i.model, [...(where.get(i.model) ?? []), i.box.code]);
+    const models = product.models.filter((m) => m.qty > 0).sort((a, b) => b.qty - a.qty || collator.compare(a.model, b.model));
+    const total = Math.max(product.stockQty, 0);
+    const split = models.reduce((a, m) => a + m.qty, 0);
+    const notSplit = Math.max(total - split, 0);
+    const columns = [
+      { key: "n", label: "#", width: 0.5, align: "center" as const },
+      { key: "model", label: "Phone model", width: 4, keepCase: true },
+      { key: "qty", label: "Pcs", width: 1, align: "right" as const },
+      { key: "box", label: "Kept in box", width: 2 },
+    ];
+    const rows: PdfRow[] = models.map((m, i) => ({
+      cells: { n: String(i + 1), model: m.model, qty: String(m.qty), box: (where.get(m.model) ?? []).sort(collator.compare).join(", ") || "-" },
+    }));
+    if (notSplit > 0) {
+      rows.push({
+        cells: { n: "", model: "Not split yet", qty: String(notSplit), box: (where.get("") ?? []).join(", ") || "-" },
+        color: { model: PDF_TONE.amber, qty: PDF_TONE.amber },
+      });
+    }
+    const pdf = await renderAccPdf({
+      title: titleCase(product.name),
+      subtitle: `${product.category.name} · split by phone model`,
+      summary: [
+        { label: "Total pieces", value: String(total), tone: "blue" },
+        { label: "Split by model", value: `${split} pcs · ${models.length} models`, tone: "green" },
+        { label: "Not split yet", value: `${notSplit} pcs`, tone: notSplit ? "amber" : "green" },
+      ],
+      sections: [{ columns, rows, total: { model: "Total", qty: String(total) }, empty: "Not split by model yet." }],
+    });
+    sendPdf(res, pdf, `${product.name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "cover"}-models.pdf`);
+  } catch (error) {
+    next(error);
+  }
+});

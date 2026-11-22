@@ -27,8 +27,92 @@ async function adminPasswordOk(password: string) {
   return false;
 }
 
+/* ---------------- auto salary ---------------- */
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** The pay date of a month ("2026-02", day 31 → "2026-02-28"). */
+function payDate(month: string, day: number) {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${pad(Math.min(Math.max(day, 1), last))}`;
+}
+
+function nextMonth(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
+}
+
+/**
+ * Add the salary entries that are due: for each staff member with auto
+ * salary on, every month from the day it was turned on up to today gets one
+ * SALARY entry on the chosen day. Runs whenever the staff page loads.
+ */
+export async function runAutoSalary(onlyId?: string) {
+  const today = istDateString();
+  const staff = await prisma.staff.findMany({
+    where: { active: true, autoSalary: true, salaryAmount: { gt: 0 }, ...(onlyId ? { id: onlyId } : {}) },
+  });
+  for (const s of staff) {
+    if (!s.autoSince) continue;
+    let month = s.lastAutoMonth ? nextMonth(s.lastAutoMonth) : s.autoSince.slice(0, 7);
+    let last = s.lastAutoMonth;
+    const creates: Array<{ day: string }> = [];
+    while (month <= today.slice(0, 7)) {
+      const day = payDate(month, s.salaryDay);
+      if (day > today) break; // this month's pay day hasn't come yet
+      if (day >= s.autoSince) creates.push({ day });
+      last = month;
+      month = nextMonth(month);
+    }
+    if (last === s.lastAutoMonth) continue;
+    await prisma.$transaction([
+      ...creates.map((c) =>
+        prisma.staffPayment.create({
+          data: { staffId: s.id, amount: s.salaryAmount, day: c.day, kind: "SALARY", mode: s.salaryMode, note: "Auto salary", auto: true, createdByName: "Auto" },
+        }),
+      ),
+      prisma.staff.update({ where: { id: s.id }, data: { lastAutoMonth: last } }),
+    ]);
+  }
+}
+
+staffRouter.put("/:id/salary", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({
+        autoSalary: z.boolean(),
+        salaryAmount: z.coerce.number().min(0).max(10_000_000),
+        salaryDay: z.coerce.number().int().min(1).max(31),
+        salaryMode: z.enum(["CASH", "ONLINE"]).default("CASH"),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return void res.status(400).json({ error: parsed.error.issues[0].message });
+    if (parsed.data.autoSalary && !(parsed.data.salaryAmount > 0)) return void res.status(400).json({ error: "Enter the monthly salary" });
+    const current = await prisma.staff.findUnique({ where: { id: req.params.id } });
+    if (!current) return void res.status(404).json({ error: "Staff not found" });
+    const turningOn = parsed.data.autoSalary && !current.autoSalary;
+    await prisma.staff.update({
+      where: { id: current.id },
+      data: {
+        ...parsed.data,
+        // Starts from today: nothing is added for days before it was turned on.
+        // (this month stays done if its salary was already added before)
+        ...(turningOn
+          ? { autoSince: istDateString(), lastAutoMonth: current.lastAutoMonth >= istDateString().slice(0, 7) ? current.lastAutoMonth : "" }
+          : {}),
+      },
+    });
+    await runAutoSalary(current.id);
+    res.json({ data: { saved: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 staffRouter.get("/", async (req, res, next) => {
   try {
+    await runAutoSalary().catch((err) => console.error("[staff] auto salary failed", err));
     const month = typeof req.query.month === "string" && MONTH.test(req.query.month) ? req.query.month : istDateString().slice(0, 7);
     const staff = await prisma.staff.findMany({
       where: { active: true },
@@ -66,6 +150,9 @@ staffRouter.get("/", async (req, res, next) => {
           since: istDateString(s.createdAt),
           attendance: s.attendance.map((a) => ({ ...a, hasPhoto: withPhoto.has(a.id) })),
           payments: "payments" in s ? s.payments : [],
+          ...(isAdmin(req)
+            ? { salary: { auto: s.autoSalary, amount: s.salaryAmount, day: s.salaryDay, mode: s.salaryMode, since: s.autoSince } }
+            : {}),
         })),
       },
     });

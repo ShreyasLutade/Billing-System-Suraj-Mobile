@@ -20,6 +20,7 @@ import {
   COMMON_PHONE_BRANDS,
   CategoryIcon,
   Empty,
+  PdfButton,
   Sheet,
   StockBadge,
   dateTime,
@@ -237,9 +238,15 @@ export function AccProductPage() {
             <Smartphone /> By phone brand
           </h3>
           {models.length ? (
-            <button type="button" className="acc-btn is-small" onClick={() => navigate(`/acc/stock/${product.id}/segregate`)}>
-              <Pencil /> Update
-            </button>
+            <span className="acc-model-head-actions">
+              <PdfButton
+                onDownload={() => accApi.pdf.models(product.id)}
+                onShare={() => accApi.sharePdf.models(product.id)}
+              />
+              <button type="button" className="acc-btn is-small" onClick={() => navigate(`/acc/stock/${product.id}/segregate`)}>
+                <Pencil /> Update
+              </button>
+            </span>
           ) : null}
         </div>
         {models.length ? (

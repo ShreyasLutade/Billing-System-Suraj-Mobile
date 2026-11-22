@@ -12249,3 +12249,76 @@ html.dark .acc {
 .acc .acc-seg-input {
   cursor: text;
 }
+
+/* Cover product: PDF + Update beside "By phone brand" */
+.acc-model-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-model-head-actions .acc-pdf-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.acc-model-head-actions .acc-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.acc-model-head-actions .acc-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Add supplier sheet */
+.acc-add-supplier {
+  display: grid;
+  gap: 12px;
+}
+
+.acc-rupee-input {
+  position: relative;
+  display: block;
+}
+
+.acc-rupee-input > b {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  z-index: 1;
+  translate: 0 -50%;
+  color: var(--a-muted);
+}
+
+.acc .acc-rupee-input input {
+  width: 100%;
+  padding-left: 30px;
+}
+
+.acc .acc-field-hint {
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Suppliers header on phones: title, then Add · Pay supplier · PDF on one row */
+@media (max-width: 560px) {
+  .acc .acc-suppliers-page > .acc-title-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .acc .acc-suppliers-page > .acc-title-row > .acc-head-actions {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .acc .acc-suppliers-page > .acc-title-row > .acc-head-actions > .acc-btn.is-primary {
+    flex: 1;
+  }
+}

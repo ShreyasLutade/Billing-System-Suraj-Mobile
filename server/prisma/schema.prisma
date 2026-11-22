@@ -781,6 +781,17 @@ model Staff {
   name      String
   phone     String   @default("")
   active    Boolean  @default(true)
+  /// Auto salary: on salaryDay each month, salaryAmount is added as a SALARY entry
+  autoSalary    Boolean @default(false)
+  salaryAmount  Float   @default(0)
+  /// 1–31 (short months use their last day)
+  salaryDay     Int     @default(1)
+  /// CASH | ONLINE
+  salaryMode    String  @default("CASH")
+  /// yyyy-mm-dd the auto salary was turned on (nothing before it is added)
+  autoSince     String  @default("")
+  /// yyyy-mm of the last month handled (an entry deleted by hand is not re-added)
+  lastAutoMonth String  @default("")
   createdAt DateTime @default(now())
   attendance StaffAttendance[]
   payments   StaffPayment[]
@@ -819,6 +830,8 @@ model StaffPayment {
   /// CASH | ONLINE
   mode      String   @default("CASH")
   note      String   @default("")
+  /// Added by the auto salary
+  auto      Boolean  @default(false)
   createdByName String?
   createdAt DateTime @default(now())
   staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
