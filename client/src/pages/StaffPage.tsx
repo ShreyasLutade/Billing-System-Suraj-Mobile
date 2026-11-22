@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
   CalendarClock,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Banknote,
@@ -1093,10 +1094,10 @@ function MoneyTab({
             </button>
           ))}
         </div>
-        <label className="flex items-center gap-2 rounded-2xl border border-ink-100 bg-ink-50/50 px-3 focus-within:border-tide-400 focus-within:bg-white dark:bg-white/5">
-          <span className="text-lg font-bold text-ink-400">₹</span>
+        <label className="staff-field is-big">
+          <span className="staff-field-prefix">₹</span>
           <input
-            className="h-12 w-full min-w-0 bg-transparent text-xl font-bold tabular-nums text-ink-900 outline-none placeholder:text-base placeholder:font-medium placeholder:text-ink-300"
+            className="staff-input is-money is-big"
             type="number"
             inputMode="decimal"
             min={0}
@@ -1106,6 +1107,7 @@ function MoneyTab({
               setAmount(e.target.value);
               setError(null);
             }}
+            aria-label="Amount"
           />
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -1135,8 +1137,8 @@ function MoneyTab({
           ))}
         </div>
         <div className="grid grid-cols-[1fr_1.2fr] gap-2">
-          <input className="field h-10" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} />
-          <input className="field h-10" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input className="staff-input" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} aria-label="Date given" />
+          <input className="staff-input" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
         <button type="button" className="btn-primary w-full" disabled={busy} onClick={() => void add()}>
@@ -1308,10 +1310,10 @@ function AutoSalaryCard({ person, today, onChanged }: { person: StaffMember; tod
       {on ? (
         <div className="mt-3 space-y-2">
           <div className="grid grid-cols-[1.3fr_1fr] gap-2">
-            <label className="flex items-center gap-1.5 rounded-xl border border-ink-100 bg-white px-3 focus-within:border-violet-400 dark:bg-white/5">
-              <span className="font-bold text-ink-400">₹</span>
+            <label className="staff-field">
+              <span className="staff-field-prefix">₹</span>
               <input
-                className="h-10 w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-ink-900 outline-none placeholder:text-sm placeholder:font-medium"
+                className="staff-input is-money"
                 type="number"
                 inputMode="decimal"
                 min={0}
@@ -1324,20 +1326,15 @@ function AutoSalaryCard({ person, today, onChanged }: { person: StaffMember; tod
                 aria-label="Monthly salary"
               />
             </label>
-            <label className="flex items-center gap-1.5 rounded-xl border border-ink-100 bg-white px-2.5 dark:bg-white/5">
-              <span className="text-xs font-semibold text-ink-500">Every</span>
-              <select
-                className="h-10 w-full min-w-0 bg-transparent text-sm font-semibold text-ink-900 outline-none"
-                value={day}
-                onChange={(e) => setDay(Number(e.target.value))}
-                aria-label="Day of the month"
-              >
+            <label className="staff-field">
+              <select className="staff-input is-select" value={day} onChange={(e) => setDay(Number(e.target.value))} aria-label="Day of the month">
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
-                    {ordinal(d)}
+                    Every {ordinal(d)}
                   </option>
                 ))}
               </select>
+              <ChevronDown className="staff-field-chev" aria-hidden />
             </label>
           </div>
           <div className="grid grid-cols-2 gap-2">

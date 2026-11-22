@@ -4106,3 +4106,85 @@ html.dark .fx-light-teal {
     display: none;
   }
 }
+
+/* Staff money fields: ONE border per box (beats the global input/select styles of
+   both shops), ₹ inside the box, whole box tappable, 44px tall. */
+.staff-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.staff-field-prefix {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  z-index: 1;
+  translate: 0 -50%;
+  color: var(--app-muted, #64748b);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.staff-field.is-big .staff-field-prefix {
+  font-size: 18px;
+}
+
+.staff-field-chev {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 16px;
+  height: 16px;
+  translate: 0 -50%;
+  color: var(--app-muted, #64748b);
+  pointer-events: none;
+}
+
+.staff-input.staff-input.staff-input.staff-input.staff-input {
+  display: block;
+  width: 100% !important;
+  min-width: 0;
+  height: 44px !important;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--app-line, #e2e8f0) !important;
+  border-radius: 12px !important;
+  outline: none !important;
+  background: var(--app-card, #fff) !important;
+  box-shadow: none !important;
+  color: var(--app-ink, #0f172a) !important;
+  font-size: 15px !important;
+  font-weight: 600;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.staff-input.staff-input.staff-input.staff-input.staff-input:focus {
+  border-color: var(--accent, #3b82f6) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 59, 130, 246), 0.16) !important;
+}
+
+.staff-input.staff-input.staff-input.staff-input.staff-input.is-money {
+  padding-left: 30px !important;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-input.staff-input.staff-input.staff-input.staff-input.is-big {
+  height: 50px !important;
+  padding-left: 34px !important;
+  font-size: 20px !important;
+}
+
+.staff-input.staff-input.staff-input.staff-input.staff-input.is-select {
+  padding-right: 34px !important;
+  cursor: pointer;
+}
+
+.staff-input.staff-input.staff-input.staff-input.staff-input::placeholder {
+  color: var(--app-muted, #94a3b8);
+  font-size: 15px;
+  font-weight: 500;
+}
