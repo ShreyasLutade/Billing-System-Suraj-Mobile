@@ -12,7 +12,6 @@ type Tile = {
   key: string;
   to: string;
   label: string;
-  hint: string;
   value: number | null;
   icon: LucideIcon;
   from: string;
@@ -44,7 +43,6 @@ export function MoneyButtons() {
       key: "cash",
       to: "/analytics/cash",
       label: "Cash",
-      hint: summary && !summary.cash.started ? "Tap to start" : "in hand",
       value: summary ? summary.cash.balance : null,
       icon: Wallet,
       from: "#10B981",
@@ -55,7 +53,6 @@ export function MoneyButtons() {
       key: "online",
       to: "/analytics/online",
       label: "Online",
-      hint: "balance",
       value: summary ? summary.online.balance : null,
       icon: Smartphone,
       from: "#3B82F6",
@@ -66,7 +63,6 @@ export function MoneyButtons() {
       key: "expense",
       to: "/analytics/expenses",
       label: "Expense",
-      hint: "this month",
       value: summary ? summary.expense.thisMonth : null,
       icon: Receipt,
       from: "#F43F5E",
@@ -83,7 +79,7 @@ export function MoneyButtons() {
           <motion.button
             key={tile.key}
             type="button"
-            className="money-tile group relative flex flex-col items-center overflow-hidden rounded-2xl border border-[#E7EAF0] bg-white px-2 pb-2.5 pt-3 text-center shadow-[0_10px_24px_-16px_rgba(11,31,51,0.45)] dark:border-[rgb(var(--color-line))] dark:bg-surface"
+            className="money-tile group relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-2xl border border-[#E7EAF0] bg-white px-2 text-center shadow-[0_10px_24px_-16px_rgba(11,31,51,0.45)] dark:border-[rgb(var(--color-line))] dark:bg-surface"
             style={{ "--tile-glow": tile.glow } as React.CSSProperties}
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -108,7 +104,6 @@ export function MoneyButtons() {
                 <AnimatedNumber value={tile.value} format={formatRupees} fit duration={1} />
               )}
             </span>
-            <span className="block text-[10.5px] font-semibold text-ink-400">{tile.hint}</span>
           </motion.button>
         );
       })}
