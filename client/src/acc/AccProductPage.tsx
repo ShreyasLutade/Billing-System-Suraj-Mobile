@@ -127,7 +127,7 @@ export function AccProductPage() {
     }
   }
 
-  const models = [...product.models].sort((a, b) => b.qty - a.qty || collator.compare(a.model, b.model));
+  const models = [...(product.modelLots ?? product.models)].sort((a, b) => b.qty - a.qty || collator.compare(a.model, b.model));
   const maxModel = Math.max(1, ...models.map((m) => m.qty));
 
   return (
@@ -251,8 +251,8 @@ export function AccProductPage() {
         </div>
         {models.length ? (
           <ul className="acc-model-list">
-            {models.map((m) => (
-              <li key={m.model} className={clsx(m.qty <= 0 && "is-zero")}>
+            {models.map((m, i) => (
+              <li key={`${m.model}#${i}`} className={clsx(m.qty <= 0 && "is-zero")}>
                 <span className="acc-model-name">{m.model}</span>
                 <span className="acc-model-bar">
                   <i style={{ width: `${(m.qty / maxModel) * 100}%` }} />
@@ -346,7 +346,7 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
 
   useEffect(() => {
     if (!open) return;
-    setRows(product.models.map((m) => ({ model: m.model, qty: String(m.qty) })));
+    setRows((product.modelLots ?? product.models).map((m) => ({ model: m.model, qty: String(m.qty) })));
     setNewModel("");
   }, [open, product]);
 
@@ -427,7 +427,7 @@ export function SortSheet({ open, product, onClose }: { open: boolean; product: 
       {rows.length ? (
         <ul className="acc-sort-rows">
           {rows.map((r, i) => (
-            <li key={r.model}>
+            <li key={`${r.model}#${i}`}>
               <span className="acc-model-name">{r.model}</span>
               <div className="acc-mini-stepper">
                 <button type="button" onClick={() => bump(i, -1)} aria-label="Less">
@@ -506,7 +506,7 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
   useEffect(() => {
     if (!open) return;
     setTotal(String(Math.max(product.stockQty, 0)));
-    setModels(product.models.map((m) => ({ model: m.model, qty: String(m.qty) })));
+    setModels((product.modelLots ?? product.models).map((m) => ({ model: m.model, qty: String(m.qty) })));
     setLoose(String(Math.max(sortedQty(product).unsorted, 0)));
   }, [open, product]);
 
@@ -560,7 +560,7 @@ export function CountSheet({ open, product, onClose }: { open: boolean; product:
       {byModel ? (
         <ul className="acc-sort-rows">
           {models.map((m, i) => (
-            <li key={m.model}>
+            <li key={`${m.model}#${i}`}>
               <span className="acc-model-name">{m.model}</span>
               <input
                 className="acc-count-input"

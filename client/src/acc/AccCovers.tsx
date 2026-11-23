@@ -116,7 +116,8 @@ function coverPiles(products: AccProduct[]): Pile[] {
 
 /* ---------------- Segregate one cover product ---------------- */
 
-type Row = { id: string; model: string; qty: number };
+/** One lot on the split page; `orig` = its saved name (for renames). */
+type Row = { id: string; orig?: string; model: string; qty: number };
 
 export function AccSegregatePage() {
   const { id } = useParams();
@@ -146,7 +147,7 @@ export function AccSegregatePage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (product && !rows) setRows(product.models.map((m) => ({ id: m.model, model: m.model, qty: m.qty })));
+    if (product && !rows) setRows((product.modelLots ?? product.models).map((m, i) => ({ id: `${m.model}#${i}`, orig: m.model, model: m.model, qty: m.qty })));
   }, [product, rows]);
 
   const total = Math.max(product?.stockQty ?? 0, 0);
@@ -158,7 +159,7 @@ export function AccSegregatePage() {
     for (const p of catalog?.products ?? []) for (const m of p.models) fromShop.add(m.model);
     const all = [...fromShop, ...names, ...COMMON_PHONE_BRANDS].filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i);
     // Models already in the list stay pickable: adding one again makes a separate lot.
-    const free = all.filter((n) => !/ \(\d+\)$/.test(n)); // lots like "iPhone 15 Pro (2)" aren't suggested
+    const free = all;
     const q = draft.trim().toLowerCase();
     // A model already picked: show it first, then the rest, so it's easy to switch.
     const exact = free.find((n) => n.toLowerCase() === q);
@@ -171,12 +172,10 @@ export function AccSegregatePage() {
     if (!model || !rows) return;
     const qty = Math.min(Math.max(draftQty, 1), Math.max(left, 0));
     if (qty < 1) return void toast("All pieces are split", { tone: "error" });
-    // Same model again = a separate lot ("iPhone 15 Pro (2)"), e.g. kept in another box.
-    const taken = new Set(rows.map((r) => r.model.toLowerCase()));
-    let lot = model;
-    for (let n = 2; taken.has(lot.toLowerCase()); n += 1) lot = `${model} (${n})`;
-    setRows([{ id: `${lot}-${Date.now()}`, model: lot, qty }, ...rows]);
-    if (lot !== model) toast(`Added as ${lot}: a separate lot of ${model}`);
+    // Same model again = a separate lot with the same name (e.g. kept in another box).
+    const again = rows.some((r) => r.model.toLowerCase() === model.toLowerCase());
+    setRows([{ id: `${model}-${Date.now()}`, model, qty }, ...rows]);
+    if (again) toast(`${model} added again as a separate lot`);
     setDraft("");
     setDraftQty(1);
   }
@@ -206,11 +205,6 @@ export function AccSegregatePage() {
     if (!renaming || !rows) return;
     const name = newName.trim().replace(/\s+/g, " ");
     if (name) {
-      const clash = rows.find((r) => r.id !== renaming && r.model.toLowerCase() === name.toLowerCase());
-      if (clash) {
-        toast(`${clash.model} is already in the list`, { tone: "error" });
-        return;
-      }
       setRows(rows.map((r) => (r.id === renaming ? { ...r, model: name } : r)));
     }
     setRenaming(null);
@@ -224,8 +218,10 @@ export function AccSegregatePage() {
     if (left < 0) return void toast(`Only ${total} pieces in stock`, { tone: "error" });
     setBusy(true);
     try {
-      const saved = new Set(product.models.map((m) => m.model));
-      const renames = rows.filter((r) => saved.has(r.id) && r.id !== r.model).map((r) => ({ from: r.id, to: r.model }));
+      // A rename moves its box places only when no other lot keeps the old name.
+      const renames = rows
+        .filter((r) => r.orig && r.orig !== r.model && !rows.some((x) => x !== r && x.model === r.orig))
+        .map((r) => ({ from: r.orig!, to: r.model }));
       const { data } = await accApi.setProductModels(
         product.id,
         rows.filter((r) => r.qty > 0).map((r) => ({ model: r.model, qty: r.qty })),

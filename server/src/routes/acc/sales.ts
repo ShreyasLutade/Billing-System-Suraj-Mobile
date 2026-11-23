@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { accRange, clampGodown, nextAccNumber, round2 } from "../../lib/accShop";
+import { accRange, clampGodown, giveModelQty, nextAccNumber, round2, takeModelQty } from "../../lib/accShop";
 import { istDateString, startOfDayIST } from "../../lib/ist";
 import { renderAccPdf, rs, sendPdf, pdfDay, PDF_TONE, type PdfRow } from "../../services/accPdf";
 import { money } from "../../services/pdf";
@@ -253,12 +253,7 @@ accSalesRouter.post("/sales", async (req, res, next) => {
       // Keep the phone-model breakdown in step (never below zero).
       for (const line of lines) {
         if (!line.productId || !line.model) continue;
-        const row = await tx.accProductModel.findUnique({
-          where: { productId_model: { productId: line.productId, model: line.model } },
-        });
-        if (row) {
-          await tx.accProductModel.update({ where: { id: row.id }, data: { qty: Math.max(0, row.qty - line.qty) } });
-        }
+        await takeModelQty(tx, line.productId, line.model, line.qty);
       }
 
       const moves = lines.filter((l) => l.productId);
@@ -552,10 +547,7 @@ accSalesRouter.post("/sales/:id/void", async (req, res, next) => {
         if (!exists) continue;
         await tx.accProduct.update({ where: { id: item.productId }, data: { stockQty: { increment: item.qty } } });
         if (item.model) {
-          await tx.accProductModel.updateMany({
-            where: { productId: item.productId, model: item.model },
-            data: { qty: { increment: item.qty } },
-          });
+          await giveModelQty(tx, item.productId, item.model, item.qty);
         }
         await tx.accStockMove.create({
           data: {
@@ -672,17 +664,11 @@ accSalesRouter.put("/sales/:id", async (req, res, next) => {
       // Phone-model breakdown: put the old pieces back, take the new ones.
       for (const item of sale.items) {
         if (!item.productId || !item.model) continue;
-        await tx.accProductModel.updateMany({
-          where: { productId: item.productId, model: item.model },
-          data: { qty: { increment: item.qty } },
-        });
+        await giveModelQty(tx, item.productId, item.model, item.qty);
       }
       for (const line of lines) {
         if (!line.productId || !line.model) continue;
-        const row = await tx.accProductModel.findUnique({
-          where: { productId_model: { productId: line.productId, model: line.model } },
-        });
-        if (row) await tx.accProductModel.update({ where: { id: row.id }, data: { qty: Math.max(0, row.qty - line.qty) } });
+        await takeModelQty(tx, line.productId, line.model, line.qty);
       }
 
       await tx.accSaleItem.deleteMany({ where: { saleId: sale.id } });
@@ -753,10 +739,7 @@ accSalesRouter.post("/sales/:id/delete", async (req, res, next) => {
         if (giveBack) {
           await tx.accProduct.update({ where: { id: item.productId }, data: { stockQty: { increment: item.qty } } });
           if (item.model) {
-            await tx.accProductModel.updateMany({
-              where: { productId: item.productId, model: item.model },
-              data: { qty: { increment: item.qty } },
-            });
+            await giveModelQty(tx, item.productId, item.model, item.qty);
           }
           await tx.accStockMove.create({
             data: {

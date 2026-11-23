@@ -168,3 +168,21 @@ export async function clampGodown(tx: Prisma.TransactionClient | import("@prisma
     'UPDATE "AccProduct" SET "godownQty" = MAX("stockQty", 0) WHERE "godownQty" > MAX("stockQty", 0)',
   );
 }
+
+/** A sale of `qty` pieces of one phone model: taken from its lots, oldest first. */
+export async function takeModelQty(tx: Prisma.TransactionClient, productId: string, model: string, qty: number) {
+  let left = qty;
+  const lots = await tx.accProductModel.findMany({ where: { productId, model, qty: { gt: 0 } }, orderBy: { createdAt: "asc" } });
+  for (const lot of lots) {
+    if (left <= 0) break;
+    const cut = Math.min(lot.qty, left);
+    await tx.accProductModel.update({ where: { id: lot.id }, data: { qty: lot.qty - cut } });
+    left -= cut;
+  }
+}
+
+/** Pieces of one phone model coming back (cancelled / edited bill): into its first lot. */
+export async function giveModelQty(tx: Prisma.TransactionClient, productId: string, model: string, qty: number) {
+  const lot = await tx.accProductModel.findFirst({ where: { productId, model }, orderBy: { createdAt: "asc" } });
+  if (lot) await tx.accProductModel.update({ where: { id: lot.id }, data: { qty: { increment: qty } } });
+}

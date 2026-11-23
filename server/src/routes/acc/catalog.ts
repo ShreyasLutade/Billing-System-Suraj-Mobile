@@ -21,7 +21,7 @@ function badRequest(res: import("express").Response, error: z.ZodError) {
 /** Category plus the phone-model breakdown, for every product sent to the app. */
 export const productInclude = {
   category: true,
-  models: { orderBy: { model: "asc" } },
+  models: { orderBy: [{ model: "asc" }, { createdAt: "asc" }] },
 } satisfies Prisma.AccProductInclude;
 
 export function serializeProduct(
@@ -53,7 +53,10 @@ export function serializeProduct(
     isFavourite: product.isFavourite,
     active: product.active,
     countedAt: product.countedAt,
-    models: models.map((m) => ({ model: m.model, qty: m.qty })),
+    // One line per model name (lots of the same model added up)…
+    models: mergeLots(models),
+    // …and every lot as entered on the split page.
+    modelLots: [...models].sort((a, b) => +a.createdAt - +b.createdAt).map((m) => ({ model: m.model, qty: m.qty })),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -437,14 +440,18 @@ const modelRows = z
   )
   .max(300);
 
-/** Same model typed twice ("iphone 15" / "iPhone 15 ") counts as one. */
+/** Tidy the typed names. The same model may come more than once (separate lots). */
 function cleanModels(rows: z.infer<typeof modelRows>) {
+  return rows.map((row) => ({ model: row.model.replace(/\s+/g, " ").trim(), qty: row.qty })).filter((r) => r.model);
+}
+
+/** Lots of the same model name added up (case-insensitive), first spelling kept. */
+function mergeLots(models: Array<{ model: string; qty: number }>) {
   const seen = new Map<string, { model: string; qty: number }>();
-  for (const row of rows) {
-    const model = row.model.replace(/\s+/g, " ").trim();
-    const key = model.toLowerCase();
+  for (const m of models) {
+    const key = m.model.toLowerCase();
     const prev = seen.get(key);
-    seen.set(key, { model: prev?.model || model, qty: (prev?.qty || 0) + row.qty });
+    seen.set(key, { model: prev?.model || m.model, qty: (prev?.qty || 0) + m.qty });
   }
   return [...seen.values()];
 }
@@ -454,15 +461,11 @@ async function replaceModels(
   productId: string,
   rows: Array<{ model: string; qty: number }>,
 ) {
-  await tx.accProductModel.deleteMany({
-    where: { productId, model: { notIn: rows.map((r) => r.model) } },
-  });
-  for (const row of rows) {
-    await tx.accProductModel.upsert({
-      where: { productId_model: { productId, model: row.model } },
-      create: { productId, model: row.model, qty: row.qty },
-      update: { qty: row.qty },
-    });
+  await tx.accProductModel.deleteMany({ where: { productId } });
+  // Kept in the order entered (createdAt one ms apart).
+  const base = Date.now();
+  for (const [i, row] of rows.entries()) {
+    await tx.accProductModel.create({ data: { productId, model: row.model, qty: row.qty, createdAt: new Date(base + i) } });
   }
 }
 

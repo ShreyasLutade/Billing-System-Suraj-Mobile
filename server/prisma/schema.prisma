@@ -557,7 +557,7 @@ model AccProductModel {
   updatedAt DateTime @updatedAt
   product   AccProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([productId, model])
+  /// The same model can appear more than once (separate lots, e.g. kept in different boxes).
   @@index([productId])
 }
 

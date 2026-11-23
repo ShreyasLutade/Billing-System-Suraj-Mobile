@@ -35,6 +35,8 @@ export type AccProduct = {
   countedAt: string | null;
   /** Pieces per phone model (a record only; the rest is "not sorted"). */
   models: AccModelQty[];
+  /** Every lot from the split page (the same model can appear more than once). */
+  modelLots?: AccModelQty[];
   createdAt: string;
   updatedAt: string;
 };

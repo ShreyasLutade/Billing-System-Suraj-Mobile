@@ -163,7 +163,7 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     const qtyOf = (productId: string, model: string) => {
       const p = byId.get(productId);
       if (!p) return 0;
-      if (model) return p.models.find((m) => m.model === model)?.qty ?? 0;
+      if (model) return p.models.filter((m) => m.model === model).reduce((a, m) => a + m.qty, 0); // all lots
       return Math.max(0, p.stockQty - p.models.reduce((a, m) => a + Math.max(0, m.qty), 0));
     };
     const where = new Map<string, string[]>();
@@ -223,7 +223,7 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     if (!boxId) {
       const rows: PdfRow[] = [];
       for (const p of covers) {
-        const piles = [...p.models.filter((m) => m.qty > 0).map((m) => m.model), ""];
+        const piles = [...new Set(p.models.filter((m) => m.qty > 0).map((m) => m.model)), ""];
         for (const model of piles) {
           const qty = qtyOf(p.id, model);
           if (qty <= 0 || where.has(`${p.id}|${model}`)) continue;
