@@ -638,6 +638,8 @@ export type SupplierDueRow = {
   outstanding: number;
   advance: number;
   purchaseCount: number;
+  /** Everything bought from them (for the paid share on the card). */
+  totalPurchased: number;
   lastPurchaseDate: string | null;
 };
 

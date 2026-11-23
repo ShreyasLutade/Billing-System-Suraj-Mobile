@@ -1464,6 +1464,9 @@ function SupplierDueList({
           </div>
           {group.rows.map((row) => {
             const adv = row.outstanding < 0;
+            // Paid so far (payments + returned units) out of everything bought.
+            const paid = adv ? 0 : round2(Math.max(row.totalPurchased - row.outstanding, 0));
+            const share = row.totalPurchased > 0 ? Math.min(paid / row.totalPurchased, 1) : 0;
             return (
               <article
                 key={row.id}
@@ -1479,6 +1482,10 @@ function SupplierDueList({
                   }
                 }}
               >
+                {paid > 0 ? (
+                  // Same as customer cards: the card fills green up to the paid share.
+                  <div className="due-paid-fill" style={{ width: `${share * 100}%` }} aria-hidden />
+                ) : null}
                 <div className="relative flex items-center gap-2">
                   <div
                     className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#0B1F33] text-[#FFA800] dark:ring-1 dark:ring-white/10"
@@ -1487,7 +1494,17 @@ function SupplierDueList({
                     <Truck className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-bold text-ink-900">{row.name}</h3>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <h3 className="truncate text-sm font-bold text-ink-900">{row.name}</h3>
+                      {paid > 0 ? (
+                        <span
+                          className="shrink-0 rounded-full bg-emerald-500/15 px-[5px] py-px text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+                          title={`${formatRupees(paid)} paid of ${formatRupees(row.totalPurchased)}`}
+                        >
+                          {formatRupees(paid)} paid
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="truncate text-xs text-ink-400">
                       {row.phone ? <span className="tabular-nums">{row.phone} · </span> : null}
                       {row.purchaseCount} purchase{row.purchaseCount === 1 ? "" : "s"}

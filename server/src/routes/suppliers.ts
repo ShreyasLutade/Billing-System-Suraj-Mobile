@@ -396,6 +396,7 @@ suppliersRouter.get("/dues", requireAdmin, async (_req, res, next) => {
           outstanding: stats.outstanding,
           advance: stats.advance,
           purchaseCount: stats.purchaseCount,
+          totalPurchased: stats.totalPurchased,
           lastPurchaseDate: last?.purchaseDate.toISOString() ?? null,
         };
       }),
