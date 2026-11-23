@@ -1083,14 +1083,16 @@ export function CoverFinder({
   const term = q.trim().toLowerCase();
   const hits = useMemo(() => {
     if (!term) return [];
-    const out: Array<{ product: AccProduct; model: string; qty: number; codes: string[] }> = [];
+    const out: Array<{ product: AccProduct; model: string; lot: number; qty: number; codes: string[] }> = [];
     for (const p of products) {
       if (!isCover(p)) continue;
-      for (const m of p.models) {
+      // One line per lot: "Y30 · 3 pcs → I3" and "Y30 · 32 pcs → No box", never added together.
+      const seen = new Map<string, number>();
+      for (const m of p.modelLots ?? p.models) {
+        const lot = seen.get(m.model) ?? 0;
+        seen.set(m.model, lot + 1);
         if (m.qty > 0 && m.model.toLowerCase().includes(term)) {
-          // Boxes holding any lot of this model.
-          const codes = [...new Set([...where.entries()].filter(([k]) => k.startsWith(`${p.id}|${m.model}|`)).flatMap(([, v]) => v))];
-          out.push({ product: p, model: m.model, qty: m.qty, codes });
+          out.push({ product: p, model: m.model, lot, qty: m.qty, codes: where.get(`${p.id}|${m.model}|${lot}`) ?? [] });
         }
       }
     }
@@ -1113,7 +1115,7 @@ export function CoverFinder({
       ) : (
         <ul className="acc-finder-list">
           {hits.map((h) => (
-            <li key={`${h.product.id}|${h.model}`}>
+            <li key={`${h.product.id}|${h.model}|${h.lot}`}>
               <button type="button" onClick={() => onSell(h.product)}>
                 <span>
                   <strong>{h.product.name}</strong>
