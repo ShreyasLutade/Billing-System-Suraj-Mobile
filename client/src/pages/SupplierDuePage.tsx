@@ -379,8 +379,8 @@ function SupplierEntryRow({
       <div
         className={clsx(
           "px-3 py-2 text-right text-[13px] font-bold tabular-nums",
-          entry.got > 0 &&
-            "bg-emerald-500/[0.06] text-emerald-600 dark:bg-emerald-500/[0.08] dark:text-emerald-400",
+          // Purchased raises what you owe: red. Paid brings it down: green.
+          entry.got > 0 && "bg-rose-500/[0.05] text-rose-600 dark:bg-rose-500/[0.08] dark:text-rose-400",
         )}
       >
         {entry.got > 0 ? formatRupees(entry.got) : ""}
@@ -388,7 +388,8 @@ function SupplierEntryRow({
       <div
         className={clsx(
           "px-3 py-2 text-right text-[13px] font-bold tabular-nums",
-          entry.gave > 0 && "bg-rose-500/[0.05] text-rose-600 dark:bg-rose-500/[0.08] dark:text-rose-400",
+          entry.gave > 0 &&
+            "bg-emerald-500/[0.06] text-emerald-600 dark:bg-emerald-500/[0.08] dark:text-emerald-400",
         )}
       >
         {entry.gave > 0 ? formatRupees(entry.gave) : ""}
