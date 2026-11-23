@@ -14,17 +14,22 @@ export function AnimatedNumber({
   duration = 1.1,
   className,
   fit = false,
+  minScale = 0.6,
 }: {
   value: number;
   format: (value: number) => string;
   duration?: number;
   className?: string;
-  /** Shrink the text (down to 60%) so the full amount fits its box. */
+  /** Shrink the text (down to `minScale`) so the full amount fits its box. */
   fit?: boolean;
+  /** Smallest size `fit` may shrink to, as a share of the font size. */
+  minScale?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const shown = useRef(0);
   const reduce = useReducedMotion();
+  const minScaleRef = useRef(minScale);
+  minScaleRef.current = minScale;
   const formatRef = useRef(format);
   formatRef.current = format;
   const valueRef = useRef(value);
@@ -37,7 +42,7 @@ export function AnimatedNumber({
     el.style.fontSize = "";
     el.textContent = text;
     let size = parseFloat(getComputedStyle(el).fontSize);
-    const min = size * 0.6;
+    const min = size * minScaleRef.current;
     while (el.scrollWidth > el.clientWidth && size > min) {
       size -= 0.5;
       el.style.fontSize = `${size}px`;

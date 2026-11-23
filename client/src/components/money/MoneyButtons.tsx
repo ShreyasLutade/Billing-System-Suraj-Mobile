@@ -101,7 +101,7 @@ export function MoneyButtons() {
               {tile.value === null ? (
                 <span className="inline-block h-3.5 w-14 animate-pulse rounded bg-ink-900/10 align-middle dark:bg-white/10" />
               ) : (
-                <AnimatedNumber value={tile.value} format={formatRupees} fit duration={1} />
+                <AnimatedNumber value={tile.value} format={formatRupees} fit minScale={0.5} duration={1} className="w-full text-center tracking-tight" />
               )}
             </span>
           </motion.button>

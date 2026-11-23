@@ -608,8 +608,15 @@ export function AnalyticsPage() {
                       {periodRangeLabel}
                     </span>
                   ) : null}
-                  <p className="mt-3 font-display text-[clamp(2.25rem,10vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
-                    <AnimatedNumber value={summary.collected} format={formatRupees} duration={1.3} />
+                  <p className="mt-3 w-full font-display text-[clamp(2.25rem,10vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
+                    {/* Shrinks for very big amounts so it stays inside the card. */}
+                    <AnimatedNumber
+                      value={summary.collected}
+                      format={formatRupees}
+                      duration={1.3}
+                      fit
+                      className="w-full text-center"
+                    />
                   </p>
                   {change && data.vsPrevious.label ? (
                     <motion.span
@@ -632,7 +639,7 @@ export function AnalyticsPage() {
                     {summarySentence(data.period, data.periodLabel, summary.collected, summary.bills, profitAmount)}
                   </p>
 
-                  <div className="mt-4 grid w-full grid-cols-3 gap-2">
+                  <div className="mt-4 grid w-full grid-cols-3 gap-1.5 sm:gap-2">
                     {[
                       { label: "Sales", value: revenueAmount, tone: "text-white", note: "before costs" },
                       {
@@ -654,7 +661,7 @@ export function AnalyticsPage() {
                     ].map((tile) => (
                       <div
                         key={tile.label}
-                        className="flex min-w-0 flex-col items-center rounded-xl border border-white/10 bg-white/[0.06] px-2 py-2.5"
+                        className="flex min-w-0 flex-col items-center rounded-xl border border-white/10 bg-white/[0.06] px-1.5 py-2.5"
                       >
                         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
                           {tile.label}
@@ -663,7 +670,8 @@ export function AnalyticsPage() {
                           value={tile.value}
                           format={tile.count ? (v) => String(Math.round(v)) : formatRupees}
                           fit
-                          className={clsx("mt-0.5 font-display text-[17px] font-bold tabular-nums", tile.tone)}
+                          minScale={0.48}
+                          className={clsx("mt-0.5 w-full text-center font-display text-[17px] font-bold tracking-tight tabular-nums", tile.tone)}
                         />
                         <p className="mt-0.5 truncate text-[10px] font-semibold text-white/50">{tile.note}</p>
                       </div>
