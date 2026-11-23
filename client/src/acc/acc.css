@@ -12390,3 +12390,88 @@ html.dark .acc {
   color: var(--a-accent);
   font-weight: 800;
 }
+
+/* Wholesale: shop name suggestions */
+.acc .acc-shop-field {
+  position: relative;
+}
+
+.acc-shop-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 40;
+  display: grid;
+  max-height: min(50vh, 340px);
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+  box-shadow: 0 16px 34px -14px rgba(15, 23, 42, 0.35);
+  list-style: none;
+}
+
+.acc .acc-shop-suggest button {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.acc .acc-shop-suggest button:hover,
+.acc .acc-shop-suggest button.is-active {
+  background: color-mix(in srgb, var(--a-accent) 12%, var(--a-card));
+}
+
+.acc-shop-suggest button > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.acc-shop-suggest b {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-shop-suggest small {
+  overflow: hidden;
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-shop-suggest em {
+  flex: none;
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.acc-shop-suggest em.is-red {
+  color: var(--a-red);
+}
+
+/* Shop list wider than its half-width field on phones */
+.acc .acc-shop-suggest {
+  right: auto;
+  width: min(360px, calc(100vw - 48px));
+}

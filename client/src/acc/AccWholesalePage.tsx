@@ -1096,6 +1096,113 @@ export function CustomerForm({
     };
   }, [phoneDigits, id, onExistingFound]);
 
+  // Wholesale bill: type the shop name and pick a saved shop to fill everything.
+  const shopSearch = Boolean(onExistingFound);
+  const [shopHits, setShopHits] = useState<AccCustomerRow[]>([]);
+  const [shopOpen, setShopOpen] = useState(false);
+  const [shopHi, setShopHi] = useState(-1);
+  const shopBoxRef = useRef<HTMLLabelElement | null>(null);
+  const shopQuery = (form.shopName || "").trim();
+  useEffect(() => {
+    if (!shopSearch || !shopOpen || !shopQuery) {
+      setShopHits([]);
+      return;
+    }
+    let live = true;
+    const timer = setTimeout(() => {
+      accApi
+        .customers({ q: shopQuery, limit: 20 })
+        .then(({ data }) => {
+          if (!live) return;
+          // Shop name starting with what's typed first, then a word starting with it, then the rest.
+          const q = shopQuery.toLowerCase();
+          const rank = (c: AccCustomerRow) => {
+            const shop = (c.shopName || c.name).toLowerCase();
+            if (shop.startsWith(q)) return 0;
+            if (shop.split(/\s+/).some((w) => w.startsWith(q))) return 1;
+            if (c.name.toLowerCase().startsWith(q)) return 2;
+            return 3;
+          };
+          setShopHits([...data].sort((a, b) => rank(a) - rank(b) || (a.shopName || a.name).localeCompare(b.shopName || b.name)));
+        })
+        .catch(() => undefined);
+    }, 180);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [shopSearch, shopOpen, shopQuery]);
+  useEffect(() => {
+    if (!shopOpen) return;
+    const away = (e: PointerEvent) => {
+      if (!shopBoxRef.current?.contains(e.target as Node)) setShopOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [shopOpen]);
+
+  function pickShop(c: AccCustomerRow) {
+    // The mobile number makes it the same saved customer (old balance, group…).
+    set({ shopName: c.shopName || c.name, phone: c.phone, name: c.name, address: c.address, city: c.city, groupId: c.group?.id ?? null });
+    setShopOpen(false);
+    setShopHi(-1);
+  }
+
+  const shopField = (
+    <label className="acc-field acc-shop-field" ref={shopBoxRef}>
+      <span>Shop name *</span>
+      <input
+        value={form.shopName}
+        onChange={(e) => {
+          set({ shopName: e.target.value });
+          setShopOpen(shopSearch && e.target.value.trim() !== "");
+          setShopHi(-1);
+        }}
+        onKeyDown={(e) => {
+          if (!shopOpen || !shopHits.length) return;
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setShopHi((cur) => (e.key === "ArrowDown" ? (cur + 1) % shopHits.length : cur <= 0 ? shopHits.length - 1 : cur - 1));
+          } else if (e.key === "Enter" && shopHi >= 0) {
+            e.preventDefault();
+            pickShop(shopHits[shopHi]);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setShopOpen(false);
+          }
+        }}
+        placeholder={shopSearch ? "Type shop name, e.g. H…" : undefined}
+        autoComplete="off"
+        required
+        autoFocus={shopSearch}
+      />
+      {shopSearch && shopOpen && shopHits.length ? (
+        <ul className="acc-shop-suggest" role="listbox">
+          {shopHits.map((c, i) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                tabIndex={-1}
+                className={clsx(i === shopHi && "is-active")}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  pickShop(c);
+                }}
+                onClick={() => pickShop(c)}
+              >
+                <span>
+                  <b>{c.shopName || c.name}</b>
+                  <small>{[c.name, c.phone, c.city || c.group?.name].filter(Boolean).join(" · ")}</small>
+                </span>
+                {c.balance > 0 ? <em className="is-red">{inr(c.balance)}</em> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </label>
+  );
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -1115,14 +1222,12 @@ export function CustomerForm({
   return (
     <form className="acc-form" onSubmit={hideActions ? (event) => event.preventDefault() : submit}>
       <div className="acc-form-grid">
+        {shopSearch ? shopField : null}
         <label className="acc-field">
           <span>Mobile *</span>
-          <input ref={phoneInputRef} inputMode="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} maxLength={13} required autoFocus />
+          <input ref={phoneInputRef} inputMode="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} maxLength={13} required autoFocus={!shopSearch} />
         </label>
-        <label className="acc-field">
-          <span>Shop name *</span>
-          <input value={form.shopName} onChange={(e) => set({ shopName: e.target.value })} required />
-        </label>
+        {shopSearch ? null : shopField}
         <label className="acc-field">
           <span>Name *</span>
           <input value={form.name} onChange={(e) => set({ name: e.target.value })} required />
