@@ -671,6 +671,24 @@ export type SupplierLedger = {
   }>;
 };
 
+/** New Bill → Due: this phone's other dues and how it paid before. */
+export type DueHistory = {
+  pending: number;
+  pendingCount: number;
+  advance: number;
+  maxDaysLate: number;
+  openBills: Array<{ invoiceNumber: string | null; dueAmount: number; daysLate: number }>;
+  paidBefore: {
+    count: number;
+    withDate: number;
+    onTime: number;
+    late: number;
+    avgDaysLate: number;
+    maxDaysLate: number;
+    last: { invoiceNumber: string; delayDays: number; paidAt: string } | null;
+  };
+};
+
 /** A due that's back to 0 (not on the list), found by search. */
 export type ClearedDueItem = {
   id: string;

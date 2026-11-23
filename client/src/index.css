@@ -2877,3 +2877,22 @@ html.dark .loader-ring {
     opacity: 0.6;
   }
 }
+
+/* New Bill: "already pending" alert glows red twice when it appears. */
+@keyframes due-history-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(229, 72, 77, 0.22);
+  }
+}
+.due-history-alert {
+  animation: due-history-glow 1.2s ease-in-out 0.2s 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .due-history-alert {
+    animation: none;
+  }
+}

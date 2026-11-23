@@ -10,6 +10,7 @@ import type {
   Bill,
   CreateBillPayload,
   ClearedDueItem,
+  DueHistory,
   ExpenseMonth,
   MoneyBookData,
   MoneyEntry,
@@ -833,6 +834,12 @@ export const api = {
       `/purchases${query ? `?${query}` : ""}`,
     );
   },
+  /** New Bill → Due: other dues of this phone and how it paid before. */
+  dueHistory: (phone: string, exclude?: string, init?: RequestInit) =>
+    request<{ data: DueHistory | null }>(
+      `/dues/history?phone=${encodeURIComponent(phone)}${exclude ? `&exclude=${encodeURIComponent(exclude)}` : ""}`,
+      init,
+    ),
   /** Dues back to 0, matched by name / phone / invoice. */
   searchClearedDues: (q: string, init?: RequestInit) =>
     request<{ data: ClearedDueItem[] }>(`/dues/cleared?q=${encodeURIComponent(q)}`, init),

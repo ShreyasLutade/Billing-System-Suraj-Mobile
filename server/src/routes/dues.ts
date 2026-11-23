@@ -227,6 +227,110 @@ duesRouter.get("/finance", async (_req, res, next) => {
   }
 });
 
+/** Whole IST days from `from` to `to` (negative = before). */
+function istDays(from: Date, to: Date) {
+  const a = Date.parse(`${istDateString(from)}T00:00:00Z`);
+  const b = Date.parse(`${istDateString(to)}T00:00:00Z`);
+  return Math.round((b - a) / 86_400_000);
+}
+
+/**
+ * New Bill → Due: what this phone number still owes on other bills, and
+ * how it paid dues before (on time / days late). `exclude` = the bill being
+ * edited. Staff don't see private dues.
+ */
+duesRouter.get("/history", async (req, res, next) => {
+  try {
+    const phone = String(req.query.phone || "").replace(/\D/g, "").slice(-10);
+    if (phone.length !== 10) {
+      res.json({ data: null });
+      return;
+    }
+    const exclude = typeof req.query.exclude === "string" ? req.query.exclude : undefined;
+    const isAdmin = req.user?.role === "ADMIN";
+    const base: Prisma.BillWhereInput = {
+      withGst: false,
+      customerPhone: phone,
+      ...(exclude ? { id: { not: exclude } } : {}),
+      ...(isAdmin ? {} : { duePrivate: false }),
+    };
+    const now = new Date();
+    const [open, cleared, advanceRows] = await Promise.all([
+      prisma.bill.findMany({
+        where: { ...base, dueSettled: false, dueAmount: { gt: 0 } },
+        orderBy: [{ dueDate: "asc" }, { billDate: "asc" }],
+        select: { invoiceNumber: true, dueAmount: true, dueDate: true, billDate: true, noPurchase: true },
+      }),
+      prisma.bill.findMany({
+        where: { ...base, dueSettled: true, dueAmount: 0, duePayments: { some: {} } },
+        orderBy: { dueSettledAt: "desc" },
+        take: 50,
+        select: {
+          invoiceNumber: true,
+          dueDate: true,
+          dueSettledAt: true,
+          duePayments: { orderBy: { paidAt: "desc" }, take: 1, select: { paidAt: true } },
+        },
+      }),
+      prisma.bill.findMany({
+        where: { ...base, dueSettled: false, dueAmount: { lt: 0 } },
+        select: { dueAmount: true },
+      }),
+    ]);
+
+    const pending = Number(open.reduce((sum, b) => sum + b.dueAmount, 0).toFixed(2));
+    const lateNow = open
+      .filter((b) => b.dueDate && b.dueDate < now)
+      .map((b) => istDays(b.dueDate as Date, now))
+      .filter((d) => d > 0);
+
+    // Past dues, cleared: how late was the last payment vs the promised date.
+    const delays = cleared
+      .map((b) => {
+        const paidAt = b.duePayments[0]?.paidAt ?? b.dueSettledAt;
+        if (!b.dueDate || !paidAt) return null;
+        return { invoiceNumber: b.invoiceNumber, delayDays: istDays(b.dueDate, paidAt), paidAt };
+      })
+      .filter((d): d is { invoiceNumber: string; delayDays: number; paidAt: Date } => d !== null);
+    const late = delays.filter((d) => d.delayDays > 0);
+
+    res.json({
+      data: {
+        pending,
+        pendingCount: open.length,
+        /** Extra money they paid before, kept as advance (you'll give / adjust). */
+        advance: Number(advanceRows.reduce((sum, b) => sum - b.dueAmount, 0).toFixed(2)),
+        /** Most days past the promised date among the open dues (0 = none late). */
+        maxDaysLate: lateNow.length ? Math.max(...lateNow) : 0,
+        openBills: open.map((b) => ({
+          invoiceNumber: b.noPurchase ? null : b.invoiceNumber,
+          dueAmount: Number(b.dueAmount.toFixed(2)),
+          daysLate: b.dueDate && b.dueDate < now ? Math.max(istDays(b.dueDate, now), 0) : 0,
+        })),
+        paidBefore: {
+          count: cleared.length,
+          withDate: delays.length,
+          onTime: delays.length - late.length,
+          late: late.length,
+          avgDaysLate: late.length
+            ? Math.round(late.reduce((s, d) => s + d.delayDays, 0) / late.length)
+            : 0,
+          maxDaysLate: late.length ? Math.max(...late.map((d) => d.delayDays)) : 0,
+          last: delays[0]
+            ? {
+                invoiceNumber: delays[0].invoiceNumber,
+                delayDays: delays[0].delayDays,
+                paidAt: delays[0].paidAt.toISOString(),
+              }
+            : null,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * Search cleared dues (balance 0, so not on the list): people who once owed
  * or were owed, matched by name, phone or invoice number.

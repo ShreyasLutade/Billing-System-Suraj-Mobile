@@ -60,11 +60,13 @@ import type {
   FinanceCompany,
   MobileCatalog,
   StockItem,
+  DueHistory,
 } from "../types";
 import {
   GivenWithPhonePicker,
   ReceivedWithPhoneNote,
 } from "../components/UsedPhoneAccessories";
+import { DueHistoryNote } from "../components/DueHistoryNote";
 
 type DraftItem = BillItem & {
   key: string;
@@ -444,6 +446,8 @@ export function CreateBillPage() {
   >({});
   const [savingFinanceKey, setSavingFinanceKey] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState("");
+  /** This number's other dues and how it paid before (shown on the due card). */
+  const [dueHistory, setDueHistory] = useState<DueHistory | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldHint, setFieldHint] = useState<{
@@ -970,6 +974,25 @@ export function CreateBillPage() {
       setFetchingCustomer(false);
     };
   }, [customerPhone]);
+
+  // Due card: does this number already owe on other bills / pay late?
+  useEffect(() => {
+    if (customerPhone.length !== 10 || withGst) {
+      setDueHistory(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api
+        .dueHistory(customerPhone, editId, { signal: controller.signal })
+        .then(({ data }) => setDueHistory(data))
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [customerPhone, editId, withGst]);
 
   useEffect(() => {
     let active = true;
@@ -3261,6 +3284,7 @@ export function CreateBillPage() {
                         onAmount={() => {}}
                         showAmount={false}
                       >
+                        {dueHistory ? <DueHistoryNote history={dueHistory} /> : null}
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
                           <div>
                             <label className="label required" htmlFor="dueAmount">
