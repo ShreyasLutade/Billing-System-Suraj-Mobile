@@ -394,7 +394,7 @@ export function SuppliersPage() {
         <div className="mb-4 flex justify-center md:justify-start">
           <div className="w-full max-w-[420px] md:max-w-xl lg:max-w-2xl">
             {imeiLoading ? (
-              <LoadingBlock label="Looking up IMEI…" />
+              <LoadingBlock label="Looking up IMEI…" rows={2} />
             ) : imeiError ? (
               <EmptyState title={imeiError} description="Try another IMEI." />
             ) : imeiTrace ? (
@@ -406,7 +406,7 @@ export function SuppliersPage() {
 
       {modelMode ? (
         mobilesLoading ? (
-          <LoadingBlock label="Finding mobiles…" />
+          <LoadingBlock label="Finding mobiles…" rows={3} />
         ) : mobilesError ? (
           <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
             {mobilesError}
@@ -421,7 +421,7 @@ export function SuppliersPage() {
       ) : null}
 
       {loading ? (
-        <LoadingBlock label="Loading suppliers…" />
+        <LoadingBlock label="Loading suppliers…" variant="table" />
       ) : imeiMode ? null : filtered.length === 0 ? (
         modelMode && (mobilesLoading || mobileMatches.length) ? null : (
         <EmptyState

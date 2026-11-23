@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { PeriodChipRow } from "../components/PeriodFilter";
 import { EmptyState, PageHeader } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
+import { PageSkeleton } from "../components/Skeleton";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
@@ -119,9 +120,7 @@ export function StaffAnalyticsPage() {
 
       {!sales ? (
         <div className="space-y-3" aria-label="Loading analytics">
-          <div className="trend-skeleton h-[150px] rounded-[1.25rem]" />
-          <div className="trend-skeleton h-[130px] rounded-[20px]" />
-          <div className="trend-skeleton h-[260px] rounded-[20px]" />
+          <PageSkeleton variant="analytics" />
         </div>
       ) : (
         <>

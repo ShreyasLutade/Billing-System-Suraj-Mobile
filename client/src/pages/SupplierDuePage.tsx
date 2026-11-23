@@ -77,7 +77,7 @@ export function SupplierDuePage() {
   }, [id]);
 
   if (!isAdmin) return <Navigate to="/dues" replace />;
-  if (loading) return <LoadingBlock label="Loading supplier…" />;
+  if (loading) return <LoadingBlock label="Loading supplier…" variant="detail" />;
   if (!data) {
     return (
       <div className="space-y-3">

@@ -61,7 +61,7 @@ export function ExpensesPage() {
         <BackLink to="/analytics" className="mb-4">
           Back to analytics
         </BackLink>
-        {error ? <p className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</p> : <LoadingBlock label="Loading expenses…" />}
+        {error ? <p className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</p> : <LoadingBlock label="Loading expenses…" variant="detail" />}
       </div>
     );
   }

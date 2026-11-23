@@ -57,6 +57,7 @@ import {
 import { MIX, mixSurface } from "../lib/analyticsMix";
 import { motion } from "framer-motion";
 import { MoneyButtons } from "../components/money/MoneyButtons";
+import { PageSkeleton } from "../components/Skeleton";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendCard } from "../components/TrendCard";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
@@ -575,8 +576,7 @@ export function AnalyticsPage() {
 
       {loading ? (
         <div className="space-y-3" aria-label="Loading analytics">
-          <div className="trend-skeleton h-[250px] rounded-[1.25rem]" />
-          <div className="trend-skeleton h-[300px] rounded-[20px]" />
+          <PageSkeleton variant="analytics" />
         </div>
       ) : null}
       {error ? (

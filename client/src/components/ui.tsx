@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
+import { PageSkeleton, type SkeletonVariant } from "./Skeleton";
 
 export function BackLink({
   to,
@@ -179,11 +180,20 @@ export function EmptyState({
   );
 }
 
-export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
+export function LoadingBlock({
+  label = "Loading…",
+  variant = "rows",
+  rows,
+}: {
+  label?: string;
+  /** Page shape of the skeleton (see components/Skeleton). */
+  variant?: SkeletonVariant;
+  rows?: number;
+}) {
   return (
-    <div className="glass-panel flex items-center justify-center gap-3 px-6 py-16 text-sm text-ink-500">
-      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-tide-500" />
-      {label}
+    <div role="status" aria-live="polite" aria-busy="true" className="w-full">
+      <span className="sr-only">{label}</span>
+      <PageSkeleton variant={variant} rows={rows} />
     </div>
   );
 }

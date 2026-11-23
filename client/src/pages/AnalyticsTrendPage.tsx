@@ -4,6 +4,7 @@ import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, TrendingUp } from "lucide-react";
 import clsx from "clsx";
 import { BackLink } from "../components/ui";
+import { PageSkeleton } from "../components/Skeleton";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendChart, type TrendPoint } from "../components/TrendChart";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
@@ -248,8 +249,7 @@ export function AnalyticsTrendPage() {
 
       {!data ? (
         <div className="space-y-3" aria-label="Loading the trend">
-          <div className="trend-skeleton h-[148px] rounded-[1.125rem]" />
-          <div className="trend-skeleton h-[250px] rounded-[1.125rem]" />
+          <PageSkeleton variant="trend" />
         </div>
       ) : month ? (
         <>
