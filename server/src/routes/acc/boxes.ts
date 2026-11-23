@@ -22,7 +22,7 @@ async function ensureDefaultGrid() {
 async function listBoxes() {
   const boxes = await prisma.accBox.findMany({
     orderBy: [{ createdAt: "asc" }, { row: "asc" }, { col: "asc" }],
-    include: { items: { select: { id: true, productId: true, model: true }, orderBy: { createdAt: "asc" } } },
+    include: { items: { select: { id: true, productId: true, model: true, lot: true }, orderBy: { createdAt: "asc" } } },
   });
   return boxes.map((b) => ({ id: b.id, code: b.code, grid: b.grid, row: b.row, col: b.col, items: b.items }));
 }
@@ -93,14 +93,13 @@ accBoxesRouter.delete("/boxes/:id", async (req, res, next) => {
 /** Put a cover (product + phone model) in a box. */
 accBoxesRouter.post("/boxes/:id/items", async (req, res, next) => {
   try {
-    const parsed = z.object({ productId: z.string().min(1), model: z.string().trim().max(60).default("") }).safeParse(req.body);
+    const parsed = z
+      .object({ productId: z.string().min(1), model: z.string().trim().max(60).default(""), lot: z.coerce.number().int().min(0).max(999).default(0) })
+      .safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: "Choose a cover" });
-    const { productId, model } = parsed.data;
-    await prisma.accBoxItem.upsert({
-      where: { boxId_productId_model: { boxId: req.params.id, productId, model } },
-      create: { boxId: req.params.id, productId, model },
-      update: {},
-    });
+    const { productId, model, lot } = parsed.data;
+    const there = await prisma.accBoxItem.findFirst({ where: { boxId: req.params.id, productId, model, lot } });
+    if (!there) await prisma.accBoxItem.create({ data: { boxId: req.params.id, productId, model, lot } });
     res.status(201).json({ data: await listBoxes() });
   } catch (error) {
     next(error);
@@ -111,19 +110,21 @@ accBoxesRouter.post("/boxes/:id/items", async (req, res, next) => {
 accBoxesRouter.post("/boxes/:id/items/bulk", async (req, res, next) => {
   try {
     const parsed = z
-      .object({ items: z.array(z.object({ productId: z.string().min(1), model: z.string().trim().max(60).default("") })).min(1).max(500) })
+      .object({
+        items: z
+          .array(z.object({ productId: z.string().min(1), model: z.string().trim().max(60).default(""), lot: z.coerce.number().int().min(0).max(999).default(0) }))
+          .min(1)
+          .max(500),
+      })
       .safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: "Choose the covers" });
     const boxId = req.params.id;
-    await prisma.$transaction(
-      parsed.data.items.map(({ productId, model }) =>
-        prisma.accBoxItem.upsert({
-          where: { boxId_productId_model: { boxId, productId, model } },
-          create: { boxId, productId, model },
-          update: {},
-        }),
-      ),
-    );
+    await prisma.$transaction(async (tx) => {
+      for (const { productId, model, lot } of parsed.data.items) {
+        const there = await tx.accBoxItem.findFirst({ where: { boxId, productId, model, lot } });
+        if (!there) await tx.accBoxItem.create({ data: { boxId, productId, model, lot } });
+      }
+    });
     res.status(201).json({ data: await listBoxes() });
   } catch (error) {
     next(error);
@@ -160,15 +161,18 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     ]);
     const covers = products.filter((p) => /cover/i.test(p.category.name));
     const byId = new Map(covers.map((p) => [p.id, p]));
-    const qtyOf = (productId: string, model: string) => {
+    // Lots of a model in entry order: lot 0 = first "iPhone 15 Pro", lot 1 = second…
+    const lotsOf = (p: (typeof covers)[number], model: string) =>
+      p.models.filter((m) => m.model === model).sort((a, b) => +a.createdAt - +b.createdAt);
+    const qtyOf = (productId: string, model: string, lot = 0) => {
       const p = byId.get(productId);
       if (!p) return 0;
-      if (model) return p.models.filter((m) => m.model === model).reduce((a, m) => a + m.qty, 0); // all lots
+      if (model) return lotsOf(p, model)[lot]?.qty ?? 0;
       return Math.max(0, p.stockQty - p.models.reduce((a, m) => a + Math.max(0, m.qty), 0));
     };
     const where = new Map<string, string[]>();
     for (const b of boxes) for (const i of b.items) {
-      const k = `${i.productId}|${i.model}`;
+      const k = `${i.productId}|${i.model}|${i.lot}`;
       where.set(k, [...(where.get(k) ?? []), b.code]);
     }
     const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
@@ -193,9 +197,9 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
         .sort((x, y) => collator.compare(x.model || "~", y.model || "~") || collator.compare(byId.get(x.productId)!.name, byId.get(y.productId)!.name));
       let boxPcs = 0;
       const rows: PdfRow[] = items.map((i, n) => {
-        const qty = qtyOf(i.productId, i.model);
+        const qty = qtyOf(i.productId, i.model, i.lot);
         boxPcs += qty;
-        const also = (where.get(`${i.productId}|${i.model}`) ?? []).filter((c) => c !== b.code);
+        const also = (where.get(`${i.productId}|${i.model}|${i.lot}`) ?? []).filter((c) => c !== b.code);
         return {
           cells: {
             n: String(n + 1),
@@ -223,10 +227,18 @@ accBoxesRouter.get("/boxes/pdf", async (req, res, next) => {
     if (!boxId) {
       const rows: PdfRow[] = [];
       for (const p of covers) {
-        const piles = [...new Set(p.models.filter((m) => m.qty > 0).map((m) => m.model)), ""];
-        for (const model of piles) {
-          const qty = qtyOf(p.id, model);
-          if (qty <= 0 || where.has(`${p.id}|${model}`)) continue;
+        const seen = new Map<string, number>();
+        const piles: Array<[string, number]> = [...p.models]
+          .sort((a, b) => +a.createdAt - +b.createdAt)
+          .map((m) => {
+            const lot = seen.get(m.model) ?? 0;
+            seen.set(m.model, lot + 1);
+            return [m.model, lot] as [string, number];
+          });
+        piles.push(["", 0]);
+        for (const [model, lot] of piles) {
+          const qty = qtyOf(p.id, model, lot);
+          if (qty <= 0 || where.has(`${p.id}|${model}|${lot}`)) continue;
           loose += qty;
           rows.push({ cells: { n: "", model: model || "Not split", cover: titleCase(p.name), qty: String(qty), also: "-" }, color: model ? {} : { model: PDF_TONE.amber } });
         }
@@ -279,8 +291,18 @@ accBoxesRouter.get("/products/:id/models/pdf", async (req, res, next) => {
     }
     const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
     const where = new Map<string, string[]>();
-    for (const i of product.boxItems) where.set(i.model, [...(where.get(i.model) ?? []), i.box.code]);
-    const models = product.models.filter((m) => m.qty > 0).sort((a, b) => b.qty - a.qty || collator.compare(a.model, b.model));
+    for (const i of product.boxItems) where.set(`${i.model}|${i.lot}`, [...(where.get(`${i.model}|${i.lot}`) ?? []), i.box.code]);
+    // Each lot with its own pieces and boxes (lot = nth time the model was entered).
+    const seen = new Map<string, number>();
+    const models = [...product.models]
+      .sort((a, b) => +a.createdAt - +b.createdAt)
+      .map((m) => {
+        const lot = seen.get(m.model) ?? 0;
+        seen.set(m.model, lot + 1);
+        return { ...m, lot };
+      })
+      .filter((m) => m.qty > 0)
+      .sort((a, b) => collator.compare(a.model, b.model) || a.lot - b.lot);
     const total = Math.max(product.stockQty, 0);
     const split = models.reduce((a, m) => a + m.qty, 0);
     const notSplit = Math.max(total - split, 0);
@@ -291,11 +313,11 @@ accBoxesRouter.get("/products/:id/models/pdf", async (req, res, next) => {
       { key: "box", label: "Kept in box", width: 2 },
     ];
     const rows: PdfRow[] = models.map((m, i) => ({
-      cells: { n: String(i + 1), model: m.model, qty: String(m.qty), box: (where.get(m.model) ?? []).sort(collator.compare).join(", ") || "-" },
+      cells: { n: String(i + 1), model: m.model, qty: String(m.qty), box: (where.get(`${m.model}|${m.lot}`) ?? []).sort(collator.compare).join(", ") || "-" },
     }));
     if (notSplit > 0) {
       rows.push({
-        cells: { n: "", model: "Not split yet", qty: String(notSplit), box: (where.get("") ?? []).join(", ") || "-" },
+        cells: { n: "", model: "Not split yet", qty: String(notSplit), box: (where.get("|0") ?? []).join(", ") || "-" },
         color: { model: PDF_TONE.amber, qty: PDF_TONE.amber },
       });
     }

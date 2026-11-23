@@ -495,7 +495,7 @@ accCatalogRouter.put("/products/:id/models", async (req, res, next) => {
         if (!from || from === to) continue;
         const placed = await tx.accBoxItem.findMany({ where: { productId: current.id, model: from } });
         for (const item of placed) {
-          const clash = await tx.accBoxItem.findFirst({ where: { boxId: item.boxId, productId: current.id, model: to } });
+          const clash = await tx.accBoxItem.findFirst({ where: { boxId: item.boxId, productId: current.id, model: to, lot: item.lot } });
           if (clash) await tx.accBoxItem.delete({ where: { id: item.id } });
           else await tx.accBoxItem.update({ where: { id: item.id }, data: { model: to } });
         }

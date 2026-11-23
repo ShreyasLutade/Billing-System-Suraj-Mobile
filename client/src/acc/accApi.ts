@@ -62,7 +62,8 @@ export type AccSaleItem = {
   amount: number;
 };
 
-export type AccBoxItem = { id: string; productId: string; model: string };
+/** lot: which entry of that model (0 = first "iPhone 15 Pro", 1 = the second…). */
+export type AccBoxItem = { id: string; productId: string; model: string; lot?: number };
 export type AccBox = { id: string; code: string; grid: string; row: number; col: number; items: AccBoxItem[] };
 
 export type AccSale = {
@@ -413,8 +414,8 @@ export const accApi = {
   addBoxGrid: (rows: number, cols: number) => post<AccBox[]>("/acc/boxes/grid", { rows, cols }),
   addSingleBox: (code?: string) => post<AccBox[]>("/acc/boxes/single", { code }),
   deleteBox: (id: string) => apiRequest<{ data: AccBox[] }>(`/acc/boxes/${id}`, { method: "DELETE" }),
-  placeInBox: (boxId: string, productId: string, model: string) => post<AccBox[]>(`/acc/boxes/${boxId}/items`, { productId, model }),
-  fillBox: (boxId: string, items: Array<{ productId: string; model: string }>) => post<AccBox[]>(`/acc/boxes/${boxId}/items/bulk`, { items }),
+  placeInBox: (boxId: string, productId: string, model: string, lot = 0) => post<AccBox[]>(`/acc/boxes/${boxId}/items`, { productId, model, lot }),
+  fillBox: (boxId: string, items: Array<{ productId: string; model: string; lot?: number }>) => post<AccBox[]>(`/acc/boxes/${boxId}/items/bulk`, { items }),
   removeFromBox: (itemId: string) => apiRequest<{ data: AccBox[] }>(`/acc/boxes/items/${itemId}`, { method: "DELETE" }),
   /** Phone model names from the mobile shop's list (for cover suggestions). */
   phoneNames: () => apiRequest<{ data: Array<{ name: string }> }>("/phone-models"),

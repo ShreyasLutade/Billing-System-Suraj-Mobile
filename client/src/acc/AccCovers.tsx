@@ -91,25 +91,29 @@ function usePhoneNames() {
 function locationMap(boxes: AccBox[] | null) {
   const map = new Map<string, string[]>();
   for (const b of boxes ?? []) for (const i of b.items) {
-    const key = `${i.productId}|${i.model}`;
+    const key = `${i.productId}|${i.model}|${i.lot ?? 0}`;
     map.set(key, [...(map.get(key) ?? []), b.code]);
   }
   return map;
 }
 
 /** Cover stock as piles: one per segregated model, plus the not-segregated rest. */
-type Pile = { key: string; product: AccProduct; model: string; qty: number };
+/** One pile = one lot of a model (the same model entered twice = two piles). */
+type Pile = { key: string; product: AccProduct; model: string; lot: number; qty: number };
 function coverPiles(products: AccProduct[]): Pile[] {
   const piles: Pile[] = [];
   for (const p of products) {
     if (!isCover(p)) continue;
     let sorted = 0;
-    for (const m of p.models) {
+    const seen = new Map<string, number>();
+    for (const m of p.modelLots ?? p.models) {
       sorted += m.qty;
-      piles.push({ key: `${p.id}|${m.model}`, product: p, model: m.model, qty: m.qty });
+      const lot = seen.get(m.model) ?? 0;
+      seen.set(m.model, lot + 1);
+      piles.push({ key: `${p.id}|${m.model}|${lot}`, product: p, model: m.model, lot, qty: m.qty });
     }
     const rest = Math.max(p.stockQty, 0) - sorted;
-    if (rest > 0 || !p.models.length) piles.push({ key: `${p.id}|`, product: p, model: "", qty: Math.max(rest, 0) });
+    if (rest > 0 || !p.models.length) piles.push({ key: `${p.id}||0`, product: p, model: "", lot: 0, qty: Math.max(rest, 0) });
   }
   return piles;
 }
@@ -557,12 +561,12 @@ export function AccCoverBoxesPage() {
   }, [boxes]);
 
   async function place(box: AccBox, pile: Pile) {
-    if (box.items.some((i) => i.productId === pile.product.id && i.model === pile.model)) {
+    if (box.items.some((i) => i.productId === pile.product.id && i.model === pile.model && (i.lot ?? 0) === pile.lot)) {
       toast(`Already in ${box.code}`);
       return;
     }
     try {
-      const { data } = await accApi.placeInBox(box.id, pile.product.id, pile.model);
+      const { data } = await accApi.placeInBox(box.id, pile.product.id, pile.model, pile.lot);
       setBoxes(data);
       toast(`${pile.model || "Not split"} · ${pile.product.name} → ${box.code}`);
     } catch (err) {
@@ -769,7 +773,7 @@ function BoxTile({
   onTap: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: box.id });
-  const items = box.items.map((i) => ({ item: i, pile: pileByKey.get(`${i.productId}|${i.model}`) }));
+  const items = box.items.map((i) => ({ item: i, pile: pileByKey.get(`${i.productId}|${i.model}|${i.lot ?? 0}`) }));
   const pcs = items.reduce((a, x) => a + (x.pile?.qty ?? 0), 0);
   return (
     <button
@@ -783,7 +787,10 @@ function BoxTile({
         <>
           <span className="acc-box-items">
             {items.slice(0, 2).map(({ item, pile }) => (
-              <i key={item.id}>{item.model || pile?.product.name || "Cover"}</i>
+              <i key={item.id}>
+                {pile ? <b className="acc-box-qty">{pile.qty}</b> : null}
+                {item.model || pile?.product.name || "Cover"}
+              </i>
             ))}
             {items.length > 2 ? <i className="is-more">+{items.length - 2} more</i> : null}
           </span>
@@ -819,7 +826,7 @@ function FillBoxSheet({
     setQ("");
   }, [box?.id]);
 
-  const inBox = new Set(box?.items.map((i) => `${i.productId}|${i.model}`) ?? []);
+  const inBox = new Set(box?.items.map((i) => `${i.productId}|${i.model}|${i.lot ?? 0}`) ?? []);
   const t = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const choices = piles
     .filter((p) => p.qty > 0 && !inBox.has(p.key))
@@ -843,7 +850,7 @@ function FillBoxSheet({
 
   async function fill() {
     if (!box || !ticked.length) return;
-    const items = ticked.map((k) => pileByKey.get(k)).filter(Boolean).map((p) => ({ productId: p!.product.id, model: p!.model }));
+    const items = ticked.map((k) => pileByKey.get(k)).filter(Boolean).map((p) => ({ productId: p!.product.id, model: p!.model, lot: p!.lot }));
     if (await run(() => accApi.fillBox(box.id, items), `${plural(items.length, "cover")} put in ${box.code}`)) setTicked([]);
   }
 
@@ -878,7 +885,7 @@ function FillBoxSheet({
               </div>
               <ul className="acc-fill-in">
                 {box.items.map((i) => {
-                  const pile = pileByKey.get(`${i.productId}|${i.model}`);
+                  const pile = pileByKey.get(`${i.productId}|${i.model}|${i.lot ?? 0}`);
                   return (
                     <li key={i.id}>
                       <span>
@@ -948,8 +955,8 @@ function BoxPickerSheet({ pile, boxes, where, onClose }: { pile: Pile | null; bo
     if (!pile || busy) return;
     setBusy(b.id);
     try {
-      const existing = b.items.find((i) => i.productId === pile.product.id && i.model === pile.model);
-      const { data } = existing ? await accApi.removeFromBox(existing.id) : await accApi.placeInBox(b.id, pile.product.id, pile.model);
+      const existing = b.items.find((i) => i.productId === pile.product.id && i.model === pile.model && (i.lot ?? 0) === pile.lot);
+      const { data } = existing ? await accApi.removeFromBox(existing.id) : await accApi.placeInBox(b.id, pile.product.id, pile.model, pile.lot);
       setBoxes(data);
       toast(existing ? `Taken out of ${b.code}` : `${pile.model || "Not split"} → ${b.code}`);
     } catch (err) {
@@ -1076,7 +1083,11 @@ export function CoverFinder({
     for (const p of products) {
       if (!isCover(p)) continue;
       for (const m of p.models) {
-        if (m.qty > 0 && m.model.toLowerCase().includes(term)) out.push({ product: p, model: m.model, qty: m.qty, codes: where.get(`${p.id}|${m.model}`) ?? [] });
+        if (m.qty > 0 && m.model.toLowerCase().includes(term)) {
+          // Boxes holding any lot of this model.
+          const codes = [...new Set([...where.entries()].filter(([k]) => k.startsWith(`${p.id}|${m.model}|`)).flatMap(([, v]) => v))];
+          out.push({ product: p, model: m.model, qty: m.qty, codes });
+        }
       }
     }
     return out.sort((a, b) => collator.compare(a.model, b.model) || collator.compare(a.product.name, b.product.name));

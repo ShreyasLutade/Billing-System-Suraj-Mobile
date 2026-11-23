@@ -860,10 +860,11 @@ model AccBoxItem {
   boxId     String
   productId String
   model     String   @default("")
+  /// Which lot of that model (0 = first "iPhone 15 Pro", 1 = the second one…)
+  lot       Int      @default(0)
   createdAt DateTime @default(now())
   box       AccBox     @relation(fields: [boxId], references: [id], onDelete: Cascade)
   product   AccProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([boxId, productId, model])
   @@index([productId])
 }

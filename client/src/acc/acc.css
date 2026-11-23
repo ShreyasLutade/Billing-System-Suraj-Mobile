@@ -12383,3 +12383,10 @@ html.dark .acc {
   font-size: 15px;
   font-weight: 600;
 }
+
+/* Box tile: each lot shows its own pieces ("5 iPhone 15 Pro", "10 iPhone 15 Pro") */
+.acc .acc-box-items .acc-box-qty {
+  margin-right: 3px;
+  color: var(--a-accent);
+  font-weight: 800;
+}
