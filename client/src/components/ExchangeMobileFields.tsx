@@ -7,6 +7,7 @@ import {
   scanFieldInputClass,
 } from "./BarcodeImeiScanner";
 import { formatINR } from "../lib/api";
+import { newClientId } from "../lib/id";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
 import type { ExchangeAccessory, PhoneModel } from "../types";
 import { ExchangeAccessoriesPicker } from "./ExchangeAccessoriesPicker";
@@ -26,7 +27,7 @@ export type ExchangeDraft = {
 
 export function blankExchangeItem(): ExchangeDraft {
   return {
-    key: crypto.randomUUID(),
+    key: newClientId(),
     platform: "IOS",
     model: "",
     color: "",

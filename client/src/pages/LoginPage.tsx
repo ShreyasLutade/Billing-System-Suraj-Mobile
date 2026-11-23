@@ -5,9 +5,10 @@ import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { useTheme } from "../theme/ThemeContext";
+import { BRAND_NAME, BrandIcon } from "../components/Brand";
 
-/** Phone + sunrise mark — transparent, stroke via currentColor */
-function SurajMark({ className }: { className?: string }) {
+/** Compact receipt mark for login mock UI */
+function BillingMark({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -16,40 +17,17 @@ function SurajMark({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <rect
-        x="12"
-        y="4"
-        width="24"
-        height="40"
-        rx="6"
-        stroke="currentColor"
-        strokeWidth="2.6"
-      />
-      <line
-        x1="20"
-        y1="8.5"
-        x2="28"
-        y2="8.5"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <path d="M17 31a7 7 0 0 1 14 0Z" fill="#F79A2B" />
-      <circle cx="24" cy="30.5" r="4.3" fill="#FFD24A" />
-      <g stroke="#FFD24A" strokeWidth="1.85" strokeLinecap="round">
-        <line x1="24" y1="18.5" x2="24" y2="14.5" />
-        <line x1="17.2" y1="21.2" x2="14.6" y2="18.6" />
-        <line x1="30.8" y1="21.2" x2="33.4" y2="18.6" />
-        <line x1="15.2" y1="28.5" x2="12.4" y2="28.5" />
-        <line x1="32.8" y1="28.5" x2="35.6" y2="28.5" />
-        <line x1="18.2" y1="24.2" x2="15.8" y2="21.8" />
-        <line x1="29.8" y1="24.2" x2="32.2" y2="21.8" />
-      </g>
+      <rect width="48" height="48" rx="12" fill="#6D5EF0" />
       <path
-        d="M15.5 34.2c2.6-1.4 5.4-2.1 8.5-2.1s5.9.7 8.5 2.1"
-        stroke="#F79A2B"
-        strokeWidth="2"
-        strokeLinecap="round"
+        fill="#FFFFFF"
+        d="M15 10h18c1.7 0 3 1.3 3 3v24l-3-1.9-3 1.9-3-1.9-3 1.9-3-1.9-3 1.9-3-1.9-3 1.9V13c0-1.7 1.3-3 3-3z"
+      />
+      <rect x="19" y="15" width="10" height="2.4" rx="1.2" fill="#5B6FD6" />
+      <rect x="19" y="20" width="14" height="2.4" rx="1.2" fill="#B8C0F5" />
+      <rect x="19" y="25" width="9" height="2.4" rx="1.2" fill="#B8C0F5" />
+      <path
+        fill="#FFC145"
+        d="M35 12.5l1.4 3.2 3.2 1.4-3.2 1.4-1.4 3.2-1.4-3.2-3.2-1.4 3.2-1.4 1.4-3.2z"
       />
     </svg>
   );
@@ -209,16 +187,12 @@ export function LoginPage() {
           <div className="login-mobile-rays" aria-hidden />
           <div className="login-mobile-glow" aria-hidden />
           <div className="login-mobile-hero-txt">
-            <p className="login-mobile-name">Suraj Mobile</p>
-            <p className="login-mobile-meta">9516533556 · Balaghat</p>
+            <p className="login-mobile-name">{BRAND_NAME}</p>
+            <p className="login-mobile-meta">Product demo</p>
           </div>
         </header>
         <div className="login-mobile-badge" aria-hidden>
-          <img
-            src="/suraj_mobile_icon.png"
-            alt=""
-            className="login-mobile-badge-img"
-          />
+          <BrandIcon alt="" className="login-mobile-badge-img" />
         </div>
       </div>
 
@@ -227,10 +201,10 @@ export function LoginPage() {
           <div className="login-bloom" aria-hidden />
 
           <div className="login-bp-top">
-            <SurajMark className="login-logo" />
+            <BillingMark className="login-logo" />
             <div className="login-bp-name">
-              Suraj Mobile
-              <small>9516533556 · Balaghat</small>
+              {BRAND_NAME}
+              <small>Product demo</small>
             </div>
           </div>
 
@@ -252,9 +226,9 @@ export function LoginPage() {
                 <div className="login-notch" />
                 <div className="login-screen">
                   <div className="login-rc-head">
-                    <SurajMark className="login-rc-sun" />
+                    <BillingMark className="login-rc-sun" />
                     <div className="login-rc-shop">
-                      Suraj Mobile
+                      {BRAND_NAME}
                       <small>TAX INVOICE</small>
                     </div>
                   </div>
@@ -393,11 +367,7 @@ export function LoginPage() {
         </section>
 
         <section className="login-form-pane">
-          <img
-            src="/suraj_mobile_icon.png"
-            alt="Suraj Mobile"
-            className="login-fp-logo"
-          />
+          <BrandIcon alt={BRAND_NAME} className="login-fp-logo" />
           <h2>{heading}</h2>
           <p className="login-sub">{subtitle}</p>
 

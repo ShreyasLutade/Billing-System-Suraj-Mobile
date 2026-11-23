@@ -1,0 +1,79 @@
+name: Deploy GCP free stack
+
+# Restored for Actions UI. Auto-deploy on this branch only — Railway `main` is not touched.
+on:
+  push:
+    branches:
+      - deploy/gcp-cloudflare-free
+    paths:
+      - "client/**"
+      - "server/**"
+      - "deploy/gcp/**"
+      - "package.json"
+      - ".github/workflows/deploy-gcp.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gcp-free-stack
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy to e2-micro
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    steps:
+      - name: Validate deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.GCP_HOST }}" || { echo "Missing GCP_HOST secret"; exit 1; }
+          test -n "${{ secrets.GCP_USER }}" || { echo "Missing GCP_USER secret"; exit 1; }
+          test -n "${{ secrets.GCP_SSH_KEY }}" || { echo "Missing GCP_SSH_KEY secret"; exit 1; }
+          grep -q "BEGIN .* PRIVATE KEY" <<< "${{ secrets.GCP_SSH_KEY }}" || {
+            echo "GCP_SSH_KEY must contain the complete private key, including BEGIN/END lines"
+            exit 1
+          }
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USER }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          port: ${{ secrets.GCP_SSH_PORT || 22 }}
+          command_timeout: 45m
+          envs: GITHUB_TOKEN
+          script: |
+            set -euo pipefail
+            cd "$HOME/Billing-System-Suraj-Mobile"
+            echo "==> Fetching deploy/gcp-cloudflare-free"
+            test -n "${GITHUB_TOKEN}" || { echo "GITHUB_TOKEN was not forwarded to the VM"; exit 1; }
+            GIT_AUTH_HEADER="basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n' | tr -d '\r')"
+            git -c http.extraheader="AUTHORIZATION: ${GIT_AUTH_HEADER}" fetch origin deploy/gcp-cloudflare-free
+            git checkout deploy/gcp-cloudflare-free
+            git -c http.extraheader="AUTHORIZATION: ${GIT_AUTH_HEADER}" pull --ff-only origin deploy/gcp-cloudflare-free
+            test -f deploy/gcp/.env || {
+              echo "Missing deploy/gcp/.env on the VM — copy from .env.example and fill secrets first."
+              exit 1
+            }
+            echo "==> Building and restarting containers (can take several minutes on e2-micro)"
+            docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env up -d --build
+            echo "==> Health check"
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -fsS http://127.0.0.1/api/health | grep -q '"ok":true'; then
+                curl -fsS http://127.0.0.1/api/health
+                echo
+                echo "==> Deploy OK"
+                exit 0
+              fi
+              sleep 6
+            done
+            echo "Health check failed"
+            docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env ps
+            docker compose -f deploy/gcp/docker-compose.yml --env-file deploy/gcp/.env logs api --tail=80
+            exit 1

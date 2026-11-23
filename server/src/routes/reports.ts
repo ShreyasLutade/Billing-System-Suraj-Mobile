@@ -1,4 +1,5 @@
 import { Router } from "express";
+import fs from "fs";
 import multer from "multer";
 import { z } from "zod";
 import { runBillingReport, runScheduledReports } from "../services/dailyReports";
@@ -14,6 +15,7 @@ import {
 import { prisma } from "../lib/prisma";
 import {
   RESTORE_DB_CONFIRM,
+  emailSqliteBackup,
   getSqliteFilePath,
   isSqliteDatabaseUrl,
   restoreSqliteFromBuffer,
@@ -22,7 +24,6 @@ import {
   buildBackupZipBuffer,
   extractSqliteBackupBuffer,
 } from "../services/backupBundle";
-import fs from "fs";
 
 export const reportsRouter = Router();
 
@@ -75,6 +76,25 @@ reportsRouter.post("/send", async (req, res, next) => {
         dateKey,
         dbFilename,
         dbBytes,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin: email a fresh SQLite .db snapshot (GCP free-stack backups). */
+reportsRouter.post("/backup-db", async (req, res, next) => {
+  try {
+    const force = Boolean(req.body?.force);
+    const result = await emailSqliteBackup({ force });
+    res.json({
+      data: {
+        filename: result.snapshot.filename,
+        bytes: result.snapshot.bytes,
+        dateKey: result.snapshot.dateKey,
+        emailedTo: result.mail.to,
+        messageId: result.mail.messageId,
       },
     });
   } catch (error) {

@@ -3,6 +3,15 @@
 Production-ready billing web app for **Suraj Mobile Shop, Balaghat**.  
 Works on desktop and mobile. Data is stored on the server so laptop and phone stay in sync.
 
+## Hosting
+
+| Branch | Hosting |
+|--------|---------|
+| `main` | **Railway** (current production — keep until free-stack is tested) |
+| `deploy/gcp-cloudflare-free` | **Cloudflare Pages + GCP e2-micro + SQLite** (free stack) |
+
+Full cutover guide: [`docs/FREE_STACK_MIGRATION.md`](docs/FREE_STACK_MIGRATION.md)
+
 ## Features (v1)
 
 - Manual bill creation (product name, price, GST, IMEI, warranty typed by hand)
@@ -18,8 +27,9 @@ Works on desktop and mobile. Data is stored on the server so laptop and phone st
 |-------|------------|
 | Frontend | React + TypeScript + Vite + Tailwind + Framer Motion |
 | Backend | Node.js + Express + TypeScript |
-| Database | SQLite (local) → PostgreSQL on Railway (production) |
-| Hosting | Railway Hobby (~₹420/month) |
+| Database | SQLite (`file:/data/suraj.db` in production) |
+| Hosting (current) | Railway |
+| Hosting (free branch) | Cloudflare Pages + Google Cloud Always Free e2-micro |
 
 ## Quick start
 
@@ -65,15 +75,8 @@ VITE_API_URL=http://localhost:4000/api
 ```
 client/   React UI
 server/   Express API + Prisma
+deploy/   GCP + Cloudflare free-stack configs (this branch)
 ```
-
-## Railway deploy (later)
-
-1. Create Railway account (Hobby plan)
-2. Add PostgreSQL plugin
-3. Change Prisma datasource provider to `postgresql`
-4. Set `DATABASE_URL` from Railway
-5. Deploy `server` + serve `client` build (or host client on Railway static)
 
 ## Shop details
 
@@ -91,13 +94,13 @@ Each send also attaches a **SQLite `.db` snapshot** (when `DATABASE_URL` is `fil
 
 Admin UI: **/backup** — email Excel + `.db` now, or upload a `.db` to restore (overwrites live data; server restarts).
 
-### Railway (recommended): Resend HTTPS
+On the free-stack branch, a **daily SQLite `.db` email backup** also runs (`BACKUP_DB_CRON`).
 
-Railway typically **blocks outbound SMTP** (ports 465/587 time out). Use [Resend](https://resend.com) over HTTPS instead:
+### Resend HTTPS (Railway / any host)
 
 1. Create a free account at https://resend.com  
 2. Create an API key  
-3. Set Railway variables:
+3. Set:
 
 ```env
 REPORT_EMAIL_TO=surajmobile33556@gmail.com
@@ -107,12 +110,7 @@ REPORT_CRON_ENABLED=true
 REPORT_CRON_SECRET=long-random-cron-secret
 ```
 
-Optional: `RESEND_FROM="Suraj Mobile Reports <onboarding@resend.dev>"`  
-(After you verify your own domain in Resend, use that address as `RESEND_FROM`.)
-
-### Local: Gmail SMTP
-
-On your PC, Gmail SMTP still works:
+### Local / GCP: Gmail SMTP
 
 ```env
 SMTP_USER=surajmobilereports@gmail.com

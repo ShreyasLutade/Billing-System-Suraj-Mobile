@@ -50,7 +50,7 @@ function isRailway() {
 }
 
 function resendFromAddress() {
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   return (
     cleanEnv(process.env.RESEND_FROM) ||
     `${shop} <onboarding@resend.dev>`
@@ -73,7 +73,7 @@ export function getReportMailConfig() {
   const pass = cleanEnv(process.env.SMTP_PASS).replace(/\s+/g, "");
   const to = cleanEnv(process.env.REPORT_EMAIL_TO);
   const provider = emailProvider();
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   const from =
     cleanEnv(process.env.RESEND_FROM) ||
     (provider === "resend"
@@ -399,7 +399,7 @@ export async function sendReportEmail(
     );
   }
 
-  const shop = process.env.SHOP_NAME || "Suraj Mobile";
+  const shop = process.env.SHOP_NAME || "Smart Billing";
   const isToday = report.scope === "today";
   const hasDb = extraAttachments.some((file) =>
     file.filename.toLowerCase().endsWith(".db"),
@@ -520,4 +520,81 @@ export async function sendReportEmail(
   }
 
   return excelResult;
+}
+
+/** Generic attachment email (SQLite .db backups, etc.). */
+export async function sendRawEmailWithAttachments(input: {
+  subject: string;
+  text: string;
+  attachments: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
+}) {
+  const { to, from, configured, provider } = getReportMailConfig();
+  if (!configured || !provider || !to) {
+    throw new Error(
+      "Email is not configured. Set REPORT_EMAIL_TO and either RESEND_API_KEY or SMTP_USER/SMTP_PASS.",
+    );
+  }
+
+  if (provider === "resend") {
+    const apiKey = resendApiKey();
+    if (!apiKey) throw new Error("RESEND_API_KEY is not set");
+
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: resendFromAddress(),
+        to: [to],
+        subject: input.subject,
+        text: input.text,
+        attachments: input.attachments.map((file) => ({
+          filename: file.filename,
+          content: file.content.toString("base64"),
+        })),
+      }),
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      id?: string;
+      message?: string;
+      name?: string;
+    };
+    if (!response.ok) {
+      throw new Error(
+        payload.message ||
+          payload.name ||
+          `Resend API failed with status ${response.status}`,
+      );
+    }
+    return {
+      messageId: payload.id || `resend-${Date.now()}`,
+      to,
+      subject: input.subject,
+    };
+  }
+
+  const info = await sendWithSmtp({
+    from,
+    to,
+    subject: input.subject,
+    text: input.text,
+    attachments: input.attachments.map((file) => ({
+      filename: file.filename,
+      content: file.content,
+      contentType: file.contentType || "application/octet-stream",
+    })),
+  });
+
+  return {
+    messageId: info.messageId,
+    to,
+    subject: input.subject,
+  };
 }

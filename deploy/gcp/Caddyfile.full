@@ -1,0 +1,18 @@
+# Full (strict) with Cloudflare Origin CA
+# 1) Cloudflare → SSL/TLS → Origin Server → Create Certificate
+# 2) Save as deploy/gcp/certs/origin.pem and origin.key
+# 3) In docker-compose, point caddy volumes to this file instead of Caddyfile
+#    or:  docker compose ... run with CADDYFILE=Caddyfile.full
+
+{$API_HOSTNAME} {
+	encode gzip
+	reverse_proxy api:4000
+	tls /certs/origin.pem /certs/origin.key
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

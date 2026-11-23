@@ -1,0 +1,5 @@
+# Keep certs out of git — place Cloudflare Origin CA files here:
+#   origin.pem
+#   origin.key
+*
+!.gitignore

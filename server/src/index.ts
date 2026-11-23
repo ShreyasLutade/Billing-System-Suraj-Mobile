@@ -40,6 +40,12 @@ const isProduction = process.env.NODE_ENV === "production";
 const clientDist = path.join(__dirname, "..", "public");
 const serveClient = fs.existsSync(path.join(clientDist, "index.html"));
 
+// Cloudflare / reverse proxies set X-Forwarded-* headers.
+const trustProxy = (process.env.TRUST_PROXY || "").toLowerCase();
+if (trustProxy === "1" || trustProxy === "true") {
+  app.set("trust proxy", 1);
+}
+
 const allowedOrigins = (
   process.env.CLIENT_ORIGIN ||
   "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
@@ -71,12 +77,24 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    service: "suraj-billing-api",
-    time: new Date().toISOString(),
-  });
+app.get("/api/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      ok: true,
+      db: true,
+      service: "suraj-billing-api",
+      time: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[health] database check failed:", error);
+    res.status(503).json({
+      ok: false,
+      db: false,
+      service: "suraj-billing-api",
+      time: new Date().toISOString(),
+    });
+  }
 });
 
 // Railway Cron Jobs can hit this without a user JWT (uses REPORT_CRON_SECRET).
@@ -102,7 +120,7 @@ app.use("/api/money", requireAuth, requireAdmin, moneyRouter);
 if (!serveClient) {
   app.get("/", (_req, res) => {
     res.json({
-      service: "Suraj Billing API",
+      service: "Smart Billing API",
       message:
         "Open the website at http://localhost:5173 — this port is the API only.",
       health: "/api/health",
@@ -153,7 +171,23 @@ if (serveClient) {
   });
 }
 
+async function configureSqlite() {
+  const url = process.env.DATABASE_URL || "";
+  if (!url.startsWith("file:")) return;
+  try {
+    // SQLite PRAGMAs return rows — must use queryRaw, not executeRaw.
+    await prisma.$queryRawUnsafe(`PRAGMA journal_mode=WAL`);
+    await prisma.$queryRawUnsafe(`PRAGMA synchronous=NORMAL`);
+    await prisma.$queryRawUnsafe(`PRAGMA busy_timeout=5000`);
+    await prisma.$queryRawUnsafe(`PRAGMA foreign_keys=ON`);
+    console.log("[db] SQLite WAL mode enabled");
+  } catch (error) {
+    console.warn("[db] SQLite pragma setup skipped:", error);
+  }
+}
+
 async function start() {
+  await configureSqlite();
   await seedFinanceCompanies();
   await seedUsers();
   try {
@@ -229,7 +263,7 @@ async function start() {
   startDailyReportScheduler();
   startRecycleBinPurge();
   const server = app.listen(port, "0.0.0.0", () => {
-    console.log(`Suraj Billing API running on http://localhost:${port}`);
+    console.log(`Smart Billing API running on http://localhost:${port}`);
     if (serveClient) {
       console.log("Serving web app from /public");
     }

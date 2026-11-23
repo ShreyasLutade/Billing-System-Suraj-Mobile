@@ -2,8 +2,10 @@ node_modules/
 dist/
 server/public/
 .env
+deploy/gcp/.env
 *.db
 *.db-journal
 .DS_Store
 .vscode/
 .idea/
+
