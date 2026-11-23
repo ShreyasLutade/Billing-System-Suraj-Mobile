@@ -46,6 +46,9 @@ type Draft = {
   transportCharge: string;
   dueDate: string;
   note: string;
+  /** "Custom date" on: the bill is dated billDate instead of today. */
+  billDateOn?: boolean;
+  billDate?: string;
 };
 
 const DRAFT_KEY = "acc.wholesale.draft";
@@ -407,6 +410,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         dueDate: due > 0 ? draft.dueDate : undefined,
         note: draft.note,
         allowOutOfStock,
+        ...(!editId && draft.billDateOn && draft.billDate ? { billDate: draft.billDate } : {}),
       };
       if (editId) {
         await accApi.updateSale(editId, body);
@@ -498,6 +502,37 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
           </button>
         ) : null}
       </div>
+
+      {!editing ? (
+        <div className={clsx("acc-billdate", draft.billDateOn && "is-on")}>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={Boolean(draft.billDateOn)}
+            className="acc-billdate-toggle"
+            onClick={() => set({ billDateOn: !draft.billDateOn, billDate: draft.billDate || todayInput() })}
+          >
+            <CalendarDays aria-hidden />
+            <span>
+              <b>Custom date</b>
+              <small>{draft.billDateOn && draft.billDate ? `Bill dated ${shortDate(draft.billDate)}` : "Bill is dated today"}</small>
+            </span>
+            <span className={clsx("acc-mini-switch", draft.billDateOn && "is-on")} aria-hidden>
+              <i />
+            </span>
+          </button>
+          {draft.billDateOn ? (
+            <input
+              type="date"
+              className="acc-billdate-input"
+              value={draft.billDate || todayInput()}
+              max={todayInput()}
+              onChange={(e) => set({ billDate: e.target.value })}
+              aria-label="Bill date"
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Customer */}
       <CustomerChooser

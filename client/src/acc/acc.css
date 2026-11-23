@@ -12322,3 +12322,64 @@ html.dark .acc {
     flex: 1;
   }
 }
+
+/* Wholesale: Custom date for the bill */
+.acc-billdate {
+  display: grid;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--a-line);
+  border-radius: 14px;
+  background: var(--a-card);
+}
+
+.acc-billdate.is-on {
+  border-color: color-mix(in srgb, var(--a-accent) 40%, var(--a-line));
+}
+
+.acc .acc-billdate-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: var(--a-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-billdate-toggle > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--a-accent);
+}
+
+.acc-billdate-toggle > span:nth-of-type(1) {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+}
+
+.acc-billdate-toggle b {
+  font-size: 14px;
+}
+
+.acc-billdate-toggle small {
+  color: var(--a-muted);
+  font-size: 12px;
+}
+
+.acc .acc-billdate-input {
+  height: 42px;
+  margin: 0 4px 4px;
+  padding: 0 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 11px;
+  background: var(--a-card);
+  color: var(--a-ink);
+  font-size: 15px;
+  font-weight: 600;
+}

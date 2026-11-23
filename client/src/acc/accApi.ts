@@ -340,6 +340,8 @@ export type SaleInput = {
   dueDate?: string;
   note?: string;
   allowOutOfStock?: boolean;
+  /** yyyy-mm-dd: bill dated on an earlier day. */
+  billDate?: string;
 };
 
 function qs(params: Record<string, string | number | boolean | undefined | null>) {

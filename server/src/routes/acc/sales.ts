@@ -95,6 +95,12 @@ const saleSchema = z.object({
     .optional(),
   note: z.string().trim().max(500).default(""),
   allowOutOfStock: z.boolean().default(false),
+  /** yyyy-mm-dd: bill dated on an earlier day ("Custom date"); today when empty. */
+  billDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 class SaleError extends Error {
@@ -217,9 +223,12 @@ accSalesRouter.post("/sales", async (req, res, next) => {
       }
 
       const number = await nextAccNumber(tx, input.kind);
+      // Custom bill date: noon (IST) of that day; today keeps the real time.
+      const billDate = input.billDate && input.billDate < istDateString() ? new Date(`${input.billDate}T12:00:00+05:30`) : undefined;
       const created = await tx.accSale.create({
         data: {
           number,
+          ...(billDate ? { saleDate: billDate } : {}),
           kind: input.kind,
           customerId,
           customerName: input.kind === "RETAIL" ? input.customerName : "",
