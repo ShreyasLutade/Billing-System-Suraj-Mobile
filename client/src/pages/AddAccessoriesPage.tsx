@@ -8,6 +8,14 @@ import {
   scanFieldInputClass,
 } from "../components/BarcodeImeiScanner";
 import { FieldPicker } from "../components/FieldPicker";
+import {
+  PaymentAtPurchaseField,
+  blankPayment,
+  paymentDraftError,
+  paymentPayload,
+  type PaymentDraft,
+} from "../components/PaymentAtPurchaseField";
+import { useAuth } from "../auth/AuthContext";
 import { BackButton, SearchClearButton } from "../components/ui";
 import { api, formatINR } from "../lib/api";
 import { subscribeOutsideDismiss } from "../lib/floatingMenu";
@@ -118,7 +126,7 @@ function AccessoryNameSearch({
         className={clsx(
           "flex min-h-[48px] cursor-text items-center gap-2.5 rounded-[13px] border-[1.5px] border-ink-100 bg-white px-3 transition dark:bg-surface-elevated",
           open &&
-            "border-[#12B886] shadow-[0_0_0_4px_rgba(18,184,134,.14)]",
+            "border-tide-500 shadow-[0_0_0_4px_rgba(255,168,0,.2)]",
           disabled && "cursor-not-allowed opacity-55",
         )}
         onMouseDown={(event) => {
@@ -194,7 +202,7 @@ function AccessoryNameSearch({
                     aria-selected={active}
                     className={
                       active
-                        ? "flex w-full rounded-[11px] px-2.5 py-2.5 text-left text-sm font-semibold text-ink-900 bg-[#E7F8F1] dark:bg-tide-100/40"
+                        ? "flex w-full rounded-[11px] px-2.5 py-2.5 text-left text-sm font-semibold text-ink-900 bg-tide-100 dark:bg-tide-100/40"
                         : "flex w-full rounded-[11px] px-2.5 py-2.5 text-left text-sm font-semibold text-ink-900 hover:bg-[#F4F7FA] dark:hover:bg-surface-muted"
                     }
                     onMouseEnter={() => setHighlight(index)}
@@ -218,6 +226,9 @@ function AccessoryNameSearch({
 
 export function AddAccessoriesPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  /** Paying a supplier is admin only; staff purchases stay unpaid. */
+  const [payment, setPayment] = useState<PaymentDraft>(blankPayment);
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [serials, setSerials] = useState<string[]>([""]);
@@ -316,6 +327,12 @@ export function AddAccessoriesPage() {
       setError("Serial numbers must be unique");
       return;
     }
+    const total = price * cleaned.length;
+    const paymentIssue = isAdmin ? paymentDraftError(payment, total) : null;
+    if (paymentIssue) {
+      setError(paymentIssue);
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -329,6 +346,7 @@ export function AddAccessoriesPage() {
         supplierPhone: useNewSupplier
           ? supplierPhone.replace(/\D/g, "")
           : null,
+        payment: isAdmin ? paymentPayload(payment, total) : null,
       });
       goBack();
     } catch (err) {
@@ -348,7 +366,7 @@ export function AddAccessoriesPage() {
       </BackButton>
 
       <div className="mb-5 flex items-start gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#E8F0FE] text-[#2563EB] dark:bg-tide-100/30 dark:text-tide-400">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-tide-100 text-tide-600 dark:bg-tide-100/30 dark:text-tide-400">
           <Cable className="h-5 w-5" strokeWidth={2} />
         </span>
         <div>
@@ -541,6 +559,24 @@ export function AddAccessoriesPage() {
             </div>
           ))}
         </div>
+
+        {isAdmin ? (
+          <section className="rounded-[14px] border border-ink-100 bg-[#FBFCFD] p-3.5 dark:border-ink-100 dark:bg-surface-muted">
+            <div className="mb-2.5 flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold text-ink-900">Total purchase</span>
+              <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                {formatINR(priceNum * unitCount)}
+              </span>
+            </div>
+            <PaymentAtPurchaseField
+              idPrefix="acc-payment"
+              value={payment}
+              total={priceNum * unitCount}
+              disabled={saving}
+              onChange={setPayment}
+            />
+          </section>
+        ) : null}
 
         {error ? (
           <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/40 dark:text-rose-300">

@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowDownUp, ChevronDown, Phone, Search, Smartphone } from "lucide-react";
+import {
+  ArrowDownUp,
+  ChevronDown,
+  Download,
+  IndianRupee,
+  Loader2,
+  Phone,
+  Search,
+  Smartphone,
+  Truck,
+} from "lucide-react";
 import clsx from "clsx";
+import { useAuth } from "../auth/AuthContext";
 import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
 import {
   EmptyState,
@@ -13,11 +24,14 @@ import {
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
-import { ApiError, api, formatINR } from "../lib/api";
-import { matchesElasticFields } from "../lib/elasticSearch";
+import { ApiError, api, formatINR, formatStockUnitId } from "../lib/api";
+import {
+  matchesElasticFields,
+  normalizeSearchText,
+} from "../lib/elasticSearch";
 import { fromState } from "../lib/navMemory";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
-import type { StockImeiTrace, Supplier } from "../types";
+import type { StockImeiTrace, Supplier, SupplierMobile } from "../types";
 
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
@@ -39,6 +53,39 @@ function stockSpecLabel(stock: StockImeiTrace["stock"]) {
   return parts.join(" · ");
 }
 
+function mobileSpecLabel(m: SupplierMobile) {
+  return [
+    m.storage ? formatCapacityLabel(m.storage) : "",
+    m.platform === "ANDROID" && m.ram ? formatCapacityLabel(m.ram) : "",
+    m.color,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Strict model match on the mobile name only (not colour/storage): every query
+ * word must start a word of the name, and numbers must match whole
+ * ("iphone 12" matches "iPhone 12 Pro" but not "iPhone 13"; "red" matches
+ * "Redmi" but not a red iPhone).
+ */
+function matchesModel(m: SupplierMobile, query: string) {
+  const words = normalizeSearchText(m.mobileName).split(" ");
+  const parts = normalizeSearchText(query).split(" ").filter(Boolean);
+  return parts.every((q, i) =>
+    // A number still being typed (last word) matches as a prefix, so
+    // "iphone 1" lists 11/12/13… and "iphone 12" narrows to the 12 only.
+    /^\d+$/.test(q) && i < parts.length - 1
+      ? words.includes(q)
+      : words.some((w) => w.startsWith(q)),
+  );
+}
+
+/** Model search kicks in from 3 characters (e.g. "i14", "iphone 14"). */
+function isModelQuery(query: string) {
+  return normalizeSearchText(query).replace(/\s+/g, "").length >= 3;
+}
+
 type SortKey = "latest" | "name" | "outstanding" | "purchased" | "stock";
 type SortDir = 1 | -1;
 
@@ -49,6 +96,9 @@ const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "purchased", label: "Purchased" },
   { key: "stock", label: "In stock" },
 ];
+
+/** Sort keys based on purchase amounts — admin only. */
+const COST_SORT_KEYS: SortKey[] = ["outstanding", "purchased"];
 
 function supplierSortLabel(key: SortKey, dir: SortDir) {
   if (key === "latest") return dir === -1 ? "Newest" : "Oldest";
@@ -78,17 +128,55 @@ function compareSuppliers(a: Supplier, b: Supplier, key: SortKey, dir: SortDir) 
   return (a.stockAvailable - b.stockAvailable) * dir;
 }
 
+/**
+ * Hide suppliers with nothing left — no stock, nothing purchased, and no money
+ * purchased/paid/outstanding (e.g. after every mobile under them was deleted).
+ * Anyone with an amount still recorded stays visible so dues aren’t hidden.
+ */
+function supplierHasActivity(s: Supplier) {
+  const qtyPurchased = s.stockPurchased ?? s.stockAvailable + s.stockSold;
+  return (
+    s.stockAvailable > 0 ||
+    qtyPurchased > 0 ||
+    Math.abs(s.totalPurchased) > 0.005 ||
+    Math.abs(s.totalPaid) > 0.005 ||
+    Math.abs(s.outstanding) > 0.005
+  );
+}
+
 export function SuppliersPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statementBusyId, setStatementBusyId] = useState<string | null>(null);
+
+  async function downloadStatement(supplier: Supplier) {
+    setStatementBusyId(supplier.id);
+    setError(null);
+    try {
+      await api.downloadSupplierStatement(supplier.id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not download statement",
+      );
+    } finally {
+      setStatementBusyId(null);
+    }
+  }
   const [query, setQuery] = useSessionState("suppliers.query", "");
-  const [sortKey, setSortKey] = useSessionState<SortKey>(
+  const { isAdmin } = useAuth();
+  const [storedSortKey, setSortKey] = useSessionState<SortKey>(
     "suppliers.sortKey",
     "latest",
   );
+  // Staff never see purchase amounts, so they can't sort by them either.
+  const sortKey: SortKey =
+    !isAdmin && COST_SORT_KEYS.includes(storedSortKey) ? "latest" : storedSortKey;
+  const sortFieldOptions = isAdmin
+    ? SORT_FIELD_OPTIONS
+    : SORT_FIELD_OPTIONS.filter((option) => !COST_SORT_KEYS.includes(option.key));
   const [sortDir, setSortDir] = useSessionState<SortDir>("suppliers.sortDir", -1);
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
@@ -96,6 +184,9 @@ export function SuppliersPage() {
   const [imeiLoading, setImeiLoading] = useState(false);
   const [imeiError, setImeiError] = useState<string | null>(null);
   const imeiAbortRef = useRef<AbortController | null>(null);
+  const [mobiles, setMobiles] = useState<SupplierMobile[] | null>(null);
+  const [mobilesError, setMobilesError] = useState<string | null>(null);
+  const mobilesRequested = useRef(false);
 
   async function load() {
     setLoading(true);
@@ -182,12 +273,44 @@ export function SuppliersPage() {
   }, [query]);
 
   const imeiMode = looksLikeImei(query);
+  const modelMode = !imeiMode && isModelQuery(query);
+
+  // Load every purchased mobile once, the first time a model is searched.
+  useEffect(() => {
+    if (!modelMode || mobilesRequested.current) return;
+    mobilesRequested.current = true;
+    void (async () => {
+      try {
+        const { data } = await api.listSupplierMobiles();
+        setMobiles(data);
+        setMobilesError(null);
+      } catch (err) {
+        mobilesRequested.current = false;
+        setMobilesError(
+          err instanceof Error ? err.message : "Could not load mobiles",
+        );
+      }
+    })();
+  }, [modelMode]);
+
+  const mobileMatches = useMemo(() => {
+    if (!modelMode || !mobiles) return [];
+    return mobiles
+      .filter((m) => matchesModel(m, query))
+      .sort(
+        (a, b) =>
+          new Date(b.purchaseDate).getTime() -
+          new Date(a.purchaseDate).getTime(),
+      );
+  }, [mobiles, query, modelMode]);
+  const mobilesLoading = modelMode && !mobiles && !mobilesError;
 
   const filtered = useMemo(() => {
     if (imeiMode) return [];
+    const active = suppliers.filter(supplierHasActivity);
     const matched = !query.trim()
-      ? suppliers
-      : suppliers.filter((s) =>
+      ? active
+      : active.filter((s) =>
           matchesElasticFields([s.name, s.phone], query),
         );
     return [...matched].sort((a, b) =>
@@ -222,9 +345,23 @@ export function SuppliersPage() {
   return (
     <div>
       <PageHeader
+        icon={Truck}
         title="Suppliers"
-        description="Supplier ledger — purchases, payments, and outstanding."
+        action={
+          isAdmin ? (
+            <button
+              type="button"
+              className="btn-primary shrink-0 self-start sm:self-auto"
+              // Paying suppliers lives on Dues → Supplier now.
+              onClick={() => navigate("/dues?tab=supplier")}
+            >
+              <IndianRupee className="h-4 w-4" />
+              Pay in Dues
+            </button>
+          ) : null
+        }
       />
+
 
       <div className="tb-toolbar">
         <div className="tb-searchrow">
@@ -233,9 +370,8 @@ export function SuppliersPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search supplier or scan / type IMEI…"
-              aria-label="Search supplier or IMEI"
-              className="font-mono tracking-wide"
+              placeholder="Search supplier, model or IMEI…"
+              aria-label="Search supplier, model or IMEI"
               inputMode="search"
               autoComplete="off"
             />
@@ -262,19 +398,39 @@ export function SuppliersPage() {
             ) : imeiError ? (
               <EmptyState title={imeiError} description="Try another IMEI." />
             ) : imeiTrace ? (
-              <ImeiTraceCard trace={imeiTrace} />
+              <ImeiTraceCard trace={imeiTrace} showCost={isAdmin} />
             ) : null}
           </div>
         </div>
       ) : null}
 
+      {modelMode ? (
+        mobilesLoading ? (
+          <LoadingBlock label="Finding mobiles…" />
+        ) : mobilesError ? (
+          <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
+            {mobilesError}
+          </div>
+        ) : mobileMatches.length ? (
+          <MobileMatchesTable
+            mobiles={mobileMatches}
+            query={query}
+            showCost={isAdmin}
+          />
+        ) : null
+      ) : null}
+
       {loading ? (
         <LoadingBlock label="Loading suppliers…" />
       ) : imeiMode ? null : filtered.length === 0 ? (
+        modelMode && (mobilesLoading || mobileMatches.length) ? null : (
         <EmptyState
-          title={query.trim() ? "No matching suppliers" : "No suppliers yet"}
-          description="Suppliers appear here after you add stock from the Stock page. You can also scan an IMEI to trace a unit."
+          title={
+            query.trim() ? "No matching suppliers or mobiles" : "No suppliers yet"
+          }
+          description="Suppliers appear here after you add stock from the Stock page. Search a model (e.g. iPhone 14) or scan an IMEI to trace units."
         />
+        )
       ) : (
         <>
           <div className="mb-2.5 flex items-center justify-between gap-3 px-1 text-[13px] text-ink-500">
@@ -357,7 +513,7 @@ export function SuppliersPage() {
                     Sort by
                   </p>
                   <div className="space-y-0.5">
-                    {SORT_FIELD_OPTIONS.map((option) => {
+                    {sortFieldOptions.map((option) => {
                       const on = sortKey === option.key;
                       return (
                         <button
@@ -393,16 +549,21 @@ export function SuppliersPage() {
 
           <div className="ledger-card">
             <div className="ledger-scroll">
-              <table className="ledger-table min-w-[48rem]">
+              <table className="ledger-table">
                 <thead>
                   <tr>
                     <th>Supplier</th>
                     <th>Phone</th>
                     <th className="text-right">In stock</th>
                     <th className="text-right">Qty purchased</th>
-                    <th className="text-right">Purchased</th>
-                    <th className="text-right">Paid</th>
-                    <th className="text-right">Outstanding</th>
+                    {isAdmin ? (
+                      <>
+                        <th className="text-right">Purchased</th>
+                        <th className="text-right">Paid</th>
+                        <th className="text-right">Outstanding</th>
+                        <th className="text-center">Statement</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -440,15 +601,38 @@ export function SuppliersPage() {
                       <td className="text-right tabular-nums text-ink-500">
                         {s.stockPurchased ?? s.stockAvailable + s.stockSold}
                       </td>
-                      <td className="text-right tabular-nums text-ink-500">
-                        {formatINR(s.totalPurchased)}
-                      </td>
-                      <td className="text-right tabular-nums text-ink-500">
-                        {formatINR(s.totalPaid)}
-                      </td>
-                      <td className="text-right tabular-nums font-bold text-ink-900">
-                        {formatINR(s.outstanding)}
-                      </td>
+                      {isAdmin ? (
+                        <>
+                          <td className="text-right tabular-nums text-ink-500">
+                            {formatINR(s.totalPurchased)}
+                          </td>
+                          <td className="text-right tabular-nums text-ink-500">
+                            {formatINR(s.totalPaid)}
+                          </td>
+                          <td className="text-right tabular-nums font-bold text-ink-900">
+                            {formatINR(s.outstanding)}
+                          </td>
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="inline-grid h-7 w-7 place-items-center rounded-lg text-ink-500 transition hover:bg-tide-100 hover:text-tide-600 disabled:opacity-50"
+                              aria-label={`Download statement for ${s.name}`}
+                              title="Download statement (PDF)"
+                              disabled={statementBusyId !== null}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void downloadStatement(s);
+                              }}
+                            >
+                              {statementBusyId === s.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </button>
+                          </td>
+                        </>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -457,15 +641,20 @@ export function SuppliersPage() {
                     <td colSpan={2}>Total</td>
                     <td className="text-right tabular-nums">{totals.stock}</td>
                     <td className="text-right tabular-nums">{totals.qty}</td>
-                    <td className="text-right tabular-nums">
-                      {formatINR(totals.purchased)}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {formatINR(totals.paid)}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {formatINR(totals.outstanding)}
-                    </td>
+                    {isAdmin ? (
+                      <>
+                        <td className="text-right tabular-nums">
+                          {formatINR(totals.purchased)}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {formatINR(totals.paid)}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {formatINR(totals.outstanding)}
+                        </td>
+                        <td />
+                      </>
+                    ) : null}
                   </tr>
                 </tfoot>
               </table>
@@ -481,7 +670,7 @@ export function SuppliersPage() {
               Click a supplier to open the ledger. Or{" "}
               <Link
                 to="/stock"
-                className="font-medium text-[#2563EB] hover:underline"
+                className="font-medium text-tide-600 hover:underline"
               >
                 go to Stock
               </Link>
@@ -490,6 +679,155 @@ export function SuppliersPage() {
           </div>
         </>
       )}
+
+    </div>
+  );
+}
+
+/** Every purchase of the searched model, with the supplier it came from. */
+function MobileMatchesTable({
+  mobiles,
+  query,
+  showCost,
+}: {
+  mobiles: SupplierMobile[];
+  query: string;
+  showCost: boolean;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const reveal = useInfiniteReveal(mobiles, `${query}|${mobiles.length}`);
+  const supplierCount = new Set(
+    mobiles.map((m) => m.supplier?.id ?? "none"),
+  ).size;
+  const totalCost = mobiles.reduce((sum, m) => sum + (m.purchasePrice ?? 0), 0);
+
+  return (
+    <div className="mb-5">
+      <div className="mb-2.5 px-1 text-[13px] text-ink-500">
+        <b className="font-semibold text-ink-900">{mobiles.length}</b> mobile
+        {mobiles.length === 1 ? "" : "s"} matching “{query.trim()}” from{" "}
+        <b className="font-semibold text-ink-900">{supplierCount}</b> supplier
+        {supplierCount === 1 ? "" : "s"}
+      </div>
+      <div className="ledger-card">
+        <div className="ledger-scroll">
+          <table className="ledger-table">
+            <thead>
+              <tr>
+                <th>Mobile</th>
+                <th>IMEI / Serial</th>
+                <th>Purchase date</th>
+                <th>Supplier</th>
+                {showCost ? <th className="text-right">Purchase price</th> : null}
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reveal.visibleItems.map((m) => {
+                const sold = m.status === "SOLD";
+                // Open the purchase this unit came in on (the mobile detail
+                // page), falling back to the supplier ledger.
+                const target = m.purchase
+                  ? `/suppliers/${m.purchase.supplierId}/purchases/${m.purchase.id}`
+                  : m.supplier
+                    ? `/suppliers/${m.supplier.id}`
+                    : null;
+                return (
+                  <tr
+                    key={m.id}
+                    className={target ? "ledger-row-click" : undefined}
+                    onClick={() => {
+                      if (!target) return;
+                      navigate(target, {
+                        state: { ...fromState(location), highlightStockId: m.id },
+                      });
+                    }}
+                  >
+                    <td className="whitespace-normal">
+                      <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-ink-900">
+                        {m.mobileName}
+                        {m.condition === "USED" ? (
+                          <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                            Old
+                          </span>
+                        ) : null}
+                      </span>
+                      {mobileSpecLabel(m) ? (
+                        <span className="block text-[12px] text-ink-400">
+                          {mobileSpecLabel(m)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="font-mono text-[12.5px] tabular-nums text-ink-500">
+                      {formatStockUnitId(m)}
+                    </td>
+                    <td className="tabular-nums text-ink-500">
+                      {format(new Date(m.purchaseDate), "dd MMM yyyy")}
+                    </td>
+                    <td className="font-semibold text-ink-900">
+                      {m.supplier?.name || "—"}
+                    </td>
+                    {showCost ? (
+                      <td className="text-right tabular-nums text-ink-900">
+                        {formatINR(m.purchasePrice ?? 0)}
+                      </td>
+                    ) : null}
+                    <td>
+                      {sold ? (
+                        m.sale ? (
+                          <Link
+                            to={`/bills/${m.sale.billId}`}
+                            state={fromState(location)}
+                            className={clsx(
+                              "text-[12.5px] font-semibold hover:underline",
+                              m.returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {m.returned ? "Returned / Replaced" : "Sold"} · {m.sale.invoiceNumber}
+                          </Link>
+                        ) : (
+                          <span
+                            className={clsx(
+                              "text-[12.5px] font-semibold",
+                              m.returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
+                            )}
+                          >
+                            {m.returned ? "Returned / Replaced" : "Sold"}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[12.5px] font-semibold text-tide-600">
+                          In stock
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {showCost ? (
+              <tfoot>
+                <tr>
+                  <td colSpan={4}>Total</td>
+                  <td className="text-right tabular-nums">
+                    {formatINR(totalCost)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
+        </div>
+        <LoadMoreSentinel
+          sentinelRef={reveal.sentinelRef}
+          hasMore={reveal.hasMore}
+          loadingMore={reveal.loadingMore}
+          totalCount={reveal.totalCount}
+          showEnd={false}
+        />
+      </div>
     </div>
   );
 }
@@ -507,7 +845,13 @@ function formatPhoneGroups(phone: string) {
   return phone;
 }
 
-function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
+function ImeiTraceCard({
+  trace,
+  showCost,
+}: {
+  trace: StockImeiTrace;
+  showCost: boolean;
+}) {
   const location = useLocation();
   const { stock, supplier, purchaseDate, costPrice, sale } = trace;
   const sold = stock.status === "SOLD" || Boolean(sale);
@@ -560,13 +904,13 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
                   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold",
                   sold
                     ? "bg-rose-50 text-rose-600"
-                    : "bg-[#E8F1FE] text-[#2563EB]",
+                    : "bg-[#E8F1FE] text-tide-600",
                 )}
               >
                 <span
                   className={clsx(
                     "h-1.5 w-1.5 rounded-full",
-                    sold ? "bg-rose-500" : "bg-[#3B82F6]",
+                    sold ? "bg-rose-500" : "bg-tide-500",
                   )}
                 />
                 {sold ? "Sold" : "In stock"}
@@ -611,14 +955,16 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
         ) : null}
 
         <div className="space-y-3 px-4 pb-4 sm:px-5 sm:pb-5">
-          <div className="flex items-center justify-between gap-3 rounded-[16px] bg-[#F3F5F8] px-4 py-3.5 dark:bg-surface-muted">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-              Cost price
-            </p>
-            <p className="font-display text-xl font-semibold tabular-nums tracking-tight text-ink-900 sm:text-2xl">
-              {formatINR(costPrice)}
-            </p>
-          </div>
+          {showCost ? (
+            <div className="flex items-center justify-between gap-3 rounded-[16px] bg-[#F3F5F8] px-4 py-3.5 dark:bg-surface-muted">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+                Cost price
+              </p>
+              <p className="font-display text-xl font-semibold tabular-nums tracking-tight text-ink-900 sm:text-2xl">
+                {formatINR(costPrice)}
+              </p>
+            </div>
+          ) : null}
 
           <div className="rounded-[16px] border border-[#EEF1F5] px-4 dark:border-ink-100">
             <div className="flex items-center justify-between gap-3 border-b border-[#EEF1F5] py-3.5 dark:border-ink-100">
@@ -647,7 +993,7 @@ function ImeiTraceCard({ trace }: { trace: StockImeiTrace }) {
                 <Link
                   to={`/bills/${sale.billId}`}
                   state={fromState(location)}
-                  className="max-w-[60%] truncate text-right text-[13px] font-semibold text-[#2563EB] underline-offset-2 hover:underline sm:text-sm"
+                  className="max-w-[60%] truncate text-right text-[13px] font-semibold text-tide-600 underline-offset-2 hover:underline sm:text-sm"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {sale.invoiceNumber}

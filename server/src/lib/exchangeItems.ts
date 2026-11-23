@@ -1,3 +1,51 @@
+export const EXCHANGE_ACCESSORY_KEYS = [
+  "BOX",
+  "CHARGER",
+  "CABLE",
+  "BILL",
+] as const;
+
+export type ExchangeAccessoryKey = (typeof EXCHANGE_ACCESSORY_KEYS)[number];
+
+/** Extra item handed over with an exchange phone; PENDING = customer still owes it. */
+export type ExchangeAccessory = {
+  key: ExchangeAccessoryKey;
+  status: "GIVEN" | "PENDING";
+  /** Set when a PENDING item was later handed over. */
+  receivedAt?: string | null;
+};
+
+export function normalizeExchangeAccessories(raw: unknown): ExchangeAccessory[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: ExchangeAccessory[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const entry = row as Record<string, unknown>;
+    const key = entry.key;
+    if (
+      typeof key !== "string" ||
+      !(EXCHANGE_ACCESSORY_KEYS as readonly string[]).includes(key) ||
+      seen.has(key)
+    ) {
+      continue;
+    }
+    seen.add(key);
+    const status = entry.status === "PENDING" ? "PENDING" : "GIVEN";
+    out.push({
+      key: key as ExchangeAccessoryKey,
+      status,
+      receivedAt:
+        status === "GIVEN" &&
+        typeof entry.receivedAt === "string" &&
+        entry.receivedAt
+          ? entry.receivedAt
+          : null,
+    });
+  }
+  return out;
+}
+
 export type BillExchangeItem = {
   model: string;
   platform: "IOS" | "ANDROID";
@@ -7,6 +55,7 @@ export type BillExchangeItem = {
   imei1: string;
   value: number;
   notes?: string | null;
+  accessories?: ExchangeAccessory[];
 };
 
 export function parseExchangeItemsJson(
@@ -46,6 +95,7 @@ export function parseExchangeItemsJson(
             typeof item.notes === "string" && item.notes.trim()
               ? item.notes.trim()
               : null,
+          accessories: normalizeExchangeAccessories(item.accessories),
         };
       })
       .filter((item): item is BillExchangeItem => item !== null);
@@ -76,6 +126,7 @@ export function exchangeItemsFromInput(input: {
       platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
       ram:
         item.platform === "ANDROID" && item.ram?.trim() ? item.ram.trim() : null,
+      accessories: normalizeExchangeAccessories(item.accessories),
     }));
   }
 
@@ -136,4 +187,30 @@ export function exchangeDeductionAmount(input: {
   const cashReturn = Math.max(0, Number(input.exchangeCashReturn ?? 0) || 0);
   const capped = Math.min(cashReturn, gross);
   return Math.round((gross - capped) * 100) / 100;
+}
+
+/** Bill line: accessories handed to the buyer, stored as "BOX,CHARGER". */
+export function serializeIncludedAccessories(keys?: readonly string[] | null) {
+  const valid = EXCHANGE_ACCESSORY_KEYS.filter((key) => keys?.includes(key));
+  return valid.length ? valid.join(",") : null;
+}
+
+export function parseIncludedAccessories(raw?: string | null) {
+  if (!raw) return [] as ExchangeAccessoryKey[];
+  const parts = raw.split(",").map((part) => part.trim());
+  return EXCHANGE_ACCESSORY_KEYS.filter((key) => parts.includes(key));
+}
+
+const ACCESSORY_LABELS: Record<ExchangeAccessoryKey, string> = {
+  BOX: "Box",
+  CHARGER: "Charger",
+  CABLE: "Cable",
+  BILL: "Bill",
+};
+
+/** "Box, Charger & Cable" */
+export function includedAccessoriesLabel(raw?: string | null) {
+  const labels = parseIncludedAccessories(raw).map((key) => ACCESSORY_LABELS[key]);
+  if (labels.length <= 1) return labels.join("");
+  return `${labels.slice(0, -1).join(", ")} & ${labels[labels.length - 1]}`;
 }

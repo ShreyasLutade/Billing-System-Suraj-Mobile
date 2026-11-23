@@ -1,22 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
+import { AnimatePresence } from "framer-motion";
 import {
   ArrowDownUp,
+  Boxes,
   Cable,
   Check,
   ChevronDown,
+  Download,
+  Package,
   Plus,
   RefreshCw,
   Search,
   Smartphone,
   SquarePen,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import type { AddStockLocationState } from "./AddStockPage";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
+import { AddStockFab } from "../components/AddStockFab";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
+import { StockExportModal } from "../components/StockExportModal";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
@@ -36,6 +44,9 @@ const SORT_FIELD_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "avg", label: "Avg price" },
   { key: "total", label: "Total value" },
 ];
+
+/** Sort keys based on purchase cost — admin only. */
+const COST_SORT_KEYS: SortKey[] = ["avg", "total"];
 
 function stockSortLabel(key: SortKey, dir: 1 | -1) {
   if (key === "latest") {
@@ -233,7 +244,12 @@ export function StockPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useSessionState("stock.query", "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** Unit waiting on the delete warning. */
+  const [pendingRemove, setPendingRemove] = useState<StockItem | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [editingUnit, setEditingUnit] = useState<StockItem | null>(null);
+  /** Download icon → pick new / old mobiles, then save and share the PDF. */
+  const [exportOpen, setExportOpen] = useState(false);
   const [selectedKey, setSelectedKeyState] = useState<string | null>(
     () => itemFromUrl,
   );
@@ -264,7 +280,13 @@ export function StockPage() {
   useEffect(() => {
     if (itemFromUrl) setSelectedKeyState(itemFromUrl);
   }, [itemFromUrl]);
-  const [sortKey, setSortKey] = useSessionState<SortKey>("stock.sortKey", "model");
+  const [storedSortKey, setSortKey] = useSessionState<SortKey>("stock.sortKey", "model");
+  // Staff never see cost, so they can't sort by it either.
+  const sortKey: SortKey =
+    !isAdmin && COST_SORT_KEYS.includes(storedSortKey) ? "model" : storedSortKey;
+  const sortFieldOptions = isAdmin
+    ? SORT_FIELD_OPTIONS
+    : SORT_FIELD_OPTIONS.filter((option) => !COST_SORT_KEYS.includes(option.key));
   const [sortDir, setSortDir] = useSessionState<1 | -1>("stock.sortDir", 1);
   const [sortOpen, setSortOpen] = useState(false);
   const sortWrapRef = useRef<HTMLDivElement>(null);
@@ -373,9 +395,7 @@ export function StockPage() {
     [groups, selectedKey],
   );
 
-  const tabGroups = useMemo(() => groupStockByProduct(items), [items]);
   const summaryUnits = items.length;
-  const summaryModels = tabGroups.length;
   const summaryValue = round2(
     items.reduce((sum, item) => sum + (item.purchasePrice || 0), 0),
   );
@@ -386,17 +406,12 @@ export function StockPage() {
   );
 
   async function removeItem(item: StockItem) {
-    if (
-      !window.confirm(
-        `Remove ${item.mobileName} (${formatStockUnitId(item)}) from stock?`,
-      )
-    ) {
-      return;
-    }
     setDeletingId(item.id);
+    setRemoveError(null);
     setError(null);
     try {
       await api.deleteStockItem(item.id);
+      setPendingRemove(null);
       setItems((current) => {
         const next = current.filter((row) => row.id !== item.id);
         if (!next.some((row) => stockGroupKey(row) === stockGroupKey(item))) {
@@ -405,17 +420,30 @@ export function StockPage() {
         return next;
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove item");
+      setRemoveError(err instanceof Error ? err.message : "Failed to remove item");
     } finally {
       setDeletingId(null);
     }
   }
 
   function applyEditedUnit(updated: StockItem) {
-    setItems((current) =>
-      current.map((row) => (row.id === updated.id ? updated : row)),
-    );
-    setSelectedKey(stockGroupKey(updated));
+    // New ↔ Second hand moves the unit to the other tab's list.
+    const leftTab =
+      (tab === "NEW" || tab === "USED") && updated.condition !== tab;
+    if (leftTab) {
+      const next = items.filter((row) => row.id !== updated.id);
+      setItems(next);
+      setSelectedKey(
+        next.some((row) => stockGroupKey(row) === stockGroupKey(updated))
+          ? stockGroupKey(updated)
+          : null,
+      );
+    } else {
+      setItems((current) =>
+        current.map((row) => (row.id === updated.id ? updated : row)),
+      );
+      setSelectedKey(stockGroupKey(updated));
+    }
     setError(null);
   }
 
@@ -434,8 +462,38 @@ export function StockPage() {
           isAdmin={isAdmin}
           onBack={() => setSelectedKey(null)}
           onEdit={setEditingUnit}
-          onRemove={(unit) => void removeItem(unit)}
+          onRemove={(unit) => {
+            setRemoveError(null);
+            setPendingRemove(unit);
+          }}
         />
+        <AnimatePresence>
+          {pendingRemove ? (
+            <DangerConfirmModal
+              key="remove-stock"
+              title={
+                pendingRemove.kind === "ACCESSORY"
+                  ? "Delete this accessory?"
+                  : "Delete this phone?"
+              }
+              subtitle={
+                <>
+                  {pendingRemove.mobileName} ·{" "}
+                  <span className="font-mono">
+                    {formatStockUnitId(pendingRemove)}
+                  </span>
+                </>
+              }
+              points={["It is removed from stock and from its purchase."]}
+              undoDays={RECYCLE_BIN_DAYS}
+              cancelLabel="Keep it"
+              working={deletingId === pendingRemove.id}
+              error={removeError}
+              onCancel={() => deletingId === null && setPendingRemove(null)}
+              onConfirm={() => void removeItem(pendingRemove)}
+            />
+          ) : null}
+        </AnimatePresence>
         {editingUnit && isAdmin && editingUnit.kind !== "ACCESSORY" ? (
           <EditStockUnitModal
             unit={editingUnit}
@@ -463,31 +521,52 @@ export function StockPage() {
 
   return (
     <div>
+      <AddStockFab
+        onAddMobile={openAddMobilePage}
+        onAddAccessories={openAddAccessoriesPage}
+      />
       <PageHeader
-        eyebrow="Inventory"
+        icon={Package}
         title="Stock"
-        description="Mobiles and accessories currently in the shop."
         action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="btn-primary"
-              onClick={() => openAddAccessoriesPage()}
+              className="btn-secondary px-2.5"
+              onClick={() => setExportOpen(true)}
+              aria-label="Download stock PDF"
+              title="Download stock PDF"
             >
-              <Cable className="h-4 w-4" />
-              Add accessories
+              <Download className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => openAddMobilePage()}
-            >
-              <Plus className="h-4 w-4" />
-              Add mobile
-            </button>
+            {/* Phones use the floating + instead (AddStockFab). */}
+            <div className="hidden items-center gap-2 md:flex">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => openAddAccessoriesPage()}
+              >
+                <Cable className="h-4 w-4" />
+                Add accessories
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => openAddMobilePage()}
+              >
+                <Plus className="h-4 w-4" />
+                Add mobile
+              </button>
+            </div>
           </div>
         }
       />
+
+      <AnimatePresence>
+        {exportOpen ? (
+          <StockExportModal onClose={() => setExportOpen(false)} />
+        ) : null}
+      </AnimatePresence>
 
       <div className="tb-toolbar">
         <div className="tb-tabs tb-tabs-3" role="tablist" aria-label="Stock type">
@@ -500,9 +579,6 @@ export function StockPage() {
           >
             <Smartphone className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
             New
-            {tab === "NEW" ? (
-              <span className="tb-cnt">{summaryUnits}</span>
-            ) : null}
           </button>
           <button
             type="button"
@@ -514,9 +590,6 @@ export function StockPage() {
             <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
             <span className="sm:hidden">Used</span>
             <span className="hidden sm:inline">Second hand</span>
-            {tab === "USED" ? (
-              <span className="tb-cnt">{summaryUnits}</span>
-            ) : null}
           </button>
           <button
             type="button"
@@ -526,11 +599,7 @@ export function StockPage() {
             onClick={() => setTab("ACCESSORY")}
           >
             <Cable className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-            <span className="sm:hidden">Acc.</span>
-            <span className="hidden sm:inline">Accessories</span>
-            {tab === "ACCESSORY" ? (
-              <span className="tb-cnt">{summaryUnits}</span>
-            ) : null}
+            Accessories
           </button>
         </div>
 
@@ -552,33 +621,134 @@ export function StockPage() {
               onClear={() => setQuery("")}
             />
           </div>
+          <div className="relative shrink-0" ref={sortWrapRef}>
+            <button
+              type="button"
+              className={clsx(
+                "tb-filter-btn gap-1.5 sm:flex sm:w-auto sm:items-center sm:px-3.5",
+                sortOpen && "!border-ink-900 !text-ink-900",
+              )}
+              aria-haspopup="true"
+              aria-expanded={sortOpen}
+              aria-label={`Sort: ${stockSortLabel(sortKey, sortDir)}`}
+              title={`Sort: ${stockSortLabel(sortKey, sortDir)}`}
+              onClick={() => setSortOpen((open) => !open)}
+            >
+              <ArrowDownUp className="h-[17px] w-[17px]" strokeWidth={2} />
+              <span className="hidden whitespace-nowrap text-[13px] font-semibold sm:inline">
+                {stockSortLabel(sortKey, sortDir)}
+              </span>
+              <ChevronDown
+                className={clsx(
+                  "hidden h-[13px] w-[13px] text-ink-300 transition sm:block",
+                  sortOpen && "rotate-180",
+                )}
+                strokeWidth={2}
+              />
+            </button>
+
+            {sortOpen ? (
+              <div
+                className="absolute right-0 top-[calc(100%+8px)] z-40 w-[230px] origin-top-right rounded-[14px] border border-ink-100 bg-white p-3 shadow-[0_8px_20px_rgba(16,25,40,.10),0_24px_60px_rgba(16,25,40,.16)]"
+                role="menu"
+                aria-label="Sort stock"
+              >
+                <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">
+                  Direction
+                </p>
+                <div className="mb-3 grid grid-cols-2 gap-0.5 rounded-[10px] bg-[#EEF0F3] p-[3px]">
+                  <button
+                    type="button"
+                    className={clsx(
+                      "rounded-[7px] px-2 py-1.5 text-center text-xs transition",
+                      sortDir === -1
+                        ? "bg-white font-semibold text-ink-900 shadow-soft"
+                        : "font-medium text-ink-500 hover:text-ink-900",
+                    )}
+                    onClick={() => setSortDir(-1)}
+                  >
+                    {sortKey === "latest" ? "Newest" : "High → Low"}
+                  </button>
+                  <button
+                    type="button"
+                    className={clsx(
+                      "rounded-[7px] px-2 py-1.5 text-center text-xs transition",
+                      sortDir === 1
+                        ? "bg-white font-semibold text-ink-900 shadow-soft"
+                        : "font-medium text-ink-500 hover:text-ink-900",
+                    )}
+                    onClick={() => setSortDir(1)}
+                  >
+                    {sortKey === "latest" ? "Oldest" : "Low → High"}
+                  </button>
+                </div>
+
+                <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">
+                  Sort by
+                </p>
+                <div className="space-y-0.5">
+                  {sortFieldOptions.map((option) => {
+                    const on = sortKey === option.key;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={on}
+                        className={clsx(
+                          "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
+                          on
+                            ? "bg-tide-100/60 font-semibold text-ink-900"
+                            : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
+                        )}
+                        onClick={() => {
+                          setSortKey(option.key);
+                          if (option.key === "latest") setSortDir(-1);
+                        }}
+                      >
+                        {option.label}
+                        <Check
+                          className={clsx(
+                            "h-[15px] w-[15px] text-tide-600",
+                            on ? "opacity-100" : "opacity-0",
+                          )}
+                          strokeWidth={2.6}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#0E1626] px-3.5 py-2 shadow-soft dark:border dark:border-ink-100 dark:!bg-surface-elevated">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/55 dark:!text-ink-500">
-            Stock value
-          </p>
-          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-white dark:!text-[#F8FAFC]">
-            {loading ? "…" : formatINR(summaryValue)}
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft dark:border-ink-100 dark:!bg-surface">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
-            Units in stock
-          </p>
-          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-ink-900">
-            {loading ? "…" : summaryUnits}
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-ink-100/80 bg-white px-3.5 py-2 shadow-soft dark:border-ink-100 dark:!bg-surface">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-500">
-            {tab === "ACCESSORY" ? "Distinct names" : "Distinct models"}
-          </p>
-          <p className="font-display text-[15px] font-semibold tabular-nums tracking-tight text-ink-900">
-            {loading ? "…" : summaryModels}
-          </p>
+      {/* One summary card: stock value (admin only) and units in stock. */}
+      <div className="mb-3 flex items-stretch divide-x divide-ink-100 rounded-2xl border border-ink-100/80 bg-white shadow-soft dark:divide-[rgb(var(--color-line))] dark:border-ink-100 dark:bg-surface">
+        {isAdmin ? (
+          <div className="flex min-w-0 flex-[1.4] items-center gap-2 px-3 py-1.5">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-tide-100 text-tide-600 dark:bg-tide-100/30 dark:text-tide-400">
+              <Wallet className="h-[15px] w-[15px]" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-medium leading-tight text-ink-500">Total stock value</p>
+              <p className="truncate font-display text-[14.5px] font-bold leading-tight tabular-nums tracking-tight text-ink-900">
+                {loading ? "…" : formatINR(summaryValue)}
+              </p>
+            </div>
+          </div>
+        ) : null}
+        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-ink-50 text-ink-600 dark:bg-white/10 dark:text-ink-300">
+            <Boxes className="h-[15px] w-[15px]" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-medium leading-tight text-ink-500">Total units</p>
+            <p className="font-display text-[14.5px] font-bold leading-tight tabular-nums tracking-tight text-ink-900">
+              {loading ? "…" : summaryUnits}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -611,132 +781,28 @@ export function StockPage() {
         />
       ) : (
         <>
-          <div className="mb-2.5 flex items-center justify-between gap-3 px-1 text-[13px] text-ink-500">
-            <span>
+          {query.trim() ? (
+            <p className="mb-2 px-1 text-[13px] text-ink-500">
               Showing <b className="font-semibold text-ink-900">{groups.length}</b>{" "}
               models · <b className="font-semibold text-ink-900">{totalQty}</b>{" "}
               units
-            </span>
-            <div className="relative shrink-0" ref={sortWrapRef}>
-              <button
-                type="button"
-                className={clsx(
-                  "inline-flex items-center justify-center gap-2 rounded-[11px] border bg-white p-2.5 text-[13px] font-semibold text-ink-700 shadow-soft transition sm:px-3.5 sm:py-2",
-                  sortOpen
-                    ? "border-ink-900 text-ink-900"
-                    : "border-ink-100 text-ink-500 hover:border-ink-300 hover:text-ink-900",
-                )}
-                aria-haspopup="true"
-                aria-expanded={sortOpen}
-                aria-label={`Sort: ${stockSortLabel(sortKey, sortDir)}`}
-                title={`Sort: ${stockSortLabel(sortKey, sortDir)}`}
-                onClick={() => setSortOpen((open) => !open)}
-              >
-                <ArrowDownUp
-                  className="h-4 w-4 text-ink-500 sm:h-[15px] sm:w-[15px] sm:text-ink-300"
-                  strokeWidth={2}
-                />
-                <span className="hidden sm:inline">
-                  Sort:{" "}
-                  <b className="font-semibold text-ink-900">
-                    {stockSortLabel(sortKey, sortDir)}
-                  </b>
-                </span>
-                <ChevronDown
-                  className={clsx(
-                    "hidden h-[13px] w-[13px] text-ink-300 transition sm:block",
-                    sortOpen && "rotate-180",
-                  )}
-                  strokeWidth={2}
-                />
-              </button>
-
-              {sortOpen ? (
-                <div
-                  className="absolute right-0 top-[calc(100%+8px)] z-40 w-[230px] origin-top-right rounded-[14px] border border-ink-100 bg-white p-3 shadow-[0_8px_20px_rgba(16,25,40,.10),0_24px_60px_rgba(16,25,40,.16)]"
-                  role="menu"
-                  aria-label="Sort stock"
-                >
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">
-                    Direction
-                  </p>
-                  <div className="mb-3 grid grid-cols-2 gap-0.5 rounded-[10px] bg-[#EEF0F3] p-[3px]">
-                    <button
-                      type="button"
-                      className={clsx(
-                        "rounded-[7px] px-2 py-1.5 text-center text-xs transition",
-                        sortDir === -1
-                          ? "bg-white font-semibold text-ink-900 shadow-soft"
-                          : "font-medium text-ink-500 hover:text-ink-900",
-                      )}
-                      onClick={() => setSortDir(-1)}
-                    >
-                      {sortKey === "latest" ? "Newest" : "High → Low"}
-                    </button>
-                    <button
-                      type="button"
-                      className={clsx(
-                        "rounded-[7px] px-2 py-1.5 text-center text-xs transition",
-                        sortDir === 1
-                          ? "bg-white font-semibold text-ink-900 shadow-soft"
-                          : "font-medium text-ink-500 hover:text-ink-900",
-                      )}
-                      onClick={() => setSortDir(1)}
-                    >
-                      {sortKey === "latest" ? "Oldest" : "Low → High"}
-                    </button>
-                  </div>
-
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">
-                    Sort by
-                  </p>
-                  <div className="space-y-0.5">
-                    {SORT_FIELD_OPTIONS.map((option) => {
-                      const on = sortKey === option.key;
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={on}
-                          className={clsx(
-                            "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
-                            on
-                              ? "bg-[#F1F5FF] font-semibold text-ink-900"
-                              : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
-                          )}
-                          onClick={() => {
-                            setSortKey(option.key);
-                            if (option.key === "latest") setSortDir(-1);
-                          }}
-                        >
-                          {option.label}
-                          <Check
-                            className={clsx(
-                              "h-[15px] w-[15px] text-[#2563EB]",
-                              on ? "opacity-100" : "opacity-0",
-                            )}
-                            strokeWidth={2.6}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
+            </p>
+          ) : null}
 
           <div className="ledger-card">
             <div className="ledger-scroll">
-              <table className="ledger-table min-w-[36rem]">
+              <table className="ledger-table">
                 <thead>
                   <tr>
                     <th>Model</th>
                     <th>Variant</th>
                     <th className="text-center">Qty</th>
-                    <th className="text-right">Avg price</th>
-                    <th className="text-right">Total value</th>
+                    {isAdmin ? (
+                      <>
+                        <th className="text-right">Avg price</th>
+                        <th className="text-right">Total value</th>
+                      </>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -757,19 +823,23 @@ export function StockPage() {
                             className={clsx(
                               "tabular-nums font-semibold",
                               group.quantity > 1
-                                ? "text-[#2563EB]"
+                                ? "text-tide-600"
                                 : "text-ink-500",
                             )}
                           >
                             {group.quantity}
                           </span>
                         </td>
-                        <td className="text-right tabular-nums text-ink-500">
-                          {formatINR(group.avgPrice)}
-                        </td>
-                        <td className="text-right tabular-nums font-bold text-ink-900">
-                          {formatINR(group.totalValue)}
-                        </td>
+                        {isAdmin ? (
+                          <>
+                            <td className="text-right tabular-nums text-ink-500">
+                              {formatINR(group.avgPrice)}
+                            </td>
+                            <td className="text-right tabular-nums font-bold text-ink-900">
+                              {formatINR(group.totalValue)}
+                            </td>
+                          </>
+                        ) : null}
                       </tr>
                     );
                   })}
@@ -778,10 +848,14 @@ export function StockPage() {
                   <tr>
                     <td colSpan={2}>Total</td>
                     <td className="text-center tabular-nums">{totalQty}</td>
-                    <td className="text-right text-ink-300">—</td>
-                    <td className="text-right text-[15px] tabular-nums">
-                      {formatINR(totalValue)}
-                    </td>
+                    {isAdmin ? (
+                      <>
+                        <td className="text-right text-ink-300">—</td>
+                        <td className="text-right text-[15px] tabular-nums">
+                          {formatINR(totalValue)}
+                        </td>
+                      </>
+                    ) : null}
                   </tr>
                 </tfoot>
               </table>
@@ -798,7 +872,7 @@ export function StockPage() {
               Manage suppliers under{" "}
               <Link
                 to="/suppliers"
-                className="font-medium text-[#2563EB] hover:underline"
+                className="font-medium text-tide-600 hover:underline"
               >
                 Suppliers
               </Link>
@@ -862,8 +936,13 @@ function StockProductDetail({
           </span>
         </div>
         <p className="mt-1 text-sm text-ink-500">
-          {group.quantity} unit{group.quantity === 1 ? "" : "s"} · Avg{" "}
-          {formatINR(group.avgPrice)} · Total {formatINR(group.totalValue)}
+          {group.quantity} unit{group.quantity === 1 ? "" : "s"}
+          {isAdmin ? (
+            <>
+              {" · Avg "}
+              {formatINR(group.avgPrice)} · Total {formatINR(group.totalValue)}
+            </>
+          ) : null}
           {group.supplierName ? (
             <>
               {" · "}
@@ -889,14 +968,14 @@ function StockProductDetail({
 
       <div className="ledger-card">
         <div className="ledger-scroll">
-          <table className="ledger-table min-w-[44rem]">
+          <table className="ledger-table">
             <thead>
               <tr>
                 <th>Purchase date</th>
                 <th>Supplier name</th>
-                <th className="text-right">Price</th>
+                {isAdmin ? <th className="text-right">Price</th> : null}
                 <th>{isAccessory ? "Serial" : "IMEI / Serial"}</th>
-                <th className="w-[1%] text-right">Action</th>
+                {isAdmin ? <th className="w-[1%] text-right">Action</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -926,22 +1005,25 @@ function StockProductDetail({
                         <Link
                           to={`/suppliers/${unit.supplierId}`}
                           state={fromState(location)}
-                          className="text-xs text-[#2563EB] hover:underline"
+                          className="text-xs text-tide-600 hover:underline"
                         >
                           ledger
                         </Link>
                       </>
                     ) : null}
                   </td>
-                  <td className="text-right tabular-nums text-ink-800">
-                    {formatINR(unit.purchasePrice)}
-                  </td>
+                  {isAdmin ? (
+                    <td className="text-right tabular-nums text-ink-800">
+                      {formatINR(unit.purchasePrice)}
+                    </td>
+                  ) : null}
                   <td className="font-mono text-ink-800">
                     {formatStockUnitId(unit)}
                   </td>
+                  {isAdmin ? (
                   <td className="w-[1%] whitespace-nowrap text-right">
                     <div className="inline-flex items-center justify-end gap-1.5">
-                      {isAdmin && !isAccessory ? (
+                      {!isAccessory ? (
                         <button
                           type="button"
                           className="inline-flex items-center gap-1 rounded border border-tide-200 bg-tide-50 px-2 py-0.5 text-xs font-semibold text-tide-700 hover:bg-tide-100 disabled:opacity-50 dark:border-tide-400/35 dark:bg-tide-100/20 dark:text-tide-400 dark:hover:bg-tide-100/35"
@@ -962,6 +1044,7 @@ function StockProductDetail({
                       </button>
                     </div>
                   </td>
+                  ) : null}
                 </tr>
                 );
               })}

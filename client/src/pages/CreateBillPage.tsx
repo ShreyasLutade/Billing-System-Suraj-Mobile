@@ -6,12 +6,15 @@ import clsx from "clsx";
 import {
   Check,
   Download,
+  FilePlus2,
   Info,
   ListOrdered,
+  Lock,
   Loader2,
   Plus,
   RefreshCw,
   Share2,
+  SquarePen,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -54,10 +57,15 @@ import type {
   Bill,
   BillItem,
   CreateBillPayload,
+  ExchangeIntake,
   FinanceCompany,
   MobileCatalog,
   StockItem,
 } from "../types";
+import {
+  GivenWithPhonePicker,
+  ReceivedWithPhoneNote,
+} from "../components/UsedPhoneAccessories";
 
 type DraftItem = BillItem & {
   key: string;
@@ -106,6 +114,16 @@ function isAccessoryStock(stock: {
   platform?: string | null;
 }) {
   return stock.kind === "ACCESSORY" || stock.platform === "ACCESSORY";
+}
+
+/** Second-hand phone line — gets the received / given-with-phone accessories UI. */
+function isUsedPhoneLine(item: DraftItem) {
+  return (
+    item.catalogMode === "mobile" &&
+    item.condition === "USED" &&
+    item.platform !== "ACCESSORY" &&
+    Boolean(item.productName)
+  );
 }
 
 function isAccessoryDraft(item: { platform?: string | null }) {
@@ -339,6 +357,11 @@ export function CreateBillPage() {
   const [items, setItems] = useState<DraftItem[]>([blankItem()]);
   const [isExchange, setIsExchange] = useState(false);
   const [exchangeItems, setExchangeItems] = useState<ExchangeDraft[]>([]);
+  /** IMEI → what came in with that second-hand phone (null = not an exchange intake). */
+  const [intakeByImei, setIntakeByImei] = useState<
+    Record<string, ExchangeIntake | null>
+  >({});
+  const intakeRequestedRef = useRef(new Set<string>());
   const [exchangePayConfirmed, setExchangePayConfirmed] = useState(false);
   const [useFixedReturn, setUseFixedReturn] = useState(false);
   const [fixedReturnAmount, setFixedReturnAmount] = useState(0);
@@ -362,6 +385,7 @@ export function CreateBillPage() {
         imei1: item.imei1,
         value: item.value,
         notes: item.notes || "",
+        accessories: item.accessories ?? [],
       }));
     }
     if (bill.isExchange && bill.exchangeModel) {
@@ -376,6 +400,7 @@ export function CreateBillPage() {
           imei1: bill.exchangeImei1 || "",
           value: bill.exchangeValue ?? "",
           notes: bill.exchangeNotes || "",
+          accessories: [],
         },
       ];
     }
@@ -392,6 +417,8 @@ export function CreateBillPage() {
   const [useCard, setUseCard] = useState(false);
   const [useFinance, setUseFinance] = useState(false);
   const [hasDue, setHasDue] = useState(false);
+  /** Admin only: hide this due from staff on the dues page. */
+  const [duePrivate, setDuePrivate] = useState(false);
   const [dueFollowsRemaining, setDueFollowsRemaining] = useState(true);
   const [cashAmount, setCashAmount] = useState(0);
   const [onlineAmount, setOnlineAmount] = useState(0);
@@ -506,6 +533,7 @@ export function CreateBillPage() {
     setUseCard(false);
     setUseFinance(false);
     setHasDue(false);
+    setDuePrivate(false);
     setDueFollowsRemaining(true);
     setCashAmount(0);
     setOnlineAmount(0);
@@ -564,6 +592,7 @@ export function CreateBillPage() {
             imei1: item.imei1 || "",
             serialNumber: item.serialNumber || "",
             warrantyMonths: item.warrantyMonths ?? undefined,
+            includedAccessories: item.includedAccessories || null,
           }))
         : [blankItem()],
     );
@@ -588,6 +617,7 @@ export function CreateBillPage() {
     setUseCard((bill.cardAmount || 0) > 0);
     setUseFinance(bill.financeAmount > 0);
     setHasDue(bill.dueAmount > 0);
+    setDuePrivate(Boolean(bill.duePrivate));
     setDueFollowsRemaining(
       bill.dueAmount > 0 &&
         (bill.financeAmount || 0) + (bill.financeAmount2 || 0) <= 0,
@@ -1201,10 +1231,43 @@ export function CreateBillPage() {
     }
   }
 
+  useEffect(() => {
+    const imeis = items
+      .filter(isUsedPhoneLine)
+      .map((item) => (item.imei1 || "").trim())
+      .filter(
+        (imei) => imei.length >= 8 && !intakeRequestedRef.current.has(imei),
+      );
+    for (const imei of new Set(imeis)) {
+      intakeRequestedRef.current.add(imei);
+      api
+        .exchangeIntake(imei)
+        .then(({ data }) =>
+          setIntakeByImei((current) => ({ ...current, [imei]: data })),
+        )
+        .catch(() => {
+          // Allow a retry on the next change.
+          intakeRequestedRef.current.delete(imei);
+        });
+    }
+  }, [items]);
+
   function updateItem(key: string, patch: Partial<DraftItem>) {
     setFieldHint(null);
     setItems((prev) =>
-      prev.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        const next = { ...item, ...patch };
+        // Ticked "given with phone" belongs to the old phone, not a newly picked one.
+        if (
+          !("includedAccessories" in patch) &&
+          (next.stockItemId !== item.stockItemId ||
+            next.mobileCatalogId !== item.mobileCatalogId)
+        ) {
+          next.includedAccessories = null;
+        }
+        return next;
+      }),
     );
   }
 
@@ -1284,6 +1347,7 @@ export function CreateBillPage() {
       imei1: stock.imei || "",
       serialNumber: stock.serialNumber || "",
       quantity: 1,
+      includedAccessories: null,
     });
   }
 
@@ -1522,7 +1586,7 @@ export function CreateBillPage() {
         customerPhone,
         customerAddress: customerAddress || null,
         notes: notes || null,
-        billDate: useCustomBillDate ? customBillDate.trim() : null,
+        billDate: isAdmin && useCustomBillDate ? customBillDate.trim() : null,
         withGst: true,
         useCash: false,
         useOnline: false,
@@ -1641,7 +1705,7 @@ export function CreateBillPage() {
       customerPhone,
       customerAddress: customerAddress || null,
       notes: notes || null,
-      billDate: useCustomBillDate ? customBillDate.trim() : null,
+      billDate: isAdmin && useCustomBillDate ? customBillDate.trim() : null,
       withGst: false,
       useCash,
       useOnline,
@@ -1668,6 +1732,7 @@ export function CreateBillPage() {
             imei1: item.imei1.trim(),
             value: item.value === "" ? 0 : Number(item.value) || 0,
             notes: item.notes.trim() || null,
+            accessories: item.accessories,
           }))
         : [],
       exchangeModel: isExchange ? exchangeItems[0]?.model.trim() || null : null,
@@ -1692,6 +1757,10 @@ export function CreateBillPage() {
         ? exchangeItems[0]?.notes.trim() || null
         : null,
       dueDate: hasDue && totals.dueAmount > 0 ? dueDate.trim() : null,
+      // Staff never send it, so the server keeps whatever an admin set.
+      ...(isAdmin
+        ? { duePrivate: hasDue && totals.dueAmount > 0 && duePrivate }
+        : {}),
       companyDiscount: totals.companyDiscountAmount,
       items: items.map((item) => ({
         productName: item.productName,
@@ -1716,6 +1785,9 @@ export function CreateBillPage() {
         imei2: null,
         serialNumber: item.serialNumber || null,
         warrantyMonths: item.warrantyMonths || null,
+        includedAccessories: isUsedPhoneLine(item)
+          ? item.includedAccessories || null
+          : null,
       })),
     };
   }
@@ -1731,7 +1803,7 @@ export function CreateBillPage() {
       return;
     }
 
-    if (useCustomBillDate && !customBillDate.trim()) {
+    if (isAdmin && useCustomBillDate && !customBillDate.trim()) {
       setError("Select a custom bill date");
       document.getElementById("customBillDate")?.focus();
       return;
@@ -2158,13 +2230,8 @@ export function CreateBillPage() {
   return (
     <div>
       <PageHeader
-        eyebrow={isEdit ? "Edit" : "Create"}
+        icon={isEdit ? SquarePen : FilePlus2}
         title={isEdit ? `Edit ${originalBill?.invoiceNumber || "bill"}` : "New bill"}
-        description={
-          isEdit
-            ? "Update customer, products, or payment details. You’ll review a change summary before saving."
-            : "Enter products manually. Split payment across cash, online, card, and finance — remaining amount becomes due."
-        }
         action={
           isEdit && editId ? (
             <BackLink to={`/bills/${editId}`} state={location.state}>
@@ -2256,6 +2323,7 @@ export function CreateBillPage() {
                     </p>
                   </div>
                 </div>
+                {isAdmin ? (
                 <div className="flex shrink-0 items-center gap-2">
                   <label
                     htmlFor="useCustomBillDate"
@@ -2275,10 +2343,11 @@ export function CreateBillPage() {
                     }}
                   />
                 </div>
+                ) : null}
               </div>
 
               <div className="space-y-4">
-                {useCustomBillDate ? (
+                {isAdmin && useCustomBillDate ? (
                   <div>
                     <label className="label required" htmlFor="customBillDate">
                       Bill date
@@ -2523,6 +2592,14 @@ export function CreateBillPage() {
                       ) : null}
                     </>
                   )}
+                  {isUsedPhoneLine(item) &&
+                  intakeByImei[(item.imei1 || "").trim()] ? (
+                    <div className="min-w-0 sm:col-span-2 lg:col-span-5">
+                      <ReceivedWithPhoneNote
+                        intake={intakeByImei[(item.imei1 || "").trim()]!}
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="label required" htmlFor={`rate-${item.key}`}>Rate (₹)</label>
                     <input
@@ -2712,6 +2789,19 @@ export function CreateBillPage() {
                     />
                   </div>
                 </div>
+                {isUsedPhoneLine(item) ? (
+                  <div className="mt-4">
+                    <GivenWithPhonePicker
+                      value={item.includedAccessories}
+                      onChange={(includedAccessories) =>
+                        updateItem(item.key, { includedAccessories })
+                      }
+                      receivedKeys={intakeByImei[(item.imei1 || "").trim()]?.accessories
+                        .filter((acc) => acc.status === "GIVEN")
+                        .map((acc) => acc.key)}
+                    />
+                  </div>
+                ) : null}
                 <p className="mt-4 border-t border-ink-100/80 pt-3 text-right text-sm font-semibold text-ink-800">
                   Line total · {formatINR(lineAmount(item))}
                 </p>
@@ -2745,7 +2835,7 @@ export function CreateBillPage() {
             {!withGst ? (
               <section className="overflow-visible rounded-[18px] border border-ink-100/80 bg-white shadow-soft">
                 <div className="flex items-center gap-3.5 px-5 py-[18px] sm:px-[22px]">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E7F8F1] text-[#0E9E76] dark:bg-tide-100/70 dark:text-tide-400">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-tide-100 text-tide-600 dark:bg-tide-100/70 dark:text-tide-400">
                     <RefreshCw className="h-5 w-5" strokeWidth={2} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -2782,7 +2872,7 @@ export function CreateBillPage() {
                       className="overflow-visible"
                     >
                       <div className="space-y-4 px-5 pb-5 sm:px-[22px] sm:pb-[22px]">
-                        <div className="flex items-start gap-2.5 rounded-xl border border-[#CDEFE0] bg-[#E7F8F1] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[#0B7A5B] dark:border-tide-400/25 dark:bg-tide-100/40 dark:text-tide-400">
+                        <div className="flex items-start gap-2.5 rounded-xl border border-tide-400/40 bg-tide-100 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-tide-600 dark:border-tide-400/25 dark:bg-tide-100/40 dark:text-tide-400">
                           <Info
                             className="mt-0.5 h-4 w-4 shrink-0"
                             strokeWidth={2}
@@ -2817,7 +2907,7 @@ export function CreateBillPage() {
 
                         <button
                           type="button"
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#BFE9D6] bg-[#E7F8F1]/40 px-4 py-3 text-sm font-semibold text-[#0B7A5B] transition hover:border-[#12B886] hover:bg-[#E7F8F1] dark:border-tide-400/30 dark:bg-tide-100/30 dark:text-tide-400 dark:hover:border-tide-400 dark:hover:bg-tide-100/50"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-tide-400/50 bg-tide-100/40 px-4 py-3 text-sm font-semibold text-tide-600 transition hover:border-tide-500 hover:bg-tide-100 dark:border-tide-400/30 dark:bg-tide-100/30 dark:text-tide-400 dark:hover:border-tide-400 dark:hover:bg-tide-100/50"
                           onClick={() =>
                             setExchangeItems((current) => [
                               ...current,
@@ -2909,7 +2999,7 @@ export function CreateBillPage() {
                           <div className="flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-[#0E1626] to-[#1B2740] px-4 py-3.5 text-white">
                             <span className="inline-flex items-center gap-2 text-[13px] text-[#B7C3D6]">
                               <Check
-                                className="h-[15px] w-[15px] text-[#12B886]"
+                                className="h-[15px] w-[15px] text-tide-500"
                                 strokeWidth={2.6}
                               />
                               {useFixedReturn && totals.cashReturn > 0
@@ -3021,12 +3111,12 @@ export function CreateBillPage() {
                     </div>
                     {useCompanyCashback ? (
                       <div className="relative mt-3">
-                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
+                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-tide-600">
                           ₹
                         </span>
                         <input
                           id="companyDiscount"
-                          className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)] dark:border-tide-400/30 dark:bg-tide-100/35 dark:focus:border-tide-400 dark:focus:bg-surface-elevated dark:focus:shadow-[0_0_0_3px_rgba(45,212,191,0.2)]"
+                          className="w-full rounded-[11px] border border-tide-400/50 bg-tide-100 py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-tide-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,168,0,.2)] dark:border-tide-400/30 dark:bg-tide-100/35 dark:focus:border-tide-400 dark:focus:bg-surface-elevated dark:focus:shadow-[0_0_0_3px_rgba(255,168,0,0.22)]"
                           type="number"
                           min={0}
                           step="0.01"
@@ -3226,6 +3316,29 @@ export function CreateBillPage() {
                             />
                           </div>
                         </div>
+                        {isAdmin ? (
+                          <label
+                            htmlFor="duePrivate"
+                            className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg border border-ink-100 bg-white/70 px-3 py-2 dark:bg-transparent"
+                          >
+                            <input
+                              id="duePrivate"
+                              type="checkbox"
+                              className="h-4 w-4 shrink-0 accent-ink-900 dark:accent-tide-400"
+                              checked={duePrivate}
+                              onChange={(e) => setDuePrivate(e.target.checked)}
+                            />
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-800">
+                                <Lock className="h-3.5 w-3.5" strokeWidth={2.2} />
+                                Keep due private
+                              </span>
+                              <span className="mt-0.5 block text-[11px] text-ink-500">
+                                Staff won’t see this due on the dues page.
+                              </span>
+                            </span>
+                          </label>
+                        ) : null}
                       </PaymentToggle>
                     ) : null}
                     <PaymentToggle
@@ -3617,7 +3730,7 @@ function Switch({
       className={clsx(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-surface",
         checked
-          ? "border-[#0B9B72] bg-[#12B886] shadow-[0_0_0_3px_rgba(18,184,134,0.25)] focus-visible:ring-[#12B886]"
+          ? "border-transparent [background:var(--brand-grad)_border-box] shadow-[0_0_0_3px_rgba(255,168,0,0.25)] focus-visible:ring-tide-400"
           : "border-ink-300 bg-ink-100 shadow-sm focus-visible:ring-ink-300 dark:border-slate-500 dark:bg-slate-600 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]",
       )}
     >
@@ -3676,12 +3789,12 @@ function FieldInfoTip({
       className="pointer-events-auto fixed z-[80] max-w-[240px] -translate-y-full"
       style={{ top: pos.top, left: pos.left }}
     >
-      <div className="flex items-start gap-2 rounded-xl border border-[#93C5FD] bg-[#E8F0FE] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
+      <div className="flex items-start gap-2 rounded-xl border border-tide-400/50 bg-tide-100 px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
         <span className="min-w-0">{message}</span>
         <button
           type="button"
-          className="ml-1 shrink-0 rounded-md px-1 text-[#2563EB]/80 hover:bg-white/60 hover:text-[#1D4ED8]"
+          className="ml-1 shrink-0 rounded-md px-1 text-tide-600/80 hover:bg-white/60 hover:text-[#1D4ED8]"
           aria-label="Dismiss"
           onClick={onDismiss}
         >
@@ -3690,7 +3803,7 @@ function FieldInfoTip({
       </div>
       <span
         aria-hidden
-        className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
+        className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-tide-400/50 bg-tide-100"
       />
     </div>,
     document.body,

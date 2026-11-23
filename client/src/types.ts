@@ -16,6 +16,8 @@ export type BillItem = {
   imei2?: string | null;
   serialNumber?: string | null;
   warrantyMonths?: number | null;
+  /** "BOX,CHARGER" — handed to the buyer with this phone. */
+  includedAccessories?: string | null;
 };
 
 export type DuePayment = {
@@ -40,6 +42,40 @@ export type BillExchangeItem = {
   stockStatus?: string | null;
   soldBillId?: string | null;
   soldInvoiceNumber?: string | null;
+  accessories?: ExchangeAccessory[];
+};
+
+export type ExchangeAccessoryKey = "BOX" | "CHARGER" | "CABLE" | "BILL";
+
+export type ExchangeAccessory = {
+  key: ExchangeAccessoryKey;
+  status: "GIVEN" | "PENDING";
+  receivedAt?: string | null;
+};
+
+export type PendingAccessoryBill = {
+  billId: string;
+  invoiceNumber: string;
+  billDate: string;
+  customerName: string;
+  customerPhone: string;
+  pendingCount: number;
+  phones: Array<{
+    itemIndex: number;
+    model: string;
+    platform: "IOS" | "ANDROID";
+    color: string;
+    storage: string;
+    ram?: string | null;
+    imei1: string;
+    pending: ExchangeAccessoryKey[];
+  }>;
+};
+
+export type PendingAccessoriesSummary = {
+  billCount: number;
+  itemCount: number;
+  bills: PendingAccessoryBill[];
 };
 
 export type BillPurchaseHistoryItem = {
@@ -56,6 +92,8 @@ export type BillPurchaseHistoryItem = {
   } | null;
   purchaseDate: string;
   costPrice: number;
+  /** "Given as replacement" / "Replaced · sent back to supplier" … */
+  label?: string;
 };
 
 export type Bill = {
@@ -101,9 +139,13 @@ export type Bill = {
   exchangeItems?: BillExchangeItem[];
   /** Purchase provenance for stock-linked line items (bill detail only). */
   purchaseHistory?: BillPurchaseHistoryItem[];
+  /** Products on this bill sent back to the supplier (replaced / returned). */
+  productReturns?: BillProductReturn[];
   dueAmount: number;
   dueDate?: string | null;
   dueSettled: boolean;
+  /** Admin-only due, hidden from staff on the dues page. */
+  duePrivate?: boolean;
   dueSettledMethod?: string | null;
   dueSettledAt?: string | null;
   isPartialPaid?: boolean;
@@ -170,8 +212,22 @@ export type AnalyticsSummary = {
     count: number;
     value: number;
   };
+  purchaseHistory?: {
+    count: number;
+    value: number;
+  };
+  customerPayouts?: {
+    count: number;
+    value: number;
+  };
+  /** Sales, plus Replace / Return entries made in the period. */
   periodBills: Array<{
+    /** Bill to open. */
     id: string;
+    /** Unique row key (return entries share their bill's id). */
+    entryId?: string;
+    kind?: "SALE" | "REPLACED" | "RETURNED";
+    refundMethod?: "cash" | "online";
     invoiceNumber: string;
     customerName: string;
     customerPhone: string;
@@ -184,7 +240,13 @@ export type AnalyticsSummary = {
     profit: number;
   }>;
   paymentSources?: Array<{
+    /** Bill id. */
     id: string;
+    /** Unique row key (a due payment's id for DUE_RECEIVED rows). */
+    entryId?: string;
+    /** SALE: paid when billed. DUE_RECEIVED: a due paid on `paidAt`. */
+    kind?: "SALE" | "DUE_RECEIVED";
+    paidAt?: string | null;
     invoiceNumber: string;
     customerName: string;
     billDate: string;
@@ -220,6 +282,63 @@ export type AnalyticsExchangeItem = {
   status: string;
 };
 
+/** One day (or month) of the Analytics monthly trend. */
+export type TrendTotals = {
+  sales: number;
+  profit: number;
+  collected: number;
+  bills: number;
+  phones: number;
+};
+
+export type TrendMonth = TrendTotals & {
+  /** "2026-11" */
+  key: string;
+  days: Array<TrendTotals & { date: string }>;
+};
+
+export type MonthlyTrend = {
+  /** India date today, "2026-11-21". */
+  today: string;
+  /** Oldest first, the current month last. */
+  months: TrendMonth[];
+};
+
+/** A phone sold (or a Replace / Return entry), for the staff Analytics page: no cost or profit. */
+export type StaffSaleRow = {
+  /** Bill to open. */
+  id: string;
+  entryId: string;
+  kind: "SALE" | "REPLACED" | "RETURNED";
+  refundMethod: "cash" | "online" | null;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  billDate: string;
+  productLabel: string;
+  /** What the customer paid for the phone (negative for a refund). */
+  sellingPrice: number;
+  exchangeValue: number;
+};
+
+export type StaffSalesSummary = {
+  period: "today" | "yesterday" | "all";
+  periodLabel: string;
+  soldCount: number;
+  soldTotal: number;
+  items: StaffSaleRow[];
+};
+
+/** An exchange mobile on the Exchange page (everyone; no prices). */
+export type ExchangeMobile = Omit<AnalyticsExchangeItem, "purchaseId" | "supplierId" | "value">;
+
+export type ExchangeMobilesSummary = {
+  period: "today" | "yesterday" | "all";
+  periodLabel: string;
+  count: number;
+  items: ExchangeMobile[];
+};
+
 export type AnalyticsExchangesSummary = {
   period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
   periodLabel: string;
@@ -228,6 +347,63 @@ export type AnalyticsExchangesSummary = {
   count: number;
   totalValue: number;
   items: AnalyticsExchangeItem[];
+};
+
+/** A mobile bought from a supplier (Analytics → Purchase history). */
+export type AnalyticsPurchaseItem = {
+  id: string;
+  purchaseId: string;
+  purchaseDate: string;
+  supplierId: string;
+  supplierName: string;
+  mobileName: string;
+  color: string;
+  storage: string;
+  ram: string;
+  platform: string;
+  condition: string;
+  imei: string | null;
+  serialNumber: string | null;
+  price: number;
+  status: string;
+};
+
+export type AnalyticsPurchasesSummary = {
+  period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
+  periodLabel: string;
+  from: string | null;
+  to: string | null;
+  count: number;
+  totalValue: number;
+  items: AnalyticsPurchaseItem[];
+};
+
+/** Money given back to a customer (Analytics → Money given to customers). */
+export type AnalyticsCustomerPayout = {
+  id: string;
+  /** Bill to open; null when the bill no longer exists. */
+  billId: string | null;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  date: string;
+  /** EXCHANGE: cash return / extra exchange value. RETURN: refund for a returned item. */
+  reason: "EXCHANGE" | "RETURN";
+  cashReturn: number;
+  extraExchange: number;
+  amount: number;
+  method: "cash" | "online" | null;
+  detail: string;
+};
+
+export type AnalyticsCustomerPayoutsSummary = {
+  period: "today" | "yesterday" | "week" | "month" | "all" | "custom";
+  periodLabel: string;
+  from: string | null;
+  to: string | null;
+  count: number;
+  totalAmount: number;
+  items: AnalyticsCustomerPayout[];
 };
 
 export type FinanceCompany = {
@@ -294,6 +470,10 @@ export type Supplier = {
   totalPurchased: number;
   totalPaid: number;
   outstanding: number;
+  /** Purchase price of units returned to this supplier. */
+  totalReturned?: number;
+  /** Return credit not yet used against a purchase (supplier owes us). */
+  supplierCredit?: number;
   stockAvailable: number;
   stockSold: number;
   /** Total units purchased from this supplier (available + sold). */
@@ -329,6 +509,15 @@ export type PurchaseStockRef = {
   soldBillId?: string | null;
   soldInvoiceNumber?: string | null;
   soldCustomerName?: string | null;
+  /** Given to a customer as a replacement (Replace product). */
+  givenAsReplacement?: boolean;
+  /** Sent back to the supplier after being sold. */
+  returned?: {
+    createdAt: string;
+    note: string | null;
+    invoiceNumber: string | null;
+    billId: string | null;
+  } | null;
   /** Selling price from the sale bill — admin only. */
   soldPrice?: number | null;
 };
@@ -341,6 +530,8 @@ export type Purchase = {
   totalAmount: number;
   condition: "NEW" | "USED" | string;
   paidAt?: string | null;
+  /** Paid so far while not fully paid (part payments). */
+  paidAmount?: number;
   createdByUserId?: string | null;
   createdByName?: string | null;
   createdAt: string;
@@ -350,6 +541,27 @@ export type Purchase = {
     stockItemId: string;
     stockItem: PurchaseStockRef;
   }>;
+};
+
+/** A purchased mobile (in stock or sold) with where it came from. */
+export type SupplierMobile = {
+  id: string;
+  mobileName: string;
+  platform: string;
+  condition: "NEW" | "USED" | string;
+  storage: string;
+  ram: string;
+  color: string;
+  imei: string | null;
+  serialNumber: string | null;
+  status: "AVAILABLE" | "SOLD" | string;
+  /** Null for staff — purchase amounts are admin only. */
+  purchasePrice: number | null;
+  purchaseDate: string;
+  supplier: { id: string; name: string } | null;
+  sale: { billId: string; invoiceNumber: string } | null;
+  returned?: boolean;
+  purchase: { id: string; supplierId: string } | null;
 };
 
 export type SupplierDetail = Supplier & {
@@ -408,14 +620,129 @@ export type DueItem = {
   grandTotal?: number;
   payableAmount?: number;
   isPartialPaid?: boolean;
+  /** Paid so far against this due (part payments). */
+  paidTotal?: number;
   productLabels?: string[];
   imeiNumbers?: string[];
+  duePrivate?: boolean;
+  /** Khata entry with no purchase (added from the Dues "+"). Its dueAmount
+   *  can be below 0: they paid first, you'll give it back. */
+  noPurchase?: boolean;
+};
+
+/** Dues page, Supplier tab: what you owe a supplier (below 0 = advance). */
+export type SupplierDueRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  outstanding: number;
+  advance: number;
+  purchaseCount: number;
+  /** Everything bought from them (for the paid share on the card). */
+  totalPurchased: number;
+  lastPurchaseDate: string | null;
+};
+
+/** A supplier's account: purchases (you got), payments / returns (you gave). */
+export type SupplierLedger = {
+  id: string;
+  name: string;
+  phone: string | null;
+  outstanding: number;
+  advance: number;
+  supplierCredit: number;
+  totalPurchased: number;
+  purchaseCount: number;
+  undoPaymentId: string | null;
+  entries: Array<{
+    key: string;
+    kind: "purchase" | "payment" | "return";
+    date: string;
+    particulars: string;
+    detail: string;
+    qty: number | null;
+    got: number;
+    gave: number;
+    paidNote: string | null;
+    method: string | null;
+    paymentId: string | null;
+    purchaseId: string | null;
+    balanceAfter: number;
+  }>;
+};
+
+/** A due that's back to 0 (not on the list), found by search. */
+export type ClearedDueItem = {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  billDate: string;
+  dueSettledAt: string | null;
+  duePrivate: boolean;
+  noPurchase: boolean;
+  paidTotal: number;
+  productLabels: string[];
+};
+
+/** One customer due with its payment history (GET /dues/:id). */
+export type CustomerDueDetail = {
+  id: string;
+  duePrivate?: boolean;
+  /** Khata entry with no purchase: no bill row, balance can go below 0. */
+  noPurchase?: boolean;
+  /** They paid more than they owe: you'll give this back (khata entries). */
+  advance?: number;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string | null;
+  billDate: string;
+  billTotal: number;
+  products: Array<{ label: string; ids: string[] }>;
+  originalDue: number;
+  paidTotal: number;
+  pending: number;
+  settled: boolean;
+  dueDate: string | null;
+  settledAt: string | null;
+  /** Days after the promised date (today if pending, clear date if settled). */
+  delayDays: number | null;
+  payments: Array<{
+    id: string;
+    paidAt: string;
+    amount: number;
+    method: string;
+    methodLabel: string;
+    kind: string;
+    note: string | null;
+    balanceAfter: number;
+    delayDays: number | null;
+  }>;
+  /** Left unpaid when the bill was made. */
+  creditAtSale: number;
+  /** All "You gave" entries added later. */
+  givenTotal: number;
+  /** Ledger, oldest first: the bill, then "You gave" / "You got" by date. */
+  entries: Array<{
+    id: string;
+    kind: "bill" | "gave" | "got";
+    date: string;
+    amount: number;
+    note: string | null;
+    method: string | null;
+    methodLabel: string | null;
+    delayDays: number | null;
+    balanceAfter: number;
+  }>;
 };
 
 export type DuesSummary = {
   period: "today" | "tomorrow" | "yesterday" | "past_due" | "future_due" | "all";
   periodLabel: string;
   totalDue: number;
+  /** Khata entries that paid first: you'll give this back. */
+  totalAdvance?: number;
   count: number;
   dues: DueItem[];
 };
@@ -480,6 +807,7 @@ export type CreateBillPayload = {
   exchangeItems?: BillExchangeItem[];
   exchangeCashReturn?: number;
   dueDate?: string | null;
+  duePrivate?: boolean;
   companyDiscount?: number;
 };
 
@@ -490,3 +818,107 @@ export type AuthUser = {
   role: "ADMIN" | "STAFF";
 };
 
+/** A login as the Manage users page sees it (admin only). */
+export type ManagedUser = AuthUser & {
+  blocked: boolean;
+  createdAt: string;
+};
+
+export type BillProductReturn = {
+  billItemId: string | null;
+  stockItemId: string;
+  note: string | null;
+  createdAt: string;
+  createdByName: string | null;
+  /** REPLACE | RETURN; null on entries made before this choice existed. */
+  kind: "REPLACE" | "RETURN" | null;
+  refundAmount: number;
+  refundMethod: "cash" | "online" | null;
+  /** The unit from stock given to the customer (Replace). */
+  replacement: {
+    id: string;
+    mobileName: string;
+    storage: string;
+    ram: string;
+    color: string;
+    platform: string;
+    condition: string;
+    imei: string | null;
+    serialNumber: string | null;
+  } | null;
+};
+
+/** A sold unit found by IMEI / serial for Replace product. */
+export type ReturnLookup = {
+  stockItemId: string;
+  mobileName: string;
+  storage: string;
+  ram: string;
+  color: string;
+  platform: string;
+  condition: string;
+  imei: string | null;
+  serialNumber: string | null;
+  purchasePrice: number | null;
+  purchaseDate: string | null;
+  supplier: { id: string; name: string } | null;
+  /** What the customer paid for this item (default refund). */
+  soldPrice: number;
+  bill: {
+    id: string;
+    billItemId: string;
+    invoiceNumber: string;
+    billDate: string;
+    customerName: string;
+    customerPhone: string;
+  };
+  alreadyReturned: { createdAt: string; note: string | null } | null;
+};
+
+/** Accessories that came in with a second-hand phone on its exchange bill. */
+export type ExchangeIntake = {
+  billId: string;
+  invoiceNumber: string;
+  billDate: string;
+  customerName: string;
+  accessories: ExchangeAccessory[];
+};
+
+/* ---- Analytics money books (Cash / Online / Expense), written by hand ---- */
+export type MoneyEntryKind = "IN" | "OUT" | "OPENING";
+
+export type MoneyEntry = {
+  id: string;
+  kind: MoneyEntryKind;
+  amount: number;
+  category: string | null;
+  method: string | null;
+  note: string | null;
+  date: string;
+  createdAt: string;
+  createdByName: string | null;
+};
+
+export type MoneySummary = {
+  cash: { balance: number; started: boolean };
+  online: { balance: number; started: boolean };
+  expense: { thisMonth: number; month: string };
+};
+
+export type MoneyBookData = {
+  book: "CASH" | "ONLINE";
+  balance: number;
+  opening: { amount: number; date: string } | null;
+  monthIn: number;
+  monthOut: number;
+  /** Newest first, with the running balance after each entry. */
+  entries: Array<MoneyEntry & { balanceAfter: number }>;
+};
+
+export type ExpenseMonth = {
+  month: string;
+  total: number;
+  byCategory: Array<{ category: string; total: number; count: number }>;
+  months: Array<{ month: string; total: number }>;
+  entries: MoneyEntry[];
+};

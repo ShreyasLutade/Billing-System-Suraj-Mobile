@@ -1,5 +1,6 @@
 import { formatINR } from "./api";
-import type { Bill, CreateBillPayload } from "../types";
+import { accessoryLabel } from "./exchangeAccessories";
+import type { Bill, CreateBillPayload, ExchangeAccessory } from "../types";
 
 export type DiffKind = "added" | "removed" | "updated";
 
@@ -41,6 +42,7 @@ export type BillSnapshot = {
   exchangeValue: number | null;
   exchangeCashReturn: number;
   exchangeNotes: string;
+  exchangeAccessories: string;
   dueDate: string;
   dueAmount: number;
   payableAmount: number;
@@ -66,6 +68,23 @@ function display(value: string | number | boolean | null | undefined) {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—";
   return String(value);
+}
+
+/** "Box, Charger (pending)" — phones separated by " | " when there are several. */
+function accessoriesSummary(
+  items?: Array<{ accessories?: ExchangeAccessory[] }> | null,
+) {
+  return (items ?? [])
+    .map((item) =>
+      (item.accessories ?? [])
+        .map(
+          (a) =>
+            `${accessoryLabel(a.key)}${a.status === "PENDING" ? " (pending)" : ""}`,
+        )
+        .join(", "),
+    )
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function money(value: number | null | undefined) {
@@ -153,6 +172,7 @@ export function billToSnapshot(bill: Bill): BillSnapshot {
     exchangeValue: bill.exchangeValue ?? null,
     exchangeCashReturn: bill.exchangeCashReturn || 0,
     exchangeNotes: bill.exchangeNotes || "",
+    exchangeAccessories: accessoriesSummary(bill.exchangeItems),
     dueDate,
     dueAmount: bill.dueAmount,
     payableAmount: bill.payableAmount ?? bill.grandTotal,
@@ -215,6 +235,7 @@ export function payloadToSnapshot(
     exchangeValue: payload.exchangeValue ?? null,
     exchangeCashReturn: payload.exchangeCashReturn || 0,
     exchangeNotes: payload.exchangeNotes || "",
+    exchangeAccessories: accessoriesSummary(payload.exchangeItems),
     dueDate: payload.dueDate || "",
     dueAmount: totals.dueAmount,
     payableAmount: totals.payableAmount,
@@ -373,6 +394,12 @@ export function diffBillSnapshots(
       "Exchange notes",
       display(before.exchangeNotes),
       display(after.exchangeNotes),
+    );
+    pushChange(
+      lines,
+      "Exchange accessories",
+      display(before.exchangeAccessories),
+      display(after.exchangeAccessories),
     );
   }
 

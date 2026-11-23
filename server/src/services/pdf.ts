@@ -6,6 +6,7 @@ import type { Bill, BillItem } from "@prisma/client";
 import { format } from "date-fns";
 import {
   exchangeItemsFromInput,
+  includedAccessoriesLabel,
   parseExchangeItemsJson,
   type BillExchangeItem,
 } from "../lib/exchangeItems";
@@ -53,6 +54,24 @@ function registerFonts(doc: PDFKit.PDFDocument) {
   doc.registerFont(FONT.medium, path.join(FONTS_DIR, "Manrope-Medium.ttf"));
   doc.registerFont(FONT.semibold, path.join(FONTS_DIR, "Manrope-SemiBold.ttf"));
   doc.registerFont(FONT.bold, path.join(FONTS_DIR, "Manrope-Bold.ttf"));
+}
+
+/** Shop logo (falls back to the icon) for other PDFs, e.g. supplier statements. */
+export function drawShopLogo(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  const logoFile = fs.existsSync(LOGO_PATH)
+    ? LOGO_PATH
+    : fs.existsSync(ICON_PATH)
+      ? ICON_PATH
+      : null;
+  if (logoFile) {
+    doc.image(logoFile, x, y, { fit: [w, h], align: "center", valign: "center" });
+  }
 }
 
 function exchangeItemsForPdf(bill: BillWithItems): BillExchangeItem[] {
@@ -530,6 +549,18 @@ function drawItemNameCell(
         width: width - 6,
         lineBreak: false,
       });
+    ty += 9;
+  }
+  const included = includedAccessoriesLabel(item.includedAccessories);
+  if (included) {
+    doc
+      .fillColor(COLORS.ink)
+      .font(FONT.medium)
+      .fontSize(6.5)
+      .text(`Included: ${included}`, x + 3, ty, {
+        width: width - 6,
+        lineBreak: false,
+      });
   }
 }
 
@@ -627,6 +658,9 @@ function drawItemsTable(
     if (condition) nameLines.push(condition);
     if (item.imei1) nameLines.push(`IMEI: ${item.imei1}`);
     if (item.serialNumber) nameLines.push(`S/N: ${item.serialNumber}`);
+    if (includedAccessoriesLabel(item.includedAccessories)) {
+      nameLines.push("Included");
+    }
     const rowH = Math.max(28, nameLines.length * 10 + 4);
 
     strokeBox(doc, MARGIN, y, CONTENT_WIDTH, rowH);
@@ -1241,3 +1275,6 @@ export function buildInvoicePdf(bill: BillWithItems): Promise<Buffer> {
     doc.end();
   });
 }
+
+// Shared with the supplier statement PDF.
+export { COLORS, FONT, money, registerFonts, shop };

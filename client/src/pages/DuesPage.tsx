@@ -1,12 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import { AnimatePresence } from "framer-motion";
 import {
-  BarChart3,
   Check,
-  Filter,
+  CircleCheck,
+  Clock3,
+  Landmark,
+  Lock,
+  Plus,
   Search,
+  SlidersHorizontal,
+  Truck,
   UserRound,
 } from "lucide-react";
 import clsx from "clsx";
@@ -14,16 +29,15 @@ import {
   DUE_PERIOD_OPTIONS,
   type DuePeriodValue,
 } from "../components/PeriodFilter";
-import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
-import { BackLink, EmptyState, LoadingBlock, PageHeader, SearchClearButton } from "../components/ui";
+import { BackLink, EmptyState, LoadingBlock, SearchClearButton } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useAuth } from "../auth/AuthContext";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { useSessionState } from "../hooks/useSessionState";
 import { fromState, readFromState, backLabel } from "../lib/navMemory";
-import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { api, formatFinanceCompanies, round2 } from "../lib/api";
 import {
   financeSlotAmounts,
   financeSlotOptions,
@@ -32,15 +46,25 @@ import {
   type FinanceSlot,
 } from "../lib/financeSlots";
 import {
+  dueStatus,
+  formatRupees,
+  initials,
+  URGENCY_TONE,
+  type DueUrgency,
+} from "../lib/dueStatus";
+import { dueReminderLink } from "../lib/dueReminder";
+import {
   matchesDueSearch,
   type BillSearchScope,
 } from "../lib/billSearch";
 import type {
-  DueItem,
+  ClearedDueItem,
+  SupplierDueRow,
   DuesSummary,
   FinanceDueItem,
   FinanceDuesSummary,
 } from "../types";
+import { WhatsAppIcon } from "../components/WhatsAppIcon";
 
 const DUE_PERIOD_LABELS: Record<DuePeriodValue, string> = {
   all: "All time",
@@ -65,15 +89,18 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
   { value: "phone", label: "Number" },
   { value: "imei", label: "IMEI" },
   { value: "product", label: "Product" },
+  { value: "finance", label: "Finance" },
 ];
 
 function searchPlaceholder(
   scope: BillSearchScope,
-  tab: "customer" | "finance",
+  tab: "customer" | "finance" | "supplier",
 ) {
+  if (tab === "supplier") return "Search supplier name or phone…";
   if (scope === "phone") return "Search by number…";
   if (scope === "imei") return "Search by IMEI…";
   if (scope === "product") return "Search by product…";
+  if (scope === "finance") return "Search by finance company…";
   if (tab === "finance") {
     return "Search finance, customer, invoice…";
   }
@@ -109,14 +136,179 @@ function financeTotalsByCompany(dues: FinanceDueItem[]) {
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 }
 
-function dueDateStatus(dueDate: string | null) {
-  if (!dueDate) return null;
-  const day = dueDate.slice(0, 10);
-  const today = format(new Date(), "yyyy-MM-dd");
-  const display = format(new Date(dueDate), "dd MMM");
-  if (day < today) return { label: `Overdue · ${display}`, overdue: true };
-  if (day === today) return { label: "Due today", overdue: false };
-  return { label: `Due ${display}`, overdue: false };
+const URGENCY_ORDER: DueUrgency[] = ["overdue", "today", "upcoming", "none"];
+
+const GROUP_TITLE: Record<DueUrgency, string> = {
+  overdue: "Overdue · collect first",
+  today: "Due today",
+  upcoming: "Coming up",
+  none: "No due date",
+};
+
+/** Status circle colours (no circle for "no due date"). */
+const STATUS_DOT: Record<Exclude<DueUrgency, "none">, string> = {
+  overdue: "bg-[#E5484D] text-white",
+  today: "bg-[#FFB020] text-white",
+  upcoming: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+};
+
+const COMPANY_AVATARS = [
+  "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+];
+
+/** Same company, same colour. */
+function companyAvatar(name: string) {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return COMPANY_AVATARS[hash % COMPANY_AVATARS.length];
+}
+
+function daysSince(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 0;
+  return Math.max(differenceInCalendarDays(new Date(), date), 0);
+}
+
+function waitingDays(days: number) {
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** Finance money waiting a week or more is red, a few days amber. */
+function waitingAccent(days: number) {
+  if (days >= 7) return "#E5484D";
+  if (days >= 3) return "#FFB020";
+  return "#34D399";
+}
+
+/**
+ * Keeps its children on one line: starts at 11.5px and shrinks the text
+ * (down to 8px) until it fits, again whenever the width or `fitKey` changes.
+ */
+function OneLineFit({
+  className,
+  fitKey,
+  children,
+}: {
+  className?: string;
+  fitKey: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      let size = 11.5;
+      el.style.fontSize = `${size}px`;
+      while (el.scrollWidth > el.clientWidth && size > 8) {
+        size -= 0.5;
+        el.style.fontSize = `${size}px`;
+      }
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitKey]);
+  return (
+    <div
+      ref={ref}
+      className={clsx("overflow-hidden whitespace-nowrap", className)}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** WhatsApp logo (Simple Icons, CC0). */
+/** Navy summary card at the top of the Dues page. */
+function DuesHero({
+  label,
+  amount,
+  side,
+  children,
+}: {
+  label: string;
+  amount: number | null;
+  side?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="dues-hero mb-2" aria-label={label}>
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/65">
+            {label}
+          </p>
+          <p className="font-display text-[23px] font-bold leading-tight tracking-tight tabular-nums">
+            {amount === null ? (
+              "—"
+            ) : (
+              <>
+                <span className="mr-0.5 text-[#FFA800]">₹</span>
+                {formatRupees(amount).replace("₹", "")}
+              </>
+            )}
+          </p>
+        </div>
+        {side ? (
+          <p className="shrink-0 pb-1 text-right text-xs font-semibold leading-snug text-white/70">
+            {side}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Thin coloured bar + one-line legend under the hero amount. Always drawn
+ * (empty bar when nothing is pending) so every tab's box is the same height.
+ */
+function HeroBar({
+  segments,
+}: {
+  segments: Array<{ label: string; color: string; amount: number }>;
+}) {
+  const total = segments.reduce((sum, segment) => sum + Math.max(segment.amount, 0), 0);
+  const shown = segments.length ? segments : [{ label: "Nothing pending", color: "#94A3B8", amount: 0 }];
+  return (
+    <>
+      <div className="mt-2 flex h-1 gap-[3px] overflow-hidden rounded-full bg-white/10">
+        {total > 0
+          ? segments.map((segment) =>
+              segment.amount > 0 ? (
+                <span
+                  key={segment.label}
+                  className="h-full"
+                  style={{ width: `${(segment.amount / total) * 100}%`, background: segment.color }}
+                />
+              ) : null,
+            )
+          : null}
+      </div>
+      <OneLineFit
+        className="mt-1.5 flex items-center justify-between gap-2"
+        fitKey={shown.map((segment) => `${segment.label}:${segment.amount}`).join("|")}
+      >
+        {shown.map((segment) => (
+          <span
+            key={segment.label}
+            className="flex shrink-0 items-center gap-[0.4em] font-semibold text-white/70"
+          >
+            <span className="h-[7px] w-[7px] rounded-full" style={{ background: segment.color }} />
+            {segment.label}
+            <b className="font-bold tabular-nums text-white">{formatRupees(segment.amount)}</b>
+          </span>
+        ))}
+      </OneLineFit>
+    </>
+  );
 }
 
 function dueMatchesFinanceCompany(due: FinanceDueItem, company: string) {
@@ -155,7 +347,7 @@ export function DuesPage() {
   const [tab, setTab] = usePersistedTab(
     "tab",
     "dues.tab",
-    ["customer", "finance"] as const,
+    ["customer", "finance", "supplier"] as const,
     "customer",
   );
   const [period, setPeriod] = useSessionState<DuePeriodValue>("dues.period", "all");
@@ -163,9 +355,13 @@ export function DuesPage() {
   const [financeData, setFinanceData] = useState<FinanceDuesSummary | null>(
     null,
   );
+  const [supplierData, setSupplierData] = useState<{
+    totalOwed: number;
+    totalAdvance: number;
+    suppliers: SupplierDueRow[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDue, setSelectedDue] = useState<DueItem | null>(null);
   const [query, setQuery] = useSessionState("dues.query", "");
   const [searchScope, setSearchScope] = useSessionState<BillSearchScope>(
     "dues.searchScope",
@@ -179,9 +375,14 @@ export function DuesPage() {
     string | null
   >("dues.financeCompanyFilter", null);
   const filterWrapRef = useRef<HTMLDivElement>(null);
+  /** Admin only: list just the dues kept private from staff. */
+  const [privateOnly, setPrivateOnly] = useSessionState("dues.privateOnly", false);
+  const showPrivateOnly = isAdmin && tab === "customer" && privateOnly;
 
   const filtersActive =
-    (tab === "customer" && period !== "all") || searchScope !== "all";
+    (tab === "customer" && period !== "all") ||
+    searchScope !== "all" ||
+    showPrivateOnly;
 
   async function loadDues(activePeriod: DuePeriodValue) {
     setLoading(true);
@@ -211,9 +412,29 @@ export function DuesPage() {
     }
   }
 
+  async function loadSupplierDues() {
+    setLoading(true);
+    try {
+      const response = await api.listSupplierDues();
+      setSupplierData(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load supplier dues");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
+    // Supplier dues are admin only.
+    if (tab === "supplier" && !isAdmin) {
+      setTab("customer");
+      return;
+    }
     if (tab === "customer") {
       void loadDues(period);
+    } else if (tab === "supplier") {
+      void loadSupplierDues();
     } else {
       void loadFinanceDues();
     }
@@ -242,13 +463,51 @@ export function DuesPage() {
   }, [filterOpen]);
 
   const searchQuery = query.trim();
+  const supplierRows = (supplierData?.suppliers ?? []).filter((row) => {
+    const q = searchQuery.toLowerCase();
+    if (!q) return true;
+    return (
+      row.name.toLowerCase().includes(q) ||
+      Boolean(row.phone && row.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "") || "~"))
+    );
+  });
+
+  // Searching also finds people whose due is back to 0 (not on the list).
+  const [cleared, setCleared] = useState<ClearedDueItem[]>([]);
+  useEffect(() => {
+    if (tab !== "customer" || searchQuery.length < 2) {
+      setCleared([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api
+        .searchClearedDues(searchQuery, { signal: controller.signal })
+        .then(({ data: rows }) => setCleared(rows))
+        .catch(() => undefined);
+    }, 280);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery, tab]);
+  // Customer dues have no finance company, so "Finance" only applies on the Finance tab.
+  const activeScope: BillSearchScope =
+    tab === "customer" && searchScope === "finance" ? "all" : searchScope;
 
   const filteredDues =
-    data?.dues.filter((due) =>
-      matchesDueSearch(due, searchQuery, { scope: searchScope }),
+    data?.dues.filter(
+      (due) =>
+        (!showPrivateOnly || due.duePrivate) &&
+        matchesDueSearch(due, searchQuery, { scope: activeScope }),
     ) || [];
 
-  const filteredTotal = filteredDues.reduce((sum, due) => sum + due.dueAmount, 0);
+  // Khata entries below 0 (they paid first): listed apart as "You will give".
+  const owedDues = filteredDues.filter((due) => due.dueAmount > 0);
+  const advanceDues = filteredDues.filter((due) => due.dueAmount < 0);
+  const clearedShown = cleared.filter((row) => !showPrivateOnly || row.duePrivate);
+  const filteredTotal = owedDues.reduce((sum, due) => sum + due.dueAmount, 0);
+  const advanceTotal = round2(advanceDues.reduce((sum, due) => sum - due.dueAmount, 0));
   const searchMatchedFinance =
     financeData?.dues.filter((due) =>
       matchesDueSearch(due, searchQuery, {
@@ -279,9 +538,60 @@ export function DuesPage() {
     );
   }, [financeCompanyFilter, financeCompanyTotals, filteredFinanceDues]);
 
+  const statusRows = owedDues.map((due) => ({
+    due,
+    status: dueStatus(due.dueDate),
+    advance: false,
+  }));
+  // Overdue first, then today, coming up, no date (server order kept inside),
+  // then the people you owe.
+  const groupedDues = [
+    ...URGENCY_ORDER.flatMap((urgency) =>
+      statusRows.filter((row) => row.status.urgency === urgency),
+    ),
+    ...advanceDues.map((due) => ({ due, status: dueStatus(null), advance: true })),
+  ];
+  const groupTotals = Object.fromEntries(
+    URGENCY_ORDER.map((urgency) => [urgency, 0]),
+  ) as Record<DueUrgency, number>;
+  for (const row of statusRows) {
+    groupTotals[row.status.urgency] = round2(
+      groupTotals[row.status.urgency] + row.due.dueAmount,
+    );
+  }
+  const customerTotal = round2(filteredTotal);
+  const customerCount = query.trim() || showPrivateOnly ? filteredDues.length : (data?.count ?? 0);
+  const heroSegments = [
+    { label: "Overdue", color: "#FF6B6B", amount: groupTotals.overdue },
+    { label: "Today", color: "#FFB020", amount: groupTotals.today },
+    {
+      label: "Later",
+      color: "#34D399",
+      amount: round2(groupTotals.upcoming + groupTotals.none),
+    },
+  ];
+  // Finance hero: the two biggest companies, the rest together.
+  const financeHeroSegments = (() => {
+    const sorted = [...financeCompanyTotals]
+      .filter((company) => !financeCompanyFilter || company.name === financeCompanyFilter)
+      .sort((a, b) => b.amount - a.amount);
+    const colors = ["#60A5FA", "#A78BFA"];
+    const top = sorted.slice(0, 2).map((company, index) => ({
+      label: company.name,
+      color: colors[index],
+      amount: company.amount,
+    }));
+    const rest = round2(sorted.slice(2).reduce((sum, company) => sum + company.amount, 0));
+    return rest > 0 ? [...top, { label: "Others", color: "#94A3B8", amount: rest }] : top;
+  })();
+  const oldestFinanceDays = filteredFinanceDues.reduce(
+    (max, due) => Math.max(max, daysSince(due.billDate)),
+    0,
+  );
+
   const customerReveal = useInfiniteReveal(
-    filteredDues,
-    `customer|${period}|${searchQuery}|${searchScope}|${filteredDues.length}`,
+    groupedDues,
+    `customer|${period}|${searchQuery}|${searchScope}|${showPrivateOnly}|${groupedDues.length}`,
   );
   const financeReveal = useInfiniteReveal(
     filteredFinanceDues,
@@ -292,6 +602,7 @@ export function DuesPage() {
     setPeriod("all");
     setSearchScope("all");
     setFinanceCompanyFilter(null);
+    setPrivateOnly(false);
   };
 
   async function markFinanceReceived(
@@ -316,50 +627,159 @@ export function DuesPage() {
     }
   }
 
+  function openOnEnter(event: ReactKeyboardEvent<HTMLElement>, to: string) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      navigate(to, { state: fromState(location) });
+    }
+  }
+
   return (
     <div>
-      <PageHeader
-        eyebrow="Collections"
-        title="Dues"
-        description="Pending payments from customers and financiers."
-        action={
-          <BackLink to={from ?? "/"}>
-            {from ? backLabel(from) : "Home"}
-          </BackLink>
-        }
-      />
+      <div className="mb-2.5 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-ink-900">
+            Dues
+          </h1>
+          <p className="text-[12.5px] text-ink-500">
+            {tab === "customer"
+              ? "Money customers still owe you"
+              : tab === "supplier"
+                ? "Money you still owe suppliers"
+                : "Money finance companies still owe you"}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {from ? <BackLink to={from}>{backLabel(from)}</BackLink> : null}
+          {isAdmin ? (
+            <button
+              type="button"
+              className="due-add-btn grid h-10 w-10 place-items-center rounded-full"
+              aria-label="Add money given or received (no purchase)"
+              title="Add to khata"
+              onClick={() => navigate("/dues/new")}
+            >
+              <Plus className="h-5 w-5" strokeWidth={2.6} />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {tab === "customer" ? (
+        <DuesHero
+          label={`Total to collect${period !== "all" && data ? ` · ${data.periodLabel}` : ""}`}
+          amount={data ? customerTotal : null}
+          side={
+            data ? (
+              <>
+                {customerCount} open due{customerCount === 1 ? "" : "s"}
+                {advanceTotal > 0 ? (
+                  <>
+                    <br />
+                    <span className="text-[#5CE0AE]">You'll give {formatRupees(advanceTotal)}</span>
+                  </>
+                ) : null}
+              </>
+            ) : null
+          }
+        >
+          <HeroBar segments={heroSegments} />
+        </DuesHero>
+      ) : tab === "supplier" ? (
+        <DuesHero
+          label="To pay suppliers"
+          amount={supplierData ? supplierData.totalOwed : null}
+          side={
+            supplierData ? (
+              <>
+                {supplierData.suppliers.filter((r) => r.outstanding > 0).length} supplier
+                {supplierData.suppliers.filter((r) => r.outstanding > 0).length === 1 ? "" : "s"}
+              </>
+            ) : null
+          }
+        >
+          <HeroBar
+            segments={[
+              { label: "To pay", color: "#FF6B6B", amount: supplierData?.totalOwed ?? 0 },
+              { label: "Advance", color: "#34D399", amount: supplierData?.totalAdvance ?? 0 },
+            ]}
+          />
+        </DuesHero>
+      ) : (
+        <DuesHero
+          label={`Finance pending${financeCompanyFilter ? ` · ${financeCompanyFilter}` : ""}`}
+          amount={financeData ? round2(filteredFinanceTotal) : null}
+          side={
+            financeData ? (
+              <>
+                {filteredFinanceDues.length} settlement
+                {filteredFinanceDues.length === 1 ? "" : "s"}
+                {filteredFinanceDues.length > 0 ? (
+                  <>
+                    <br />
+                    oldest {waitingDays(oldestFinanceDays)}
+                  </>
+                ) : null}
+              </>
+            ) : null
+          }
+        >
+          <HeroBar segments={financeHeroSegments} />
+        </DuesHero>
+      )}
+
+      <div
+        className={clsx("dues-seg mb-2", isAdmin && "dues-seg-3")}
+        role="tablist"
+        aria-label="Due type"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "customer"}
+          className={clsx("dues-seg-btn", tab === "customer" && "dues-seg-on")}
+          onClick={() => setTab("customer")}
+        >
+          <UserRound className="h-[15px] w-[15px] shrink-0" />
+          Customer
+          <span className="dues-seg-cnt">
+            {data?.count ?? (tab === "customer" ? filteredDues.length : "—")}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "finance"}
+          className={clsx("dues-seg-btn", tab === "finance" && "dues-seg-on")}
+          onClick={() => setTab("finance")}
+        >
+          <Landmark className="h-[15px] w-[15px] shrink-0" />
+          Finance
+          <span className="dues-seg-cnt">
+            {financeData?.count ??
+              (tab === "finance" ? filteredFinanceDues.length : "—")}
+          </span>
+        </button>
+        {isAdmin ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "supplier"}
+            className={clsx("dues-seg-btn", tab === "supplier" && "dues-seg-on")}
+            onClick={() => setTab("supplier")}
+          >
+            <Truck className="h-[15px] w-[15px] shrink-0" />
+            Supplier
+            <span className="dues-seg-cnt">
+              {supplierData
+                ? supplierData.suppliers.filter((r) => r.outstanding > 0).length
+                : "—"}
+            </span>
+          </button>
+        ) : null}
+      </div>
 
       <div className="tb-toolbar">
-        <div className="tb-tabs" role="tablist" aria-label="Due type">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "customer"}
-            className={clsx("tb-tab", tab === "customer" && "tb-tab-on")}
-            onClick={() => setTab("customer")}
-          >
-            <UserRound className="h-4 w-4 shrink-0" />
-            Customer
-            <span className="tb-cnt">
-              {data?.count ?? (tab === "customer" ? filteredDues.length : "—")}
-            </span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "finance"}
-            className={clsx("tb-tab", tab === "finance" && "tb-tab-on")}
-            onClick={() => setTab("finance")}
-          >
-            <BarChart3 className="h-4 w-4 shrink-0" />
-            Finance
-            <span className="tb-cnt">
-              {financeData?.count ??
-                (tab === "finance" ? filteredFinanceDues.length : "—")}
-            </span>
-          </button>
-        </div>
-
         <div className="tb-searchrow">
           <div className="tb-search">
             <Search className="h-[17px] w-[17px] shrink-0 text-[#7A8699]" />
@@ -367,8 +787,8 @@ export function DuesPage() {
               id="dues-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={searchPlaceholder(searchScope, tab)}
-              aria-label={searchPlaceholder(searchScope, tab)}
+              placeholder={searchPlaceholder(activeScope, tab)}
+              aria-label={searchPlaceholder(activeScope, tab)}
             />
             <SearchClearButton
               visible={Boolean(query)}
@@ -376,7 +796,7 @@ export function DuesPage() {
             />
           </div>
 
-          <div className="relative shrink-0" ref={filterWrapRef}>
+          <div className={clsx("relative shrink-0", tab === "supplier" && "hidden")} ref={filterWrapRef}>
             <button
               type="button"
               className={clsx(
@@ -388,7 +808,7 @@ export function DuesPage() {
               aria-label="Filter dues"
               onClick={() => setFilterOpen((open) => !open)}
             >
-              <Filter className="h-[19px] w-[19px]" strokeWidth={2} />
+              <SlidersHorizontal className="h-[19px] w-[19px]" strokeWidth={2} />
               <span
                 className={clsx(
                   "tb-filter-badge",
@@ -404,8 +824,10 @@ export function DuesPage() {
                     Match search on
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {SCOPE_CHIPS.map((chip) => {
-                      const on = searchScope === chip.value;
+                    {SCOPE_CHIPS.filter(
+                      (chip) => tab === "finance" || chip.value !== "finance",
+                    ).map((chip) => {
+                      const on = activeScope === chip.value;
                       return (
                         <button
                           key={chip.value}
@@ -460,6 +882,21 @@ export function DuesPage() {
                   </div>
                 ) : null}
 
+                {isAdmin && tab === "customer" ? (
+                  <label className="mb-3.5 flex cursor-pointer items-center gap-2.5 rounded-xl border border-ink-100 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-ink-900 dark:accent-tide-400"
+                      checked={privateOnly}
+                      onChange={(event) => setPrivateOnly(event.target.checked)}
+                    />
+                    <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink-800">
+                      <Lock className="h-3.5 w-3.5 text-ink-500" strokeWidth={2.2} />
+                      Show only private dues
+                    </span>
+                  </label>
+                ) : null}
+
                 <div className="mt-0.5 flex items-center justify-between border-t border-ink-100 pt-3">
                   <button
                     type="button"
@@ -484,227 +921,276 @@ export function DuesPage() {
 
       {loading ? <LoadingBlock label="Loading dues…" /> : null}
       {error ? (
-        <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
+        <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
 
-      {tab === "customer" && data && !loading ? (
-        <>
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-ember-500/10 to-transparent px-4 py-2.5 ring-1 ring-ember-500/15">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                {data.periodLabel}
-              </p>
-              <p className="text-sm text-ink-700">
-                {query.trim() ? filteredDues.length : data.count} open due
-                {(query.trim() ? filteredDues.length : data.count) === 1
-                  ? ""
-                  : "s"}
-              </p>
-            </div>
-            <p className="font-display text-xl font-semibold tabular-nums text-ember-500">
-              {formatINR(query.trim() ? filteredTotal : data.totalDue)}
-            </p>
-          </div>
+      {tab === "supplier" && supplierData && !loading ? (
+        supplierRows.length === 0 ? (
+          <EmptyState
+            title={searchQuery ? "No matching suppliers" : "Nothing to pay suppliers"}
+            description={
+              searchQuery
+                ? "Try another search, or clear the search box."
+                : "Suppliers you owe money to will show here when you add stock."
+            }
+          />
+        ) : (
+          <SupplierDueList
+            rows={supplierRows}
+            totalAdvance={supplierData.totalAdvance}
+            onOpen={(id) => navigate(`/dues/suppliers/${id}`, { state: fromState(location) })}
+          />
+        )
+      ) : null}
 
-          {filteredDues.length === 0 ? (
-            <EmptyState
-              title={query.trim() ? "No matching dues" : "No dues in this period"}
-              description={
-                query.trim()
-                  ? "Try another search, or clear the search box."
-                  : "Try another filter, or check back when a bill has pending amount."
-              }
-            />
-          ) : (
-            <div className="space-y-2">
-              {customerReveal.visibleItems.map((due) => {
-                const dueWhen = dueDateStatus(due.dueDate);
-                return (
-                <article
-                  key={due.id}
-                  role="link"
-                  tabIndex={0}
-                  className={clsx(
-                    "interactive-card rounded-2xl border px-3.5 py-3 shadow-sm backdrop-blur-sm",
-                    dueWhen?.overdue
-                      ? "interactive-card-danger border-red-500/40 bg-red-500/20"
-                      : "border-ink-100/80 bg-white/90 shadow-ink-900/5",
-                  )}
-                  onClick={() =>
-                    navigate(`/bills/${due.id}`, { state: fromState(location) })
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/bills/${due.id}`, {
-                        state: fromState(location),
-                      });
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <h3 className="truncate text-sm font-semibold text-ink-900">
-                          {due.customerName}
-                        </h3>
-                        {due.isPartialPaid ? (
-                          <span className="rounded-full bg-ember-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
-                            Partial
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 truncate text-xs text-ink-500">
-                        <span className="tabular-nums">{due.customerPhone}</span>
-                        <span className="text-ink-300"> · </span>
-                        <span className="font-mono text-tide-600">
-                          {due.invoiceNumber}
-                        </span>
-                      </p>
+      {tab === "customer" && data && !loading ? (
+        filteredDues.length === 0 && clearedShown.length === 0 ? (
+          <EmptyState
+            title={query.trim() ? "No matching dues" : "No dues in this period"}
+            description={
+              query.trim()
+                ? "Try another search, or clear the search box."
+                : "Try another filter, or check back when a bill has pending amount."
+            }
+          />
+        ) : (
+          <div>
+            {customerReveal.visibleItems.map(({ due, status, advance }, index) => {
+              const tone = advance ? URGENCY_TONE.upcoming : URGENCY_TONE[status.urgency];
+              const overdue = !advance && status.urgency === "overdue";
+              // Khata entries: paid share means nothing when you owe them.
+              const paid = advance ? 0 : round2(due.paidTotal ?? 0);
+              const prev = customerReveal.visibleItems[index - 1];
+              const startsGroup =
+                index === 0 ||
+                prev.advance !== advance ||
+                prev.status.urgency !== status.urgency;
+              const to = `/dues/${due.id}`;
+              const reminder = advance ? null : dueReminderLink(due);
+              return (
+                <Fragment key={due.id}>
+                  {startsGroup ? (
+                    <div
+                      className={clsx(
+                        "mb-1.5 flex items-center justify-between gap-3 px-1",
+                        index > 0 && "mt-3",
+                      )}
+                    >
+                      <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ background: tone.accent }}
+                        />
+                        {advance ? "You will give" : GROUP_TITLE[status.urgency]}
+                      </h2>
+                      <span
+                        className={clsx(
+                          "text-[12.5px] font-bold tabular-nums",
+                          advance ? "text-emerald-600 dark:text-emerald-400" : "text-ink-500",
+                        )}
+                      >
+                        {formatRupees(advance ? advanceTotal : groupTotals[status.urgency])}
+                      </span>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2.5">
-                      <div className="text-right">
-                        <p className="text-base font-semibold tabular-nums text-ember-500">
-                          {formatINR(due.dueAmount)}
+                  ) : null}
+                  <article
+                    role="link"
+                    tabIndex={0}
+                    className={clsx(
+                      "due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5",
+                      overdue && "due-card-overdue interactive-card-danger",
+                    )}
+                    style={{ "--due-accent": tone.accent } as CSSProperties}
+                    onClick={() => navigate(to, { state: fromState(location) })}
+                    onKeyDown={(event) => openOnEnter(event, to)}
+                  >
+                    {paid > 0 ? (
+                      // Part paid: the card fills green up to the paid share.
+                      <div
+                        className="due-paid-fill"
+                        style={{
+                          width: `${Math.min(paid / (paid + due.dueAmount), 1) * 100}%`,
+                        }}
+                        aria-hidden
+                      />
+                    ) : null}
+                    <div className="relative flex items-center gap-2">
+                      <div
+                        className={clsx(
+                          "grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold",
+                          overdue
+                            ? "bg-white/80 text-rose-600 dark:bg-white/10 dark:text-rose-300"
+                            : tone.avatar,
+                        )}
+                        aria-hidden
+                      >
+                        {initials(due.customerName)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <h3 className="truncate text-sm font-bold text-ink-900">
+                            {due.customerName}
+                          </h3>
+                          {isAdmin && due.duePrivate ? (
+                            <Lock
+                              className="h-3.5 w-3.5 shrink-0 text-ink-400"
+                              strokeWidth={2.4}
+                              aria-label="Private due"
+                            />
+                          ) : null}
+                          {paid > 0 ? (
+                            <span
+                              className="shrink-0 rounded-full bg-emerald-500/15 px-[5px] py-px text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+                              title={`${formatRupees(paid)} paid of ${formatRupees(round2(paid + due.dueAmount))}`}
+                            >
+                              {formatRupees(paid)} paid
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="truncate text-xs text-ink-400">
+                          <span className="tabular-nums">{due.customerPhone}</span>
+                          <span className="text-ink-300"> · </span>
+                          {due.noPurchase ? (
+                            <span className="font-semibold text-indigo-600 dark:text-indigo-300">
+                              No bill
+                            </span>
+                          ) : (
+                            <span className="font-mono text-tide-600">
+                              {due.invoiceNumber}
+                            </span>
+                          )}
                         </p>
+                      </div>
+                      <div className="shrink-0 text-right">
                         <p
                           className={clsx(
-                            "mt-0.5 text-[11.5px] font-semibold",
-                            dueWhen?.overdue
-                              ? "text-[#E5484D]"
-                              : dueWhen
-                                ? "text-[#B76E00]"
-                                : "text-ink-400",
+                            "text-[15px] font-bold tabular-nums tracking-tight",
+                            advance
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-ink-900",
                           )}
                         >
-                          {dueWhen?.label || "No due date"}
+                          {formatRupees(Math.abs(due.dueAmount))}
                         </p>
+                        {advance ? (
+                          <span className="mt-0.5 block h-5 text-[10px] font-bold uppercase leading-5 tracking-wide text-emerald-600 dark:text-emerald-400">
+                            You'll give
+                          </span>
+                        ) : status.urgency === "none" ? (
+                          // Same height as the cards with a circle.
+                          <span className="mt-0.5 block h-5" aria-hidden />
+                        ) : (
+                          // Small circle: days late (red) / left (green), clock for today.
+                          <span
+                            className={clsx(
+                              "ml-auto mt-0.5 grid h-5 w-fit min-w-[20px] place-items-center rounded-full px-1 text-[10px] font-bold leading-none tabular-nums",
+                              STATUS_DOT[status.urgency],
+                            )}
+                            title={status.label}
+                            aria-label={status.label}
+                          >
+                            {status.urgency === "today" ? (
+                              <Clock3 className="h-3 w-3" strokeWidth={2.6} />
+                            ) : (
+                              `${status.days}d`
+                            )}
+                          </span>
+                        )}
                       </div>
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedDue(due);
-                          }}
+                      {reminder ? (
+                        <a
+                          href={reminder}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#25D366] text-white shadow-[0_4px_10px_-4px_rgba(37,211,102,0.8)] transition hover:bg-[#1EBE5A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/50"
+                          aria-label={`Send WhatsApp due reminder to ${due.customerName}`}
+                          title="Send WhatsApp reminder"
+                          // Don't open the due when the button is tapped.
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
                         >
-                          <Check className="h-3.5 w-3.5" />
-                          Paid
-                        </button>
+                          <WhatsAppIcon className="h-[17px] w-[17px]" />
+                        </a>
                       ) : null}
                     </div>
-                  </div>
-                </article>
-                );
-              })}
-              <LoadMoreSentinel
-                sentinelRef={customerReveal.sentinelRef}
-                hasMore={customerReveal.hasMore}
-                loadingMore={customerReveal.loadingMore}
-                totalCount={customerReveal.totalCount}
+                  </article>
+                </Fragment>
+              );
+            })}
+            {clearedShown.length > 0 && !customerReveal.hasMore ? (
+              <ClearedDues
+                rows={clearedShown}
+                first={filteredDues.length === 0}
+                onOpen={(id) => navigate(`/dues/${id}`, { state: fromState(location) })}
+                isAdmin={isAdmin}
               />
-            </div>
-          )}
-        </>
+            ) : null}
+            <LoadMoreSentinel
+              sentinelRef={customerReveal.sentinelRef}
+              hasMore={customerReveal.hasMore}
+              loadingMore={customerReveal.loadingMore}
+              totalCount={customerReveal.totalCount}
+            />
+          </div>
+        )
       ) : null}
 
       {tab === "finance" && financeData && !loading ? (
         <>
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-ember-500/10 to-transparent px-4 py-2.5 ring-1 ring-ember-500/15">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                Finance pending
-                {financeCompanyFilter ? ` · ${financeCompanyFilter}` : ""}
-              </p>
-              <p className="text-sm text-ink-700">
-                {filteredFinanceDues.length} settlement
-                {filteredFinanceDues.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <p className="font-display text-xl font-semibold tabular-nums text-ember-500">
-              {formatINR(filteredFinanceTotal)}
-            </p>
-          </div>
-
           {financeCompanyTotals.length > 0 ? (
-            <div className="mb-3 overflow-x-auto pb-1">
-              <div className="flex w-max min-w-full justify-center gap-2 px-1">
-                <button
-                  type="button"
-                  className={clsx(
-                    "min-w-[5.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition",
-                    !financeCompanyFilter
-                      ? "border-ink-900 bg-ink-900 dark:border-tide-400 dark:bg-tide-400"
-                      : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
-                  )}
-                  onClick={() => setFinanceCompanyFilter(null)}
-                >
-                  <p
+            <div className="-mx-1 mb-2.5 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+              {[
+                {
+                  name: null as string | null,
+                  label: "All",
+                  amount: financeCompanyTotals.reduce(
+                    (sum, company) => sum + company.amount,
+                    0,
+                  ),
+                },
+                ...financeCompanyTotals.map((company) => ({
+                  name: company.name as string | null,
+                  label: company.name,
+                  amount: company.amount,
+                })),
+              ].map((chip) => {
+                const on = financeCompanyFilter === chip.name;
+                return (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    aria-pressed={on}
                     className={clsx(
-                      "truncate text-xs",
-                      !financeCompanyFilter
-                        ? "text-white/70 dark:!text-slate-700"
-                        : "text-ink-500",
+                      "min-w-[6rem] shrink-0 rounded-xl border px-2.5 py-1.5 text-left transition",
+                      on
+                        ? "dues-seg-on border-transparent"
+                        : "border-[#E7EAF0] bg-white hover:border-ink-300 dark:border-[rgb(var(--color-line))] dark:bg-surface",
                     )}
+                    onClick={() =>
+                      setFinanceCompanyFilter(on || !chip.name ? null : chip.name)
+                    }
                   >
-                    All
-                  </p>
-                  <p
-                    className={clsx(
-                      "mt-0.5 text-sm font-semibold tabular-nums",
-                      !financeCompanyFilter
-                        ? "text-white dark:!text-slate-900"
-                        : "text-ember-500",
-                    )}
-                  >
-                    {formatINR(
-                      financeCompanyTotals.reduce(
-                        (sum, company) => sum + company.amount,
-                        0,
-                      ),
-                    )}
-                  </p>
-                </button>
-                {financeCompanyTotals.map((company) => {
-                  const on = financeCompanyFilter === company.name;
-                  return (
-                    <button
-                      key={company.name}
-                      type="button"
+                    <p
                       className={clsx(
-                        "min-w-[9.5rem] shrink-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition",
-                        on
-                          ? "border-ink-900 bg-ink-900 dark:border-tide-400 dark:bg-tide-400"
-                          : "border-ink-100 bg-white/90 text-ink-700 hover:border-ink-300 dark:border-ink-100 dark:bg-surface-elevated dark:hover:border-ink-300",
+                        "max-w-[10rem] truncate text-[11px] font-semibold",
+                        on ? "text-white/70 dark:text-[#1f1600]/70" : "text-ink-500",
                       )}
-                      aria-pressed={on}
-                      onClick={() =>
-                        setFinanceCompanyFilter(on ? null : company.name)
-                      }
                     >
-                      <p
-                        className={clsx(
-                          "truncate text-xs",
-                          on ? "text-white/70 dark:!text-slate-700" : "text-ink-500",
-                        )}
-                      >
-                        {company.name}
-                      </p>
-                      <p
-                        className={clsx(
-                          "mt-0.5 text-sm font-semibold tabular-nums",
-                          on ? "text-white dark:!text-slate-900" : "text-ember-500",
-                        )}
-                      >
-                        {formatINR(company.amount)}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+                      {chip.label}
+                    </p>
+                    <p
+                      className={clsx(
+                        "text-sm font-bold tabular-nums",
+                        on ? "text-[#FFA800] dark:text-[#1f1600]" : "text-ink-900",
+                      )}
+                    >
+                      {formatRupees(chip.amount)}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
 
@@ -724,59 +1210,76 @@ export function DuesPage() {
               }
             />
           ) : (
-            <div className="space-y-2">
-              {financeReveal.visibleItems.map((due) => (
-                <article
-                  key={due.id}
-                  role="link"
-                  tabIndex={0}
-                  className="interactive-card rounded-2xl border border-ink-100/80 bg-white/90 px-3.5 py-3 shadow-sm shadow-ink-900/5 backdrop-blur-sm"
-                  onClick={() =>
-                    navigate(`/bills/${due.id}`, { state: fromState(location) })
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/bills/${due.id}`, {
-                        state: fromState(location),
-                      });
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold text-ink-900">
-                        {financeCompanyFilter
-                          ? financeCompanyFilter
-                          : formatFinanceCompanies(
-                              due.financeReceived
-                                ? null
-                                : due.financeCompanyName,
-                              due.financeReceived2
-                                ? null
-                                : due.financeCompanyName2,
-                            ) || "Finance company"}
-                      </h3>
-                      <p className="mt-0.5 truncate text-xs text-ink-500">
-                        {due.customerName}
-                        <span className="text-ink-300"> · </span>
-                        <span className="tabular-nums">{due.customerPhone}</span>
-                        <span className="text-ink-300"> · </span>
-                        <span className="font-mono text-tide-600">
-                          {due.invoiceNumber}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2.5">
-                      <p className="text-right text-base font-semibold tabular-nums text-ember-500">
-                        {formatINR(
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
+                <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
+                  <span className="h-2 w-2 rounded-full bg-[#FFB020]" />
+                  Waiting longest
+                </h2>
+                <span className="text-[12.5px] font-bold tabular-nums text-ink-500">
+                  {filteredFinanceDues.length} bill
+                  {filteredFinanceDues.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {financeReveal.visibleItems.map((due) => {
+                const company = financeCompanyFilter
+                  ? financeCompanyFilter
+                  : formatFinanceCompanies(
+                      due.financeReceived ? null : due.financeCompanyName,
+                      due.financeReceived2 ? null : due.financeCompanyName2,
+                    ) || "Finance company";
+                const days = daysSince(due.billDate);
+                const to = `/bills/${due.id}`;
+                return (
+                  <article
+                    key={due.id}
+                    role="link"
+                    tabIndex={0}
+                    className="due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5"
+                    style={{ "--due-accent": waitingAccent(days) } as CSSProperties}
+                    onClick={() => navigate(to, { state: fromState(location) })}
+                    onKeyDown={(event) => openOnEnter(event, to)}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={clsx(
+                          "grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12.5px] font-bold",
+                          companyAvatar(company),
+                        )}
+                        aria-hidden
+                      >
+                        {initials(company)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-bold text-ink-900">
+                          {company}
+                        </h3>
+                        <p className="truncate text-xs text-ink-400">
+                          {due.customerName}
+                          <span className="text-ink-300"> · </span>
+                          <span className="font-mono text-tide-600">
+                            {due.invoiceNumber}
+                          </span>
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-right text-[15px] font-bold tabular-nums tracking-tight text-ink-900">
+                        {formatRupees(
                           financeAmountForCompany(due, financeCompanyFilter),
                         )}
+                      </p>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-[#E7EAF0] pt-2 dark:border-[rgb(var(--color-line))]">
+                      <p className="flex min-w-0 items-center gap-1.5 text-[11.5px] font-semibold text-ink-500">
+                        <Clock3 className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                        <span className="truncate">
+                          {days > 0 ? `Waiting ${waitingDays(days)}` : "Sold today"}
+                          {" · "}sold {format(new Date(due.billDate), "dd MMM")}
+                        </span>
                       </p>
                       {isAdmin ? (
                         <button
                           type="button"
-                          className="inline-flex h-8 items-center gap-1 rounded-full bg-ink-900 px-3 text-xs font-semibold text-white transition hover:bg-ink-800 disabled:opacity-50 dark:bg-tide-400 dark:!text-[#0F172A] dark:hover:bg-tide-500"
+                          className="due-btn-dark inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-3 text-xs font-bold transition disabled:opacity-50"
                           disabled={receivingId === due.id}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -785,14 +1288,14 @@ export function DuesPage() {
                           }}
                           aria-label={`Mark ${due.invoiceNumber} finance amount as received`}
                         >
-                          <Check className="h-3.5 w-3.5" />
+                          <Check className="h-3.5 w-3.5" strokeWidth={2.6} />
                           {receivingId === due.id ? "…" : "Received"}
                         </button>
                       ) : null}
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
               <LoadMoreSentinel
                 sentinelRef={financeReveal.sentinelRef}
                 hasMore={financeReveal.hasMore}
@@ -802,14 +1305,6 @@ export function DuesPage() {
             </div>
           )}
         </>
-      ) : null}
-
-      {selectedDue && isAdmin ? (
-        <SettleDueModal
-          bill={selectedDue}
-          onClose={() => setSelectedDue(null)}
-          onSettled={() => loadDues(period)}
-        />
       ) : null}
 
       <AnimatePresence>
@@ -848,6 +1343,200 @@ export function DuesPage() {
           />
         ) : null}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/** Search results whose due is back to 0: tap to see every entry. */
+function ClearedDues({
+  rows,
+  first,
+  onOpen,
+  isAdmin,
+}: {
+  rows: ClearedDueItem[];
+  first: boolean;
+  onOpen: (id: string) => void;
+  isAdmin: boolean;
+}) {
+  return (
+    <div className={first ? "" : "mt-3"}>
+      <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
+        <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
+          <span className="h-2 w-2 rounded-full bg-ink-300" />
+          Cleared
+        </h2>
+        <span className="text-[12.5px] font-bold text-ink-400">
+          {rows.length} found
+        </span>
+      </div>
+      {rows.map((row) => {
+        const product = row.productLabels[0];
+        return (
+          <article
+            key={row.id}
+            role="link"
+            tabIndex={0}
+            className="due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5"
+            style={{ "--due-accent": "#C9D0DB" } as CSSProperties}
+            onClick={() => onOpen(row.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpen(row.id);
+              }
+            }}
+          >
+            <div className="relative flex items-center gap-2">
+              <div
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                aria-hidden
+              >
+                <CircleCheck className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <h3 className="truncate text-sm font-bold text-ink-900">{row.customerName}</h3>
+                  {isAdmin && row.duePrivate ? (
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-ink-400" strokeWidth={2.4} aria-label="Private due" />
+                  ) : null}
+                </div>
+                <p className="truncate text-xs text-ink-400">
+                  <span className="tabular-nums">{row.customerPhone}</span>
+                  <span className="text-ink-300"> · </span>
+                  {row.noPurchase ? (
+                    <span className="font-semibold text-indigo-600 dark:text-indigo-300">No bill</span>
+                  ) : (
+                    <span className="font-mono text-tide-600">{row.invoiceNumber}</span>
+                  )}
+                  {product ? <span className="text-ink-400"> · {product}</span> : null}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-[15px] font-bold tabular-nums tracking-tight text-ink-400">₹0</p>
+                <span className="mt-0.5 block h-5 text-[10px] font-bold uppercase leading-5 tracking-wide text-emerald-600 dark:text-emerald-400">
+                  {row.dueSettledAt
+                    ? `Cleared ${format(new Date(row.dueSettledAt), "d MMM")}`
+                    : "Cleared"}
+                </span>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Supplier tab: who you owe, then who you paid extra (advance). */
+function SupplierDueList({
+  rows,
+  totalAdvance,
+  onOpen,
+}: {
+  rows: SupplierDueRow[];
+  totalAdvance: number;
+  onOpen: (id: string) => void;
+}) {
+  const owe = rows.filter((row) => row.outstanding > 0);
+  const advance = rows.filter((row) => row.outstanding < 0);
+  const groups = [
+    { key: "owe", title: "To pay", color: "#E5484D", rows: owe, total: owe.reduce((s, r) => s + r.outstanding, 0) },
+    { key: "advance", title: "Advance · you paid extra", color: "#34D399", rows: advance, total: totalAdvance },
+  ].filter((group) => group.rows.length > 0);
+  return (
+    <div>
+      {groups.map((group, index) => (
+        <div key={group.key} className={index > 0 ? "mt-3" : ""}>
+          <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
+            <h2 className="flex items-center gap-2 text-[12.5px] font-bold text-ink-900">
+              <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
+              {group.title}
+            </h2>
+            <span
+              className={clsx(
+                "text-[12.5px] font-bold tabular-nums",
+                group.key === "advance" ? "text-emerald-600 dark:text-emerald-400" : "text-ink-500",
+              )}
+            >
+              {formatRupees(round2(group.total))}
+            </span>
+          </div>
+          {group.rows.map((row) => {
+            const adv = row.outstanding < 0;
+            // Paid so far (payments + returned units) out of everything bought.
+            const paid = adv ? 0 : round2(Math.max(row.totalPurchased - row.outstanding, 0));
+            const share = row.totalPurchased > 0 ? Math.min(paid / row.totalPurchased, 1) : 0;
+            return (
+              <article
+                key={row.id}
+                role="link"
+                tabIndex={0}
+                className="due-card due-card-stripe interactive-card mb-1.5 cursor-pointer px-3 py-2.5"
+                style={{ "--due-accent": adv ? "#34D399" : "#FFB020" } as CSSProperties}
+                onClick={() => onOpen(row.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpen(row.id);
+                  }
+                }}
+              >
+                {paid > 0 ? (
+                  // Same as customer cards: the card fills green up to the paid share.
+                  <div className="due-paid-fill" style={{ width: `${share * 100}%` }} aria-hidden />
+                ) : null}
+                <div className="relative flex items-center gap-2">
+                  <div
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#0B1F33] text-[#FFA800] dark:ring-1 dark:ring-white/10"
+                    aria-hidden
+                  >
+                    <Truck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <h3 className="truncate text-sm font-bold text-ink-900">{row.name}</h3>
+                      {paid > 0 ? (
+                        <span
+                          className="shrink-0 rounded-full bg-emerald-500/15 px-[5px] py-px text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+                          title={`${formatRupees(paid)} paid of ${formatRupees(row.totalPurchased)}`}
+                        >
+                          {formatRupees(paid)} paid
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-xs text-ink-400">
+                      {row.phone ? <span className="tabular-nums">{row.phone} · </span> : null}
+                      {row.purchaseCount} purchase{row.purchaseCount === 1 ? "" : "s"}
+                      {row.lastPurchaseDate
+                        ? ` · last ${format(new Date(row.lastPurchaseDate), "d MMM")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p
+                      className={clsx(
+                        "text-[15px] font-bold tabular-nums tracking-tight",
+                        adv ? "text-emerald-600 dark:text-emerald-400" : "text-ink-900",
+                      )}
+                    >
+                      {formatRupees(Math.abs(row.outstanding))}
+                    </p>
+                    <span
+                      className={clsx(
+                        "mt-0.5 block text-[10px] font-bold uppercase leading-4 tracking-wide",
+                        adv ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+                      )}
+                    >
+                      {adv ? "Advance" : "To pay"}
+                    </span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

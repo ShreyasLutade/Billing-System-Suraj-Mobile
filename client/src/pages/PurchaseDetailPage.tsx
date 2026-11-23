@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { SquarePen, Trash2, X } from "lucide-react";
+import { SquarePen, Trash2 } from "lucide-react";
+import { DangerConfirmModal, RECYCLE_BIN_DAYS } from "../components/RemoveConfirmModals";
 import { useAuth } from "../auth/AuthContext";
 import { BackButton, BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { EditStockUnitModal } from "../components/EditStockUnitModal";
@@ -21,20 +22,35 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+// IMEI / Serial never narrower than its text, so it cannot run into Status.
 const COL_TEMPLATE =
-  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(7rem,1.1fr)_6.5rem_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(9rem,1.2fr)_7rem_max-content_max-content]";
+  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(max-content,1.1fr)_6.5rem_max-content_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(max-content,1.2fr)_7rem_max-content_max-content]";
+
+/** Staff: no "Purchase price" (cost) and no "Action" (edit/delete are admin only). */
+const COL_TEMPLATE_STAFF =
+  "grid-cols-[minmax(7rem,1.3fr)_4.5rem_4rem_5rem_minmax(max-content,1.1fr)_max-content] sm:grid-cols-[minmax(9rem,1.4fr)_5rem_4.5rem_6rem_minmax(max-content,1.2fr)_max-content]";
 
 const ROW_GRID = "col-span-full grid grid-cols-subgrid items-center";
+
+function unitCondition(item: PurchaseStockRef, purchase: Purchase) {
+  if (item.condition === "USED" || item.condition === "NEW") return item.condition;
+  return purchase.condition === "USED" ? "USED" : "NEW";
+}
+
+/** "New", "Second hand", or "New & second hand" once units were switched. */
+function purchaseConditionLabel(purchase: Purchase) {
+  const conditions = new Set(
+    purchase.items.map((row) => unitCondition(row.stockItem, purchase)),
+  );
+  if (conditions.size > 1) return "New & second hand";
+  const only = conditions.values().next().value ?? purchase.condition;
+  return only === "USED" ? "Second hand" : "New";
+}
 
 function toEditUnit(item: PurchaseStockRef, purchase: Purchase): StockItem {
   return {
     id: item.id,
-    condition:
-      item.condition === "USED" || item.condition === "NEW"
-        ? item.condition
-        : purchase.condition === "USED"
-          ? "USED"
-          : "NEW",
+    condition: unitCondition(item, purchase),
     platform: item.platform === "ANDROID" ? "ANDROID" : "IOS",
     mobileName: item.mobileName,
     storage: item.storage || "",
@@ -62,6 +78,13 @@ export function PurchaseDetailPage() {
   const from = readFromState(location.state);
   const origin = readOriginState(location.state);
   const supplierState = origin ? { from: origin } : undefined;
+  // Set when opened from the Suppliers page model search — mark that unit.
+  const highlightStockId =
+    location.state && typeof location.state === "object"
+      ? ((location.state as { highlightStockId?: unknown }).highlightStockId as
+          | string
+          | undefined)
+      : undefined;
   const { isAdmin } = useAuth();
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +123,16 @@ export function PurchaseDetailPage() {
       active = false;
     };
   }, [purchaseId, supplierId]);
+
+  // Bring the highlighted unit into view once, after the purchase loads.
+  const scrolledToHighlight = useRef(false);
+  useEffect(() => {
+    if (!purchase || !highlightStockId || scrolledToHighlight.current) return;
+    scrolledToHighlight.current = true;
+    document
+      .querySelector(`[data-stock-id="${CSS.escape(highlightStockId)}"]`)
+      ?.scrollIntoView({ block: "center" });
+  }, [purchase, highlightStockId]);
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -162,10 +195,14 @@ export function PurchaseDetailPage() {
           Purchase · {formatDate(purchase.purchaseDate)}
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          {purchase.condition === "USED" ? "Second hand" : "New"} ·{" "}
-          {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"} ·{" "}
-          {formatINR(purchase.totalAmount)}
-          {purchase.paidAt ? " · Paid" : " · Unpaid"}
+          {purchaseConditionLabel(purchase)} ·{" "}
+          {purchase.items.length} unit{purchase.items.length === 1 ? "" : "s"}
+          {isAdmin ? <> · {formatINR(purchase.totalAmount)}</> : null}
+          {purchase.paidAt
+            ? " · Paid"
+            : isAdmin && (purchase.paidAmount ?? 0) > 0
+              ? ` · ${formatINR(Math.max(purchase.totalAmount - (purchase.paidAmount ?? 0), 0))} left`
+              : " · Unpaid"}
         </p>
       </div>
 
@@ -183,7 +220,12 @@ export function PurchaseDetailPage() {
       ) : (
         <div className="ledger-card">
           <div className="ledger-scroll">
-            <div className={clsx("min-w-[52rem] grid", COL_TEMPLATE)}>
+            <div
+              className={clsx(
+                "grid",
+                isAdmin ? COL_TEMPLATE : COL_TEMPLATE_STAFF,
+              )}
+            >
               <div
                 className={clsx(
                   ROW_GRID,
@@ -205,19 +247,32 @@ export function PurchaseDetailPage() {
                 <div className="border-r border-[#EEF1F5] px-3 py-2 dark:border-[rgb(var(--color-line))]">
                   IMEI / Serial
                 </div>
-                <div className="border-r border-[#EEF1F5] px-3 py-2 text-right dark:border-[rgb(var(--color-line))]">
-                  Purchase price
-                </div>
-                <div className="border-r border-[#EEF1F5] px-2 py-2 dark:border-[rgb(var(--color-line))]">
+                {isAdmin ? (
+                  <div className="border-r border-[#EEF1F5] px-3 py-2 text-right dark:border-[rgb(var(--color-line))]">
+                    Purchase price
+                  </div>
+                ) : null}
+                <div
+                  className={clsx(
+                    "px-2 py-2",
+                    isAdmin &&
+                      "border-r border-[#EEF1F5] dark:border-[rgb(var(--color-line))]",
+                  )}
+                >
                   Status
                 </div>
-                <div className="px-2 py-2 text-right">Action</div>
+                {isAdmin ? (
+                  <div className="px-2 py-2 text-right">Action</div>
+                ) : null}
               </div>
 
               {purchase.items.map((row, index) => {
                 const item = row.stockItem;
                 const sold = item.status === "SOLD";
-                const billId = item.soldBillId;
+                // Sold, then sent back to the supplier (replaced / returned): amber, not red.
+                const returned = Boolean(item.returned);
+                const billId = item.soldBillId ?? item.returned?.billId ?? null;
+                const highlighted = item.id === highlightStockId;
                 const openBill = () => {
                   if (sold && billId) {
                     navigate(`/bills/${billId}`, { state: fromState(location) });
@@ -227,6 +282,7 @@ export function PurchaseDetailPage() {
                 return (
                   <div
                     key={row.id}
+                    data-stock-id={item.id}
                     role={sold && billId ? "link" : undefined}
                     tabIndex={sold && billId ? 0 : undefined}
                     onClick={openBill}
@@ -245,10 +301,18 @@ export function PurchaseDetailPage() {
                       "relative isolate overflow-hidden border-b border-[#EEF1F5] text-[13px] dark:border-[rgb(var(--color-line))]",
                       !sold && (index % 2 === 0 ? "bg-white" : "bg-[#FAFBFC]"),
                       sold &&
+                        !returned &&
                         "bg-rose-50/70 dark:!bg-rose-950/45 dark:hover:!bg-rose-950/60",
                       sold &&
+                        !returned &&
                         billId &&
                         "cursor-pointer hover:bg-rose-50 dark:hover:!bg-rose-950/60",
+                      returned &&
+                        "bg-amber-50/80 dark:!bg-amber-500/10 dark:hover:!bg-amber-500/15",
+                      returned && billId && "cursor-pointer hover:bg-amber-50",
+                      highlighted &&
+                        "shadow-[inset_4px_0_0_rgb(var(--color-tide-500)),inset_0_0_0_2px_rgb(var(--color-tide-500)/0.55)]",
+                      highlighted && !sold && "!bg-tide-100",
                     )}
                     title={
                       sold && billId
@@ -263,6 +327,14 @@ export function PurchaseDetailPage() {
                       )}
                     >
                       {item.mobileName}
+                      {unitCondition(item, purchase) !==
+                      (purchase.condition === "USED" ? "USED" : "NEW") ? (
+                        <span className="ml-1.5 whitespace-nowrap rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ember-500">
+                          {unitCondition(item, purchase) === "USED"
+                            ? "Second hand"
+                            : "New"}
+                        </span>
+                      ) : null}
                     </div>
                     <div
                       className={clsx(
@@ -296,21 +368,35 @@ export function PurchaseDetailPage() {
                     >
                       {formatStockUnitId(item)}
                     </div>
+                    {isAdmin ? (
+                      <div
+                        className={clsx(
+                          "border-r border-[#EEF1F5] px-3 py-1.5 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
+                          sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
+                        )}
+                      >
+                        {formatINR(item.purchasePrice)}
+                      </div>
+                    ) : null}
                     <div
                       className={clsx(
-                        "border-r border-[#EEF1F5] px-3 py-1.5 text-right tabular-nums dark:border-[rgb(var(--color-line))]",
-                        sold ? "text-ink-400 dark:!text-ink-500" : "text-ink-500",
+                        "relative z-20 whitespace-nowrap px-2 py-1.5",
+                        isAdmin &&
+                          "border-r border-[#EEF1F5] dark:border-[rgb(var(--color-line))]",
                       )}
                     >
-                      {formatINR(item.purchasePrice)}
-                    </div>
-                    <div className="relative z-20 whitespace-nowrap border-r border-[#EEF1F5] px-2 py-1.5 dark:border-[rgb(var(--color-line))]">
                       {sold ? (
                         <div className="relative z-20 space-y-0.5">
                           {billId ? (
                             <button
                               type="button"
-                              className="block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold text-rose-600 underline decoration-rose-400/80 underline-offset-2 hover:text-rose-700"
+                              className={clsx(
+                                "block max-w-full truncate whitespace-nowrap text-left text-xs font-semibold underline underline-offset-2",
+                                returned
+                                  ? "text-amber-700 decoration-amber-400/80 hover:text-amber-800 dark:text-amber-300"
+                                  : "text-rose-600 decoration-rose-400/80 hover:text-rose-700",
+                              )}
+                              title={returned && item.returned?.note ? item.returned.note : undefined}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 navigate(`/bills/${billId}`, {
@@ -318,14 +404,19 @@ export function PurchaseDetailPage() {
                                 });
                               }}
                             >
-                              Sold
-                              {item.soldInvoiceNumber
-                                ? ` · ${item.soldInvoiceNumber}`
+                              {returned ? "Returned / Replaced" : item.givenAsReplacement ? "Sold as replacement" : "Sold"}
+                              {item.soldInvoiceNumber ?? item.returned?.invoiceNumber
+                                ? ` · ${item.soldInvoiceNumber ?? item.returned?.invoiceNumber}`
                                 : ""}
                             </button>
                           ) : (
-                            <span className="block truncate whitespace-nowrap text-xs font-semibold text-rose-600">
-                              Sold
+                            <span
+                              className={clsx(
+                                "block truncate whitespace-nowrap text-xs font-semibold",
+                                returned ? "text-amber-700 dark:text-amber-300" : "text-rose-600",
+                              )}
+                            >
+                              {returned ? "Returned / Replaced" : item.givenAsReplacement ? "Sold as replacement" : "Sold"}
                             </span>
                           )}
                           {isAdmin &&
@@ -343,8 +434,8 @@ export function PurchaseDetailPage() {
                       )}
                     </div>
 
-                    <div className="relative z-20 whitespace-nowrap px-2 py-1.5 text-right">
-                      {isAdmin ? (
+                    {isAdmin ? (
+                      <div className="relative z-20 whitespace-nowrap px-2 py-1.5 text-right">
                         <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             type="button"
@@ -373,10 +464,8 @@ export function PurchaseDetailPage() {
                             </button>
                           ) : null}
                         </div>
-                      ) : (
-                        <span className="text-ink-300">—</span>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
 
                     {sold ? (
                       <div
@@ -384,10 +473,15 @@ export function PurchaseDetailPage() {
                         className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
                       >
                         <span
-                          className="select-none whitespace-nowrap rounded border border-rose-500/45 bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase tracking-[0.35em] text-rose-500/75 shadow-sm dark:border-rose-400/40 dark:!bg-rose-500/15 dark:!text-rose-300/80 sm:text-xs"
+                          className={clsx(
+                            "select-none whitespace-nowrap rounded border bg-white/55 px-4 py-0.5 text-[11px] font-black uppercase shadow-sm sm:text-xs",
+                            returned
+                              ? "border-amber-500/50 tracking-[0.2em] text-amber-600/80 dark:border-amber-400/40 dark:!bg-amber-500/15 dark:!text-amber-300/80"
+                              : "border-rose-500/45 tracking-[0.35em] text-rose-500/75 dark:border-rose-400/40 dark:!bg-rose-500/15 dark:!text-rose-300/80",
+                          )}
                           style={{ transform: "rotate(-12deg)" }}
                         >
-                          Sold
+                          {returned ? "Returned" : "Sold"}
                         </span>
                       </div>
                     ) : null}
@@ -404,85 +498,29 @@ export function PurchaseDetailPage() {
 
       <AnimatePresence>
         {isAdmin && pendingDelete ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => !deleting && setPendingDelete(null)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-purchase-unit-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift dark:border-ink-100 dark:bg-surface-elevated"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
-                <h2
-                  id="delete-purchase-unit-title"
-                  className="mt-0.5 font-display text-xl font-semibold text-ink-900"
-                >
-                  Delete {pendingDelete.mobileName}?
-                </h2>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-xl p-2 text-ink-400 transition hover:bg-ink-50 hover:text-ink-700"
-                  onClick={() => !deleting && setPendingDelete(null)}
-                  aria-label="Close"
-                  disabled={deleting}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
-                <p>
-                  This will permanently remove{" "}
-                  <span className="font-semibold text-ink-800">
-                    {pendingDelete.mobileName}
-                  </span>{" "}
-                  (
-                  <span className="font-mono text-ink-800">
-                    {formatStockUnitId(pendingDelete)}
-                  </span>
-                  ) from this purchase and from stock.
-                </p>
-                {purchase.items.length === 1 ? (
-                  <p>This is the only phone in the purchase, so the purchase will also be removed.</p>
-                ) : null}
-              </div>
-
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
-
-              <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setPendingDelete(null)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => void confirmDelete()}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <DangerConfirmModal
+            title="Delete this phone?"
+            subtitle={
+              <>
+                {pendingDelete.mobileName} ·{" "}
+                <span className="font-mono">
+                  {formatStockUnitId(pendingDelete)}
+                </span>
+              </>
+            }
+            points={[
+              "The phone is removed from this purchase and from stock.",
+              ...(purchase.items.length === 1
+                ? ["It's the only phone in the purchase, so the purchase is removed too."]
+                : []),
+            ]}
+            undoDays={RECYCLE_BIN_DAYS}
+            cancelLabel="Keep phone"
+            working={deleting}
+            error={deleteError}
+            onCancel={() => !deleting && setPendingDelete(null)}
+            onConfirm={() => void confirmDelete()}
+          />
         ) : null}
       </AnimatePresence>
 
@@ -519,6 +557,7 @@ export function PurchaseDetailPage() {
                               stockItem: {
                                 ...row.stockItem,
                                 mobileName: updated.mobileName,
+                                condition: updated.condition,
                                 purchasePrice: updated.purchasePrice,
                                 imei: updated.imei,
                                 serialNumber: updated.serialNumber,

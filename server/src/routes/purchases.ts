@@ -6,6 +6,14 @@ import { upsertSupplierByName } from "../services/suppliers";
 import { upsertPhoneModel } from "../services/phoneModels";
 import { requireAdmin } from "../middleware/auth";
 import { setPurchaseCondition } from "../services/fixPurchaseCondition";
+import { retireStockImei } from "../services/stockSync";
+import { format } from "date-fns";
+import { applyPendingReturnCredits } from "../services/productReturns";
+import {
+  paymentAtPurchaseError,
+  paymentAtPurchaseSchema,
+  recordPaymentAtPurchase,
+} from "../services/purchasePayment";
 
 export const purchasesRouter = Router();
 
@@ -73,6 +81,8 @@ const createPurchaseSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
   purchaseDate: z.string().trim().optional().nullable(),
   items: z.array(purchaseItemSchema).min(1, "Add at least one mobile"),
+  /** Paid while entering the purchase (admin only). Omit = unpaid. */
+  payment: paymentAtPurchaseSchema.optional().nullable(),
 });
 
 purchasesRouter.get("/", async (req, res, next) => {
@@ -134,6 +144,12 @@ purchasesRouter.get("/:id", async (req, res, next) => {
             stockItem: {
               select: {
                 ...stockItemSelect,
+                productReturn: {
+                  select: { createdAt: true, note: true, invoiceNumber: true, billId: true },
+                },
+                replacementFor: {
+                  select: { invoiceNumber: true, billId: true, customerName: true },
+                },
                 billItems: {
                   orderBy: { bill: { billDate: "desc" } },
                   take: 1,
@@ -167,14 +183,30 @@ purchasesRouter.get("/:id", async (req, res, next) => {
         items: purchase.items.map((item) => {
           const saleLine = item.stockItem.billItems[0];
           const sale = saleLine?.bill;
-          const { billItems: _billItems, ...stockItem } = item.stockItem;
+          const {
+            billItems: _billItems,
+            productReturn,
+            replacementFor,
+            ...stockItem
+          } = item.stockItem;
           return {
             ...item,
             stockItem: {
               ...stockItem,
-              soldBillId: sale?.id ?? null,
-              soldInvoiceNumber: sale?.invoiceNumber ?? null,
-              soldCustomerName: sale?.customerName ?? null,
+              // Given to a customer as a replacement (no bill line of its own).
+              soldBillId: sale?.id ?? replacementFor?.billId ?? null,
+              soldInvoiceNumber: sale?.invoiceNumber ?? replacementFor?.invoiceNumber ?? null,
+              soldCustomerName: sale?.customerName ?? replacementFor?.customerName ?? null,
+              givenAsReplacement: Boolean(replacementFor),
+              // Sent back to the supplier (customer got a replacement / refund).
+              returned: productReturn
+                ? {
+                    createdAt: productReturn.createdAt.toISOString(),
+                    note: productReturn.note,
+                    invoiceNumber: productReturn.invoiceNumber,
+                    billId: productReturn.billId,
+                  }
+                : null,
               // Selling price only for admins (staff never receive it).
               soldPrice: isAdmin
                 ? saleLine != null
@@ -203,6 +235,14 @@ purchasesRouter.post("/", async (req, res, next) => {
     }
 
     const data = parsed.data;
+    if (
+      data.payment &&
+      data.payment.mode !== "UNPAID" &&
+      req.user?.role !== "ADMIN"
+    ) {
+      res.status(403).json({ error: "Only an admin can record a payment" });
+      return;
+    }
     const units = data.items.map((item) => ({
       imei: cleanId(item.imei) || null,
       serialNumber: cleanId(item.serialNumber) || null,
@@ -223,26 +263,43 @@ purchasesRouter.post("/", async (req, res, next) => {
       return;
     }
 
+    // Only IMEIs/serials still in stock block a new purchase. A sold phone can be
+    // bought back: its old row keeps its history under a retired IMEI (same
+    // as a re-exchange in stockSync).
+    const soldImeiOwners: Array<{ id: string; imei: string }> = [];
     if (imeis.length) {
       const existingImei = await prisma.stockItem.findMany({
         where: { imei: { in: imeis } },
-        select: { imei: true },
+        select: { id: true, imei: true, status: true },
       });
-      if (existingImei.length) {
+      const inStock = existingImei.filter((e) => e.status === "AVAILABLE");
+      if (inStock.length) {
         res.status(409).json({
-          error: `IMEI already in stock: ${existingImei.map((e) => e.imei).join(", ")}`,
+          error: `IMEI already in stock: ${inStock.map((e) => e.imei).join(", ")}`,
         });
         return;
       }
+      for (const e of existingImei) {
+        if (e.imei) soldImeiOwners.push({ id: e.id, imei: e.imei });
+      }
     }
+    const soldSerialOwners: Array<{ id: string; serialNumber: string }> = [];
     if (serials.length) {
       const existingSerial = await prisma.stockItem.findMany({
         where: { serialNumber: { in: serials } },
-        select: { serialNumber: true },
+        select: { id: true, serialNumber: true, status: true },
       });
-      if (existingSerial.length) {
+      for (const e of existingSerial) {
+        if (e.status !== "AVAILABLE" && e.serialNumber) {
+          soldSerialOwners.push({ id: e.id, serialNumber: e.serialNumber });
+        }
+      }
+      const inStockSerials = existingSerial.filter(
+        (e) => e.status === "AVAILABLE",
+      );
+      if (inStockSerials.length) {
         res.status(409).json({
-          error: `Serial already in stock: ${existingSerial
+          error: `Serial already in stock: ${inStockSerials
             .map((e) => e.serialNumber)
             .join(", ")}`,
         });
@@ -276,8 +333,26 @@ purchasesRouter.post("/", async (req, res, next) => {
     const totalAmount = round2(
       data.items.reduce((sum, item) => sum + item.purchasePrice, 0),
     );
+    const paymentError = paymentAtPurchaseError(data.payment, totalAmount);
+    if (paymentError) {
+      res.status(400).json({ error: paymentError });
+      return;
+    }
 
     const purchase = await prisma.$transaction(async (tx) => {
+      for (const owner of soldImeiOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { imei: retireStockImei(owner.imei, owner.id) },
+        });
+      }
+      for (const owner of soldSerialOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { serialNumber: retireStockImei(owner.serialNumber, owner.id) },
+        });
+      }
+
       const created = await tx.purchase.create({
         data: {
           supplierId: supplier!.id,
@@ -325,6 +400,10 @@ purchasesRouter.post("/", async (req, res, next) => {
         });
         stockItems.push(stock);
       }
+
+      await recordPaymentAtPurchase(tx, created, data.payment);
+      // Supplier credit from returned products clears what's left unpaid.
+      await applyPendingReturnCredits(tx, created.supplierId);
 
       return tx.purchase.findUniqueOrThrow({
         where: { id: created.id },
@@ -399,8 +478,19 @@ purchasesRouter.patch("/:id/condition", requireAdmin, async (req, res, next) => 
   }
 });
 
-purchasesRouter.post("/:id/mark-paid", async (req, res, next) => {
+const markPaidSchema = z.object({
+  /** Omit to mark the whole purchase paid; otherwise a part payment. */
+  amount: z.number().positive().optional(),
+});
+
+purchasesRouter.post("/:id/mark-paid", requireAdmin, async (req, res, next) => {
   try {
+    const parsed = markPaidSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Enter a valid amount" });
+      return;
+    }
+
     const purchase = await prisma.purchase.findUnique({
       where: { id: req.params.id },
       include: {
@@ -417,13 +507,42 @@ purchasesRouter.post("/:id/mark-paid", async (req, res, next) => {
       return;
     }
 
-    const updated = await prisma.purchase.update({
-      where: { id: purchase.id },
-      data: { paidAt: new Date() },
-      include: {
-        supplier: true,
-        items: { include: { stockItem: true } },
-      },
+    const total = purchase.totalAmount || 0;
+    const alreadyPaid = Math.min(purchase.paidAmount || 0, total);
+    const remaining = Math.round((total - alreadyPaid) * 100) / 100;
+    const amount = parsed.data.amount ?? remaining;
+    if (amount > remaining + 0.005) {
+      res.status(400).json({
+        error: `Amount is more than the ₹${remaining.toLocaleString("en-IN")} left to pay`,
+      });
+      return;
+    }
+    const newPaid = Math.round((alreadyPaid + amount) * 100) / 100;
+    const fullyPaid = newPaid >= total - 0.005;
+
+    const paidNow = Math.round((newPaid - alreadyPaid) * 100) / 100;
+    const updated = await prisma.$transaction(async (tx) => {
+      if (paidNow > 0) {
+        // Dated record of this payment, for the supplier statement.
+        await tx.supplierPayment.create({
+          data: {
+            supplierId: purchase.supplierId,
+            amount: paidNow,
+            method: "na",
+            note: `Against purchase of ${format(purchase.purchaseDate, "dd MMM yyyy")}`,
+          },
+        });
+      }
+      return tx.purchase.update({
+        where: { id: purchase.id },
+        data: fullyPaid
+          ? { paidAt: new Date(), paidAmount: total }
+          : { paidAmount: newPaid },
+        include: {
+          supplier: true,
+          items: { include: { stockItem: true } },
+        },
+      });
     });
 
     res.json({ data: updated });

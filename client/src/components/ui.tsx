@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { meltLoader } from "./LoaderReveal";
 
 export function BackLink({
   to,
@@ -80,35 +81,31 @@ export function BackButton({
   );
 }
 
+/**
+ * Compact page title: icon tile + title on one row, optional action on the
+ * right (buttons inside are shrunk via .page-header-action), so content
+ * starts high on a phone.
+ */
 export function PageHeader({
-  eyebrow,
+  icon: Icon,
   title,
-  description,
   action,
 }: {
-  eyebrow?: string;
+  icon?: ComponentType<{ className?: string }>;
   title: string;
-  description?: string;
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        {eyebrow ? (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-tide-600">
-            {eyebrow}
-          </p>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <h1 className="flex min-w-0 items-center gap-2.5 font-display text-[22px] font-bold tracking-tight text-ink-900 sm:text-2xl">
+        {Icon ? (
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-tide-100 text-tide-600 dark:bg-tide-100/30 dark:text-tide-400">
+            <Icon className="h-[18px] w-[18px]" />
+          </span>
         ) : null}
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
-          {title}
-        </h1>
-        {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-500 sm:text-base">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {action}
+        <span className="truncate">{title}</span>
+      </h1>
+      {action ? <div className="page-header-action">{action}</div> : null}
     </div>
   );
 }
@@ -184,10 +181,33 @@ export function EmptyState({
 }
 
 export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  // When the data arrives the ring fades and the content rises in (meltLoader).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const shownAt = performance.now();
+    // Only when it was really seen (not a flash, or React's dev re-mount).
+    return () => {
+      if (performance.now() - shownAt > 150) meltLoader(el);
+    };
+  }, []);
   return (
-    <div className="glass-panel flex items-center justify-center gap-3 px-6 py-16 text-sm text-ink-500">
-      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-tide-500" />
-      {label}
+    <div
+      ref={ref}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="loader-wrap flex min-h-[42vh] w-full flex-col items-center justify-center gap-4 py-10"
+    >
+      <span className="loader-ring" aria-hidden />
+      <span className="text-[13.5px] font-semibold text-ink-500">
+        {label.replace(/…$/, "")}
+        <span className="loader-dots" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </span>
+      </span>
     </div>
   );
 }

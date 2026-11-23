@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -10,7 +10,9 @@ import {
   Package,
   ReceiptText,
   Sun,
+  Trash2,
   Truck,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -20,6 +22,9 @@ import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
 import { BRAND_NAME, BrandIcon } from "./Brand";
 
+const menuItemClass =
+  "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-700 transition hover:bg-ink-50 hover:text-ink-900 focus-visible:bg-ink-50 focus-visible:outline-none dark:text-ink-100 dark:hover:bg-white/5";
+
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -27,6 +32,33 @@ export function AppShell() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountName = user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff");
+  const location = useLocation();
+
+  // Account menu: close on outside click, Escape, or when the page changes.
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);
@@ -71,7 +103,10 @@ export function AppShell() {
     { to: "/dues", label: "Dues", icon: Wallet },
     { to: "/stock", label: "Stock", icon: Package },
     { to: "/suppliers", label: "Suppliers", icon: Truck },
-    ...(isAdmin ? [{ to: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
+    // Staff get their own Analytics (no cost / profit) where admins have theirs.
+    isAdmin
+      ? { to: "/analytics", label: "Analytics", icon: BarChart3 }
+      : { to: "/staff-analytics", label: "Analytics", icon: BarChart3 },
   ];
 
   function onMainNavClick() {
@@ -85,17 +120,19 @@ export function AppShell() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden">
+    // Pinned to the visible viewport: on iOS, 100vh (h-screen) is taller than the
+    // screen, which let the whole page shift up under the fixed header.
+    <div className="fixed inset-0 flex flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-24 top-16 h-72 w-72 rounded-full bg-tide-400/20 blur-3xl animate-float" />
         <div className="absolute -right-16 top-40 h-80 w-80 rounded-full bg-ink-900/10 blur-3xl dark:bg-tide-400/10" />
       </div>
 
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/50 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-ink-100 bg-white pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
         <div
           className={clsx(
             "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",
-            isAdmin ? "pr-[10.5rem] sm:pr-48" : "pr-[7.25rem] sm:pr-36",
+            "pr-16 sm:pr-20",
           )}
         >
           <Link
@@ -139,46 +176,117 @@ export function AppShell() {
           </nav>
         </div>
 
-        <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 sm:right-6 sm:gap-2">
+        {/* Account circle: opens Dark mode / Restore data / Recycle bin / Logout. */}
+        <div
+          ref={accountMenuRef}
+          className="absolute right-3 top-1/2 -translate-y-1/2 sm:right-6"
+        >
           <button
             type="button"
-            className="btn-secondary px-2.5 py-2 sm:px-3"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            aria-label={
-              theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
-            }
-          >
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
+            className={clsx(
+              "grid h-11 w-11 place-items-center rounded-full bg-ink-900 font-display text-base font-semibold text-white shadow-soft ring-offset-2 transition hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:bg-tide-400 dark:text-ink-50 dark:ring-offset-surface",
+              accountMenuOpen && "ring-2 ring-tide-400",
             )}
-          </button>
-          {isAdmin ? (
-            <Link
-              to="/backup"
-              onClick={onMainNavClick}
-              title="Restore data"
-              aria-label="Restore data"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-100/90 bg-white/80 text-center text-[9px] font-semibold leading-[1.05] text-ink-700 shadow-soft transition hover:border-tide-300 hover:bg-tide-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:border-white/10 dark:bg-surface-muted/80 dark:text-ink-100 dark:hover:bg-tide-400/15"
-            >
-              <span className="px-0.5">
-                Restore
-                <br />
-                Data
-              </span>
-            </Link>
-          ) : null}
-          <button
-            type="button"
-            className="btn-secondary px-3 py-2"
-            onClick={() => setShowLogoutConfirm(true)}
-            title="Log out"
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+            aria-label="Account options"
+            title="Account options"
+            onClick={() => setAccountMenuOpen((open) => !open)}
           >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Logout</span>
+            {accountName.slice(0, 1).toUpperCase()}
           </button>
+
+          <AnimatePresence>
+            {accountMenuOpen ? (
+              <motion.div
+                role="menu"
+                aria-label="Account"
+                className="absolute right-0 top-[calc(100%+0.5rem)] w-60 overflow-hidden rounded-2xl border border-ink-100 bg-white p-1.5 shadow-lift dark:border-white/10 dark:bg-surface-elevated"
+                initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+              >
+                <div className="mb-1 border-b border-ink-100 px-3 pb-2.5 pt-2 dark:border-white/10">
+                  <p className="truncate text-sm font-semibold text-ink-900">
+                    {accountName}
+                  </p>
+                  <p className="truncate text-xs text-ink-500">
+                    {user?.phone || (isAdmin ? "Admin" : "Staff")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItemClass}
+                  onClick={() => {
+                    toggleTheme();
+                    setAccountMenuOpen(false);
+                  }}
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  {theme === "dark" ? "Light mode" : "Dark mode"}
+                </button>
+                {isAdmin ? (
+                  <Link
+                    to="/users"
+                    role="menuitem"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onMainNavClick();
+                      setAccountMenuOpen(false);
+                    }}
+                  >
+                    <Users className="h-4 w-4" />
+                    Manage users
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <Link
+                    to="/backup"
+                    role="menuitem"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onMainNavClick();
+                      setAccountMenuOpen(false);
+                    }}
+                  >
+                    <Package className="h-4 w-4" />
+                    Restore data
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <Link
+                    to="/recycle-bin"
+                    role="menuitem"
+                    className={clsx(
+                      menuItemClass,
+                      "!text-rose-600 hover:!bg-rose-50 dark:!text-rose-400 dark:hover:!bg-rose-500/10",
+                    )}
+                    onClick={() => {
+                      onMainNavClick();
+                      setAccountMenuOpen(false);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Recycle bin
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuItemClass}
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setShowLogoutConfirm(true);
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
 
         {!isOnline ? (
@@ -196,10 +304,11 @@ export function AppShell() {
       <main
         ref={mainRef}
         className={clsx(
-          "relative mx-auto flex-1 w-full max-w-6xl overflow-y-auto scroll-pt-28 px-4 pb-28 sm:px-6 sm:scroll-pt-32 sm:pb-8",
+          "relative mx-auto min-h-0 flex-1 w-full max-w-6xl overflow-y-auto overscroll-y-contain scroll-pt-28 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:scroll-pt-32 sm:pb-8",
+          // Header is ~69px tall: leave a small gap under it (+2rem for the Offline strip).
           isOnline
-            ? "pt-[6.5rem] sm:pt-[6.75rem]"
-            : "pt-[8.5rem] sm:pt-[8.75rem]",
+            ? "pt-[calc(5.25rem+env(safe-area-inset-top))] sm:pt-[calc(5.75rem+env(safe-area-inset-top))]"
+            : "pt-[calc(7.25rem+env(safe-area-inset-top))] sm:pt-[calc(7.75rem+env(safe-area-inset-top))]",
         )}
       >
         <motion.div
@@ -211,7 +320,7 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
+      <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
         <div
           className={clsx(
             "mx-auto grid max-w-lg gap-1",
@@ -247,7 +356,6 @@ export function AppShell() {
           ))}
         </div>
       </nav>
-      <div className="h-20 md:hidden" />
 
       <AnimatePresence>
         {showScrollToTop ? (
@@ -258,7 +366,7 @@ export function AppShell() {
             exit={{ opacity: 0, scale: 0.72, y: 16 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6"
+            className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-ink-900 text-white shadow-lift transition-[transform,background-color,box-shadow] duration-250 ease-out hover:scale-105 hover:bg-ink-800 dark:border-white/10 dark:bg-tide-400 dark:text-ink-900 md:bottom-6 [body.has-fab_&]:bottom-[10.5rem] md:[body.has-fab_&]:bottom-6"
             aria-label="Scroll to top"
             title="Scroll to top"
           >

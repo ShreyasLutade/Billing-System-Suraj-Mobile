@@ -8,6 +8,7 @@ import {
   subWeeks,
 } from "date-fns";
 import { prisma } from "../lib/prisma";
+import { endOfDayIST, istDateString } from "../lib/ist";
 import {
   getPeriodRange,
   isActivityPeriod,
@@ -18,7 +19,11 @@ import {
   type ActivityPeriod,
   type PeriodRange,
 } from "../lib/period";
-import { EXCHANGE_NOTE_PREFIX } from "../services/stockSync";
+import { EXCHANGE_NOTE_PREFIX, RETURN_NOTE_PREFIX } from "../services/stockSync";
+import {
+  buildCustomerPayoutsPdf,
+  loadCustomerPayouts,
+} from "../services/customerPayouts";
 
 export const analyticsRouter = Router();
 
@@ -76,7 +81,41 @@ type BillRow = {
   isExchange?: boolean;
   exchangeValue?: number | null;
   items: BillItemRow[];
+  /** Dues paid later. Settling a due also adds it to the bill's cash /
+   *  online / card, so these are taken back out to get what was paid at sale. */
+  duePayments?: Array<{ amount: number; method: string; chargePart?: number }>;
 };
+
+type PayMethod = "cash" | "online" | "card";
+
+/** A due paid in the period: money received that day, for an older (or same-day) bill. */
+type DueCollection = {
+  id: string;
+  billId: string;
+  invoiceNumber: string;
+  customerName: string;
+  billDate: Date;
+  billTotal: number;
+  paidAt: Date;
+  method: PayMethod;
+  amount: number;
+};
+
+/** Cash / online / card paid when the bill was made (without later due payments). */
+function paidAtSale(bill: BillRow) {
+  const later = { cash: 0, online: 0, card: 0 };
+  for (const payment of bill.duePayments ?? []) {
+    if (payment.method === "cash" || payment.method === "online" || payment.method === "card") {
+      // Only the part paid against the bill went on its cash / online / card.
+      later[payment.method] += Number(payment.amount || 0) - Number(payment.chargePart || 0);
+    }
+  }
+  return {
+    cash: round2(Math.max(Number(bill.cashAmount || 0) - later.cash, 0)),
+    online: round2(Math.max(Number(bill.onlineAmount || 0) - later.online, 0)),
+    card: round2(Math.max(Number(bill.cardAmount || 0) - later.card, 0)),
+  };
+}
 
 function isStockMobile(item: BillItemRow) {
   return Boolean(item.stockItemId || item.stockItem);
@@ -110,7 +149,7 @@ function splitBillItems(items: BillItemRow[]) {
   };
 }
 
-function summarizeBills(bills: BillRow[]) {
+function summarizeBills(bills: BillRow[], collections: DueCollection[] = []) {
   const summary = bills.reduce(
     (acc, bill) => {
       const finance =
@@ -118,11 +157,12 @@ function summarizeBills(bills: BillRow[]) {
       const payable = bill.payableAmount || bill.grandTotal;
       const companyDiscount = Number(bill.companyDiscount || 0);
       const split = splitBillItems(bill.items);
+      const atSale = paidAtSale(bill);
       acc.sales += split.mobileSales;
       acc.payable += payable;
-      acc.cash += bill.cashAmount;
-      acc.online += bill.onlineAmount;
-      acc.card += bill.cardAmount;
+      acc.cash += atSale.cash;
+      acc.online += atSale.online;
+      acc.card += atSale.card;
       acc.finance += finance;
       acc.due += bill.dueAmount;
       acc.cost += split.cost;
@@ -149,6 +189,11 @@ function summarizeBills(bills: BillRow[]) {
       bills: 0,
     },
   );
+
+  // Dues received in the period count on the day they were paid.
+  for (const collection of collections) {
+    summary[collection.method] += collection.amount;
+  }
 
   const mixTotal =
     summary.cash +
@@ -184,9 +229,29 @@ function summarizeBills(bills: BillRow[]) {
   };
 }
 
-function mapPeriodBills(bills: BillRow[]) {
+/** A row in the period's bills list: a sale, or a replacement / return. */
+type PeriodBillRow = {
+  /** Bill to open. */
+  id: string;
+  /** Unique row key (return entries share their bill's id). */
+  entryId: string;
+  kind: "SALE" | "REPLACED" | "RETURNED";
+  refundMethod?: "cash" | "online";
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone: string;
+  billDate: string;
+  productLabel: string;
+  costPrice: number;
+  sellingPrice: number;
+  companyDiscount: number;
+  exchangeValue: number;
+  profit: number;
+};
+
+function mapPeriodBills(bills: BillRow[]): PeriodBillRow[] {
   return bills
-    .map((bill) => {
+    .map((bill): PeriodBillRow | null => {
       const split = splitBillItems(bill.items);
       if (split.mobileSales <= 0 && split.cost <= 0) return null;
       const companyDiscount = round2(bill.companyDiscount || 0);
@@ -204,6 +269,8 @@ function mapPeriodBills(bills: BillRow[]) {
 
       return {
         id: bill.id,
+        entryId: bill.id,
+        kind: "SALE",
         invoiceNumber: bill.invoiceNumber,
         customerName: bill.customerName,
         customerPhone: bill.customerPhone,
@@ -216,7 +283,7 @@ function mapPeriodBills(bills: BillRow[]) {
         profit: round2(sellingPrice - split.cost),
       };
     })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+    .filter((row): row is PeriodBillRow => Boolean(row));
 }
 
 function financeLabel(bill: BillRow) {
@@ -226,25 +293,94 @@ function financeLabel(bill: BillRow) {
     .join(" + ");
 }
 
-function mapPaymentSources(bills: BillRow[]) {
-  return bills.map((bill) => {
+/**
+ * Rows behind the Cash / Online / Card / Finance / Due cards: one per bill
+ * (what was paid at sale) plus one per due received in the period
+ * (`kind: "DUE_RECEIVED"`, dated when it was paid).
+ */
+function mapPaymentSources(bills: BillRow[], collections: DueCollection[] = []) {
+  const sales = bills.map((bill) => {
     const finance =
       Number(bill.financeAmount || 0) + Number(bill.financeAmount2 || 0);
+    const atSale = paidAtSale(bill);
     return {
       id: bill.id,
+      entryId: bill.id,
+      kind: "SALE" as const,
       invoiceNumber: bill.invoiceNumber,
       customerName: bill.customerName,
       billDate: bill.billDate.toISOString(),
+      paidAt: null as string | null,
       billTotal: round2(bill.payableAmount || bill.grandTotal),
-      cashAmount: round2(bill.cashAmount || 0),
-      onlineAmount: round2(bill.onlineAmount || 0),
-      cardAmount: round2(bill.cardAmount || 0),
+      cashAmount: atSale.cash,
+      onlineAmount: atSale.online,
+      cardAmount: atSale.card,
       financeAmount: round2(finance),
       financeLabel: financeLabel(bill) || null,
       dueAmount: round2(bill.dueAmount || 0),
       dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
     };
   });
+  const received = collections.map((c) => ({
+    id: c.billId,
+    entryId: c.id,
+    kind: "DUE_RECEIVED" as const,
+    invoiceNumber: c.invoiceNumber,
+    customerName: c.customerName,
+    billDate: c.billDate.toISOString(),
+    paidAt: c.paidAt.toISOString(),
+    billTotal: c.billTotal,
+    cashAmount: c.method === "cash" ? c.amount : 0,
+    onlineAmount: c.method === "online" ? c.amount : 0,
+    cardAmount: c.method === "card" ? c.amount : 0,
+    financeAmount: 0,
+    financeLabel: null,
+    dueAmount: 0,
+    dueDate: null,
+  }));
+  return [...sales, ...received];
+}
+
+/** Dues paid in the period by cash / online / card (shop bills only). */
+async function loadDueCollections(
+  paidAtFilter: ReturnType<typeof toDateFilter>,
+): Promise<DueCollection[]> {
+  const rows = await prisma.duePayment.findMany({
+    where: {
+      method: { in: ["cash", "online", "card"] },
+      amount: { gt: 0 },
+      bill: { withGst: false, noPurchase: false },
+      ...(paidAtFilter ? { paidAt: paidAtFilter } : {}),
+    },
+    orderBy: { paidAt: "desc" },
+    select: {
+      id: true,
+      amount: true,
+      method: true,
+      paidAt: true,
+      bill: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          customerName: true,
+          billDate: true,
+          payableAmount: true,
+          grandTotal: true,
+        },
+      },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    billId: row.bill.id,
+    invoiceNumber: row.bill.invoiceNumber,
+    customerName: row.bill.customerName,
+    billDate: row.bill.billDate,
+    billTotal: round2(row.bill.payableAmount || row.bill.grandTotal),
+    paidAt: row.paidAt,
+    method: row.method as PayMethod,
+    amount: round2(row.amount),
+  }));
 }
 
 async function loadPeriodBills(
@@ -253,6 +389,7 @@ async function loadPeriodBills(
   return prisma.bill.findMany({
     where: {
       withGst: false,
+      noPurchase: false,
       ...(billDateFilter ? { billDate: billDateFilter } : {}),
     },
     orderBy: [{ billDate: "desc" }, { createdAt: "desc" }],
@@ -285,22 +422,217 @@ async function loadPeriodBills(
           stockItem: { select: { purchasePrice: true } },
         },
       },
+      duePayments: { select: { amount: true, method: true, chargePart: true } },
     },
   });
+}
+
+/**
+ * Replace / Return entries made in the period (by the day they were made).
+ *
+ * Return: the customer got `refundAmount` back and the unit went to the
+ * supplier, who credits its cost → revenue −refund, profit −refund +cost.
+ * Replace: a swap — revenue and profit don't change; listed for the record.
+ * Entries from before Replace / Return existed (kind null) change nothing.
+ */
+async function loadReturns(dateFilter: ReturnType<typeof toDateFilter>) {
+  const rows = await prisma.productReturn.findMany({
+    where: {
+      kind: { not: null },
+      ...(dateFilter ? { createdAt: dateFilter } : {}),
+    },
+    select: {
+      id: true,
+      kind: true,
+      amount: true,
+      refundAmount: true,
+      refundMethod: true,
+      billId: true,
+      invoiceNumber: true,
+      customerName: true,
+      createdAt: true,
+      stockItem: { select: { mobileName: true } },
+      replacementStock: { select: { mobileName: true } },
+    },
+  });
+  // Same scope as the rest of Analytics: shop bills, not GST invoices.
+  const billIds = [...new Set(rows.map((r) => r.billId).filter((id): id is string => Boolean(id)))];
+  const bills = new Map(
+    (
+      await prisma.bill.findMany({
+        where: { id: { in: billIds } },
+        select: { id: true, withGst: true, customerPhone: true },
+      })
+    ).map((b) => [b.id, b]),
+  );
+
+  let revenueAdjust = 0;
+  let profitAdjust = 0;
+  /** One row per return / replacement for the period's bills list. */
+  const billRows: PeriodBillRow[] = [];
+  for (const r of rows) {
+    const bill = r.billId ? bills.get(r.billId) : undefined;
+    if (bill?.withGst) continue;
+    const cost = round2(Number(r.amount || 0));
+    const base = {
+      id: r.billId ?? r.id,
+      entryId: r.id,
+      invoiceNumber: r.invoiceNumber ?? "—",
+      customerName: r.customerName ?? "—",
+      customerPhone: bill?.customerPhone ?? "",
+      billDate: r.createdAt.toISOString(),
+      companyDiscount: 0,
+      exchangeValue: 0,
+    };
+    if (r.kind === "RETURN") {
+      // Refund given; the unit's cost comes back from the supplier.
+      const refund = round2(Number(r.refundAmount || 0));
+      revenueAdjust -= refund;
+      profitAdjust += cost - refund;
+      billRows.push({
+        ...base,
+        kind: "RETURNED",
+        refundMethod: r.refundMethod === "online" ? "online" : "cash",
+        productLabel: r.stockItem.mobileName,
+        costPrice: -cost,
+        sellingPrice: -refund,
+        profit: round2(cost - refund),
+      });
+    } else if (r.kind === "REPLACE") {
+      // A swap: revenue and profit stay as they were. Listed for the record
+      // only (the bills list shows cost / selling / profit blank).
+      billRows.push({
+        ...base,
+        kind: "REPLACED",
+        productLabel: `${r.stockItem.mobileName} → ${r.replacementStock?.mobileName ?? "—"}`,
+        costPrice: 0,
+        sellingPrice: 0,
+        profit: 0,
+      });
+    }
+  }
+  return {
+    billRows,
+    revenueAdjust: round2(revenueAdjust),
+    profitAdjust: round2(profitAdjust),
+  };
+}
+
+/** Phones sold (and Replace / Return entries) in the period, newest first. */
+export async function loadSoldRows(dateFilter: ReturnType<typeof toDateFilter>) {
+  const [bills, returns] = await Promise.all([
+    loadPeriodBills(dateFilter),
+    loadReturns(dateFilter),
+  ]);
+  return [...mapPeriodBills(bills), ...returns.billRows].sort((a, b) =>
+    b.billDate.localeCompare(a.billDate),
+  );
 }
 
 async function analyzePeriod(
   billDateFilter: ReturnType<typeof toDateFilter>,
 ) {
-  const bills = await loadPeriodBills(billDateFilter);
+  const [bills, returns, collections] = await Promise.all([
+    loadPeriodBills(billDateFilter),
+    loadReturns(billDateFilter),
+    loadDueCollections(billDateFilter),
+  ]);
+  const summary = summarizeBills(bills, collections);
+  // Returns / replacements are listed with the bills (newest first).
+  const periodBills = [...mapPeriodBills(bills), ...returns.billRows].sort(
+    (a, b) => b.billDate.localeCompare(a.billDate),
+  );
   return {
-    summary: summarizeBills(bills),
-    periodBills: mapPeriodBills(bills),
-    paymentSources: mapPaymentSources(bills),
+    summary: {
+      ...summary,
+      sales: round2(summary.sales + returns.revenueAdjust),
+      profit: round2(summary.profit + returns.profitAdjust),
+    },
+    periodBills,
+    paymentSources: mapPaymentSources(bills, collections),
   };
 }
 
-async function loadExchangeIntake(
+/**
+ * Mobiles bought from suppliers in the period (by purchase date). Skips
+ * customer exchange/return intakes (own card) and accessories.
+ */
+async function loadPurchaseHistory(
+  purchaseDateFilter: ReturnType<typeof toDateFilter>,
+) {
+  const rows = await prisma.purchaseItem.findMany({
+    where: {
+      stockItem: { kind: "MOBILE" },
+      purchase: {
+        ...(purchaseDateFilter ? { purchaseDate: purchaseDateFilter } : {}),
+        // A plain NOT would also drop purchases with no note (SQL NULL).
+        OR: [
+          { note: null },
+          {
+            NOT: [
+              { note: { startsWith: EXCHANGE_NOTE_PREFIX } },
+              { note: { startsWith: RETURN_NOTE_PREFIX } },
+            ],
+          },
+        ],
+      },
+    },
+    orderBy: [
+      { purchase: { purchaseDate: "desc" } },
+      { purchase: { createdAt: "desc" } },
+    ],
+    select: {
+      purchase: {
+        select: {
+          id: true,
+          purchaseDate: true,
+          supplier: { select: { id: true, name: true } },
+        },
+      },
+      stockItem: {
+        select: {
+          id: true,
+          mobileName: true,
+          color: true,
+          storage: true,
+          ram: true,
+          platform: true,
+          condition: true,
+          imei: true,
+          serialNumber: true,
+          purchasePrice: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  const items = rows.map(({ purchase, stockItem: stock }) => ({
+    id: stock.id,
+    purchaseId: purchase.id,
+    purchaseDate: purchase.purchaseDate.toISOString(),
+    supplierId: purchase.supplier.id,
+    supplierName: purchase.supplier.name,
+    mobileName: stock.mobileName,
+    color: stock.color,
+    storage: stock.storage,
+    ram: stock.ram,
+    platform: stock.platform,
+    condition: stock.condition,
+    imei: stock.imei,
+    serialNumber: stock.serialNumber,
+    price: round2(stock.purchasePrice || 0),
+    status: stock.status,
+  }));
+
+  return {
+    count: items.length,
+    totalValue: round2(items.reduce((sum, item) => sum + item.price, 0)),
+    items,
+  };
+}
+
+export async function loadExchangeIntake(
   purchaseDateFilter: ReturnType<typeof toDateFilter>,
 ) {
   const purchases = await prisma.purchase.findMany({
@@ -414,14 +746,19 @@ function previousComparableRange(
     const day = subDays(now, 2);
     return { from: startOfDay(day), to: endOfDay(day) };
   }
-  if (period === "week" && current.from && current.to) {
+  // This week / month only has data up to today, so compare it with the
+  // same days of the previous week / month (not the whole of it).
+  if (period === "week" && current.from) {
     return {
       from: subWeeks(current.from, 1),
-      to: subWeeks(current.to, 1),
+      to: endOfDay(subWeeks(now, 1)),
     };
   }
-  if (period === "month") {
-    return getPeriodRange("month", subMonths(now, 1));
+  if (period === "month" && current.from) {
+    return {
+      from: subMonths(current.from, 1),
+      to: endOfDay(subMonths(now, 1)),
+    };
   }
   return null;
 }
@@ -463,9 +800,9 @@ analyticsRouter.get("/summary", async (req, res, next) => {
         ).summary;
         const label =
           period === "month"
-            ? "vs last month"
+            ? "vs same days last month"
             : period === "week"
-              ? "vs last week"
+              ? "vs same days last week"
               : "vs prior day";
 
         const mixTotalChangePct = percentChange(
@@ -482,6 +819,7 @@ analyticsRouter.get("/summary", async (req, res, next) => {
     const outstandingRows = await prisma.bill.findMany({
       where: {
         withGst: false,
+        noPurchase: false,
         dueAmount: { gt: 0 },
         dueSettled: false,
       },
@@ -509,6 +847,12 @@ analyticsRouter.get("/summary", async (req, res, next) => {
     });
 
     const exchangeIntake = await loadExchangeIntake(
+      period === "all" ? undefined : billDateFilter,
+    );
+    const purchaseHistory = await loadPurchaseHistory(
+      period === "all" ? undefined : billDateFilter,
+    );
+    const customerPayouts = await loadCustomerPayouts(
       period === "all" ? undefined : billDateFilter,
     );
 
@@ -561,6 +905,14 @@ analyticsRouter.get("/summary", async (req, res, next) => {
           count: exchangeIntake.count,
           value: exchangeIntake.totalValue,
         },
+        purchaseHistory: {
+          count: purchaseHistory.count,
+          value: purchaseHistory.totalValue,
+        },
+        customerPayouts: {
+          count: customerPayouts.count,
+          value: customerPayouts.totalAmount,
+        },
         periodBills,
         paymentSources,
       },
@@ -605,6 +957,205 @@ analyticsRouter.get("/exchanges", async (req, res, next) => {
         items: exchangeIntake.items,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analyticsRouter.get("/purchases", async (req, res, next) => {
+  try {
+    const customFrom = parseDayParam(req.query.from, false);
+    const customTo = parseDayParam(req.query.to, true);
+    const hasCustomRange = Boolean(customFrom || customTo);
+
+    const period: ActivityPeriod | "custom" = hasCustomRange
+      ? "custom"
+      : isActivityPeriod(req.query.period)
+        ? req.query.period
+        : "all";
+
+    const range: PeriodRange = hasCustomRange
+      ? { from: customFrom, to: customTo }
+      : getPeriodRange(period === "custom" ? "all" : period);
+
+    const purchaseDateFilter = toDateFilter(range);
+    const history = await loadPurchaseHistory(
+      period === "all" ? undefined : purchaseDateFilter,
+    );
+
+    res.json({
+      data: {
+        period,
+        periodLabel:
+          period === "custom"
+            ? customPeriodLabel(customFrom, customTo)
+            : periodLabel(period),
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+        count: history.count,
+        totalValue: history.totalValue,
+        items: history.items,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Period from ?period= or ?from=&to=, as the other analytics lists read it. */
+function readPeriodQuery(query: Record<string, unknown>) {
+  const customFrom = parseDayParam(query.from, false);
+  const customTo = parseDayParam(query.to, true);
+  const hasCustomRange = Boolean(customFrom || customTo);
+  const period: ActivityPeriod | "custom" = hasCustomRange
+    ? "custom"
+    : isActivityPeriod(query.period)
+      ? query.period
+      : "all";
+  const range: PeriodRange = hasCustomRange
+    ? { from: customFrom, to: customTo }
+    : getPeriodRange(period === "custom" ? "all" : period);
+  return {
+    period,
+    range,
+    dateFilter: period === "all" ? undefined : toDateFilter(range),
+    label:
+      period === "custom"
+        ? customPeriodLabel(customFrom, customTo)
+        : periodLabel(period),
+  };
+}
+
+/** Money given back to customers (exchange cash return / extra value, return refunds). */
+analyticsRouter.get("/customer-payouts", async (req, res, next) => {
+  try {
+    const { period, range, dateFilter, label } = readPeriodQuery(req.query);
+    const payouts = await loadCustomerPayouts(dateFilter);
+    res.json({
+      data: {
+        period,
+        periodLabel: label,
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+        count: payouts.count,
+        totalAmount: payouts.totalAmount,
+        items: payouts.items,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+analyticsRouter.get("/customer-payouts/pdf", async (req, res, next) => {
+  try {
+    const { dateFilter, label } = readPeriodQuery(req.query);
+    const payouts = await loadCustomerPayouts(dateFilter);
+    const { pdf, filename } = await buildCustomerPayoutsPdf(payouts, label);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+type TrendTotals = {
+  sales: number;
+  profit: number;
+  collected: number;
+  bills: number;
+  phones: number;
+};
+
+function addTotals(into: TrendTotals, add: TrendTotals) {
+  into.sales = round2(into.sales + add.sales);
+  into.profit = round2(into.profit + add.profit);
+  into.collected = round2(into.collected + add.collected);
+  into.bills += add.bills;
+  into.phones += add.phones;
+}
+
+function emptyTotals(): TrendTotals {
+  return { sales: 0, profit: 0, collected: 0, bills: 0, phones: 0 };
+}
+
+/**
+ * Month-by-month (and day-by-day) trend for the last `months` months, by
+ * India date. Same maths as the summary: sales and profit include Replace /
+ * Return adjustments, collected includes dues paid that day.
+ */
+analyticsRouter.get("/monthly", async (req, res, next) => {
+  try {
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const now = new Date();
+    const today = istDateString(now);
+    const [thisYear, thisMonth] = today.split("-").map(Number);
+    const monthKeys: string[] = [];
+    for (let i = months - 1; i >= 0; i -= 1) {
+      const d = new Date(Date.UTC(thisYear, thisMonth - 1 - i, 1));
+      monthKeys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+    }
+    const filter = {
+      gte: new Date(`${monthKeys[0]}-01T00:00:00.000+05:30`),
+      lte: endOfDayIST(now),
+    };
+
+    const [bills, returns, collections] = await Promise.all([
+      loadPeriodBills(filter),
+      loadReturns(filter),
+      loadDueCollections(filter),
+    ]);
+
+    const billsByDay = new Map<string, BillRow[]>();
+    for (const bill of bills) {
+      const day = istDateString(bill.billDate);
+      billsByDay.set(day, [...(billsByDay.get(day) ?? []), bill]);
+    }
+    const collectionsByDay = new Map<string, DueCollection[]>();
+    for (const row of collections) {
+      const day = istDateString(row.paidAt);
+      collectionsByDay.set(day, [...(collectionsByDay.get(day) ?? []), row]);
+    }
+    const returnsByDay = new Map<string, { sales: number; profit: number }>();
+    for (const row of returns.billRows) {
+      if (row.kind !== "RETURNED") continue;
+      const day = istDateString(new Date(row.billDate));
+      const acc = returnsByDay.get(day) ?? { sales: 0, profit: 0 };
+      acc.sales += row.sellingPrice;
+      acc.profit += row.profit;
+      returnsByDay.set(day, acc);
+    }
+
+    const result = monthKeys.map((key) => {
+      const [year, month] = key.split("-").map(Number);
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const total = emptyTotals();
+      const days: Array<TrendTotals & { date: string }> = [];
+      for (let d = 1; d <= daysInMonth; d += 1) {
+        const date = `${key}-${String(d).padStart(2, "0")}`;
+        if (date > today) break;
+        const dayBills = billsByDay.get(date) ?? [];
+        const dayCollections = collectionsByDay.get(date) ?? [];
+        const adjust = returnsByDay.get(date) ?? { sales: 0, profit: 0 };
+        const summary = summarizeBills(dayBills, dayCollections);
+        const totals: TrendTotals = {
+          sales: round2(summary.sales + adjust.sales),
+          profit: round2(summary.profit + adjust.profit),
+          collected: summary.collected,
+          bills: summary.bills,
+          phones: dayBills.reduce(
+            (sum, bill) => sum + bill.items.filter(isStockMobile).length,
+            0,
+          ),
+        };
+        addTotals(total, totals);
+        days.push({ date, ...totals });
+      }
+      return { key, ...total, days };
+    });
+
+    res.json({ data: { today, months: result } });
   } catch (error) {
     next(error);
   }

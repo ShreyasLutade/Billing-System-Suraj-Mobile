@@ -19,7 +19,12 @@ import { purchasesRouter } from "./routes/purchases";
 import { phoneModelsRouter } from "./routes/phoneModels";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { startDailyReportScheduler } from "./services/dailyReports";
-import { startSqliteBackupScheduler } from "./services/sqliteBackup";
+import { startRecycleBinPurge } from "./services/recycleBin";
+import { recycleBinRouter } from "./routes/recycleBin";
+import { productReturnsRouter } from "./routes/productReturns";
+import { exchangesRouter } from "./routes/exchanges";
+import { moneyRouter } from "./routes/money";
+import { salesRouter } from "./routes/sales";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
 import { ensurePhoneModelsSeeded } from "./services/phoneModels";
@@ -106,6 +111,11 @@ app.use("/api/purchases", requireAuth, purchasesRouter);
 app.use("/api/phone-models", requireAuth, phoneModelsRouter);
 app.use("/api/dues", requireAuth, duesRouter);
 app.use("/api/reports", requireAuth, requireAdmin, reportsRouter);
+app.use("/api/recycle-bin", requireAuth, requireAdmin, recycleBinRouter);
+app.use("/api/returns", requireAuth, productReturnsRouter);
+app.use("/api/exchanges", requireAuth, exchangesRouter);
+app.use("/api/sales", requireAuth, salesRouter);
+app.use("/api/money", requireAuth, requireAdmin, moneyRouter);
 
 if (!serveClient) {
   app.get("/", (_req, res) => {
@@ -133,10 +143,14 @@ app.use(
     const known =
       message === "FINANCE_COMPANY_NOT_FOUND"
         ? "Selected finance company was not found"
-        : message.startsWith("Unknown argument") ||
-            message.includes("Invalid `prisma")
+        : // Only a missing column / argument means the database is behind
+          // the code; other Prisma errors are not about the schema.
+          message.startsWith("Unknown argument") ||
+            /column .* does not exist|Unknown (field|arg)/i.test(message)
           ? "Database is out of date. Restart the API after schema changes."
-          : null;
+          : message.includes("Invalid `prisma")
+            ? "Something went wrong loading this. Please try again."
+            : null;
     res.status(500).json({
       error: known || "Internal server error",
       ...(process.env.NODE_ENV !== "production" && !known
@@ -247,7 +261,7 @@ async function start() {
     console.warn("[stock] Sold-as-available repair skipped:", error);
   }
   startDailyReportScheduler();
-  startSqliteBackupScheduler();
+  startRecycleBinPurge();
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`Smart Billing API running on http://localhost:${port}`);
     if (serveClient) {

@@ -9,7 +9,8 @@ import {
 import { formatINR } from "../lib/api";
 import { newClientId } from "../lib/id";
 import { formatCapacityLabel } from "../lib/phoneModelSearch";
-import type { PhoneModel } from "../types";
+import type { ExchangeAccessory, PhoneModel } from "../types";
+import { ExchangeAccessoriesPicker } from "./ExchangeAccessoriesPicker";
 
 export type ExchangeDraft = {
   key: string;
@@ -21,6 +22,7 @@ export type ExchangeDraft = {
   imei1: string;
   value: number | "";
   notes: string;
+  accessories: ExchangeAccessory[];
 };
 
 export function blankExchangeItem(): ExchangeDraft {
@@ -34,6 +36,7 @@ export function blankExchangeItem(): ExchangeDraft {
     imei1: "",
     value: "",
     notes: "",
+    accessories: [],
   };
 }
 
@@ -213,19 +216,19 @@ export function ExchangeMobileFields({
         </div>
         <div>
           <label
-            className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-[0.07em] text-[#0E9E76]"
+            className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-[0.07em] text-tide-600"
             htmlFor={`${idPrefix}-value`}
           >
             Exchange value
             <span className="ml-0.5 text-[#B76E00]"> *</span>
           </label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-[#0E9E76]">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-tide-600">
               ₹
             </span>
             <input
               id={`${idPrefix}-value`}
-              className="w-full rounded-[11px] border border-[#BFE9D6] bg-[#E7F8F1] py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-[#12B886] focus:bg-white focus:shadow-[0_0_0_3px_rgba(18,184,134,.15)]"
+              className="w-full rounded-[11px] border border-tide-400/50 bg-tide-100 py-3 pl-[30px] pr-3.5 font-display text-base font-semibold tabular-nums text-ink-900 outline-none transition focus:border-tide-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,168,0,.2)]"
               type="number"
               min={0}
               step="0.01"
@@ -251,6 +254,11 @@ export function ExchangeMobileFields({
         </div>
       </div>
 
+      <ExchangeAccessoriesPicker
+        value={item.accessories}
+        onChange={(accessories) => onChange({ accessories })}
+      />
+
       <div>
         <label className="label" htmlFor={`${idPrefix}-notes`}>
           Notes
@@ -260,7 +268,7 @@ export function ExchangeMobileFields({
           className="field min-h-[70px] resize-y"
           value={item.notes}
           onChange={(e) => onChange({ notes: e.target.value })}
-          placeholder="Optional — screen condition, box, accessories, etc."
+          placeholder="Optional — screen condition, scratches, battery health, etc."
         />
       </div>
     </div>

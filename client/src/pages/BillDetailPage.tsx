@@ -7,9 +7,11 @@ import {
   Check,
   Download,
   History,
+  Lock,
+  PackageCheck,
+  RefreshCcw,
   Pencil,
   Phone,
-  RotateCcw,
   Share2,
   Trash2,
   Undo2,
@@ -19,6 +21,11 @@ import {
 import clsx from "clsx";
 import { SettleDueModal } from "../components/SettleDueModal";
 import { FinanceReceivedConfirmModal } from "../components/FinanceReceivedConfirmModal";
+import {
+  DeleteBillModal,
+  RECYCLE_BIN_DAYS,
+  ReturnToStockConfirmModal,
+} from "../components/RemoveConfirmModals";
 import { BackLink, EmptyState, LoadingBlock } from "../components/ui";
 import { api, formatINR, round2 } from "../lib/api";
 import {
@@ -30,7 +37,20 @@ import {
   type FinanceSlot,
 } from "../lib/financeSlots";
 import { isShareAbort, shareInvoicePdf } from "../lib/shareInvoice";
-import type { Bill, BillPurchaseHistoryItem, DuePayment } from "../types";
+import type {
+  Bill,
+  BillProductReturn,
+  BillPurchaseHistoryItem,
+  DuePayment,
+  ExchangeAccessory,
+  ExchangeAccessoryKey,
+} from "../types";
+import {
+  accessoryIcon,
+  accessoryLabel,
+  joinAccessoryLabels,
+  parseIncludedAccessories,
+} from "../lib/exchangeAccessories";
 import { useAuth } from "../auth/AuthContext";
 import {
   backLabel,
@@ -55,6 +75,22 @@ function formatPhoneDisplay(phone: string) {
   return phone;
 }
 
+/** "Replaced" / "Returned"; older entries made before the choice existed. */
+function returnKindLabel(r: BillProductReturn) {
+  if (r.kind === "REPLACE") return "Replaced";
+  if (r.kind === "RETURN") return "Returned";
+  return "Replaced / Returned";
+}
+
+function returnsBadge(returns: BillProductReturn[]) {
+  const kinds = new Set(returns.map(returnKindLabel));
+  if (kinds.size === 1) {
+    const only = [...kinds][0];
+    return only === "Replaced / Returned" ? "Product replaced / returned" : `Product ${only.toLowerCase()}`;
+  }
+  return "Product replaced / returned";
+}
+
 function createdByLabel(bill: Bill) {
   if (!bill.createdByRole) return null;
   return (
@@ -76,6 +112,7 @@ export function BillDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [removeStep, setRemoveStep] = useState<"delete" | "restock" | null>(null);
   const [markingFinance, setMarkingFinance] = useState(false);
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [showFinanceConfirm, setShowFinanceConfirm] = useState(false);
@@ -103,11 +140,46 @@ export function BillDetailPage() {
     }
   }, [id]);
 
+  async function setAccessoryStatus(
+    itemIndex: number,
+    key: ExchangeAccessoryKey,
+    status: ExchangeAccessory["status"],
+  ) {
+    if (!bill) return;
+    const { data } = await api.setExchangeAccessoryStatus(bill.id, {
+      itemIndex,
+      key,
+      status,
+    });
+    setBill((current) =>
+      current
+        ? {
+            ...current,
+            exchangeItems: current.exchangeItems?.map((item, i) =>
+              i === itemIndex ? { ...item, accessories: data.accessories } : item,
+            ),
+          }
+        : current,
+    );
+  }
+
   useEffect(() => {
     void loadBill();
   }, [loadBill]);
 
-  async function confirmDelete(mode: "delete" | "return" = "delete") {
+  /** Delete / Return to Stock each get their own confirmation first. */
+  function openRemoveStep(step: "delete" | "restock") {
+    setDeleteError(null);
+    setRemoveStep(step);
+  }
+
+  function closeRemoveStep() {
+    if (deleting) return;
+    setRemoveStep(null);
+    setDeleteError(null);
+  }
+
+  async function confirmDelete(mode: "delete" | "restock" = "delete") {
     if (!bill || !isAdmin) return;
     setDeleting(true);
     setDeleteError(null);
@@ -118,8 +190,8 @@ export function BillDetailPage() {
       setDeleteError(
         err instanceof Error
           ? err.message
-          : mode === "return"
-            ? "Failed to return this bill to stock"
+          : mode === "restock"
+            ? "Failed to put these mobiles back in stock"
             : "Failed to delete bill",
       );
     } finally {
@@ -225,7 +297,7 @@ export function BillDetailPage() {
               {bill.invoiceNumber}
             </h1>
             {bill.withGst ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F0FE] px-[11px] py-1 text-xs font-semibold text-[#2563EB]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-[11px] py-1 text-xs font-semibold text-tide-600">
                 GST invoice
               </span>
             ) : fullyPaid ? (
@@ -238,6 +310,12 @@ export function BillDetailPage() {
                 ● {formatINR(bill.dueAmount)} due
               </span>
             )}
+            {(bill.productReturns?.length || 0) > 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-[11px] py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300">
+                <RefreshCcw className="h-[13px] w-[13px]" strokeWidth={2.4} />
+                {returnsBadge(bill.productReturns ?? [])}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1.5 text-[13px] text-[#7A8699]">{meta}</p>
         </div>
@@ -324,7 +402,7 @@ export function BillDetailPage() {
         <div className="min-w-0 space-y-4">
           <section className="bd-card">
             <div className="flex items-center gap-3.5">
-              <div className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] bg-gradient-to-br from-[#12B886] to-[#0E9E76] text-white">
+              <div className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[13px] bg-gradient-to-br from-[#ffe100] to-[#ffa800] text-[#1f1600]">
                 <UserRound className="h-[22px] w-[22px]" strokeWidth={2} />
               </div>
               <div className="min-w-0">
@@ -365,12 +443,33 @@ export function BillDetailPage() {
                   item.warrantyMonths
                     ? `Warranty ${item.warrantyMonths} mo`
                     : null,
+                  item.includedAccessories
+                    ? `Included: ${joinAccessoryLabels(
+                        parseIncludedAccessories(item.includedAccessories),
+                      )}`
+                    : null,
                 ].filter(Boolean);
+                // Every replace / return on this line, oldest first (a
+                // replacement can itself be replaced or returned later).
+                const itemReturns = (bill.productReturns ?? []).filter(
+                  (r) =>
+                    (item.id && r.billItemId === item.id) ||
+                    (item.stockItemId && r.stockItemId === item.stockItemId),
+                );
+                const itemReturn = itemReturns[0];
+                const refunded = itemReturns.reduce(
+                  (sum, r) => sum + (r.kind === "RETURN" ? r.refundAmount : 0),
+                  0,
+                );
 
                 return (
                   <div
                     key={item.id || `${item.productName}-${index}`}
-                    className="flex items-start justify-between gap-4"
+                    className={clsx(
+                      "flex items-start justify-between gap-4",
+                      itemReturn &&
+                        "-mx-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 dark:border-amber-500/30 dark:bg-amber-500/10",
+                    )}
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-[#0E1626]">
@@ -384,9 +483,14 @@ export function BillDetailPage() {
                             NEW
                           </span>
                         ) : null}
+                        {itemReturn ? (
+                          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                            {returnKindLabel(itemReturn)}
+                          </span>
+                        ) : null}
                       </div>
                       {specs ? (
-                        <p className="mt-1 text-[13px] font-medium text-[#0E9E76]">
+                        <p className="mt-1 text-[13px] font-medium text-tide-600">
                           {specs}
                         </p>
                       ) : null}
@@ -400,10 +504,61 @@ export function BillDetailPage() {
                           </span>
                         ))}
                       </p>
+                      {itemReturns.map((r, step) => (
+                        <div key={`${r.stockItemId}-${step}`}>
+                          <p className="mt-1 text-[12.5px] font-medium text-amber-800 dark:text-amber-300">
+                            {step > 0 ? "Then " : ""}
+                            {step > 0 ? returnKindLabel(r).toLowerCase() : returnKindLabel(r)} on{" "}
+                            {format(new Date(r.createdAt), "dd MMM yyyy")}
+                            {r.createdByName ? ` by ${r.createdByName}` : ""}
+                            {r.kind === "RETURN" && r.refundAmount > 0
+                              ? ` · Refunded ${formatINR(r.refundAmount)}${
+                                  r.refundMethod
+                                    ? ` (${r.refundMethod === "online" ? "Online" : "Cash"})`
+                                    : ""
+                                }`
+                              : ""}
+                            {r.note ? ` — ${r.note}` : ""}
+                          </p>
+                          {r.replacement ? (
+                            <div className="mt-2 rounded-lg border border-[#CDEFE0] bg-white/80 px-2.5 py-2 dark:bg-surface">
+                              <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#0E9E76]">
+                                Given instead
+                              </p>
+                              <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[#0E1626]">
+                                {r.replacement.mobileName}
+                                <span className="rounded-md bg-[#E7F8F1] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
+                                  {r.replacement.condition === "USED" ? "OLD" : "NEW"}
+                                </span>
+                              </p>
+                              <p className="text-[12.5px] text-[#7A8699]">
+                                {[
+                                  r.replacement.storage,
+                                  r.replacement.platform === "ANDROID" ? r.replacement.ram : null,
+                                  r.replacement.color,
+                                  r.replacement.imei ? `IMEI ${r.replacement.imei}` : null,
+                                  r.replacement.serialNumber
+                                    ? `Serial ${r.replacement.serialNumber}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
-                    <p className="shrink-0 whitespace-nowrap font-display text-[17px] font-bold tabular-nums text-[#0E1626]">
-                      {formatINR(item.amount || 0)}
-                    </p>
+                    <div className="shrink-0 text-right">
+                      <p className="whitespace-nowrap font-display text-[17px] font-bold tabular-nums text-[#0E1626]">
+                        {formatINR(item.amount || 0)}
+                      </p>
+                      {refunded > 0 ? (
+                        <p className="whitespace-nowrap text-[12.5px] font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                          −{formatINR(refunded)} refunded
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -413,7 +568,7 @@ export function BillDetailPage() {
           {!bill.withGst && bill.isExchange ? (
             <section className="bd-card">
               <div className="mb-4 flex items-center gap-2.5">
-                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#E7F8F1] text-[#0E9E76]">
+                <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-tide-100 text-tide-600">
                   <ArrowLeftRight className="h-[15px] w-[15px]" strokeWidth={2} />
                 </span>
                 <h2 className="font-display text-base font-semibold text-[#0E1626]">
@@ -475,6 +630,14 @@ export function BillDetailPage() {
                         <Kv label="Notes" value={item.notes} full />
                       ) : null}
                     </div>
+                    {"accessories" in item && item.accessories?.length ? (
+                      <ExchangeAccessoryStatus
+                        accessories={item.accessories}
+                        onSetStatus={(key, status) =>
+                          setAccessoryStatus(index, key, status)
+                        }
+                      />
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -773,11 +936,19 @@ export function BillDetailPage() {
 
           {!bill.withGst && hasDue ? (
             <div className="relative overflow-hidden rounded-2xl border border-[#F5E0BC] bg-gradient-to-br from-[#FEF3E2] to-white p-5 shadow-[0_1px_2px_rgba(16,25,40,.04),0_6px_18px_rgba(16,25,40,.05)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#B76E00]">
-                {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
-                  ? "Partial paid"
-                  : "Pending due"}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#B76E00]">
+                  {bill.isPartialPaid || (bill.duePayments?.length ?? 0) > 0
+                    ? "Partial paid"
+                    : "Pending due"}
+                </p>
+                {isAdmin && bill.duePrivate ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-ink-900/[0.07] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-700">
+                    <Lock className="h-3 w-3" strokeWidth={2.6} />
+                    Private
+                  </span>
+                ) : null}
+              </div>
               <p className="mt-2 font-display text-[22px] font-bold text-[#B76E00]">
                 {formatINR(bill.dueAmount)}
               </p>
@@ -791,6 +962,17 @@ export function BillDetailPage() {
                 <DuePaymentHistory
                   payments={bill.duePayments!}
                   borderClass="border-[#F5E0BC]"
+                />
+              ) : null}
+              {isAdmin ? (
+                <DuePrivateToggle
+                  billId={bill.id}
+                  value={Boolean(bill.duePrivate)}
+                  onChange={(duePrivate) =>
+                    setBill((current) =>
+                      current ? { ...current, duePrivate } : current,
+                    )
+                  }
                 />
               ) : null}
               {isAdmin ? (
@@ -881,7 +1063,7 @@ export function BillDetailPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isAdmin && showDeleteConfirm ? (
+        {isAdmin && showDeleteConfirm && !removeStep ? (
           <motion.div
             className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-4 sm:items-center"
             initial={{ opacity: 0 }}
@@ -893,7 +1075,7 @@ export function BillDetailPage() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="delete-bill-title"
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/70 bg-white shadow-lift"
+              className="w-full max-w-md overflow-hidden sm:max-w-lg rounded-3xl border border-white/70 bg-white shadow-lift"
               initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -920,58 +1102,82 @@ export function BillDetailPage() {
               <div className="space-y-2 px-5 py-4 text-sm text-ink-600">
                 {bill.items.some((item) => item.stockItemId) ? (
                   <p>
-                    <span className="font-semibold text-ink-800">Return</span>
-                    {" → "}mobiles go back to second-hand stock (adds a Return
-                    card).
+                    <span className="font-semibold text-ink-800">
+                      Return to Stock
+                    </span>
+                    {" → "}bill removed, mobiles back in stock under their
+                    original supplier, as if never sold (customer changed
+                    their mind).
                   </p>
                 ) : (
                   <p>This bill has no stock mobile to return.</p>
                 )}
                 <p>
                   <span className="font-semibold text-ink-800">Delete</span>
-                  {" → "}invoice removed, mobiles permanently deleted from
-                  stock.
+                  {" → "}invoice removed, mobiles deleted from stock.
+                </p>
+                <p className="text-xs text-ink-500">
+                  Either way you can undo it from the Recycle bin for{" "}
+                  {RECYCLE_BIN_DAYS} days.
                 </p>
               </div>
 
-              {deleteError ? (
-                <p className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">
-                  {deleteError}
-                </p>
-              ) : null}
-
               <div className="flex flex-col-reverse gap-2 border-t border-ink-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => void confirmDelete("delete")}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {deleting ? "Working…" : "Delete"}
-                </button>
                 {bill.items.some((item) => item.stockItemId) ? (
                   <button
                     type="button"
-                    className="btn-primary"
-                    onClick={() => void confirmDelete("return")}
+                    className="btn-secondary whitespace-nowrap !border-ink-900 dark:!border-ink-100"
+                    onClick={() => openRemoveStep("restock")}
                     disabled={deleting}
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    {deleting ? "Working…" : "Return"}
+                    <PackageCheck className="h-4 w-4" />
+                    Return to Stock
                   </button>
-                ) : null}
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-secondary whitespace-nowrap"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-danger whitespace-nowrap"
+                  onClick={() => openRemoveStep("delete")}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
               </div>
             </motion.div>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAdmin && removeStep === "restock" ? (
+          <ReturnToStockConfirmModal
+            key="restock"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("restock")}
+          />
+        ) : null}
+        {isAdmin && removeStep === "delete" ? (
+          <DeleteBillModal
+            key="delete"
+            bill={bill}
+            working={deleting}
+            error={deleteError}
+            onCancel={closeRemoveStep}
+            onConfirm={() => void confirmDelete("delete")}
+          />
         ) : null}
       </AnimatePresence>
     </div>
@@ -1028,8 +1234,18 @@ function PurchaseHistoryCard({
   return (
     <div className="rounded-xl border border-ink-100 bg-ink-50/40 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+        <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink-500">
           {multi ? `Purchase ${index + 1}` : "Stock purchase"}
+          {/* Same tags as the items list above. */}
+          {row.label === "Given as replacement" ? (
+            <span className="rounded-md bg-[#E7F8F1] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
+              Given instead
+            </span>
+          ) : row.label ? (
+            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+              {row.label.startsWith("Returned") ? "Returned" : "Replaced"}
+            </span>
+          ) : null}
         </p>
         {unitId ? (
           <p className="font-mono text-[11px] tabular-nums text-[#7A8699]">
@@ -1051,7 +1267,7 @@ function PurchaseHistoryCard({
             <Link
               to={`/suppliers/${row.supplier.id}`}
               state={fromState(location)}
-              className="text-sm font-semibold text-[#2563EB] underline-offset-2 hover:underline"
+              className="text-sm font-semibold text-tide-600 underline-offset-2 hover:underline"
             >
               {row.supplier.name}
             </Link>
@@ -1095,6 +1311,128 @@ function PurchaseHistoryCard({
         />
         <Kv label="Cost price" value={formatINR(row.costPrice)} highlight />
       </div>
+    </div>
+  );
+}
+
+/** Admin: keep this due off the staff dues page. */
+function DuePrivateToggle({
+  billId,
+  value,
+  onChange,
+}: {
+  billId: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function toggle(next: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      const { data } = await api.setDuePrivate(billId, next);
+      onChange(data.duePrivate);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-[#F5E0BC] bg-white/70 px-3 py-2.5">
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 accent-[#0E1626]"
+          checked={value}
+          disabled={saving}
+          onChange={(event) => void toggle(event.target.checked)}
+        />
+        <span className="text-[13px] font-medium text-[#0E1626]">
+          {saving ? "Saving…" : "Keep due private"}
+        </span>
+      </label>
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function ExchangeAccessoryStatus({
+  accessories,
+  onSetStatus,
+}: {
+  accessories: ExchangeAccessory[];
+  onSetStatus: (
+    key: ExchangeAccessoryKey,
+    status: ExchangeAccessory["status"],
+  ) => Promise<void>;
+}) {
+  const [busyKey, setBusyKey] = useState<ExchangeAccessoryKey | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(key: ExchangeAccessoryKey, status: ExchangeAccessory["status"]) {
+    setBusyKey(key);
+    setError(null);
+    try {
+      await onSetStatus(key, status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-ink-100 pt-3">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7A8699]">
+        Came with the phone
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {accessories.map((acc) => {
+          const Icon = accessoryIcon(acc.key);
+          const pending = acc.status === "PENDING";
+          const busy = busyKey === acc.key;
+          return (
+            <div
+              key={acc.key}
+              className={clsx(
+                "inline-flex items-center overflow-hidden rounded-full border text-[12.5px] font-semibold",
+                pending
+                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-200"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+              )}
+              title={
+                acc.receivedAt
+                  ? `Received ${format(new Date(acc.receivedAt), "dd MMM yyyy")}`
+                  : undefined
+              }
+            >
+              <span className="inline-flex items-center gap-1.5 py-1.5 pl-2.5 pr-2">
+                <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+                {accessoryLabel(acc.key)}
+                <span className="font-medium opacity-75">
+                  · {pending ? "Pending" : "Given"}
+                </span>
+              </span>
+              {pending ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(acc.key, "GIVEN")}
+                  className="inline-flex items-center gap-1 self-stretch border-l border-amber-200 bg-white/70 px-2.5 text-[11.5px] text-ink-700 transition hover:bg-emerald-500 hover:text-white disabled:opacity-50 dark:border-amber-500/35 dark:bg-transparent dark:text-ink-800"
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                  {busy ? "Saving…" : "Received"}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      {error ? <p className="mt-2 text-xs text-rose-600">{error}</p> : null}
     </div>
   );
 }

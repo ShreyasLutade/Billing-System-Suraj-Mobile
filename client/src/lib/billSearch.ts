@@ -1,8 +1,14 @@
-/** Bill/due search by invoice, customer, phone, product, or IMEI (spaces optional). */
+/** Bill/due search by invoice, customer, phone, product, IMEI or finance company (spaces optional). */
 
 import { matchesElasticSearch } from "./elasticSearch";
 
-export type BillSearchScope = "all" | "name" | "phone" | "imei" | "product";
+export type BillSearchScope =
+  | "all"
+  | "name"
+  | "phone"
+  | "imei"
+  | "product"
+  | "finance";
 
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
@@ -18,6 +24,19 @@ function matchesPhone(phone: string, rawQuery: string, query: string) {
   return (
     includesText(phone, query) ||
     (qDigits.length > 0 && phoneDigits.includes(qDigits))
+  );
+}
+
+function matchesFinanceCompany(
+  record: {
+    financeCompanyName?: string | null;
+    financeCompanyName2?: string | null;
+  },
+  query: string,
+) {
+  return (
+    includesText(record.financeCompanyName || "", query) ||
+    includesText(record.financeCompanyName2 || "", query)
   );
 }
 
@@ -51,6 +70,8 @@ export function matchesBillSearch(
     exchangeImei1?: string | null;
     exchangeImei2?: string | null;
     exchangeSerial?: string | null;
+    financeCompanyName?: string | null;
+    financeCompanyName2?: string | null;
   },
   rawQuery: string,
   scope: BillSearchScope = "all",
@@ -60,6 +81,10 @@ export function matchesBillSearch(
 
   if (scope === "name") {
     return includesText(bill.customerName, query);
+  }
+
+  if (scope === "finance") {
+    return matchesFinanceCompany(bill, query);
   }
 
   if (scope === "phone") {
@@ -95,6 +120,7 @@ export function matchesBillSearch(
 
   if (includesText(bill.invoiceNumber, query)) return true;
   if (includesText(bill.customerName, query)) return true;
+  if (matchesFinanceCompany(bill, query)) return true;
 
   for (const item of bill.items || []) {
     const haystack = [
@@ -164,6 +190,10 @@ export function matchesDueSearch(
     return matchesPhone(due.customerPhone, rawQuery, query);
   }
 
+  if (scope === "finance") {
+    return matchesFinanceCompany(due, query);
+  }
+
   if (scope === "imei") {
     for (const imei of due.imeiNumbers || []) {
       if (matchesImeiValue(imei, rawQuery, query)) return true;
@@ -185,11 +215,7 @@ export function matchesDueSearch(
   if (includesText(due.invoiceNumber, query)) return true;
   if (includesText(due.customerName, query)) return true;
 
-  if (
-    options?.includeFinanceCompany &&
-    (includesText(due.financeCompanyName || "", query) ||
-      includesText(due.financeCompanyName2 || "", query))
-  ) {
+  if (options?.includeFinanceCompany && matchesFinanceCompany(due, query)) {
     return true;
   }
 

@@ -25,6 +25,15 @@ import {
   invalidatePhoneModelCache,
 } from "./MobileNameSearch";
 import { BackButton } from "./ui";
+import {
+  PaymentAtPurchaseField,
+  blankPayment,
+  paidNow,
+  paymentDraftError,
+  paymentPayload,
+  type PaymentDraft,
+} from "./PaymentAtPurchaseField";
+import { useAuth } from "../auth/AuthContext";
 import { api, formatINR } from "../lib/api";
 import { newClientId } from "../lib/id";
 import type { PhoneModel, Purchase, Supplier } from "../types";
@@ -229,6 +238,9 @@ export function PurchaseEntryModal({
   layout?: "modal" | "page";
 }) {
   const isPage = layout === "page";
+  const { isAdmin } = useAuth();
+  /** Paying a supplier is admin only; staff purchases stay unpaid. */
+  const [payment, setPayment] = useState<PaymentDraft>(blankPayment);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierId, setSupplierId] = useState(fixedSupplier?.id || "");
   const [supplierName, setSupplierName] = useState(fixedSupplier?.name || "");
@@ -410,6 +422,14 @@ export function PurchaseEntryModal({
       }
     }
 
+    const paymentIssue = isAdmin
+      ? paymentDraftError(payment, purchaseTotal)
+      : null;
+    if (paymentIssue) {
+      setError(paymentIssue);
+      return;
+    }
+
     setConfirmOpen(true);
   }
 
@@ -442,6 +462,7 @@ export function PurchaseEntryModal({
           serialNumber: item.serialNumber,
           purchasePrice: Number(item.purchasePrice),
         })),
+        payment: isAdmin ? paymentPayload(payment, purchaseTotal) : null,
       });
       invalidatePhoneModelCache();
       onCreated(data);
@@ -495,6 +516,7 @@ export function PurchaseEntryModal({
       condition={condition}
       items={confirmItems}
       total={purchaseTotal}
+      paidNow={isAdmin ? paidNow(payment, purchaseTotal) : null}
       saving={saving}
       error={error}
       onCancel={() => {
@@ -752,7 +774,7 @@ export function PurchaseEntryModal({
 
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-[#0E9E76] hover:bg-[#E7F8F1] hover:text-[#0E9E76] dark:border-ink-300 dark:hover:border-tide-400 dark:hover:bg-tide-100/40 dark:hover:text-tide-400"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#C6CEDA] bg-transparent px-3 py-3.5 text-sm font-semibold text-ink-500 transition hover:border-tide-500 hover:bg-tide-100 hover:text-tide-600 dark:border-ink-300 dark:hover:border-tide-400 dark:hover:bg-tide-100/40 dark:hover:text-tide-400"
               onClick={addAnother}
               disabled={saving}
             >
@@ -814,10 +836,21 @@ export function PurchaseEntryModal({
                   </span>
                 </div>
 
-                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-[#E7F8F1] px-2.5 py-1 text-xs font-semibold text-[#0E9E76] dark:bg-tide-100/50 dark:text-tide-400">
+                <span className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-tide-100 px-2.5 py-1 text-xs font-semibold text-tide-600 dark:bg-tide-100/50 dark:text-tide-400">
                   <Smartphone className="h-3.5 w-3.5" />
                   {unitCount} unit{unitCount === 1 ? "" : "s"}
                 </span>
+
+                {isAdmin ? (
+                  <div className="mt-3 border-t border-ink-100 pt-3">
+                    <PaymentAtPurchaseField
+                      value={payment}
+                      total={purchaseTotal}
+                      disabled={saving}
+                      onChange={setPayment}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-2.5 border-t border-ink-100 bg-[#FAFBFC] px-5 py-4 dark:border-ink-100 dark:bg-surface-muted">
@@ -1078,6 +1111,23 @@ export function PurchaseEntryModal({
               </button>
             ) : null}
           </div>
+
+          {isAdmin ? (
+            <div className="rounded-xl border border-ink-200 bg-white p-3">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <span className="text-sm font-semibold text-ink-900">Total purchase</span>
+                <span className="font-display text-lg font-bold tabular-nums text-ink-900">
+                  {formatINR(purchaseTotal)}
+                </span>
+              </div>
+              <PaymentAtPurchaseField
+                value={payment}
+                total={purchaseTotal}
+                disabled={saving}
+                onChange={setPayment}
+              />
+            </div>
+          ) : null}
         </div>
 
         {error ? (
@@ -1271,13 +1321,13 @@ function QuantityAndImeiFields({
                     : "-translate-y-0.5 opacity-0 group-hover/ids:translate-y-0 group-hover/ids:opacity-100 group-focus-within/ids:translate-y-0 group-focus-within/ids:opacity-100",
                 )}
               >
-                <div className="flex items-start gap-2 rounded-xl border border-[#93C5FD] bg-[#E8F0FE] px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
+                <div className="flex items-start gap-2 rounded-xl border border-tide-400/50 bg-tide-100 px-3 py-2 text-[12.5px] font-medium leading-snug text-[#1E40AF] shadow-[0_8px_24px_rgba(16,25,40,.14)]">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
                   <span>Enter IMEI or serial number</span>
                 </div>
                 <span
                   aria-hidden
-                  className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-[#93C5FD] bg-[#E8F0FE]"
+                  className="ml-4 block h-2.5 w-2.5 -translate-y-1.5 rotate-45 border-b border-r border-tide-400/50 bg-tide-100"
                 />
               </div>
                 <div>
@@ -1289,7 +1339,7 @@ function QuantityAndImeiFields({
                   </label>
                   <ScanFieldShell
                     className={clsx(
-                      showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                      showIdHint && "border-tide-400/50 ring-4 ring-tide-400/25",
                     )}
                   >
                     <input
@@ -1327,7 +1377,7 @@ function QuantityAndImeiFields({
                   </label>
                   <ScanFieldShell
                     className={clsx(
-                      showIdHint && "border-[#93C5FD] ring-4 ring-[#93C5FD]/25",
+                      showIdHint && "border-tide-400/50 ring-4 ring-tide-400/25",
                     )}
                   >
                     <input

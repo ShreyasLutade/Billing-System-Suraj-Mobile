@@ -6,19 +6,37 @@ export const PAGE_SIZE = 15;
  * Reveals `pageSize` items at a time from an already-loaded list.
  * When the sentinel enters the viewport, the next page is appended
  * with a short "Loading more…" state for feedback.
+ *
+ * `restoreCount`: show this many again the first time the list has items
+ * (coming back to a page that had revealed more).
  */
 export function useInfiniteReveal<T>(
   items: T[],
   resetKey: string | number,
   pageSize: number = PAGE_SIZE,
+  restoreCount?: number | null,
 ) {
   const [visibleCount, setVisibleCount] = useState(pageSize);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingLock = useRef(false);
+  /** Count to show again, and the list (resetKey) it was used for. */
+  const restore = useRef<{ count: number; key: string | number | null } | null>(
+    restoreCount ? { count: restoreCount, key: null } : null,
+  );
+  const itemCount = useRef(items.length);
+  itemCount.current = items.length;
 
   useEffect(() => {
-    setVisibleCount(pageSize);
+    const pending = restore.current;
+    // Kept for the same list, so a re-run of this effect doesn't undo it.
+    if (pending && itemCount.current > 0 && (pending.key === null || pending.key === resetKey)) {
+      pending.key = resetKey;
+      setVisibleCount(Math.max(pageSize, pending.count));
+    } else {
+      restore.current = null;
+      setVisibleCount(pageSize);
+    }
     setLoadingMore(false);
     loadingLock.current = false;
   }, [resetKey, pageSize]);

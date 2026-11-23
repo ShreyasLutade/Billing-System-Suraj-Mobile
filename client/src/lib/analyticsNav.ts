@@ -1,6 +1,6 @@
 import type { AnalyticsPeriodValue } from "../components/PeriodFilter";
 
-export type PaymentMode = "cash" | "online" | "card" | "finance";
+export type PaymentMode = "cash" | "online" | "card" | "finance" | "due";
 
 function periodSearchParams(
   period: AnalyticsPeriodValue,
@@ -35,4 +35,22 @@ export function analyticsExchangesPath(
 ) {
   const params = periodSearchParams(period, customFrom, customTo);
   return `/analytics/exchanges?${params.toString()}`;
+}
+
+export function analyticsPurchasesPath(
+  period: AnalyticsPeriodValue,
+  customFrom = "",
+  customTo = "",
+) {
+  const params = periodSearchParams(period, customFrom, customTo);
+  return `/analytics/purchases?${params.toString()}`;
+}
+
+export function analyticsCustomerPayoutsPath(
+  period: AnalyticsPeriodValue,
+  customFrom = "",
+  customTo = "",
+) {
+  const params = periodSearchParams(period, customFrom, customTo);
+  return `/analytics/customer-payouts?${params.toString()}`;
 }

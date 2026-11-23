@@ -1,22 +1,58 @@
 import type {
+  StaffSalesSummary,
+  MonthlyTrend,
+  ExchangeMobilesSummary,
+  AnalyticsCustomerPayoutsSummary,
   AnalyticsExchangesSummary,
+  AnalyticsPurchasesSummary,
   AnalyticsSummary,
   AuthUser,
   Bill,
   CreateBillPayload,
+  ClearedDueItem,
+  ExpenseMonth,
+  MoneyBookData,
+  MoneyEntry,
+  MoneySummary,
+  SupplierDueRow,
+  SupplierLedger,
+  CustomerDueDetail,
   DuesSummary,
+  ExchangeAccessory,
+  ExchangeAccessoryKey,
+  ExchangeIntake,
+  PendingAccessoriesSummary,
   FinanceDuesSummary,
   FinanceCompany,
+  ManagedUser,
   MobileCatalog,
   PhoneModel,
   Purchase,
+  ReturnLookup,
   StockHistory,
   StockImeiTrace,
   StockItem,
   Supplier,
   SupplierDetail,
-  SupplierPayment,
+  SupplierMobile,
 } from "../types";
+
+/** Something deleted that can still be undone (kept a few days). */
+export type RecycleBinEntry = {
+  id: string;
+  kind: "BILL" | "SUPPLIER" | "STOCK";
+  label: string;
+  detail: string | null;
+  deletedAt: string;
+  deletedByName: string | null;
+  /** When it is removed for good. */
+  expiresAt: string;
+};
+
+/** Paid to the supplier while entering a purchase (omit = unpaid). */
+export type PaymentAtPurchase =
+  | { mode: "FULL" | "UNPAID" }
+  | { mode: "CUSTOM"; amount: number };
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "suraj_billing_token";
@@ -175,6 +211,27 @@ export const api = {
     );
   },
   getBill: (id: string) => request<{ data: Bill }>(`/bills/${id}`),
+  /** Find a sold unit by IMEI or serial number (Replace product). */
+  lookupReturnUnit: (code: string) =>
+    request<{ data: ReturnLookup }>(
+      `/returns/lookup?${new URLSearchParams({ code })}`,
+    ),
+  /** Mark a sold unit replaced / returned to its supplier. */
+  createProductReturn: (payload: {
+    stockItemId: string;
+    note?: string | null;
+    /** REPLACE: give another unit from stock. RETURN: refund the customer. */
+    kind: "REPLACE" | "RETURN";
+    replacementStockItemId?: string | null;
+    refundAmount?: number | null;
+    refundMethod?: "cash" | "online" | null;
+  }) =>
+    request<{
+      data: { id: string; billId: string; amount: number; creditApplied: number };
+    }>("/returns", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   lookupCustomerByPhone: (phone: string, init?: RequestInit) =>
     request<{
       data: {
@@ -193,7 +250,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  deleteBill: (id: string, mode: "delete" | "return" = "delete") =>
+  deleteBill: (
+    id: string,
+    mode: "delete" | "return" | "restock" = "delete",
+  ) =>
     request<{ data: { id: string; invoiceNumber: string; mode?: string } }>(
       `/bills/${id}`,
       {
@@ -216,6 +276,41 @@ export const api = {
       `/analytics/summary?${params.toString()}`,
     );
   },
+  exchangeIntake: (imei: string, signal?: AbortSignal) =>
+    request<{ data: ExchangeIntake | null }>(
+      `/bills/exchange-intake?imei=${encodeURIComponent(imei)}`,
+      { signal },
+    ),
+  setDuePrivate: (billId: string, duePrivate: boolean) =>
+    request<{ data: { duePrivate: boolean } }>(
+      `/bills/${billId}/due-private`,
+      { method: "PATCH", body: JSON.stringify({ duePrivate }) },
+    ),
+  pendingAccessories: () =>
+    request<{ data: PendingAccessoriesSummary }>("/bills/pending-accessories"),
+  setExchangeAccessoryStatus: (
+    billId: string,
+    payload: {
+      itemIndex: number;
+      key: ExchangeAccessoryKey;
+      status: ExchangeAccessory["status"];
+    },
+  ) =>
+    request<{ data: { itemIndex: number; accessories: ExchangeAccessory[] } }>(
+      `/bills/${billId}/exchange-accessories`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    ),
+  /** Phones sold in a period with selling prices only (staff Analytics). */
+  listSales: (period: "today" | "yesterday" | "all") =>
+    request<{ data: StaffSalesSummary }>(`/sales?period=${encodeURIComponent(period)}`),
+  /** Exchange mobiles taken in (staff and admin; no prices). */
+  listExchangeMobiles: (period: "today" | "yesterday" | "all") =>
+    request<{ data: ExchangeMobilesSummary }>(
+      `/exchanges?period=${encodeURIComponent(period)}`,
+    ),
+  /** Last 12 months, month by month and day by day (admin). */
+  analyticsMonthly: (months = 12) =>
+    request<{ data: MonthlyTrend }>(`/analytics/monthly?months=${months}`),
   analyticsExchanges: (
     period: string = "all",
     options?: { from?: string; to?: string },
@@ -230,6 +325,76 @@ export const api = {
     return request<{ data: AnalyticsExchangesSummary }>(
       `/analytics/exchanges?${params.toString()}`,
     );
+  },
+  analyticsPurchases: (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    return request<{ data: AnalyticsPurchasesSummary }>(
+      `/analytics/purchases?${params.toString()}`,
+    );
+  },
+  analyticsCustomerPayouts: (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    return request<{ data: AnalyticsCustomerPayoutsSummary }>(
+      `/analytics/customer-payouts?${params.toString()}`,
+    );
+  },
+  /** Download the "money given to customers" list as a PDF. */
+  downloadCustomerPayoutsPdf: async (
+    period: string = "all",
+    options?: { from?: string; to?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.from || options?.to) {
+      if (options.from) params.set("from", options.from);
+      if (options.to) params.set("to", options.to);
+    } else {
+      params.set("period", period);
+    }
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/analytics/customer-payouts/pdf?${params.toString()}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download PDF";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "money-given-to-customers.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   },
   listFinanceCompanies: () =>
     request<{ data: FinanceCompany[] }>("/finance-companies"),
@@ -282,6 +447,38 @@ export const api = {
       `/stock${query ? `?${query}` : ""}`,
     );
   },
+  /**
+   * Stock PDF for one condition, as a blob so the caller can both save it and
+   * hand it to the share sheet without fetching twice.
+   */
+  fetchStockExportPdf: async (condition: "NEW" | "USED") => {
+    const token = getAuthToken();
+    const params = new URLSearchParams({ condition });
+    const response = await fetch(`${API_BASE}/stock/export?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      let message = "Could not build the stock PDF";
+      try {
+        const body = await response.json();
+        message = body.error || message;
+      } catch {
+        // Not JSON — keep the default message.
+      }
+      throw new ApiError(message, response.status);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    return {
+      blob,
+      filename:
+        match?.[1] ||
+        `${condition === "USED" ? "old" : "new"}-mobiles.pdf`,
+      unitCount: Number(response.headers.get("X-Unit-Count") || 0),
+      modelCount: Number(response.headers.get("X-Model-Count") || 0),
+    };
+  },
   listAccessoryNames: () =>
     request<{ data: string[] }>("/stock/accessory-names"),
   createAccessories: (payload: {
@@ -291,6 +488,7 @@ export const api = {
     supplierId?: string | null;
     supplierName?: string | null;
     supplierPhone?: string | null;
+    payment?: PaymentAtPurchase | null;
   }) =>
     request<{ data: StockItem[] }>("/stock/accessories", {
       method: "POST",
@@ -338,6 +536,7 @@ export const api = {
     payload: {
       mobileName: string;
       platform: "IOS" | "ANDROID";
+      condition?: "NEW" | "USED";
       storage: string;
       ram?: string;
       color: string;
@@ -360,7 +559,47 @@ export const api = {
     }),
   stockHistory: (id: string) =>
     request<{ data: StockHistory }>(`/stock/${id}/history`),
+  /** Admin: things deleted in the last few days (meta.days). */
+  listRecycleBin: () =>
+    request<{ data: RecycleBinEntry[]; meta: { days: number } }>("/recycle-bin"),
+  /** Undo a delete. 409 with a reason when it can't be restored any more. */
+  restoreRecycleBinEntry: (id: string) =>
+    request<{ data: { kind: RecycleBinEntry["kind"]; label: string; path: string } }>(
+      `/recycle-bin/${id}/restore`,
+      { method: "POST" },
+    ),
+  /** Delete everything in the bin for good. */
+  emptyRecycleBin: () =>
+    request<{ data: { removed: number } }>("/recycle-bin", { method: "DELETE" }),
+  /* ---- Manage users (admin only) ---- */
+  listUsers: () => request<{ data: ManagedUser[] }>("/auth/users"),
+  createUser: (payload: {
+    name: string;
+    phone: string;
+    role: "ADMIN" | "STAFF";
+    password: string;
+  }) =>
+    request<{ data: ManagedUser }>("/auth/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  setUserBlocked: (id: string, blocked: boolean) =>
+    request<{ data: ManagedUser }>(`/auth/users/${id}/blocked`, {
+      method: "PATCH",
+      body: JSON.stringify({ blocked }),
+    }),
+  /**
+   * Replaces the account's password. Existing ones are bcrypt hashes and
+   * can't be read back, so setting a new one is the only option.
+   */
+  setUserPassword: (id: string, password: string) =>
+    request<{ data: { updated: boolean } }>(`/auth/users/${id}/password`, {
+      method: "PATCH",
+      body: JSON.stringify({ password }),
+    }),
   listSuppliers: () => request<{ data: Supplier[] }>("/suppliers"),
+  listSupplierMobiles: () =>
+    request<{ data: SupplierMobile[] }>("/suppliers/mobiles"),
   getSupplier: (id: string) =>
     request<{ data: SupplierDetail }>(`/suppliers/${id}`),
   downloadSupplierMobilesExport: async (
@@ -376,7 +615,7 @@ export const api = {
       },
     );
     if (!response.ok) {
-      let message = "Could not download Excel";
+      let message = "Could not download PDF";
       try {
         const body = await response.json();
         message = body.error || message;
@@ -388,7 +627,7 @@ export const api = {
     const blob = await response.blob();
     const disposition = response.headers.get("Content-Disposition") || "";
     const match = /filename="?([^"]+)"?/i.exec(disposition);
-    const filename = match?.[1] || `supplier-mobiles.xlsx`;
+    const filename = match?.[1] || `supplier-mobiles.pdf`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -466,21 +705,94 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  createSupplierPayment: (
+  /** Admin: delete a supplier (goes to the Recycle bin). */
+  deleteSupplier: (id: string) =>
+    request<{ data: { id: string; stock: number; purchases: number } }>(
+      `/suppliers/${id}`,
+      { method: "DELETE" },
+    ),
+  /** Download the supplier statement PDF (purchases Cr / payments Dr). */
+  downloadSupplierStatement: async (supplierId: string) => {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/suppliers/${encodeURIComponent(supplierId)}/statement`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download statement";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "supplier-statement.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
+  /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
+  paySupplier: (
     id: string,
-    payload: {
-      amount: number;
-      method: "cash" | "online" | "na";
-      paidAt?: string | null;
-      note?: string | null;
-    },
+    amount?: number,
+    extra?: { method?: "cash" | "online" | "na"; paidAt?: string | null; note?: string | null },
   ) =>
-    request<{ data: SupplierPayment; ledger: Supplier }>(
-      `/suppliers/${id}/payments`,
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
+    request<{
+      data: { paid: number; purchasesCleared: number; outstanding: number; advance?: number };
+    }>(`/suppliers/${id}/pay`, {
+      method: "POST",
+      body: JSON.stringify({ ...(amount === undefined ? {} : { amount }), ...(extra ?? {}) }),
+    }),
+  /** Analytics money books (admin): Cash / Online / Expense. */
+  moneySummary: () => request<{ data: MoneySummary }>(`/money/summary`),
+  moneyBook: (book: "cash" | "online") => request<{ data: MoneyBookData }>(`/money/book/${book}`),
+  addMoneyEntry: (
+    book: "cash" | "online",
+    payload: { kind: "IN" | "OUT"; amount: number; category?: string | null; note?: string | null; date?: string | null },
+  ) =>
+    request<{ data: MoneyEntry & { balance: number } }>(`/money/book/${book}/entries`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  /** Opening balance of a book (₹0 = skipped). */
+  setOpening: (book: "cash" | "online", amount: number, date?: string | null) =>
+    request<{ data: { balance: number } }>(`/money/book/${book}/opening`, {
+      method: "PUT",
+      body: JSON.stringify({ amount, date }),
+    }),
+  deleteMoneyEntry: (id: string) =>
+    request<{ data: { id: string } }>(`/money/entries/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  expenses: (month?: string) =>
+    request<{ data: ExpenseMonth }>(`/money/expenses${month ? `?month=${encodeURIComponent(month)}` : ""}`),
+  addExpense: (payload: {
+    amount: number;
+    category: string;
+    method?: "cash" | "online" | "na";
+    note?: string | null;
+    date?: string | null;
+  }) =>
+    request<{ data: MoneyEntry }>(`/money/expenses`, { method: "POST", body: JSON.stringify(payload) }),
+  /** Dues page, Supplier tab. */
+  listSupplierDues: () =>
+    request<{
+      data: { totalOwed: number; totalAdvance: number; suppliers: SupplierDueRow[] };
+    }>(`/suppliers/dues`),
+  getSupplierLedger: (id: string) =>
+    request<{ data: SupplierLedger }>(`/suppliers/${encodeURIComponent(id)}/ledger`),
+  undoSupplierPayment: (id: string, paymentId: string) =>
+    request<{ data: SupplierLedger }>(
+      `/suppliers/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}`,
+      { method: "DELETE" },
     ),
   createPurchase: (payload: {
     supplierId?: string | null;
@@ -499,14 +811,17 @@ export const api = {
       serialNumber?: string;
       purchasePrice: number;
     }>;
+    payment?: PaymentAtPurchase | null;
   }) =>
     request<{ data: Purchase }>("/purchases", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  markPurchasePaid: (id: string) =>
+  /** No amount = mark the whole purchase paid; with amount = part payment. */
+  markPurchasePaid: (id: string, amount?: number) =>
     request<{ data: Purchase }>(`/purchases/${id}/mark-paid`, {
       method: "POST",
+      body: JSON.stringify(amount === undefined ? {} : { amount }),
     }),
   getPurchase: (id: string) =>
     request<{ data: Purchase }>(`/purchases/${id}`),
@@ -518,10 +833,45 @@ export const api = {
       `/purchases${query ? `?${query}` : ""}`,
     );
   },
+  /** Dues back to 0, matched by name / phone / invoice. */
+  searchClearedDues: (q: string, init?: RequestInit) =>
+    request<{ data: ClearedDueItem[] }>(`/dues/cleared?q=${encodeURIComponent(q)}`, init),
   listDues: (period: string = "all") =>
     request<{ data: DuesSummary }>(
       `/dues?period=${encodeURIComponent(period)}`,
     ),
+  getCustomerDue: (id: string) =>
+    request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}`),
+  /** Download one customer's due statement PDF (purchase + payments + delay). */
+  downloadDueStatement: async (id: string) => {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_BASE}/dues/${encodeURIComponent(id)}/statement`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!response.ok) {
+      let message = "Could not download statement";
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const filename = match?.[1] || "due-statement.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
   listFinanceDues: () =>
     request<{ data: FinanceDuesSummary }>("/dues/finance"),
   markFinanceReceived: (id: string, slots: Array<1 | 2>) =>
@@ -541,12 +891,61 @@ export const api = {
       method: "cash" | "online" | "card" | "na";
       amount?: number;
       nextDueDate?: string | null;
+      /** Day it was received, YYYY-MM-DD (default today). */
+      paidAt?: string | null;
     },
   ) =>
     request<{ data: Bill }>(`/dues/${id}/settle`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  /** New khata entry without a purchase (Dues "+"). */
+  createDuePerson: (payload: {
+    customerName: string;
+    customerPhone: string;
+    direction: "gave" | "got";
+    amount: number;
+    method?: "cash" | "online" | "card" | "na";
+    note?: string | null;
+    dueDate?: string | null;
+    /** Day it was given / received, YYYY-MM-DD (default today). */
+    entryDate?: string | null;
+  }) =>
+    request<{ data: CustomerDueDetail }>(`/dues/people`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  /** "You gave": add money given / owed on this due without a new bill. */
+  addDueCharge: (
+    id: string,
+    payload: {
+      amount: number;
+      note?: string | null;
+      dueDate?: string | null;
+      /** Day it was given, YYYY-MM-DD (default today). */
+      givenAt?: string | null;
+    },
+  ) =>
+    request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}/charges`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  undoDueCharge: (id: string, chargeId: string) =>
+    request<{ data: CustomerDueDetail }>(
+      `/dues/${encodeURIComponent(id)}/charges/${encodeURIComponent(chargeId)}`,
+      { method: "DELETE" },
+    ),
+  setDueDate: (id: string, dueDate: string | null) =>
+    request<{ data: CustomerDueDetail }>(`/dues/${encodeURIComponent(id)}/due-date`, {
+      method: "PATCH",
+      body: JSON.stringify({ dueDate }),
+    }),
+  /** Undo the latest payment received on a due (admin). */
+  undoDuePayment: (id: string, paymentId: string) =>
+    request<{ data: CustomerDueDetail }>(
+      `/dues/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}`,
+      { method: "DELETE" },
+    ),
   pdfUrl: (id: string) => {
     const token = getAuthToken();
     const base = `${API_BASE}/bills/${id}/pdf`;
@@ -692,14 +1091,21 @@ export function formatINR(amount: number) {
 }
 
 /** Display IMEI and/or serial for a stock unit. */
+/** Sold units bought back later keep their old ID as `ID~stockId`; show just ID. */
+function liveStockId(value?: string | null) {
+  return value ? value.split("~")[0] : value;
+}
+
 export function formatStockUnitId(item: {
   imei?: string | null;
   serialNumber?: string | null;
 }) {
-  if (item.imei && item.serialNumber) {
-    return `${item.imei} · SN ${item.serialNumber}`;
+  const imei = liveStockId(item.imei);
+  const serialNumber = liveStockId(item.serialNumber);
+  if (imei && serialNumber) {
+    return `${imei} · SN ${serialNumber}`;
   }
-  return item.imei || item.serialNumber || "—";
+  return imei || serialNumber || "—";
 }
 
 export function formatFinanceCompanies(

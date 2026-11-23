@@ -6,13 +6,28 @@ import { ThemeProvider } from "./theme/ThemeContext";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnalyticsPaymentsPage } from "./pages/AnalyticsPaymentsPage";
 import { AnalyticsExchangesPage } from "./pages/AnalyticsExchangesPage";
+import { AnalyticsPurchasesPage } from "./pages/AnalyticsPurchasesPage";
+import { AnalyticsCustomerPayoutsPage } from "./pages/AnalyticsCustomerPayoutsPage";
+import { ExchangesPage } from "./pages/ExchangesPage";
+import { AnalyticsTrendPage } from "./pages/AnalyticsTrendPage";
+import { StaffAnalyticsPage } from "./pages/StaffAnalyticsPage";
+import { AnalyticsMotionLayout } from "./components/AnalyticsMotionLayout";
+import { AnalyticsPendingItemsPage } from "./pages/AnalyticsPendingItemsPage";
 import { BackupPage } from "./pages/BackupPage";
+import { RecycleBinPage } from "./pages/RecycleBinPage";
+import { ManageUsersPage } from "./pages/ManageUsersPage";
+import { ReplaceProductPage } from "./pages/ReplaceProductPage";
 import { AddAccessoriesPage } from "./pages/AddAccessoriesPage";
 import { AddStockPage } from "./pages/AddStockPage";
 import { BillDetailPage } from "./pages/BillDetailPage";
 import { BillsPage } from "./pages/BillsPage";
 import { CreateBillPage } from "./pages/CreateBillPage";
 import { DuesPage } from "./pages/DuesPage";
+import { DueDetailPage } from "./pages/DueDetailPage";
+import { AddDuePersonPage } from "./pages/AddDuePersonPage";
+import { SupplierDuePage } from "./pages/SupplierDuePage";
+import { MoneyBookPage } from "./pages/MoneyBookPage";
+import { ExpensesPage } from "./pages/ExpensesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
@@ -39,6 +54,9 @@ export default function App() {
                 />
                 <Route path="bills/:id" element={<BillDetailPage />} />
                 <Route path="dues" element={<DuesPage />} />
+                <Route path="dues/new" element={<AddDuePersonPage />} />
+                <Route path="dues/suppliers/:id" element={<SupplierDuePage />} />
+                <Route path="dues/:id" element={<DueDetailPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="stock/add" element={<AddStockPage />} />
                 <Route
@@ -51,17 +69,37 @@ export default function App() {
                   element={<PurchaseDetailPage />}
                 />
                 <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+                {/* Staff Analytics: exchange, pending items, phones sold (no cost / profit). */}
+                <Route path="staff-analytics" element={<AnalyticsMotionLayout />}>
+                  <Route index element={<StaffAnalyticsPage />} />
+                  <Route path="exchanges" element={<ExchangesPage />} />
+                  <Route path="pending-items" element={<AnalyticsPendingItemsPage />} />
+                </Route>
+                <Route path="exchanges" element={<Navigate to="/staff-analytics/exchanges" replace />} />
                 <Route element={<RequireAdmin />}>
-                  <Route path="analytics" element={<AnalyticsPage />} />
-                  <Route
-                    path="analytics/payments"
-                    element={<AnalyticsPaymentsPage />}
-                  />
-                  <Route
-                    path="analytics/exchanges"
-                    element={<AnalyticsExchangesPage />}
-                  />
+                  {/* Analytics pages zoom in / out of each other. */}
+                  <Route path="analytics" element={<AnalyticsMotionLayout />}>
+                    <Route index element={<AnalyticsPage />} />
+                    <Route path="trend" element={<AnalyticsTrendPage />} />
+                    <Route path="payments" element={<AnalyticsPaymentsPage />} />
+                    <Route path="exchanges" element={<AnalyticsExchangesPage />} />
+                    <Route path="purchases" element={<AnalyticsPurchasesPage />} />
+                    <Route
+                      path="customer-payouts"
+                      element={<AnalyticsCustomerPayoutsPage />}
+                    />
+                    <Route
+                      path="pending-items"
+                      element={<AnalyticsPendingItemsPage />}
+                    />
+                    <Route path="cash" element={<MoneyBookPage book="cash" />} />
+                    <Route path="online" element={<MoneyBookPage book="online" />} />
+                    <Route path="expenses" element={<ExpensesPage />} />
+                  </Route>
                   <Route path="backup" element={<BackupPage />} />
+                  <Route path="recycle-bin" element={<RecycleBinPage />} />
+                  <Route path="users" element={<ManageUsersPage />} />
+                  <Route path="bills/replace" element={<ReplaceProductPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

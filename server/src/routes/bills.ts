@@ -12,23 +12,29 @@ import {
   toDateFilter,
 } from "../lib/period";
 import { buildInvoicePdf } from "../services/pdf";
+import { chargeBalance, splitDuePayment } from "../lib/dueCharges";
 import { upsertMobileCatalog } from "../services/mobileCatalog";
 import { upsertCustomerProfile } from "../services/customers";
 import {
   clearExchangeStock,
   deleteStockIds,
+  releaseStockIds,
   exchangePurchaseNote,
   returnBillStockToCustomer,
   syncExchangeStock,
   syncStockForBillItems,
 } from "../services/stockSync";
 import {
+  EXCHANGE_ACCESSORY_KEYS,
   exchangeItemsFromInput,
   parseExchangeItemsJson,
   serializeExchangeItemsJson,
+  parseIncludedAccessories,
+  serializeIncludedAccessories,
   totalExchangeValue,
 } from "../lib/exchangeItems";
 import { requireAdmin } from "../middleware/auth";
+import { binBill } from "../services/recycleBin";
 
 export const billsRouter = Router();
 
@@ -252,9 +258,10 @@ billsRouter.get("/", async (req, res, next) => {
       ? toDateFilter({ from: customFrom, to: customTo })
       : toDateFilter(getPeriodRange(period === "custom" ? "all" : period));
 
+    // Khata entries without a purchase live on the Dues page only.
     const where: Prisma.BillWhereInput = billDateFilter
-      ? { billDate: billDateFilter }
-      : {};
+      ? { billDate: billDateFilter, noPurchase: false }
+      : { noPurchase: false };
 
     if (req.query.withGst === "true") {
       where.withGst = true;
@@ -276,6 +283,107 @@ billsRouter.get("/", async (req, res, next) => {
       from: customFrom ? customFrom.toISOString() : null,
       to: customTo ? customTo.toISOString() : null,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Exchange accessories (box, charger…) customers still have to hand over. Oldest first. */
+billsRouter.get("/pending-accessories", async (_req, res, next) => {
+  try {
+    const bills = await prisma.bill.findMany({
+      where: {
+        isExchange: true,
+        exchangeItemsJson: { contains: '"PENDING"' },
+      },
+      orderBy: { billDate: "asc" },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        billDate: true,
+        customerName: true,
+        customerPhone: true,
+        exchangeItemsJson: true,
+      },
+    });
+
+    const rows = bills
+      .map((bill) => {
+        const phones = parseExchangeItemsJson(bill.exchangeItemsJson)
+          .map((item, itemIndex) => ({
+            itemIndex,
+            model: item.model,
+            platform: item.platform,
+            color: item.color,
+            storage: item.storage,
+            ram: item.ram ?? null,
+            imei1: item.imei1,
+            pending: (item.accessories ?? [])
+              .filter((acc) => acc.status === "PENDING")
+              .map((acc) => acc.key),
+          }))
+          .filter((phone) => phone.pending.length > 0);
+        return {
+          billId: bill.id,
+          invoiceNumber: bill.invoiceNumber,
+          billDate: bill.billDate.toISOString(),
+          customerName: bill.customerName,
+          customerPhone: bill.customerPhone,
+          pendingCount: phones.reduce((sum, p) => sum + p.pending.length, 0),
+          phones,
+        };
+      })
+      .filter((row) => row.phones.length > 0);
+
+    res.json({
+      data: {
+        billCount: rows.length,
+        itemCount: rows.reduce((sum, row) => sum + row.pendingCount, 0),
+        bills: rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** What came in with a second-hand phone when it was taken on exchange (latest intake wins). */
+billsRouter.get("/exchange-intake", async (req, res, next) => {
+  try {
+    const imei = String(req.query.imei || "").trim();
+    if (imei.length < 8) {
+      res.json({ data: null });
+      return;
+    }
+    const bills = await prisma.bill.findMany({
+      where: { isExchange: true, exchangeItemsJson: { contains: imei } },
+      orderBy: { billDate: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        billDate: true,
+        customerName: true,
+        exchangeItemsJson: true,
+      },
+    });
+    for (const bill of bills) {
+      const item = parseExchangeItemsJson(bill.exchangeItemsJson).find(
+        (row) => row.imei1 === imei,
+      );
+      if (!item) continue;
+      res.json({
+        data: {
+          billId: bill.id,
+          invoiceNumber: bill.invoiceNumber,
+          billDate: bill.billDate.toISOString(),
+          customerName: bill.customerName,
+          accessories: item.accessories ?? [],
+        },
+      });
+      return;
+    }
+    res.json({ data: null });
   } catch (error) {
     next(error);
   }
@@ -615,7 +723,108 @@ billsRouter.get("/:id", async (req, res, next) => {
       req.user?.role === "ADMIN"
         ? await enrichBillPurchaseHistory(bill.items)
         : [];
-    res.json({ data: { ...data, purchaseHistory } });
+    // Products on this bill that were replaced / returned to the supplier.
+    const returns = await prisma.productReturn.findMany({
+      where: { billId: bill.id },
+      select: {
+        billItemId: true,
+        stockItemId: true,
+        note: true,
+        createdAt: true,
+        createdByName: true,
+        kind: true,
+        refundAmount: true,
+        refundMethod: true,
+        replacementStock: {
+          select: {
+            id: true,
+            mobileName: true,
+            storage: true,
+            ram: true,
+            color: true,
+            platform: true,
+            condition: true,
+            imei: true,
+            serialNumber: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    const productReturns = returns.map(({ replacementStock, ...r }) => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+      replacement: replacementStock
+        ? {
+            ...replacementStock,
+            imei: replacementStock.imei ? replacementStock.imei.split("~")[0] : null,
+          }
+        : null,
+    }));
+
+    // Purchase history also covers units given as replacements (they can
+    // come from a different supplier), and labels the units sent back.
+    let fullHistory: Array<(typeof purchaseHistory)[number] & { label?: string }> =
+      purchaseHistory;
+    if (purchaseHistory.length || returns.length) {
+      // Keyed by the unit that went back (a replacement can be replaced again).
+      const sentBack = new Map(
+        returns.map((r) => [
+          r.stockItemId,
+          r.kind === "RETURN" ? "Returned · sent back to supplier" : "Replaced · sent back to supplier",
+        ]),
+      );
+      fullHistory = purchaseHistory.map((row) => {
+        const item = bill.items.find((i) => i.id === row.billItemId);
+        const label = item?.stockItemId ? sentBack.get(item.stockItemId) : undefined;
+        return label ? { ...row, label } : row;
+      });
+      if (req.user?.role === "ADMIN") {
+        const replacementIds = returns
+          .map((r) => r.replacementStock?.id)
+          .filter((id): id is string => Boolean(id));
+        const units = replacementIds.length
+          ? await prisma.stockItem.findMany({
+              where: { id: { in: replacementIds } },
+              select: {
+                id: true,
+                mobileName: true,
+                platform: true,
+                imei: true,
+                serialNumber: true,
+                purchasePrice: true,
+                createdAt: true,
+                supplier: { select: { id: true, name: true, phone: true, isExchange: true } },
+                purchaseItem: {
+                  select: {
+                    purchase: {
+                      select: {
+                        purchaseDate: true,
+                        supplier: { select: { id: true, name: true, phone: true, isExchange: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            })
+          : [];
+        for (const unit of units) {
+          const purchase = unit.purchaseItem?.purchase;
+          fullHistory.push({
+            billItemId: `replacement-${unit.id}`,
+            productName: unit.mobileName,
+            platform: unit.platform,
+            imei: unit.imei ? unit.imei.split("~")[0] : null,
+            serialNumber: unit.serialNumber,
+            supplier: unit.supplier ?? purchase?.supplier ?? null,
+            purchaseDate: (purchase?.purchaseDate ?? unit.createdAt).toISOString(),
+            costPrice: unit.purchasePrice,
+            label: sentBack.get(unit.id) ?? "Given as replacement",
+          });
+        }
+      }
+    }
+    res.json({ data: { ...data, purchaseHistory: fullHistory, productReturns } });
   } catch (error) {
     next(error);
   }
@@ -706,9 +915,11 @@ billsRouter.post("/", async (req, res, next) => {
         customerAddress: input.customerAddress,
       });
 
-      const billDate = input.billDate
-        ? parseDateInput(input.billDate)
-        : new Date();
+      // Custom (back-dated) bill dates are admin only.
+      const billDate =
+        input.billDate && req.user?.role === "ADMIN"
+          ? parseDateInput(input.billDate)
+          : new Date();
 
       const bill = await tx.bill.create({
         data: {
@@ -771,6 +982,10 @@ billsRouter.post("/", async (req, res, next) => {
             totals.dueAmount > 0 && input.dueDate
               ? parseDateInput(input.dueDate)
               : null,
+          duePrivate:
+            req.user?.role === "ADMIN" &&
+            totals.dueAmount > 0 &&
+            Boolean(input.duePrivate),
           createdByUserId: req.user?.id || null,
           createdByName: req.user?.name || null,
           createdByRole: req.user?.role || null,
@@ -792,6 +1007,9 @@ billsRouter.post("/", async (req, res, next) => {
               imei2: item.imei2,
               serialNumber: item.serialNumber,
               warrantyMonths: item.warrantyMonths,
+              includedAccessories: serializeIncludedAccessories(
+                parseIncludedAccessories(item.includedAccessories),
+              ),
             })),
           },
         },
@@ -892,7 +1110,14 @@ billsRouter.put("/:id", async (req, res, next) => {
     }
 
     const input = parsed.data;
-    const totals = totalsForPersist(input, computeBillTotals(input));
+    const billTotals = totalsForPersist(input, computeBillTotals(input));
+    // "You gave" amounts still owed (or extra money kept as advance, below 0)
+    // stay on the due after an edit.
+    const owedExtra = input.withGst ? 0 : await chargeBalance(prisma, existing.id);
+    const totals = {
+      ...billTotals,
+      dueAmount: Number((billTotals.dueAmount + owedExtra).toFixed(2)),
+    };
 
     const bill = await prisma.$transaction(async (tx) => {
       let financeCompanyId: string | null = null;
@@ -974,8 +1199,9 @@ billsRouter.put("/:id", async (req, res, next) => {
         customerAddress: input.customerAddress,
       });
 
-      const billDate = input.billDate
-        ? parseDateInput(input.billDate)
+      const canSetDate = Boolean(input.billDate) && req.user?.role === "ADMIN";
+      const billDate = canSetDate
+        ? parseDateInput(input.billDate!)
         : existing.billDate;
 
       const bill = await tx.bill.update({
@@ -986,7 +1212,7 @@ billsRouter.put("/:id", async (req, res, next) => {
           customerAddress: input.customerAddress || null,
           notes: input.notes || null,
           withGst: Boolean(input.withGst),
-          ...(input.billDate ? { billDate } : {}),
+          ...(canSetDate ? { billDate } : {}),
           subtotal: totals.subtotal,
           gstAmount: totals.gstAmount,
           grandTotal: totals.grandTotal,
@@ -1052,7 +1278,13 @@ billsRouter.put("/:id", async (req, res, next) => {
             totals.dueAmount > 0 && input.dueDate
               ? parseDateInput(input.dueDate)
               : null,
-          dueSettled: totals.dueAmount <= 0,
+          dueSettled: Math.abs(totals.dueAmount) < 0.005,
+          // Only admins can change it; staff edits keep what an admin chose.
+          duePrivate:
+            totals.dueAmount > 0 &&
+            (req.user?.role === "ADMIN" && input.duePrivate !== undefined
+              ? input.duePrivate
+              : existing.duePrivate),
           dueSettledMethod:
             totals.dueAmount <= 0 ? existing.dueSettledMethod : null,
           dueSettledAt: totals.dueAmount <= 0 ? existing.dueSettledAt : null,
@@ -1081,6 +1313,9 @@ billsRouter.put("/:id", async (req, res, next) => {
               imei2: item.imei2,
               serialNumber: item.serialNumber,
               warrantyMonths: item.warrantyMonths,
+              includedAccessories: serializeIncludedAccessories(
+                parseIncludedAccessories(item.includedAccessories),
+              ),
             })),
           },
         },
@@ -1165,9 +1400,14 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
       return;
     }
 
+    // return  → phones become second-hand stock under the customer
+    // restock → sale undone: phones go back to stock under their original
+    //           supplier and purchase, as if never sold
+    // delete  → phones removed from stock
+    const requestedMode = req.body?.mode ?? req.query.mode;
     const mode =
-      req.body?.mode === "return" || req.query.mode === "return"
-        ? "return"
+      requestedMode === "return" || requestedMode === "restock"
+        ? requestedMode
         : "delete";
 
     const stockIds = existing.items
@@ -1175,6 +1415,8 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
       .filter((id): id is string => Boolean(id));
 
     await prisma.$transaction(async (tx) => {
+      // Keep a copy in the recycle bin so the delete can be undone.
+      await binBill(tx, existing.id, mode, req.user);
       if (mode === "return") {
         await returnBillStockToCustomer(tx, {
           ...existing,
@@ -1187,6 +1429,10 @@ billsRouter.delete("/:id", requireAdmin, async (req, res, next) => {
 
       await clearExchangeStock(tx, existing.invoiceNumber);
       await tx.bill.delete({ where: { id: existing.id } });
+      if (mode === "restock") {
+        await releaseStockIds(tx, stockIds);
+        return;
+      }
       await deleteStockIds(tx, stockIds);
     });
 
@@ -1213,13 +1459,96 @@ billsRouter.get("/:id/pdf", async (req, res, next) => {
       return;
     }
 
-    const pdf = await buildInvoicePdf(bill);
+    // The invoice shows the bill's own due, not "You gave" amounts.
+    const extra = bill.withGst || bill.noPurchase ? 0 : await chargeBalance(prisma, bill.id);
+    const pdf = await buildInvoicePdf(
+      extra !== 0
+        ? { ...bill, dueAmount: Math.max(Number((bill.dueAmount - extra).toFixed(2)), 0) }
+        : bill,
+    );
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${bill.invoiceNumber}.pdf"`,
     );
     res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin: hide / show this bill's due for staff on the dues page. */
+billsRouter.patch("/:id/due-private", requireAdmin, async (req, res, next) => {
+  try {
+    if (typeof req.body?.duePrivate !== "boolean") {
+      res.status(400).json({ error: "duePrivate must be true or false" });
+      return;
+    }
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, dueAmount: true, dueSettled: true },
+    });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+    if (req.body.duePrivate && (bill.dueAmount <= 0 || bill.dueSettled)) {
+      res.status(400).json({ error: "This bill has no pending due" });
+      return;
+    }
+    const updated = await prisma.bill.update({
+      where: { id: bill.id },
+      data: { duePrivate: req.body.duePrivate },
+      select: { duePrivate: true },
+    });
+    res.json({ data: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Flip one exchange accessory between GIVEN and PENDING (e.g. customer brought the box). */
+billsRouter.patch("/:id/exchange-accessories", async (req, res, next) => {
+  try {
+    const itemIndex = Number(req.body?.itemIndex);
+    const key = req.body?.key;
+    const status = req.body?.status;
+    if (
+      !Number.isInteger(itemIndex) ||
+      itemIndex < 0 ||
+      !(EXCHANGE_ACCESSORY_KEYS as readonly string[]).includes(key) ||
+      (status !== "GIVEN" && status !== "PENDING")
+    ) {
+      res.status(400).json({ error: "Invalid accessory update" });
+      return;
+    }
+
+    const bill = await prisma.bill.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, exchangeItemsJson: true },
+    });
+    if (!bill) {
+      res.status(404).json({ error: "Bill not found" });
+      return;
+    }
+
+    const items = parseExchangeItemsJson(bill.exchangeItemsJson);
+    const item = items[itemIndex];
+    const accessory = item?.accessories?.find((acc) => acc.key === key);
+    if (!item || !accessory) {
+      res.status(404).json({ error: "Accessory not found on this bill" });
+      return;
+    }
+
+    accessory.status = status;
+    accessory.receivedAt = status === "GIVEN" ? new Date().toISOString() : null;
+
+    await prisma.bill.update({
+      where: { id: bill.id },
+      data: { exchangeItemsJson: serializeExchangeItemsJson(items) },
+    });
+
+    res.json({ data: { itemIndex, accessories: item.accessories } });
   } catch (error) {
     next(error);
   }
@@ -1245,6 +1574,11 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
     }
 
     const due = bill.dueAmount;
+    const { billPart, chargePart } = splitDuePayment(
+      due,
+      due,
+      await chargeBalance(prisma, bill.id),
+    );
     const paidAt = new Date();
     const updated = await prisma.bill.update({
       where: { id: bill.id },
@@ -1256,15 +1590,15 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
         isPartialPaid: false,
         cashAmount:
           method === "cash"
-            ? Number((bill.cashAmount + due).toFixed(2))
+            ? Number((bill.cashAmount + billPart).toFixed(2))
             : bill.cashAmount,
         onlineAmount:
           method === "online"
-            ? Number((bill.onlineAmount + due).toFixed(2))
+            ? Number((bill.onlineAmount + billPart).toFixed(2))
             : bill.onlineAmount,
         cardAmount:
           method === "card"
-            ? Number((bill.cardAmount + due).toFixed(2))
+            ? Number((bill.cardAmount + billPart).toFixed(2))
             : bill.cardAmount,
         duePayments: {
           create: {
@@ -1272,6 +1606,7 @@ billsRouter.patch("/:id/settle-due", requireAdmin, async (req, res, next) => {
             method,
             kind: "full",
             paidAt,
+            chargePart,
           },
         },
       },

@@ -1,11 +1,23 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { latestBillLines } from "../lib/latestBillLines";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
 import { buildSupplierMobilesWorkbook } from "../services/supplierStockExport";
+import { buildSupplierMobilesPdf } from "../services/supplierStockPdf";
 import type { SupplierMobileExportCondition } from "../services/supplierStockExport";
 import { intakeKindFromNote } from "../services/stockSync";
+import { buildSupplierStatement, loadSupplierLedger } from "../services/supplierStatement";
+import {
+  applyCreditTracked,
+  applyPendingReturnCredits,
+  readAppliedParts,
+  settlePendingReturnCredits,
+} from "../services/productReturns";
+import { istDateString } from "../lib/ist";
+import { binSupplier } from "../services/recycleBin";
+import { format } from "date-fns";
 
 export const suppliersRouter = Router();
 
@@ -21,11 +33,16 @@ function round2(value: number) {
 }
 
 async function supplierLedgerStats(supplierId: string) {
-  const [purchases, stockAvailable, stockSold, stockPurchased] =
+  const [purchases, stockAvailable, stockSold, stockPurchased, returns, advanceSum] =
     await Promise.all([
       prisma.purchase.findMany({
         where: { supplierId },
-        select: { totalAmount: true, paidAt: true, note: true },
+        select: {
+          totalAmount: true,
+          paidAt: true,
+          paidAmount: true,
+          note: true,
+        },
       }),
       prisma.stockItem.count({
         where: { supplierId, status: "AVAILABLE" },
@@ -36,6 +53,14 @@ async function supplierLedgerStats(supplierId: string) {
       prisma.stockItem.count({
         where: { supplierId },
       }),
+      prisma.productReturn.findMany({
+        where: { supplierId },
+        select: { amount: true, creditApplied: true },
+      }),
+      prisma.supplierPayment.aggregate({
+        where: { supplierId, unapplied: { gt: 0 } },
+        _sum: { unapplied: true },
+      }),
     ]);
 
   let totalPurchased = 0;
@@ -43,16 +68,33 @@ async function supplierLedgerStats(supplierId: string) {
   for (const purchase of purchases) {
     const amount = purchase.totalAmount || 0;
     totalPurchased += amount;
-    if (purchase.paidAt) totalPaid += amount;
+    totalPaid += purchase.paidAt
+      ? amount
+      : Math.min(purchase.paidAmount || 0, amount);
   }
 
+  // Returned units are credited to purchases like payments (creditApplied);
+  // keep "paid" to real money and show returns on their own.
+  const totalReturned = round2(returns.reduce((s, r) => s + r.amount, 0));
+  const creditApplied = round2(returns.reduce((s, r) => s + r.creditApplied, 0));
+  const creditUnapplied = round2(Math.max(totalReturned - creditApplied, 0));
+  const owedOnPurchases = round2(Math.max(totalPurchased - totalPaid, 0));
+  /** Paid more than was pending, not yet used on a purchase. */
+  const advance = round2(advanceSum._sum.unapplied ?? 0);
+
   totalPurchased = round2(totalPurchased);
-  totalPaid = round2(totalPaid);
   return {
     purchaseCount: purchases.length,
     totalPurchased,
-    totalPaid,
-    outstanding: round2(Math.max(totalPurchased - totalPaid, 0)),
+    totalPaid: round2(Math.max(totalPaid - creditApplied, 0)),
+    totalReturned,
+    /** Return credit + advance not yet used against a purchase (supplier owes us). */
+    supplierCredit: round2(Math.max(creditUnapplied + advance - owedOnPurchases, 0)),
+    /** Paid more than was pending, waiting for the next stock. */
+    advance,
+    // Negative when the supplier owes us (return credit / advance bigger than
+    // what we owe); it is used up automatically against the next stock we add.
+    outstanding: round2(owedOnPurchases - creditUnapplied - advance),
     stockAvailable,
     stockSold,
     stockPurchased,
@@ -79,15 +121,9 @@ const updateSupplierSchema = z.object({
   notes: z.string().trim().max(500).optional().nullable(),
 });
 
-const paymentSchema = z.object({
-  amount: z.coerce.number().positive("Payment amount must be greater than 0"),
-  method: z.enum(["cash", "online", "na"]).default("cash"),
-  paidAt: z.string().trim().optional().nullable(),
-  note: z.string().trim().max(300).optional().nullable(),
-});
-
 suppliersRouter.get("/", async (_req, res, next) => {
   try {
+    await settlePendingReturnCredits();
     const suppliers = await prisma.supplier.findMany({
       orderBy: { name: "asc" },
     });
@@ -97,6 +133,71 @@ suppliersRouter.get("/", async (_req, res, next) => {
         ...(await supplierLedgerStats(supplier.id)),
       })),
     );
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Every mobile ever purchased (in stock or sold) with its supplier and purchase
+ * date, for the Suppliers page model search ("iPhone 14" → who sold us each one).
+ * Purchase price is admin only.
+ */
+suppliersRouter.get("/mobiles", async (req, res, next) => {
+  try {
+    const isAdmin = req.user?.role === "ADMIN";
+    const items = await prisma.stockItem.findMany({
+      where: { NOT: { kind: "ACCESSORY" } },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        purchaseItem: {
+          select: {
+            purchase: {
+              select: {
+                id: true,
+                supplierId: true,
+                purchaseDate: true,
+                supplier: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        productReturn: { select: { createdAt: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    // Latest sale per unit, loaded on its own (see latestBillLines).
+    const sales = await latestBillLines(items.map((item) => item.id));
+
+    const data = items.map((item) => {
+      const purchase = item.purchaseItem?.purchase || null;
+      const supplier = item.supplier || purchase?.supplier || null;
+      const bill = sales.get(item.id)?.bill || null;
+      return {
+        id: item.id,
+        mobileName: item.mobileName,
+        platform: item.platform,
+        condition: item.condition,
+        storage: item.storage,
+        ram: item.ram,
+        color: item.color,
+        // Archived units keep "IMEI~id" so the live unit can reuse the IMEI.
+        imei: item.imei ? item.imei.split("~")[0] : null,
+        serialNumber: item.serialNumber,
+        status: item.status,
+        purchasePrice: isAdmin ? item.purchasePrice : null,
+        purchaseDate: (purchase?.purchaseDate || item.createdAt).toISOString(),
+        supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
+        sale: bill ? { billId: bill.id, invoiceNumber: bill.invoiceNumber } : null,
+        returned: Boolean(item.productReturn),
+        // Opens /suppliers/:supplierId/purchases/:id with this unit highlighted.
+        purchase: purchase
+          ? { id: purchase.id, supplierId: purchase.supplierId }
+          : null,
+      };
+    });
+
     res.json({ data });
   } catch (error) {
     next(error);
@@ -164,7 +265,7 @@ suppliersRouter.get("/export-mobiles", requireAdmin, async (req, res, next) => {
   }
 });
 
-/** Admin Excel export of mobiles for one supplier id. */
+/** Admin PDF of a supplier's new / old mobiles (Export new / Export old). */
 suppliersRouter.get(
   "/:id/mobiles-export",
   requireAdmin,
@@ -177,22 +278,15 @@ suppliersRouter.get(
           .json({ error: "Pass ?condition=NEW or ?condition=USED" });
         return;
       }
-      const exportFile = await buildSupplierMobilesWorkbook(
-        prisma,
-        req.params.id,
-        condition,
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      );
+      const exportFile = await buildSupplierMobilesPdf(req.params.id, condition);
+      res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
         `attachment; filename="${exportFile.filename}"`,
       );
       res.setHeader("X-Unit-Count", String(exportFile.unitCount));
       res.setHeader("X-Sold-Count", String(exportFile.soldCount));
-      res.send(exportFile.buffer);
+      res.send(exportFile.pdf);
     } catch (error) {
       if (error instanceof Error && error.message === "SUPPLIER_NOT_FOUND") {
         res.status(404).json({ error: "Supplier not found" });
@@ -228,8 +322,118 @@ suppliersRouter.post("/", async (req, res, next) => {
   }
 });
 
+/** A supplier's account for the Dues page: balance and every entry. */
+async function supplierDueDetail(supplierId: string) {
+  const ledger = await loadSupplierLedger(supplierId);
+  if (!ledger) return null;
+  const stats = await supplierLedgerStats(supplierId);
+  const payments = await prisma.supplierPayment.findMany({
+    where: { supplierId },
+    orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+    take: 1,
+    select: { id: true, appliedJson: true, purchaseId: true },
+  });
+  const latest = payments[0];
+  let balance = 0;
+  const entries = ledger.entries.map((e, index) => {
+    balance = round2(balance + e.credit - e.debit);
+    return {
+      key: `${e.kind}-${e.purchaseId ?? e.paymentId ?? index}`,
+      kind: e.kind,
+      date: e.date.toISOString(),
+      particulars: e.particulars,
+      detail: e.detail,
+      qty: e.qty,
+      /** Purchases: what you got (goods). */
+      got: round2(e.credit),
+      /** Payments / returned units / paid at purchase. */
+      gave: round2(e.debit),
+      paidNote: e.paidNote ?? null,
+      method: e.method ?? null,
+      paymentId: e.paymentId ?? null,
+      purchaseId: e.purchaseId ?? null,
+      balanceAfter: balance,
+    };
+  });
+  return {
+    id: ledger.supplier.id,
+    name: ledger.supplier.name,
+    phone: ledger.supplier.phone,
+    /** What you still owe (below 0 = advance / credit: they owe you). */
+    outstanding: stats.outstanding,
+    advance: stats.advance,
+    supplierCredit: stats.supplierCredit,
+    totalPurchased: stats.totalPurchased,
+    purchaseCount: stats.purchaseCount,
+    /** The newest payment, when it can be undone (made from Dues). */
+    undoPaymentId:
+      latest && latest.appliedJson !== null && !latest.purchaseId ? latest.id : null,
+    entries,
+  };
+}
+
+/** Admin: suppliers you owe (or who owe you), for the Dues page. */
+suppliersRouter.get("/dues", requireAdmin, async (_req, res, next) => {
+  try {
+    await settlePendingReturnCredits();
+    const suppliers = await prisma.supplier.findMany({
+      where: { isExchange: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, phone: true },
+    });
+    const rows = await Promise.all(
+      suppliers.map(async (supplier) => {
+        const [stats, last] = await Promise.all([
+          supplierLedgerStats(supplier.id),
+          prisma.purchase.findFirst({
+            where: { supplierId: supplier.id },
+            orderBy: { purchaseDate: "desc" },
+            select: { purchaseDate: true },
+          }),
+        ]);
+        return {
+          ...supplier,
+          outstanding: stats.outstanding,
+          advance: stats.advance,
+          purchaseCount: stats.purchaseCount,
+          totalPurchased: stats.totalPurchased,
+          lastPurchaseDate: last?.purchaseDate.toISOString() ?? null,
+        };
+      }),
+    );
+    const open = rows
+      .filter((row) => Math.abs(row.outstanding) > 0.005)
+      .sort((a, b) => b.outstanding - a.outstanding);
+    res.json({
+      data: {
+        totalOwed: round2(open.reduce((sum, r) => sum + Math.max(r.outstanding, 0), 0)),
+        totalAdvance: round2(open.reduce((sum, r) => sum + Math.max(-r.outstanding, 0), 0)),
+        suppliers: open,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin: one supplier's account for the Dues page. */
+suppliersRouter.get("/:id/ledger", requireAdmin, async (req, res, next) => {
+  try {
+    await settlePendingReturnCredits(req.params.id);
+    const detail = await supplierDueDetail(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+    res.json({ data: detail });
+  } catch (error) {
+    next(error);
+  }
+});
+
 suppliersRouter.get("/:id", async (req, res, next) => {
   try {
+    await settlePendingReturnCredits(req.params.id);
     const supplier = await prisma.supplier.findUnique({
       where: { id: req.params.id },
       include: {
@@ -343,53 +547,262 @@ suppliersRouter.patch("/:id", async (req, res, next) => {
   }
 });
 
-suppliersRouter.post("/:id/payments", async (req, res, next) => {
+/**
+ * Admin only: remove a supplier with its purchases, payments and unsold
+ * phones. Refused while any of its phones is on a bill, same rule as
+ * deleting a single stock unit.
+ */
+suppliersRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
-    const supplier = await prisma.supplier.findUnique({
+    const existing = await prisma.supplier.findUnique({
       where: { id: req.params.id },
     });
-    if (!supplier) {
+    if (!existing) {
       res.status(404).json({ error: "Supplier not found" });
       return;
     }
 
-    const parsed = paymentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: "Validation failed",
-        details: parsed.error.flatten(),
-      });
-      return;
-    }
-
-    const stats = await supplierLedgerStats(supplier.id);
-    if (parsed.data.amount > stats.outstanding + 0.009) {
-      res.status(400).json({
-        error: `Payment exceeds outstanding (${stats.outstanding})`,
-      });
-      return;
-    }
-
-    let paidAt = new Date();
-    if (parsed.data.paidAt && /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.paidAt)) {
-      const [y, m, d] = parsed.data.paidAt.split("-").map(Number);
-      paidAt = new Date(y, m - 1, d, 12, 0, 0);
-    }
-
-    const payment = await prisma.supplierPayment.create({
-      data: {
-        supplierId: supplier.id,
-        amount: round2(parsed.data.amount),
-        method: parsed.data.method,
-        paidAt,
-        note: parsed.data.note || null,
+    const stockWhere = {
+      OR: [
+        { supplierId: existing.id },
+        { purchaseItem: { purchase: { supplierId: existing.id } } },
+      ],
+    };
+    const soldCount = await prisma.stockItem.count({
+      where: {
+        AND: [
+          stockWhere,
+          { OR: [{ status: "SOLD" }, { billItems: { some: {} } }] },
+        ],
       },
     });
+    if (soldCount > 0) {
+      res.status(400).json({
+        error: `${soldCount} phone${soldCount === 1 ? " from this supplier is" : "s from this supplier are"} on a bill. Remove ${soldCount === 1 ? "it" : "them"} from the bill first.`,
+      });
+      return;
+    }
 
-    res.status(201).json({
-      data: payment,
-      ledger: await supplierLedgerStats(supplier.id),
+    const removed = await prisma.$transaction(async (tx) => {
+      const stockIds = await tx.stockItem.findMany({
+        where: stockWhere,
+        select: { id: true },
+      });
+      await binSupplier(
+        tx,
+        existing.id,
+        stockIds.map((s) => s.id),
+        req.user,
+      );
+      // Purchase items cascade with their stock; payments cascade with the supplier.
+      const stock = await tx.stockItem.deleteMany({ where: stockWhere });
+      const purchases = await tx.purchase.deleteMany({
+        where: { supplierId: existing.id },
+      });
+      await tx.supplier.delete({ where: { id: existing.id } });
+      return { stock: stock.count, purchases: purchases.count };
     });
+
+    res.json({ data: { id: existing.id, ...removed } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const paySupplierSchema = z.object({
+  /** Omit to clear everything outstanding; otherwise any amount (more than
+   *  pending is kept as advance). */
+  amount: z.number().positive().finite().optional(),
+  method: z.enum(["cash", "online", "na"]).optional(),
+  /** Day it was paid, YYYY-MM-DD (default today; no future days). */
+  paidAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  note: z.string().trim().max(200).optional().nullable(),
+});
+
+/**
+ * Admin only: pay a supplier against their outstanding. The amount is applied
+ * to unpaid purchases oldest first (same fields as a per-purchase mark-paid),
+ * and can never be more than what is outstanding.
+ */
+/** Admin only: supplier statement PDF (purchases as credit, payments as debit). */
+suppliersRouter.get("/:id/statement", requireAdmin, async (req, res, next) => {
+  try {
+    await settlePendingReturnCredits(req.params.id);
+    const statement = await buildSupplierStatement(req.params.id);
+    if (!statement) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${statement.filename}"`,
+    );
+    res.send(statement.pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = paySupplierSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Enter a valid amount" });
+      return;
+    }
+    // Work in paise so rounding can't leave ₹0.01 behind.
+    const requestedPaise =
+      parsed.data.amount === undefined
+        ? null
+        : Math.round(parsed.data.amount * 100);
+    if (requestedPaise !== null && requestedPaise <= 0) {
+      res.status(400).json({ error: "Enter an amount above ₹0" });
+      return;
+    }
+    const today = istDateString(new Date());
+    const day = parsed.data.paidAt;
+    if (day && day > today) {
+      res.status(400).json({ error: "The date can't be in the future" });
+      return;
+    }
+    const paidAt =
+      !day || day === today ? new Date() : new Date(`${day}T12:00:00.000+05:30`);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findUnique({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (!supplier) return { status: 404, error: "Supplier not found" } as const;
+      await applyPendingReturnCredits(tx, supplier.id);
+
+      const unpaid = await tx.purchase.findMany({
+        where: { supplierId: supplier.id, paidAt: null },
+        select: { totalAmount: true, paidAmount: true, purchaseDate: true },
+        orderBy: [{ purchaseDate: "asc" }, { createdAt: "asc" }],
+      });
+      const open = unpaid.filter(
+        (p) => Math.round((p.totalAmount || 0) * 100) > Math.round((p.paidAmount || 0) * 100),
+      );
+      const outstandingPaise = open.reduce(
+        (sum, p) =>
+          sum +
+          Math.round((p.totalAmount || 0) * 100) -
+          Math.min(Math.round((p.paidAmount || 0) * 100), Math.round((p.totalAmount || 0) * 100)),
+        0,
+      );
+      if (requestedPaise === null && outstandingPaise <= 0) {
+        return { status: 400, error: "Nothing is outstanding for this supplier" } as const;
+      }
+
+      // Oldest unpaid purchases first; anything over what's pending is kept
+      // as advance (used on the next stock from this supplier).
+      const totalPaise = requestedPaise ?? outstandingPaise;
+      const { applied, parts } = await applyCreditTracked(tx, supplier.id, totalPaise);
+      const againstDates = [
+        ...new Set(
+          open.slice(0, Math.max(parts.length, 0)).map((p) => format(p.purchaseDate, "dd MMM yyyy")),
+        ),
+      ];
+      const extraPaise = totalPaise - applied;
+      const note =
+        parsed.data.note?.trim() ||
+        [
+          againstDates.length
+            ? `Against purchase${againstDates.length === 1 ? "" : "s"} of ${againstDates.join(", ")}`
+            : null,
+          extraPaise > 0 ? `₹${(extraPaise / 100).toLocaleString("en-IN")} kept as advance` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+      const payment = await tx.supplierPayment.create({
+        data: {
+          supplierId: supplier.id,
+          amount: totalPaise / 100,
+          method: parsed.data.method ?? "na",
+          paidAt,
+          note: note || null,
+          unapplied: extraPaise / 100,
+          appliedJson: JSON.stringify(parts),
+        },
+      });
+      return {
+        status: 200,
+        paymentId: payment.id,
+        paid: totalPaise / 100,
+        advance: extraPaise / 100,
+        purchasesCleared: parts.filter((part) => part.c).length,
+        outstanding: (outstandingPaise - applied) / 100,
+      } as const;
+    });
+
+    if (result.status !== 200) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({
+      data: {
+        paymentId: result.paymentId,
+        paid: result.paid,
+        advance: result.advance,
+        purchasesCleared: result.purchasesCleared,
+        outstanding: result.outstanding,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Admin: undo the latest payment to a supplier (one made from the Dues page,
+ * which records where it went). Each purchase it paid goes back to unpaid by
+ * that much; advance it left behind goes away.
+ */
+suppliersRouter.delete("/:id/payments/:paymentId", requireAdmin, async (req, res, next) => {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const latest = await tx.supplierPayment.findFirst({
+        where: { supplierId: req.params.id },
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      });
+      if (!latest || latest.id !== req.params.paymentId) {
+        return { status: 400, error: "Only the latest payment can be undone" } as const;
+      }
+      if (latest.appliedJson === null || latest.purchaseId) {
+        return {
+          status: 400,
+          error: "This payment was made before Undo existed. Edit the purchase instead.",
+        } as const;
+      }
+      for (const part of readAppliedParts(latest.appliedJson)) {
+        const purchase = await tx.purchase.findUnique({
+          where: { id: part.p },
+          select: { id: true, paidAmount: true, totalAmount: true },
+        });
+        if (!purchase) continue;
+        const paidPaise = Math.min(
+          Math.round((purchase.paidAmount || 0) * 100),
+          Math.round((purchase.totalAmount || 0) * 100),
+        );
+        await tx.purchase.update({
+          where: { id: purchase.id },
+          data: { paidAmount: Math.max(paidPaise - part.a, 0) / 100, paidAt: null },
+        });
+      }
+      await tx.supplierPayment.delete({ where: { id: latest.id } });
+      return { status: 200 } as const;
+    });
+    if (result.status !== 200) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({ data: await supplierDueDetail(req.params.id) });
   } catch (error) {
     next(error);
   }

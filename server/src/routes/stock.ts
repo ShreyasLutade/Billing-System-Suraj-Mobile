@@ -4,7 +4,16 @@ import { prisma } from "../lib/prisma";
 import { normalizeCapacity } from "../lib/capacity";
 import { requireAdmin } from "../middleware/auth";
 import { upsertSupplierByName } from "../services/suppliers";
-import { intakeKindFromNote } from "../services/stockSync";
+import { intakeKindFromNote, retireStockImei } from "../services/stockSync";
+import { binStockItem } from "../services/recycleBin";
+import { buildStockExportPdf } from "../services/stockExportPdf";
+import { applyPendingReturnCredits } from "../services/productReturns";
+import {
+  paymentAtPurchaseError,
+  paymentAtPurchaseSchema,
+  recordPaymentAtPurchase,
+  setPurchaseTotal,
+} from "../services/purchasePayment";
 
 export const stockRouter = Router();
 
@@ -195,6 +204,41 @@ stockRouter.get("/", async (req, res, next) => {
   }
 });
 
+/**
+ * PDF of the mobiles in stock for one condition (Stock page → download).
+ * Costs are included only for admins, matching what the page itself shows.
+ */
+stockRouter.get("/export", async (req, res, next) => {
+  try {
+    const raw =
+      typeof req.query.condition === "string"
+        ? req.query.condition.toUpperCase()
+        : "";
+    if (raw !== "NEW" && raw !== "USED") {
+      res.status(400).json({ error: "Pass ?condition=NEW or ?condition=USED" });
+      return;
+    }
+
+    const withCost = req.user?.role === "ADMIN";
+    const exportFile = await buildStockExportPdf(raw, withCost);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${exportFile.filename}"`,
+    );
+    res.setHeader("X-Unit-Count", String(exportFile.unitCount));
+    res.setHeader("X-Model-Count", String(exportFile.modelCount));
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Content-Disposition, X-Unit-Count, X-Model-Count",
+    );
+    res.send(exportFile.pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /** Distinct accessory names for typeahead suggestions. */
 stockRouter.get("/accessory-names", async (_req, res, next) => {
   try {
@@ -229,6 +273,8 @@ const createAccessoriesSchema = z
     supplierId: z.string().trim().optional().nullable(),
     supplierName: z.string().trim().min(2).max(100).optional().nullable(),
     supplierPhone: z.string().trim().max(15).optional().nullable(),
+    /** Paid while entering the purchase (admin only). Omit = unpaid. */
+    payment: paymentAtPurchaseSchema.optional().nullable(),
   })
   .superRefine((data, ctx) => {
     if (!data.supplierId?.trim() && !data.supplierName?.trim()) {
@@ -254,6 +300,11 @@ stockRouter.post("/accessories", async (req, res, next) => {
       });
       return;
     }
+    const payment = parsed.data.payment;
+    if (payment && payment.mode !== "UNPAID" && req.user?.role !== "ADMIN") {
+      res.status(403).json({ error: "Only an admin can record a payment" });
+      return;
+    }
 
     const name = parsed.data.name.trim();
     const purchasePrice = parsed.data.purchasePrice;
@@ -270,15 +321,18 @@ stockRouter.post("/accessories", async (req, res, next) => {
       return;
     }
 
+    // Only in-stock serials block; sold ones are retired in the transaction.
+    const soldSerialOwners: Array<{ id: string; serialNumber: string }> = [];
     for (const serial of serials) {
       const existing = await prisma.stockItem.findUnique({
         where: { serialNumber: serial },
-        select: { id: true },
+        select: { id: true, status: true },
       });
-      if (existing) {
+      if (existing?.status === "AVAILABLE") {
         res.status(409).json({ error: `Serial ${serial} is already in stock` });
         return;
       }
+      if (existing) soldSerialOwners.push({ id: existing.id, serialNumber: serial });
     }
 
     let supplier = parsed.data.supplierId
@@ -302,8 +356,20 @@ stockRouter.post("/accessories", async (req, res, next) => {
 
     const purchaseDate = new Date();
     const totalAmount = round2(purchasePrice * serials.length);
+    const paymentError = paymentAtPurchaseError(payment, totalAmount);
+    if (paymentError) {
+      res.status(400).json({ error: paymentError });
+      return;
+    }
 
     const created = await prisma.$transaction(async (tx) => {
+      for (const owner of soldSerialOwners) {
+        await tx.stockItem.update({
+          where: { id: owner.id },
+          data: { serialNumber: retireStockImei(owner.serialNumber, owner.id) },
+        });
+      }
+
       const purchase = await tx.purchase.create({
         data: {
           supplierId: supplier!.id,
@@ -352,6 +418,9 @@ stockRouter.post("/accessories", async (req, res, next) => {
         });
         items.push(item);
       }
+      await recordPaymentAtPurchase(tx, purchase, payment);
+      // Supplier credit from returned products clears what's left unpaid.
+      await applyPendingReturnCredits(tx, purchase.supplierId);
       return items;
     });
 
@@ -601,23 +670,22 @@ stockRouter.post("/", async (req, res, next) => {
     const imei = cleanId(data.imei) || null;
     const serialNumber = cleanId(data.serialNumber) || null;
 
-    if (imei) {
-      const existingImei = await prisma.stockItem.findUnique({ where: { imei } });
-      if (existingImei) {
-        res.status(409).json({ error: `IMEI ${imei} is already in stock` });
-        return;
-      }
+    // Only an in-stock IMEI/serial blocks; sold ones are retired below.
+    const soldImeiOwner = imei
+      ? await prisma.stockItem.findUnique({ where: { imei } })
+      : null;
+    if (soldImeiOwner?.status === "AVAILABLE") {
+      res.status(409).json({ error: `IMEI ${imei} is already in stock` });
+      return;
     }
-    if (serialNumber) {
-      const existingSerial = await prisma.stockItem.findUnique({
-        where: { serialNumber },
-      });
-      if (existingSerial) {
-        res
-          .status(409)
-          .json({ error: `Serial ${serialNumber} is already in stock` });
-        return;
-      }
+    const soldSerialOwner = serialNumber
+      ? await prisma.stockItem.findUnique({ where: { serialNumber } })
+      : null;
+    if (soldSerialOwner?.status === "AVAILABLE") {
+      res
+        .status(409)
+        .json({ error: `Serial ${serialNumber} is already in stock` });
+      return;
     }
 
     let supplier = data.supplierId
@@ -634,6 +702,21 @@ stockRouter.post("/", async (req, res, next) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      if (soldImeiOwner && imei) {
+        await tx.stockItem.update({
+          where: { id: soldImeiOwner.id },
+          data: { imei: retireStockImei(imei, soldImeiOwner.id) },
+        });
+      }
+      if (soldSerialOwner && serialNumber) {
+        await tx.stockItem.update({
+          where: { id: soldSerialOwner.id },
+          data: {
+            serialNumber: retireStockImei(serialNumber, soldSerialOwner.id),
+          },
+        });
+      }
+
       const purchase = await tx.purchase.create({
         data: {
           supplierId: supplier!.id,
@@ -686,6 +769,8 @@ const updateStockSchema = z
   .object({
     mobileName: z.string().trim().min(2, "Mobile name is required").max(100),
     platform: z.enum(["IOS", "ANDROID"]),
+    /** NEW | USED — omit to keep the unit's current condition. */
+    condition: z.enum(["NEW", "USED"]).optional(),
     storage: z.string().trim().min(1, "Storage is required").max(30),
     ram: z.string().trim().max(30).optional().default(""),
     color: z.string().trim().min(1, "Color is required").max(40),
@@ -816,11 +901,13 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
     const ram =
       platform === "ANDROID" ? normalizeCapacity(data.ram || "") : "";
     const color = data.color.trim();
+    const condition = data.condition ?? existing.condition;
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.stockItem.update({
         where: { id: existing.id },
         data: {
+          condition,
           mobileName,
           platform,
           storage,
@@ -844,7 +931,11 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
       if (purchaseId) {
         const siblings = await tx.purchaseItem.findMany({
           where: { purchaseId },
-          include: { stockItem: { select: { id: true, purchasePrice: true } } },
+          include: {
+            stockItem: {
+              select: { id: true, purchasePrice: true, condition: true },
+            },
+          },
         });
         const totalAmount = siblings.reduce((sum, row) => {
           const price =
@@ -854,13 +945,22 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
           return sum + price;
         }, 0);
 
+        // The purchase is labelled New / Second hand as a whole: follow the
+        // unit only once every unit in it has the same condition.
+        const allSameCondition = siblings.every(
+          (row) =>
+            row.stockItemId === existing.id ||
+            row.stockItem.condition === condition,
+        );
+
         await tx.purchase.update({
           where: { id: purchaseId },
           data: {
             supplierId: supplier!.id,
-            totalAmount,
+            ...(allSameCondition ? { condition } : {}),
           },
         });
+        await setPurchaseTotal(tx, purchaseId, totalAmount);
       }
 
       // Keep sold bills in sync when identity fields change.
@@ -868,6 +968,7 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
         where: { stockItemId: existing.id },
         data: {
           productName: mobileName,
+          condition,
           platform,
           storage,
           ram,
@@ -886,7 +987,7 @@ stockRouter.patch("/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
-stockRouter.delete("/:id", async (req, res, next) => {
+stockRouter.delete("/:id", requireAdmin, async (req, res, next) => {
   try {
     const existing = await prisma.stockItem.findUnique({
       where: { id: req.params.id },
@@ -910,6 +1011,7 @@ stockRouter.delete("/:id", async (req, res, next) => {
     let purchaseDeleted = false;
 
     await prisma.$transaction(async (tx) => {
+      await binStockItem(tx, existing.id, req.user);
       await tx.stockItem.delete({ where: { id: existing.id } });
 
       if (!purchaseId) return;
@@ -929,10 +1031,7 @@ stockRouter.delete("/:id", async (req, res, next) => {
         (sum, row) => sum + row.stockItem.purchasePrice,
         0,
       );
-      await tx.purchase.update({
-        where: { id: purchaseId },
-        data: { totalAmount },
-      });
+      await setPurchaseTotal(tx, purchaseId, totalAmount);
     });
 
     res.json({

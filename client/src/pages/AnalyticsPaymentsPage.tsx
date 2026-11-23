@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import {
   Banknote,
@@ -78,6 +78,13 @@ const MODE_META: Record<
     colors: MIX.finance,
     icon: ChartColumn,
   },
+  due: {
+    name: "Due",
+    verb: "Due created",
+    countLabel: "Bills",
+    colors: MIX.due,
+    icon: Clock3,
+  },
 };
 
 function initials(name: string) {
@@ -91,6 +98,7 @@ function amountFor(row: SourceRow, mode: PaymentMode) {
   if (mode === "cash") return row.cashAmount;
   if (mode === "online") return row.onlineAmount;
   if (mode === "card") return row.cardAmount;
+  if (mode === "due") return row.dueAmount;
   return row.financeAmount;
 }
 
@@ -117,14 +125,19 @@ function readPeriod(search: URLSearchParams): {
 
 function readMode(search: URLSearchParams): PaymentMode {
   const raw = search.get("mode");
-  if (raw === "online" || raw === "card" || raw === "finance" || raw === "cash")
+  if (
+    raw === "online" ||
+    raw === "card" ||
+    raw === "finance" ||
+    raw === "cash" ||
+    raw === "due"
+  )
     return raw;
   return "cash";
 }
 
 export function AnalyticsPaymentsPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { theme } = useTheme();
   const dark = theme === "dark";
   const [searchParams, setSearchParams] = useSearchParams();
@@ -139,12 +152,6 @@ export function AnalyticsPaymentsPage() {
 
   const customRangeReady =
     period === "custom" && Boolean(customFrom || customTo);
-
-  useEffect(() => {
-    if (searchParams.get("mode") === "due") {
-      navigate("/dues", { replace: true, state: fromState(location) });
-    }
-  }, [location, navigate, searchParams]);
 
   useEffect(() => {
     if (period === "custom" && !customRangeReady) return;
@@ -192,11 +199,12 @@ export function AnalyticsPaymentsPage() {
           .toLowerCase()
           .includes(needle);
       });
+    // A due received is dated when the money came in, not by its bill.
+    const when = (row: SourceRow) =>
+      new Date(row.paidAt || row.billDate).getTime();
     filtered.sort((a, b) => {
       if (sort === "amount") return b.amount - a.amount;
-      return (
-        new Date(b.row.billDate).getTime() - new Date(a.row.billDate).getTime()
-      );
+      return when(b.row) - when(a.row);
     });
     return filtered;
   }, [data?.paymentSources, mode, query, sort]);
@@ -217,17 +225,15 @@ export function AnalyticsPaymentsPage() {
         ? summary?.online ?? 0
         : mode === "card"
           ? summary?.card ?? 0
-          : summary?.finance ?? 0;
+          : mode === "due"
+            ? summary?.due ?? 0
+            : summary?.finance ?? 0;
   const share = mixTotal > 0 ? Math.round((modeTotal / mixTotal) * 100) : 0;
 
   function setMode(next: PaymentMode) {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("mode", next);
     setSearchParams(nextParams, { replace: true });
-  }
-
-  function goDue() {
-    navigate("/dues", { state: fromState(location) });
   }
 
   return (
@@ -239,13 +245,14 @@ export function AnalyticsPaymentsPage() {
         Payment breakdown · {data?.periodLabel || "All time"}
       </p>
 
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {(
           [
             ["cash", MODE_META.cash, summary?.cash ?? 0],
             ["online", MODE_META.online, summary?.online ?? 0],
             ["card", MODE_META.card, summary?.card ?? 0],
             ["finance", MODE_META.finance, summary?.finance ?? 0],
+            ["due", MODE_META.due, summary?.due ?? 0],
           ] as const
         ).map(([key, item, value]) => {
           const Icon = item.icon;
@@ -278,24 +285,6 @@ export function AnalyticsPaymentsPage() {
             </button>
           );
         })}
-        <button
-          type="button"
-          onClick={goDue}
-          className="interactive-card rounded-[14px] border-[1.5px] border-ink-100 bg-white/90 p-3.5 text-left shadow-soft"
-        >
-          <div className="mb-2.5 flex items-center gap-2">
-            <span
-              className="grid h-7 w-7 place-items-center rounded-[8px]"
-              style={mixSurface(MIX.due, dark)}
-            >
-              <Clock3 className="h-[15px] w-[15px]" strokeWidth={2.2} />
-            </span>
-            <span className="text-[12.5px] font-medium text-ink-400">Due</span>
-          </div>
-          <p className="font-display text-lg font-bold tabular-nums text-ink-900">
-            {formatINR(summary?.due ?? 0)}
-          </p>
-        </button>
       </div>
 
       {loading ? <LoadingBlock label="Loading payments…" /> : null}
@@ -355,7 +344,7 @@ export function AnalyticsPaymentsPage() {
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-2.5">
-            <div className="tb-search min-h-11">
+            <div className="tb-search">
               <Search className="h-[17px] w-[17px] shrink-0 text-ink-400" />
               <input
                 value={query}
@@ -394,19 +383,31 @@ export function AnalyticsPaymentsPage() {
 
           {listReveal.visibleItems.length === 0 ? (
             <EmptyState
-              title={query.trim() ? `No ${mode} payments match` : `No ${mode} payments`}
+              title={
+                mode === "due"
+                  ? query.trim()
+                    ? "No dues match"
+                    : "No dues created in this period"
+                  : query.trim()
+                    ? `No ${mode} payments match`
+                    : `No ${mode} payments`
+              }
               description={
                 query.trim()
                   ? "Try another search, or clear the search box."
-                  : "Bills with this payment mode will show here."
+                  : mode === "due"
+                    ? "Bills with an amount left to pay will show here."
+                    : "Bills with this payment mode will show here."
               }
             />
           ) : (
             <div className="flex flex-col gap-2.5">
-              {listReveal.visibleItems.map(({ row, amount }, index) => (
+              {listReveal.visibleItems.map(({ row, amount }, index) => {
+                const dueReceived = row.kind === "DUE_RECEIVED";
+                return (
                 <Link
-                  key={row.id}
-                  to={`/bills/${row.id}`}
+                  key={row.entryId ?? row.id}
+                  to={dueReceived ? `/dues/${row.id}` : `/bills/${row.id}`}
                   state={fromState({
                     pathname: location.pathname,
                     search: location.search,
@@ -434,11 +435,28 @@ export function AnalyticsPaymentsPage() {
                     <p className="mt-0.5 truncate text-xs text-ink-400">
                       {row.invoiceNumber}
                       <span className="mx-1.5 opacity-50">·</span>
-                      {format(new Date(row.billDate), "dd MMM")}
+                      {format(new Date(row.paidAt || row.billDate), "dd MMM")}
                     </p>
+                    {dueReceived ? (
+                      <p
+                        className="mt-1 text-[11.5px] font-semibold"
+                        style={{ color: dark ? MIX.due.inkDark : MIX.due.ink }}
+                      >
+                        ● Due received · bill of{" "}
+                        {format(new Date(row.billDate), "dd MMM")}
+                      </p>
+                    ) : null}
                     {mode === "finance" && row.financeLabel ? (
                       <p className="mt-1 text-[11.5px] font-semibold text-[#7C3AED]">
                         ● via {row.financeLabel}
+                      </p>
+                    ) : null}
+                    {mode === "due" && row.dueDate ? (
+                      <p
+                        className="mt-1 text-[11.5px] font-semibold"
+                        style={{ color: dark ? MIX.due.inkDark : MIX.due.ink }}
+                      >
+                        ● Due by {format(new Date(row.dueDate), "dd MMM yyyy")}
                       </p>
                     ) : null}
                   </div>
@@ -453,7 +471,8 @@ export function AnalyticsPaymentsPage() {
                     ) : null}
                   </div>
                 </Link>
-              ))}
+                );
+              })}
               <LoadMoreSentinel
                 sentinelRef={listReveal.sentinelRef}
                 hasMore={listReveal.hasMore}

@@ -11,7 +11,7 @@ export async function renumberShopBillsFrom3000(
   options: { apply: boolean },
 ) {
   const shopBills = await prisma.bill.findMany({
-    where: { withGst: false },
+    where: { withGst: false, noPurchase: false },
     select: {
       id: true,
       invoiceNumber: true,
@@ -76,7 +76,7 @@ export async function renumberShopBillsFrom3000(
   });
 
   const remaining = await prisma.bill.findMany({
-    where: { withGst: false },
+    where: { withGst: false, noPurchase: false },
     select: { invoiceNumber: true, customerName: true },
     orderBy: { invoiceNumber: "asc" },
   });

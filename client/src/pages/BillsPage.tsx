@@ -7,7 +7,8 @@ import {
   ChevronDown,
   Download,
   Filter,
-  Plus,
+  ReceiptText,
+  RefreshCcw,
   Search,
   Share2,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { usePersistedTab } from "../hooks/usePersistedTab";
 import { useSessionState } from "../hooks/useSessionState";
 import { fromState } from "../lib/navMemory";
+import { useAuth } from "../auth/AuthContext";
 import { api, formatFinanceCompanies, formatINR } from "../lib/api";
 import {
   matchesBillSearch,
@@ -105,6 +107,7 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
   { value: "phone", label: "Number" },
   { value: "imei", label: "IMEI" },
   { value: "product", label: "Product" },
+  { value: "finance", label: "Finance" },
 ];
 
 const PAY = {
@@ -128,6 +131,7 @@ function searchPlaceholder(scope: BillSearchScope) {
   if (scope === "phone") return "Search by number…";
   if (scope === "imei") return "Search by IMEI…";
   if (scope === "product") return "Search by product…";
+  if (scope === "finance") return "Search by finance company…";
   return "Search customer, phone, invoice…";
 }
 
@@ -195,6 +199,7 @@ function soldProductLabel(bill: Bill): string | null {
 export function BillsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useAuth();
   const [tab, setTab] = usePersistedTab(
     "tab",
     "bills.tab",
@@ -334,14 +339,19 @@ export function BillsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="History"
+        icon={ReceiptText}
         title="Bills"
-        description="Every bill with its payment split. Search by name, phone, product or IMEI — filters stack with the period."
         action={
-          <Link to="/" state={fromState(location)} className="btn-primary">
-            <Plus className="h-4 w-4" />
-            New bill
-          </Link>
+          isAdmin ? (
+            <Link
+              to="/bills/replace"
+              state={fromState(location)}
+              className="btn-primary"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Replace / return
+            </Link>
+          ) : undefined
         }
       />
 
@@ -480,8 +490,8 @@ export function BillsPage() {
                       className={clsx(
                         "rounded-full border px-1 py-1.5 text-center text-[11px] font-semibold transition sm:text-[12px]",
                         period === "custom"
-                          ? "border-[#2563EB] bg-[#3B82F6] text-white shadow-[0_0_0_3px_#E8F0FE]"
-                          : "border-[#93C5FD] bg-[#E8F0FE] text-[#2563EB] hover:border-[#3B82F6] hover:bg-[#DBEAFE]",
+                          ? "border-tide-600 bg-tide-400 text-[#1f1600] shadow-[0_0_0_3px_rgba(255,168,0,0.2)]"
+                          : "border-tide-400/50 bg-tide-100 text-tide-600 hover:border-tide-500 hover:bg-tide-100",
                       )}
                       onClick={() => {
                         setPeriod("custom");
@@ -646,7 +656,7 @@ export function BillsPage() {
                         className={clsx(
                           "flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[13.5px] transition",
                           on
-                            ? "bg-[#F1F5FF] font-semibold text-ink-900"
+                            ? "bg-tide-100/60 font-semibold text-ink-900"
                             : "font-medium text-ink-500 hover:bg-[#F4F5F7] hover:text-ink-900",
                         )}
                         onClick={() => {
@@ -658,7 +668,7 @@ export function BillsPage() {
                         {option.label}
                         <Check
                           className={clsx(
-                            "h-[15px] w-[15px] text-[#2563EB]",
+                            "h-[15px] w-[15px] text-tide-600",
                             on ? "opacity-100" : "opacity-0",
                           )}
                           strokeWidth={2.6}
@@ -781,14 +791,14 @@ export function BillsPage() {
                   {format(new Date(bill.billDate), "dd MMM")}
                 </p>
                 {soldLabel ? (
-                  <p className="mt-1 hidden truncate text-[12.5px] font-semibold leading-snug text-[#2563EB] dark:text-[#93C5FD] sm:block">
+                  <p className="mt-1 hidden truncate text-[12.5px] font-semibold leading-snug text-tide-600 dark:text-tide-400 sm:block">
                     {soldLabel}
                   </p>
                 ) : null}
               </div>
 
               {soldLabel ? (
-                <p className="min-w-0 truncate text-[12.5px] font-semibold leading-snug text-[#2563EB] dark:text-[#93C5FD] max-sm:[grid-area:product] sm:hidden">
+                <p className="min-w-0 truncate text-[12.5px] font-semibold leading-snug text-tide-600 dark:text-tide-400 max-sm:[grid-area:product] sm:hidden">
                   {soldLabel}
                 </p>
               ) : null}

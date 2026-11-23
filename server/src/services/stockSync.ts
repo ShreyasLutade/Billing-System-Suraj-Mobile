@@ -167,7 +167,10 @@ function resolveExchangeImei(invoiceNumber: string, rawImei?: string | null) {
   return `EXC${safeInvoice}${Date.now().toString(36).toUpperCase()}`;
 }
 
-/** Free a unique IMEI slot while keeping the sold/historical stock row readable. */
+/**
+ * Free a unique IMEI (or serial) slot while keeping the sold/historical stock
+ * row readable.
+ */
 export function retireStockImei(imei: string, stockId: string) {
   const cleaned = imei.replace(/\s+/g, "").trim();
   return `${cleaned}~${stockId}`;

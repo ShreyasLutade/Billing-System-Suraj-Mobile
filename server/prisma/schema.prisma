@@ -14,6 +14,8 @@ model User {
   name         String
   /// ADMIN | STAFF
   role         String
+  /// Blocked accounts keep their data but cannot log in.
+  blocked      Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -94,6 +96,12 @@ model Bill {
   dueAmount          Float            @default(0)
   dueDate           DateTime?
   dueSettled        Boolean          @default(false)
+  /// Admin-only due: hidden from staff on the dues page
+  duePrivate        Boolean          @default(false)
+  /// Khata entry with no purchase (added from the Dues page "+"): no items,
+  /// totals 0, kept out of bills, sales and analytics. dueAmount can go below
+  /// 0 here (they paid first: you'll give it back).
+  noPurchase        Boolean          @default(false)
   dueSettledMethod  String?
   dueSettledAt      DateTime?
   isPartialPaid     Boolean          @default(false)
@@ -105,6 +113,8 @@ model Bill {
   updatedAt         DateTime         @updatedAt
   items             BillItem[]
   duePayments       DuePayment[]
+  /// "You gave" entries added on the due page (money given / added without a new bill)
+  dueCharges        DueCharge[]
   financeCompany    FinanceCompany?  @relation(fields: [financeCompanyId], references: [id])
 
   @@index([billDate])
@@ -124,10 +134,31 @@ model DuePayment {
   kind      String   @default("partial")
   paidAt    DateTime @default(now())
   note      String?
+  /// Promised date before this payment moved it (so Undo can put it back).
+  dueDateBefore DateTime?
+  /// Part of this payment that cleared "You gave" amounts (kept off the bill's
+  /// cash / online / card, which only ever hold money paid against the bill).
+  chargePart Float @default(0)
   bill      Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
 
   @@index([billId])
   @@index([paidAt])
+}
+
+/// "You gave" on a due: money given to (or an amount added for) the customer
+/// on top of the bill, e.g. cash lent or an old balance. Raises the bill's due.
+model DueCharge {
+  id            String   @id @default(cuid())
+  billId        String
+  amount        Float
+  note          String?
+  givenAt       DateTime @default(now())
+  /// Promised date before this entry moved it (so Undo can put it back).
+  dueDateBefore DateTime?
+  createdByName String?
+  bill          Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
 }
 
 model BillItem {
@@ -150,6 +181,8 @@ model BillItem {
   imei2          String?
   serialNumber   String?
   warrantyMonths Int?
+  /// Comma-separated BOX,CHARGER,CABLE,BILL handed to the customer with this phone
+  includedAccessories String?
   bill           Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
   mobileCatalog  MobileCatalog? @relation(fields: [mobileCatalogId], references: [id])
   stockItem      StockItem? @relation(fields: [stockItemId], references: [id])
@@ -250,6 +283,9 @@ model StockItem {
   billItems     BillItem[]
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   purchaseItem  PurchaseItem?
+  productReturn ProductReturn? @relation("ReturnedUnit")
+  /// Set when this unit was given to a customer as a replacement.
+  replacementFor ProductReturn? @relation("ReplacementUnit")
 
   @@index([kind])
   @@index([condition])
@@ -274,6 +310,7 @@ model Supplier {
   purchases  Purchase[]
   payments   SupplierPayment[]
   stockItems StockItem[]
+  productReturns ProductReturn[]
 
   @@index([name])
   @@index([isExchange])
@@ -291,12 +328,16 @@ model Purchase {
   condition    String    @default("NEW")
   /// When set, this purchase is fully paid to the supplier
   paidAt       DateTime?
+  /// Paid so far while not fully paid (part payments)
+  paidAmount   Float     @default(0)
   createdByUserId String?
   createdByName   String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   supplier     Supplier  @relation(fields: [supplierId], references: [id])
   items        PurchaseItem[]
+  /// Payment made while entering this purchase (Fully paid / Custom paid)
+  payments     SupplierPayment[]
 
   @@index([supplierId])
   @@index([purchaseDate])
@@ -314,6 +355,58 @@ model PurchaseItem {
   @@index([purchaseId])
 }
 
+/// Recycle bin: a snapshot of everything a delete removed, kept for 30 days so
+/// the delete can be undone. `payload` is JSON (rows by table).
+/// A sold unit sent back to its supplier: the customer got another unit from
+/// stock (REPLACE) or a refund (RETURN). Its purchase price is credited to
+/// the supplier: applied to unpaid purchases like a payment (creditApplied);
+/// any part that could not be applied stays as supplier credit.
+model ProductReturn {
+  id              String    @id @default(cuid())
+  stockItemId     String    @unique
+  supplierId      String?
+  /// Bill the unit was sold on (snapshot, the bill may change later)
+  billId          String?
+  billItemId      String?
+  invoiceNumber   String?
+  customerName    String?
+  /// Purchase price credited to the supplier
+  amount          Float     @default(0)
+  creditApplied   Float     @default(0)
+  /// REPLACE (customer got another unit from stock) | RETURN (refund)
+  kind            String?
+  /// RETURN: money given back to the customer, and how (cash | online).
+  refundAmount    Float     @default(0)
+  refundMethod    String?
+  /// REPLACE: the unit from stock given to the customer (marked SOLD).
+  replacementStockItemId String? @unique
+  note            String?
+  createdByUserId String?
+  createdByName   String?
+  createdAt       DateTime  @default(now())
+  stockItem       StockItem @relation("ReturnedUnit", fields: [stockItemId], references: [id], onDelete: Cascade)
+  replacementStock StockItem? @relation("ReplacementUnit", fields: [replacementStockItemId], references: [id], onDelete: SetNull)
+  supplier        Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([billId])
+  @@index([createdAt])
+}
+
+model RecycleBinEntry {
+  id            String   @id @default(cuid())
+  /// BILL | SUPPLIER | STOCK
+  kind          String
+  label         String
+  detail        String?
+  payload       String
+  deletedAt     DateTime @default(now())
+  deletedById   String?
+  deletedByName String?
+
+  @@index([deletedAt])
+}
+
 model SupplierPayment {
   id         String   @id @default(cuid())
   supplierId String
@@ -322,9 +415,42 @@ model SupplierPayment {
   method     String
   paidAt     DateTime @default(now())
   note       String?
+  /// Set when paid while entering this purchase ("Paid at purchase")
+  purchaseId String?
+  /// Paid more than was pending: the part not yet used on a purchase
+  /// (advance). Used up automatically on the next stock from this supplier.
+  unapplied  Float    @default(0)
+  /// Where this payment went, for Undo: JSON [{ p: purchaseId, a: paise,
+  /// c: true if it cleared that purchase }]. Null for older payments.
+  appliedJson String?
   createdAt  DateTime @default(now())
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
   @@index([paidAt])
+  @@index([purchaseId])
+}
+
+/// Shop money books on Analytics: Cash, Online and Expense, written by hand
+/// (khata style). Nothing here is filled in from bills automatically.
+model MoneyEntry {
+  id            String   @id @default(cuid())
+  /// CASH | ONLINE | EXPENSE
+  book          String
+  /// IN (money got) | OUT (money gave / spent) | OPENING (cash in hand at the start)
+  kind          String
+  amount        Float
+  /// Expense: rent, electricity, salary…  Cash / Online: optional reason.
+  category      String?
+  /// Expense: how it was paid (cash | online | na).
+  method        String?
+  note          String?
+  /// The day it happened (IST midday for back-dated entries).
+  entryDate     DateTime @default(now())
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([book, entryDate])
 }
