@@ -768,7 +768,7 @@ export const api = {
   },
   /** Mobiles in shop as a PDF, A→Z (cost column only for admins, when asked). */
   downloadStockStatement: async (
-    scope: "NEW" | "USED" | "ALL",
+    scope: "NEW" | "USED" | "ALL" | "ACC",
     includePrice = false,
   ) => {
     const token = getAuthToken();

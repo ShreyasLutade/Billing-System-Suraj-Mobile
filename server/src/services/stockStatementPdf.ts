@@ -20,7 +20,7 @@ import { intakeKindFromNote } from "./stockSync";
  * exchange, and how long it has been in stock. Cost is shown to admins only.
  */
 
-export type StockStatementScope = "NEW" | "USED" | "ALL";
+export type StockStatementScope = "NEW" | "USED" | "ALL" | "ACC";
 
 const PAGE = { width: 841.89, height: 595.28 };
 const M = 28;
@@ -59,7 +59,7 @@ function rupees(amount: number) {
 }
 
 function scopeTitle(scope: StockStatementScope) {
-  return scope === "NEW" ? "NEW MOBILES" : scope === "USED" ? "OLD MOBILES" : "ALL STOCK";
+  return scope === "NEW" ? "NEW MOBILES" : scope === "USED" ? "OLD MOBILES" : scope === "ACC" ? "ACCESSORIES" : "ALL STOCK";
 }
 
 function legacySupplierName(raw: string) {
@@ -72,6 +72,21 @@ function legacySupplierName(raw: string) {
 }
 
 function columns(scope: StockStatementScope, showCost: boolean): Col[] {
+  if (scope === "ACC") {
+    const acc: Col[] = [
+      { key: "n", label: "#", width: 24, align: "right" },
+      { key: "mobile", label: "Accessory", width: 200, align: "left" },
+      { key: "ids", label: "Serial no.", width: 150, align: "left" },
+      { key: "supplier", label: "Supplier / from", width: 150, align: "left" },
+      { key: "since", label: "In stock since", width: 90, align: "left" },
+    ];
+    if (showCost) acc.push({ key: "cost", label: "Cost", width: 70, align: "right" });
+    const usedAcc = acc.reduce((sum, col) => sum + col.width, 0);
+    const growAcc = acc.filter((col) => col.key !== "n");
+    const baseAcc = growAcc.reduce((sum, col) => sum + col.width, 0);
+    for (const col of growAcc) col.width += ((W - usedAcc) * col.width) / baseAcc;
+    return acc;
+  }
   const cols: Col[] = [
     { key: "n", label: "#", width: 24, align: "right" },
     { key: "mobile", label: "Mobile", width: 140, align: "left" },
@@ -102,9 +117,9 @@ export async function buildStockStatementPdf(
   const items = await prisma.stockItem.findMany({
     where: {
       status: "AVAILABLE",
-      NOT: { kind: "ACCESSORY" },
+      ...(scope === "ACC" ? { kind: "ACCESSORY" } : { NOT: { kind: "ACCESSORY" } }),
       productReturn: null,
-      ...(scope === "ALL" ? {} : { condition: scope }),
+      ...(scope === "ALL" || scope === "ACC" ? {} : { condition: scope }),
     },
     include: {
       supplier: { select: { name: true, isExchange: true } },
@@ -159,6 +174,7 @@ export async function buildStockStatementPdf(
   );
 
   const totals = {
+    noun: scope === "ACC" ? "accessory" : "mobile",
     count: rows.length,
     newCount: rows.filter((r) => r.condition === "NEW").length,
     oldCount: rows.filter((r) => r.condition === "USED").length,
@@ -167,7 +183,7 @@ export async function buildStockStatementPdf(
   };
 
   const pdf = await render({ scope, rows, totals, showCost: options.showCost });
-  const part = scope === "NEW" ? "new-mobiles" : scope === "USED" ? "old-mobiles" : "all-stock";
+  const part = scope === "NEW" ? "new-mobiles" : scope === "USED" ? "old-mobiles" : scope === "ACC" ? "accessories" : "all-stock";
   return {
     pdf,
     filename: `stock-${part}-${format(today, "yyyy-MM-dd")}.pdf`,
@@ -175,6 +191,8 @@ export async function buildStockStatementPdf(
 }
 
 type Totals = {
+  /** "mobile" or "accessory" */
+  noun: string;
   count: number;
   newCount: number;
   oldCount: number;
@@ -219,7 +237,7 @@ function drawHeader(doc: PDFKit.PDFDocument, scope: StockStatementScope) {
     .font(FONT.regular)
     .fontSize(8)
     .fillColor(COLORS.muted)
-    .text(`Mobiles in shop · as of ${day(new Date())}`, M, 42, { width: W, align: "right" });
+    .text(`${scope === "ACC" ? "Accessories" : "Mobiles"} in shop · as of ${day(new Date())}`, M, 42, { width: W, align: "right" });
 
   doc.moveTo(M, 72).lineTo(PAGE.width - M, 72).strokeColor(COLORS.slate).lineWidth(1).stroke();
   return 84;
@@ -233,7 +251,7 @@ function drawSummary(
   showCost: boolean,
 ) {
   const boxes: Array<{ label: string; value: string; fill: string; color: string }> = [
-    { label: "Mobiles in stock", value: String(t.count), fill: "#F4F6FB", color: COLORS.ink },
+    { label: scope === "ACC" ? "Accessories in stock" : "Mobiles in stock", value: String(t.count), fill: "#F4F6FB", color: COLORS.ink },
   ];
   if (scope === "ALL") {
     boxes.push(
@@ -241,7 +259,7 @@ function drawSummary(
       { label: "Old", value: String(t.oldCount), fill: "#FFF7E6", color: AMBER },
     );
   }
-  boxes.push({ label: "From exchange", value: String(t.exchangeCount), fill: "#EAF2FF", color: BLUE });
+  if (scope !== "ACC") boxes.push({ label: "From exchange", value: String(t.exchangeCount), fill: "#EAF2FF", color: BLUE });
   if (showCost) {
     boxes.push({ label: "Total cost", value: rupees(t.cost), fill: "#F4F6FB", color: COLORS.ink });
   }
@@ -352,7 +370,7 @@ function drawTotals(doc: PDFKit.PDFDocument, y: number, t: Totals, cols: Col[], 
   const h = 22;
   doc.rect(M, y, W, h).fill(COLORS.accentSoft);
   doc.font(FONT.bold).fontSize(8.5).fillColor(COLORS.ink);
-  doc.text(`Total · ${t.count} mobile${t.count === 1 ? "" : "s"}`, M + PAD, y + 7, { lineBreak: false });
+  doc.text(`Total · ${t.count} ${t.count === 1 ? t.noun : t.noun === "accessory" ? "accessories" : `${t.noun}s`}`, M + PAD, y + 7, { lineBreak: false });
   if (showCost) {
     const costCol = cols[cols.length - 1];
     doc.text(money(t.cost), M + W - costCol.width + PAD, y + 7, {
@@ -364,7 +382,7 @@ function drawTotals(doc: PDFKit.PDFDocument, y: number, t: Totals, cols: Col[], 
   return y + h;
 }
 
-function drawFooters(doc: PDFKit.PDFDocument) {
+function drawFooters(doc: PDFKit.PDFDocument, noun = "mobiles") {
   const range = doc.bufferedPageRange();
   const generated = format(new Date(), "dd MMM yyyy, h:mm a");
   for (let i = range.start; i < range.start + range.count; i += 1) {
@@ -375,7 +393,7 @@ function drawFooters(doc: PDFKit.PDFDocument) {
       .font(FONT.regular)
       .fontSize(7.5)
       .fillColor(COLORS.muted)
-      .text("Only mobiles currently in the shop (sold and returned units are not listed).", M, y, {
+      .text(`Only ${noun} currently in the shop (sold and returned units are not listed).`, M, y, {
         width: W - 200,
         lineBreak: false,
       })
@@ -434,7 +452,7 @@ function render(data: {
       y = M;
     }
     drawTotals(doc, y, data.totals, cols, data.showCost);
-    drawFooters(doc);
+    drawFooters(doc, data.scope === "ACC" ? "accessories" : "mobiles");
     doc.end();
   });
 }

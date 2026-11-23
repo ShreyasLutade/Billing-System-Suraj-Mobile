@@ -212,7 +212,7 @@ stockRouter.get("/statement", async (req, res, next) => {
   try {
     const raw = String(req.query.scope || "ALL").toUpperCase();
     const scope: StockStatementScope =
-      raw === "NEW" || raw === "USED" ? raw : "ALL";
+      raw === "NEW" || raw === "USED" || raw === "ACC" ? raw : "ALL";
     const { pdf, filename } = await buildStockStatementPdf(scope, {
       showCost: req.user?.role === "ADMIN" && req.query.price === "1",
     });

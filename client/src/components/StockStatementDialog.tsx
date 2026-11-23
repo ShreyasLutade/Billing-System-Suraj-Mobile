@@ -1,11 +1,11 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Boxes, ChevronRight, Loader2, RefreshCw, Smartphone, X } from "lucide-react";
+import { Boxes, ChevronRight, Headphones, Loader2, RefreshCw, Smartphone, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 
-type Scope = "NEW" | "USED" | "ALL";
+type Scope = "NEW" | "USED" | "ALL" | "ACC";
 
 const OPTIONS: Array<{
   scope: Scope;
@@ -15,7 +15,8 @@ const OPTIONS: Array<{
 }> = [
   { scope: "NEW", label: "New mobiles", hint: "Only new phones in stock", icon: Smartphone },
   { scope: "USED", label: "Old mobiles", hint: "Second-hand & exchange phones", icon: RefreshCw },
-  { scope: "ALL", label: "All stock", hint: "New and old together", icon: Boxes },
+  { scope: "ACC", label: "Accessories", hint: "Accessories in this shop's stock", icon: Headphones },
+  { scope: "ALL", label: "All mobiles", hint: "New and old mobiles together", icon: Boxes },
 ];
 
 /** Pick which mobiles go in the stock statement PDF, then download it. */
