@@ -17,7 +17,21 @@ export async function applyCreditToPurchases(
   amountPaise: number,
   preferPurchaseId?: string | null,
 ) {
-  if (amountPaise <= 0) return 0;
+  return (await applyCreditTracked(tx, supplierId, amountPaise, preferPurchaseId)).applied;
+}
+
+/** One purchase a payment / credit went to: paise, and whether it cleared it. */
+export type AppliedPart = { p: string; a: number; c: boolean };
+
+/** Same as applyCreditToPurchases, also listing where the money went. */
+export async function applyCreditTracked(
+  tx: Tx,
+  supplierId: string,
+  amountPaise: number,
+  preferPurchaseId?: string | null,
+): Promise<{ applied: number; parts: AppliedPart[] }> {
+  const parts: AppliedPart[] = [];
+  if (amountPaise <= 0) return { applied: 0, parts };
   const unpaid = await tx.purchase.findMany({
     where: { supplierId, paidAt: null },
     select: { id: true, totalAmount: true, paidAmount: true },
@@ -48,8 +62,46 @@ export async function applyCreditToPurchases(
           ? { paidAt: now, paidAmount: p.totalAmount }
           : { paidAmount: newPaid / 100 },
     });
+    parts.push({ p: p.id, a: apply, c: newPaid >= totalPaise });
   }
-  return amountPaise - left;
+  return { applied: amountPaise - left, parts };
+}
+
+/** Parse a payment's appliedJson (null / bad JSON = nothing recorded). */
+export function readAppliedParts(json: string | null | undefined): AppliedPart[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as AppliedPart[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Advance paid to a supplier (paid more than was pending) is used up on their
+ * unpaid purchases, oldest advance first; each payment keeps a record of
+ * where it went so it can still be undone.
+ */
+export async function applyPendingAdvances(tx: Tx, supplierId: string) {
+  const payments = await tx.supplierPayment.findMany({
+    where: { supplierId, unapplied: { gt: 0 } },
+    select: { id: true, unapplied: true, appliedJson: true },
+    orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }],
+  });
+  for (const pay of payments) {
+    const leftPaise = toPaise(pay.unapplied);
+    if (leftPaise <= 0) continue;
+    const { applied, parts } = await applyCreditTracked(tx, supplierId, leftPaise);
+    if (applied <= 0) break;
+    await tx.supplierPayment.update({
+      where: { id: pay.id },
+      data: {
+        unapplied: (leftPaise - applied) / 100,
+        appliedJson: JSON.stringify([...readAppliedParts(pay.appliedJson), ...parts]),
+      },
+    });
+  }
 }
 
 /**
@@ -57,6 +109,11 @@ export async function applyCreditToPurchases(
  * already paid) is used up as soon as the supplier has something unpaid again.
  */
 export async function applyPendingReturnCredits(tx: Tx, supplierId: string) {
+  await applyPendingReturnCreditsOnly(tx, supplierId);
+  await applyPendingAdvances(tx, supplierId);
+}
+
+async function applyPendingReturnCreditsOnly(tx: Tx, supplierId: string) {
   const pending = await tx.productReturn.findMany({
     where: { supplierId },
     select: { id: true, amount: true, creditApplied: true },
@@ -85,6 +142,17 @@ export async function settlePendingReturnCredits(supplierId?: string) {
       .filter((r) => r.supplierId && toPaise(r.amount) > toPaise(r.creditApplied))
       .map((r) => r.supplierId as string),
   );
+  // Suppliers with advance not yet used, but only if something is unpaid.
+  const advances = await prisma.supplierPayment.findMany({
+    where: {
+      unapplied: { gt: 0 },
+      ...(supplierId ? { supplierId } : {}),
+      supplier: { purchases: { some: { paidAt: null } } },
+    },
+    select: { supplierId: true },
+    distinct: ["supplierId"],
+  });
+  for (const a of advances) ids.add(a.supplierId);
   for (const id of ids) {
     await prisma.$transaction((tx) => applyPendingReturnCredits(tx, id));
   }

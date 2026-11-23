@@ -29,7 +29,7 @@ import type { CustomerDueDetail } from "../types";
 
 type Entry = CustomerDueDetail["entries"][number];
 
-function formatDate(value: string | null, withYear = true) {
+export function formatDate(value: string | null, withYear = true) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
@@ -42,7 +42,7 @@ function formatDate(value: string | null, withYear = true) {
 }
 
 /** "12 Oct" this year, "12 Oct 2025" otherwise. */
-function shortDate(value: string) {
+export function shortDate(value: string) {
   const sameYear =
     new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", year: "numeric" }) ===
     new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", year: "numeric" });
@@ -691,7 +691,7 @@ function EntryRow({
  * follows the visible area so it rests right on top of the keyboard (and
  * scrolls inside if it doesn't fit).
  */
-function Sheet({
+export function Sheet({
   labelledBy,
   busy,
   onClose,
@@ -851,7 +851,7 @@ function SheetHeader({
   );
 }
 
-function ErrorNote({ error }: { error: string | null }) {
+export function ErrorNote({ error }: { error: string | null }) {
   if (!error) return null;
   return (
     <p className="mt-3 rounded-2xl bg-orange-50 px-4 py-3 text-sm text-ember-500 dark:bg-orange-500/10">
@@ -860,7 +860,7 @@ function ErrorNote({ error }: { error: string | null }) {
   );
 }
 
-function AmountField({
+export function AmountField({
   id,
   value,
   onChange,

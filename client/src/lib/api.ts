@@ -10,6 +10,8 @@ import type {
   Bill,
   CreateBillPayload,
   ClearedDueItem,
+  SupplierDueRow,
+  SupplierLedger,
   CustomerDueDetail,
   DuesSummary,
   ExchangeAccessory,
@@ -736,13 +738,29 @@ export const api = {
     URL.revokeObjectURL(url);
   },
   /** Pay a supplier's outstanding (oldest purchases first). Omit amount to pay it all. */
-  paySupplier: (id: string, amount?: number) =>
+  paySupplier: (
+    id: string,
+    amount?: number,
+    extra?: { method?: "cash" | "online" | "na"; paidAt?: string | null; note?: string | null },
+  ) =>
     request<{
-      data: { paid: number; purchasesCleared: number; outstanding: number };
+      data: { paid: number; purchasesCleared: number; outstanding: number; advance?: number };
     }>(`/suppliers/${id}/pay`, {
       method: "POST",
-      body: JSON.stringify(amount === undefined ? {} : { amount }),
+      body: JSON.stringify({ ...(amount === undefined ? {} : { amount }), ...(extra ?? {}) }),
     }),
+  /** Dues page, Supplier tab. */
+  listSupplierDues: () =>
+    request<{
+      data: { totalOwed: number; totalAdvance: number; suppliers: SupplierDueRow[] };
+    }>(`/suppliers/dues`),
+  getSupplierLedger: (id: string) =>
+    request<{ data: SupplierLedger }>(`/suppliers/${encodeURIComponent(id)}/ledger`),
+  undoSupplierPayment: (id: string, paymentId: string) =>
+    request<{ data: SupplierLedger }>(
+      `/suppliers/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}`,
+      { method: "DELETE" },
+    ),
   createPurchase: (payload: {
     supplierId?: string | null;
     supplierName?: string | null;

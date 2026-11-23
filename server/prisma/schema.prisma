@@ -417,6 +417,12 @@ model SupplierPayment {
   note       String?
   /// Set when paid while entering this purchase ("Paid at purchase")
   purchaseId String?
+  /// Paid more than was pending: the part not yet used on a purchase
+  /// (advance). Used up automatically on the next stock from this supplier.
+  unapplied  Float    @default(0)
+  /// Where this payment went, for Undo: JSON [{ p: purchaseId, a: paise,
+  /// c: true if it cleared that purchase }]. Null for older payments.
+  appliedJson String?
   createdAt  DateTime @default(now())
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)

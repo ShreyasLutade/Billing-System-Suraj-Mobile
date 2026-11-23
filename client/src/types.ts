@@ -630,6 +630,45 @@ export type DueItem = {
   noPurchase?: boolean;
 };
 
+/** Dues page, Supplier tab: what you owe a supplier (below 0 = advance). */
+export type SupplierDueRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  outstanding: number;
+  advance: number;
+  purchaseCount: number;
+  lastPurchaseDate: string | null;
+};
+
+/** A supplier's account: purchases (you got), payments / returns (you gave). */
+export type SupplierLedger = {
+  id: string;
+  name: string;
+  phone: string | null;
+  outstanding: number;
+  advance: number;
+  supplierCredit: number;
+  totalPurchased: number;
+  purchaseCount: number;
+  undoPaymentId: string | null;
+  entries: Array<{
+    key: string;
+    kind: "purchase" | "payment" | "return";
+    date: string;
+    particulars: string;
+    detail: string;
+    qty: number | null;
+    got: number;
+    gave: number;
+    paidNote: string | null;
+    method: string | null;
+    paymentId: string | null;
+    purchaseId: string | null;
+    balanceAfter: number;
+  }>;
+};
+
 /** A due that's back to 0 (not on the list), found by search. */
 export type ClearedDueItem = {
   id: string;

@@ -26,7 +26,13 @@ type Entry = {
   paidFor?: string;
   /** Purchase rows: "Paid at purchase · …" when paid while entering it. */
   paidNote?: string;
+  /** Payment rows: the SupplierPayment id (none for older "Mark paid"). */
+  paymentId?: string;
+  /** Payment rows: cash | online | na. */
+  method?: string;
 };
+
+export type SupplierLedgerEntry = Entry;
 
 const PAGE = { width: 595.28, height: 841.89 };
 const M = 32;
@@ -83,6 +89,30 @@ function itemsSummary(
 }
 
 export async function buildSupplierStatement(supplierId: string) {
+  const ledger = await loadSupplierLedger(supplierId);
+  if (!ledger) return null;
+  const { supplier, entries, totalCredit, totalDebit, totalReturned } = ledger;
+  const pdf = await renderStatement({
+    name: supplier.name,
+    phone: supplier.phone,
+    entries,
+    totalCredit,
+    totalDebit,
+    totalReturned,
+  });
+  const safeName = supplier.name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "supplier";
+  return {
+    pdf,
+    filename: `Statement-${safeName}-${format(new Date(), "yyyy-MM-dd")}.pdf`,
+  };
+}
+
+/**
+ * The supplier's account, oldest first: purchases (credit: what we owe goes
+ * up), payments and returned units (debit). A payment made while entering a
+ * purchase sits on that purchase's row. Closing balance = outstanding.
+ */
+export async function loadSupplierLedger(supplierId: string) {
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
     include: {
@@ -128,13 +158,16 @@ export async function buildSupplierStatement(supplierId: string) {
 
   let recorded = 0;
   for (const pay of supplier.payments) {
-    recorded += pay.amount;
+    // Only the part used on purchases (advance waits for the next stock).
+    recorded += pay.amount - (pay.unapplied || 0);
     // Paid while entering the purchase (Fully paid / Custom paid).
     const atPurchase = Boolean(pay.purchaseId);
     entries.push({
       date: pay.paidAt,
       kind: "payment",
       particulars: atPurchase ? "Paid at purchase" : "Payment",
+      paymentId: pay.id,
+      method: pay.method,
       detail: atPurchase
         ? (pay.note || "").replace(/ at purchase$/, "")
         : pay.note || "",
@@ -239,18 +272,12 @@ export async function buildSupplierStatement(supplierId: string) {
 
   const totalCredit = round2(entries.reduce((s, e) => s + e.credit, 0));
   const totalDebit = round2(entries.reduce((s, e) => s + e.debit, 0));
-  const pdf = await renderStatement({
-    name: supplier.name,
-    phone: supplier.phone,
+  return {
+    supplier,
     entries,
     totalCredit,
     totalDebit,
     totalReturned: round2(totalReturned),
-  });
-  const safeName = supplier.name.replace(/[^\w.-]+/g, "_").slice(0, 40) || "supplier";
-  return {
-    pdf,
-    filename: `Statement-${safeName}-${format(new Date(), "yyyy-MM-dd")}.pdf`,
   };
 }
 
