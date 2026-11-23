@@ -5,9 +5,8 @@ import { motion } from "framer-motion";
 import { ArrowDownUp, BarChart3, ChevronRight, PackageOpen } from "lucide-react";
 import clsx from "clsx";
 import { PeriodChipRow } from "../components/PeriodFilter";
-import { EmptyState, PageHeader } from "../components/ui";
+import { EmptyState, PageHeader, LoadingBlock } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
-import { PageSkeleton } from "../components/Skeleton";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
@@ -119,9 +118,7 @@ export function StaffAnalyticsPage() {
       ) : null}
 
       {!sales ? (
-        <div className="space-y-3" aria-label="Loading analytics">
-          <PageSkeleton variant="analytics" />
-        </div>
+        <LoadingBlock label="Loading analytics…" variant="analytics" />
       ) : (
         <>
           {/* Headline: phones sold and what they sold for */}

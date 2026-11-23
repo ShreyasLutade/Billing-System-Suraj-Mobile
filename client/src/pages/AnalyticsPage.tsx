@@ -40,7 +40,7 @@ import {
   PeriodFilter,
   type AnalyticsPeriodValue,
 } from "../components/PeriodFilter";
-import { EmptyState, PageHeader } from "../components/ui";
+import { EmptyState, PageHeader, LoadingBlock } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
@@ -57,7 +57,6 @@ import {
 import { MIX, mixSurface } from "../lib/analyticsMix";
 import { motion } from "framer-motion";
 import { MoneyButtons } from "../components/money/MoneyButtons";
-import { PageSkeleton } from "../components/Skeleton";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendCard } from "../components/TrendCard";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
@@ -575,9 +574,7 @@ export function AnalyticsPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3" aria-label="Loading analytics">
-          <PageSkeleton variant="analytics" />
-        </div>
+        <LoadingBlock label="Loading analytics…" variant="analytics" />
       ) : null}
       {error ? (
         <div className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</div>

@@ -2911,3 +2911,14 @@ html.dark .skel-draw-dark {
 html.dark .skel-draw .skel-draw {
   --skel-fill: #2a3a58;
 }
+/* The melting copy of a skeleton: frozen, filled. */
+.skel-ghost *,
+.skel-ghost *::before {
+  animation: none !important;
+}
+.skel-ghost .skel-draw::before {
+  opacity: 1;
+}
+.skel-ghost .skel-draw-svg {
+  display: none;
+}

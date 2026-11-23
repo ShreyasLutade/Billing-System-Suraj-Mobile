@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
-import { PageSkeleton, type SkeletonVariant } from "./Skeleton";
+import { useLayoutEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { PageSkeleton, meltSkeleton, type SkeletonVariant } from "./Skeleton";
 
 export function BackLink({
   to,
@@ -190,8 +190,18 @@ export function LoadingBlock({
   variant?: SkeletonVariant;
   rows?: number;
 }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  // When the data arrives the skeleton melts into the page (see meltSkeleton).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const shownAt = performance.now();
+    // Only when it was really seen (not a flash, or React's dev re-mount).
+    return () => {
+      if (performance.now() - shownAt > 150) meltSkeleton(el);
+    };
+  }, []);
   return (
-    <div role="status" aria-live="polite" aria-busy="true" className="w-full">
+    <div ref={ref} role="status" aria-live="polite" aria-busy="true" className="w-full">
       <span className="sr-only">{label}</span>
       <PageSkeleton variant={variant} rows={rows} />
     </div>

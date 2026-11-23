@@ -3,8 +3,7 @@ import { useLocation } from "react-router-dom";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, TrendingUp } from "lucide-react";
 import clsx from "clsx";
-import { BackLink } from "../components/ui";
-import { PageSkeleton } from "../components/Skeleton";
+import { BackLink, LoadingBlock } from "../components/ui";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendChart, type TrendPoint } from "../components/TrendChart";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
@@ -248,9 +247,7 @@ export function AnalyticsTrendPage() {
       ) : null}
 
       {!data ? (
-        <div className="space-y-3" aria-label="Loading the trend">
-          <PageSkeleton variant="trend" />
-        </div>
+        <LoadingBlock label="Loading the trend…" variant="trend" />
       ) : month ? (
         <>
           {/* Selected month: swipe left / right to move. */}
