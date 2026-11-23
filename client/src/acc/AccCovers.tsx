@@ -228,7 +228,11 @@ export function AccSegregatePage() {
         .map((r) => ({ from: r.orig!, to: r.model }));
       const { data } = await accApi.setProductModels(
         product.id,
-        rows.filter((r) => r.qty > 0).map((r) => ({ model: r.model, qty: r.qty })),
+        // Saved lots first, in their saved order, new lots after: a box keeps pointing
+        // at the same lot ("first Y30", "second Y30") when another Y30 is added.
+        [...rows.filter((r) => r.orig), ...rows.filter((r) => !r.orig)]
+          .filter((r) => r.orig || r.qty > 0)
+          .map((r) => ({ model: r.model, qty: r.qty })),
         renames,
       );
       patchCatalogProduct(data);
