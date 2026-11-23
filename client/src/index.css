@@ -2744,3 +2744,74 @@ html.dark .fx-light-teal {
     display: none;
   }
 }
+
+/* Analytics money buttons: a sheen sweeps across on press, soft glow on hover. */
+.money-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.money-tile:active::after {
+  transform: translateX(120%);
+  transition: transform 0.55s ease-out;
+}
+html.dark .money-tile::after {
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.12) 50%, transparent 70%);
+}
+.money-tile:hover {
+  box-shadow: 0 14px 30px -16px var(--tile-glow);
+}
+
+/* Cash book first open: rings pulse out from the wallet, coins float. */
+@keyframes money-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+@keyframes money-coin {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(12deg);
+  }
+}
+.money-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid rgba(52, 211, 153, 0.55);
+  animation: money-ring 2.6s ease-out infinite;
+}
+.money-coin {
+  position: absolute;
+  animation: money-coin 3.2s ease-in-out infinite;
+}
+/* A just-saved row glows once. */
+@keyframes money-row-flash {
+  0% {
+    background: rgba(255, 209, 102, 0.45);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.money-row-new {
+  animation: money-row-flash 1.6s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .money-ring,
+  .money-coin,
+  .money-row-new {
+    animation: none;
+  }
+}

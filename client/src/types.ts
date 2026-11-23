@@ -883,3 +883,42 @@ export type ExchangeIntake = {
   customerName: string;
   accessories: ExchangeAccessory[];
 };
+
+/* ---- Analytics money books (Cash / Online / Expense), written by hand ---- */
+export type MoneyEntryKind = "IN" | "OUT" | "OPENING";
+
+export type MoneyEntry = {
+  id: string;
+  kind: MoneyEntryKind;
+  amount: number;
+  category: string | null;
+  method: string | null;
+  note: string | null;
+  date: string;
+  createdAt: string;
+  createdByName: string | null;
+};
+
+export type MoneySummary = {
+  cash: { balance: number; started: boolean };
+  online: { balance: number };
+  expense: { thisMonth: number; month: string };
+};
+
+export type MoneyBookData = {
+  book: "CASH" | "ONLINE";
+  balance: number;
+  opening: { amount: number; date: string } | null;
+  monthIn: number;
+  monthOut: number;
+  /** Newest first, with the running balance after each entry. */
+  entries: Array<MoneyEntry & { balanceAfter: number }>;
+};
+
+export type ExpenseMonth = {
+  month: string;
+  total: number;
+  byCategory: Array<{ category: string; total: number; count: number }>;
+  months: Array<{ month: string; total: number }>;
+  entries: MoneyEntry[];
+};

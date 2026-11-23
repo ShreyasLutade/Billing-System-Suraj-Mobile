@@ -431,3 +431,26 @@ model SupplierPayment {
   @@index([paidAt])
   @@index([purchaseId])
 }
+
+/// Shop money books on Analytics: Cash, Online and Expense, written by hand
+/// (khata style). Nothing here is filled in from bills automatically.
+model MoneyEntry {
+  id            String   @id @default(cuid())
+  /// CASH | ONLINE | EXPENSE
+  book          String
+  /// IN (money got) | OUT (money gave / spent) | OPENING (cash in hand at the start)
+  kind          String
+  amount        Float
+  /// Expense: rent, electricity, salary…  Cash / Online: optional reason.
+  category      String?
+  /// Expense: how it was paid (cash | online | na).
+  method        String?
+  note          String?
+  /// The day it happened (IST midday for back-dated entries).
+  entryDate     DateTime @default(now())
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([book, entryDate])
+}

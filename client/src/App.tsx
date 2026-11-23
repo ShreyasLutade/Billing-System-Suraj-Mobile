@@ -26,6 +26,8 @@ import { DuesPage } from "./pages/DuesPage";
 import { DueDetailPage } from "./pages/DueDetailPage";
 import { AddDuePersonPage } from "./pages/AddDuePersonPage";
 import { SupplierDuePage } from "./pages/SupplierDuePage";
+import { MoneyBookPage } from "./pages/MoneyBookPage";
+import { ExpensesPage } from "./pages/ExpensesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
@@ -90,6 +92,9 @@ export default function App() {
                       path="pending-items"
                       element={<AnalyticsPendingItemsPage />}
                     />
+                    <Route path="cash" element={<MoneyBookPage book="cash" />} />
+                    <Route path="online" element={<MoneyBookPage book="online" />} />
+                    <Route path="expenses" element={<ExpensesPage />} />
                   </Route>
                   <Route path="backup" element={<BackupPage />} />
                   <Route path="recycle-bin" element={<RecycleBinPage />} />

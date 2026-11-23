@@ -23,6 +23,7 @@ import { startRecycleBinPurge } from "./services/recycleBin";
 import { recycleBinRouter } from "./routes/recycleBin";
 import { productReturnsRouter } from "./routes/productReturns";
 import { exchangesRouter } from "./routes/exchanges";
+import { moneyRouter } from "./routes/money";
 import { salesRouter } from "./routes/sales";
 import { prisma } from "./lib/prisma";
 import { backfillSuppliersFromStock } from "./services/suppliers";
@@ -96,6 +97,7 @@ app.use("/api/recycle-bin", requireAuth, requireAdmin, recycleBinRouter);
 app.use("/api/returns", requireAuth, productReturnsRouter);
 app.use("/api/exchanges", requireAuth, exchangesRouter);
 app.use("/api/sales", requireAuth, salesRouter);
+app.use("/api/money", requireAuth, requireAdmin, moneyRouter);
 
 if (!serveClient) {
   app.get("/", (_req, res) => {

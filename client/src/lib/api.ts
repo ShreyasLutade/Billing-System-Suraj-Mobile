@@ -10,6 +10,10 @@ import type {
   Bill,
   CreateBillPayload,
   ClearedDueItem,
+  ExpenseMonth,
+  MoneyBookData,
+  MoneyEntry,
+  MoneySummary,
   SupplierDueRow,
   SupplierLedger,
   CustomerDueDetail,
@@ -749,6 +753,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ...(amount === undefined ? {} : { amount }), ...(extra ?? {}) }),
     }),
+  /** Analytics money books (admin): Cash / Online / Expense. */
+  moneySummary: () => request<{ data: MoneySummary }>(`/money/summary`),
+  moneyBook: (book: "cash" | "online") => request<{ data: MoneyBookData }>(`/money/book/${book}`),
+  addMoneyEntry: (
+    book: "cash" | "online",
+    payload: { kind: "IN" | "OUT"; amount: number; category?: string | null; note?: string | null; date?: string | null },
+  ) =>
+    request<{ data: MoneyEntry & { balance: number } }>(`/money/book/${book}/entries`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  setCashOpening: (amount: number, date?: string | null) =>
+    request<{ data: { balance: number } }>(`/money/book/cash/opening`, {
+      method: "PUT",
+      body: JSON.stringify({ amount, date }),
+    }),
+  deleteMoneyEntry: (id: string) =>
+    request<{ data: { id: string } }>(`/money/entries/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  expenses: (month?: string) =>
+    request<{ data: ExpenseMonth }>(`/money/expenses${month ? `?month=${encodeURIComponent(month)}` : ""}`),
+  addExpense: (payload: {
+    amount: number;
+    category: string;
+    method?: "cash" | "online" | "na";
+    note?: string | null;
+    date?: string | null;
+  }) =>
+    request<{ data: MoneyEntry }>(`/money/expenses`, { method: "POST", body: JSON.stringify(payload) }),
   /** Dues page, Supplier tab. */
   listSupplierDues: () =>
     request<{

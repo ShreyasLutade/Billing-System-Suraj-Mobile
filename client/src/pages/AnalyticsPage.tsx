@@ -56,6 +56,7 @@ import {
 } from "../lib/analyticsNav";
 import { MIX, mixSurface } from "../lib/analyticsMix";
 import { motion } from "framer-motion";
+import { MoneyButtons } from "../components/money/MoneyButtons";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { TrendCard } from "../components/TrendCard";
 import { HeroSparkles } from "../components/AnalyticsBackdrop";
@@ -664,6 +665,9 @@ export function AnalyticsPage() {
                   </div>
                 </div>
               </motion.section>
+
+              {/* Money books: Cash · Online · Expense */}
+              <MoneyButtons />
 
               {/* 2. Where the money came from */}
               <SectionTitle title="Where the money came from" hint="Tap for the bills" />
