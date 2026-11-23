@@ -133,7 +133,7 @@ export function DueDetailPage() {
     }
   }
 
-  if (loading) return <LoadingBlock label="Loading due…" variant="detail" />;
+  if (loading) return <LoadingBlock label="Loading due…" />;
   if (!data) {
     return (
       <div className="space-y-3">

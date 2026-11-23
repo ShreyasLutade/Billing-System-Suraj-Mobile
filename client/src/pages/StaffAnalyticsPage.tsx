@@ -118,7 +118,7 @@ export function StaffAnalyticsPage() {
       ) : null}
 
       {!sales ? (
-        <LoadingBlock label="Loading analytics…" variant="analytics" />
+        <LoadingBlock label="Loading analytics…" />
       ) : (
         <>
           {/* Headline: phones sold and what they sold for */}

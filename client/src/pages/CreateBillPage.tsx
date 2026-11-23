@@ -2023,7 +2023,7 @@ export function CreateBillPage() {
   }
 
   if (loadingBill) {
-    return <LoadingBlock label="Loading bill…" variant="form" />;
+    return <LoadingBlock label="Loading bill…" />;
   }
 
   if (isEdit && loadError) {

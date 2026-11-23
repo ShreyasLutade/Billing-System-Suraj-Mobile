@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
 import { useLayoutEffect, useRef, type ComponentType, type ReactNode } from "react";
-import { PageSkeleton, meltSkeleton, type SkeletonVariant } from "./Skeleton";
+import { meltLoader } from "./LoaderReveal";
 
 export function BackLink({
   to,
@@ -180,30 +180,34 @@ export function EmptyState({
   );
 }
 
-export function LoadingBlock({
-  label = "Loading…",
-  variant = "rows",
-  rows,
-}: {
-  label?: string;
-  /** Page shape of the skeleton (see components/Skeleton). */
-  variant?: SkeletonVariant;
-  rows?: number;
-}) {
+export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  // When the data arrives the skeleton melts into the page (see meltSkeleton).
+  // When the data arrives the ring fades and the content rises in (meltLoader).
   useLayoutEffect(() => {
     const el = ref.current;
     const shownAt = performance.now();
     // Only when it was really seen (not a flash, or React's dev re-mount).
     return () => {
-      if (performance.now() - shownAt > 150) meltSkeleton(el);
+      if (performance.now() - shownAt > 150) meltLoader(el);
     };
   }, []);
   return (
-    <div ref={ref} role="status" aria-live="polite" aria-busy="true" className="w-full">
-      <span className="sr-only">{label}</span>
-      <PageSkeleton variant={variant} rows={rows} />
+    <div
+      ref={ref}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="loader-wrap flex min-h-[42vh] w-full flex-col items-center justify-center gap-4 py-10"
+    >
+      <span className="loader-ring" aria-hidden />
+      <span className="text-[13.5px] font-semibold text-ink-500">
+        {label.replace(/…$/, "")}
+        <span className="loader-dots" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </span>
+      </span>
     </div>
   );
 }

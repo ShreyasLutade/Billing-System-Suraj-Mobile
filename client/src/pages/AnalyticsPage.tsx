@@ -574,7 +574,7 @@ export function AnalyticsPage() {
       </div>
 
       {loading ? (
-        <LoadingBlock label="Loading analytics…" variant="analytics" />
+        <LoadingBlock label="Loading analytics…" />
       ) : null}
       {error ? (
         <div className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</div>

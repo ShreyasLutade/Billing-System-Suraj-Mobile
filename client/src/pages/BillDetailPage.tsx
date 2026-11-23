@@ -240,7 +240,7 @@ export function BillDetailPage() {
   }
 
   if (loading) {
-    return <LoadingBlock label="Loading bill…" variant="detail" />;
+    return <LoadingBlock label="Loading bill…" />;
   }
 
   if (error || !bill) {

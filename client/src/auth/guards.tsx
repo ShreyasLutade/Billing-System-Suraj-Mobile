@@ -9,7 +9,7 @@ export function RequireAuth() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-md"><LoadingBlock label="Checking session…" rows={3} /></div>
+        <div className="w-full max-w-md"><LoadingBlock label="Checking session…" /></div>
       </div>
     );
   }
@@ -28,7 +28,7 @@ export function RequireAdmin() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-md"><LoadingBlock label="Checking session…" rows={3} /></div>
+        <div className="w-full max-w-md"><LoadingBlock label="Checking session…" /></div>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function GuestOnly() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-md"><LoadingBlock label="Loading…" rows={3} /></div>
+        <div className="w-full max-w-md"><LoadingBlock label="Loading…" /></div>
       </div>
     );
   }

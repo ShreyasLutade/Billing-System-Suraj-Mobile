@@ -448,7 +448,7 @@ export function StockPage() {
   }
 
   if (selectedKey && loading && !selectedGroup) {
-    return <LoadingBlock label="Loading stock…" variant="detail" />;
+    return <LoadingBlock label="Loading stock…" />;
   }
 
   if (selectedGroup) {
@@ -759,7 +759,7 @@ export function StockPage() {
       ) : null}
 
       {loading ? (
-        <LoadingBlock label="Loading stock…" variant="table" />
+        <LoadingBlock label="Loading stock…" />
       ) : groups.length === 0 ? (
         <EmptyState
           title={

@@ -68,7 +68,7 @@ export function MoneyBookPage({ book }: { book: Book }) {
         <BackLink to="/analytics" className="mb-4">
           Back to analytics
         </BackLink>
-        {error ? <p className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</p> : <LoadingBlock label="Opening book…" variant="detail" />}
+        {error ? <p className="glass-panel px-5 py-4 text-sm text-ember-500">{error}</p> : <LoadingBlock label="Opening book…" />}
       </div>
     );
   }

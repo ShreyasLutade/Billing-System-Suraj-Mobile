@@ -100,7 +100,7 @@ export function SupplierDetailPage() {
     }
   }
 
-  if (loading) return <LoadingBlock label="Loading ledger…" variant="detail" />;
+  if (loading) return <LoadingBlock label="Loading ledger…" />;
   if (!data) {
     return (
       <div className="space-y-3">

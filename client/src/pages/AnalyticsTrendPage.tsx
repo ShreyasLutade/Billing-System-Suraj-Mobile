@@ -247,7 +247,7 @@ export function AnalyticsTrendPage() {
       ) : null}
 
       {!data ? (
-        <LoadingBlock label="Loading the trend…" variant="trend" />
+        <LoadingBlock label="Loading the trend…" />
       ) : month ? (
         <>
           {/* Selected month: swipe left / right to move. */}

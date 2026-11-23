@@ -160,7 +160,7 @@ export function PurchaseDetailPage() {
     }
   }
 
-  if (loading) return <LoadingBlock label="Loading purchase…" variant="detail" />;
+  if (loading) return <LoadingBlock label="Loading purchase…" />;
 
   if (!purchase) {
     return (
