@@ -147,7 +147,7 @@ export function SupplierDuePage() {
       <section className="due-card px-3.5 pb-3 pt-3.5">
         <div className="absolute inset-x-0 top-0 h-1" style={{ background: accent }} aria-hidden />
         <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-400">
-          {owe ? "You will give" : advance > 0 ? "Advance · you paid extra" : "All clear"}
+          {owe ? "To pay" : advance > 0 ? "Advance · you paid extra" : "All clear"}
         </p>
         <p
           className={clsx(
@@ -213,8 +213,8 @@ export function SupplierDuePage() {
         <div className="due-card overflow-hidden !p-0">
           <div className="grid grid-cols-[minmax(0,1fr)_84px_84px] border-b border-[#EEF1F5] bg-ink-900/[0.025] text-[10px] font-bold uppercase tracking-[0.08em] text-ink-400 dark:border-[rgb(var(--color-line))] dark:bg-white/[0.03]">
             <span className="px-3 py-2">Entry</span>
-            <span className="px-3 py-2 text-right">You gave</span>
-            <span className="px-3 py-2 text-right">You got</span>
+            <span className="px-3 py-2 text-right">Paid</span>
+            <span className="px-3 py-2 text-right">Purchased</span>
           </div>
           <ol>
             {newestFirst.map((entry) => (
@@ -265,7 +265,7 @@ export function SupplierDuePage() {
                 className="h-11 w-full rounded-xl bg-[#D93A3F] text-[14.5px] font-bold tracking-wide text-white shadow-[0_8px_18px_-10px_rgba(217,58,63,0.9)] transition hover:bg-[#C5333A]"
                 onClick={() => setPaying(true)}
               >
-                YOU GAVE ₹
+                PAY ₹
               </button>
             </div>,
             document.body,
@@ -310,19 +310,24 @@ function SupplierEntryRow({
   onUndo?: () => void;
 }) {
   const purchase = entry.kind === "purchase";
+  // Returned unit: "Returned · iPhone 12 128GB" (detail: name · IMEI, bill…).
+  const returnedName = entry.kind === "return" ? entry.detail.split("\n")[0].split(" · ")[0] : "";
   const title = purchase
-    ? entry.particulars.replace(/^Purchase · /, "Purchase · ")
+    ? entry.particulars
     : entry.kind === "payment"
       ? entry.particulars === "Paid at purchase"
         ? "Paid at purchase"
-        : `Paid${entry.method && METHOD_LABEL[entry.method] ? ` · ${METHOD_LABEL[entry.method]}` : ""}`
-      : entry.particulars;
-  const detail = [
-    purchase && entry.qty ? `${entry.qty} item${entry.qty === 1 ? "" : "s"}` : null,
-    entry.detail.split("\n")[0] || null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+        : `Payment${entry.method && METHOD_LABEL[entry.method] ? ` · ${METHOD_LABEL[entry.method]}` : ""}`
+      : `${entry.particulars.startsWith("Replaced") ? "Replaced" : "Returned"}${returnedName ? ` · ${returnedName}` : ""}`;
+  const detail =
+    entry.kind === "return"
+      ? entry.detail.split("\n").slice(1).join(" · ") || entry.detail.split("\n")[0].split(" · ").slice(1).join(" · ")
+      : [
+          purchase && entry.qty ? `${entry.qty} item${entry.qty === 1 ? "" : "s"}` : null,
+          entry.detail.split("\n")[0] || null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
   return (
     <li
       className={clsx(
@@ -392,7 +397,7 @@ function SupplierEntryRow({
   );
 }
 
-/** You gave (paid the supplier): any amount, extra is kept as advance. */
+/** Pay the supplier: any amount, extra is kept as advance. */
 function PaySupplierSheet({
   ledger,
   onClose,
@@ -441,12 +446,12 @@ function PaySupplierSheet({
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-rose-600 dark:text-rose-400">
-            You gave
+            Payment
           </p>
           <h2 id="pay-supplier-title" className="truncate font-display text-[17px] font-bold leading-tight text-ink-900">
-            {ledger.name}
+            Pay {ledger.name}
             <span className="ml-1.5 text-[13px] font-semibold text-ink-400">
-              · Bal{" "}
+              · To pay{" "}
               <span className="tabular-nums text-ink-700 dark:text-ink-800">
                 {balanceText(ledger.outstanding)}
               </span>

@@ -700,7 +700,7 @@ export function DuesPage() {
         >
           <HeroBar
             segments={[
-              { label: "You'll give", color: "#FF6B6B", amount: supplierData?.totalOwed ?? 0 },
+              { label: "To pay", color: "#FF6B6B", amount: supplierData?.totalOwed ?? 0 },
               { label: "Advance", color: "#34D399", amount: supplierData?.totalAdvance ?? 0 },
             ]}
           />
@@ -1441,7 +1441,7 @@ function SupplierDueList({
   const owe = rows.filter((row) => row.outstanding > 0);
   const advance = rows.filter((row) => row.outstanding < 0);
   const groups = [
-    { key: "owe", title: "You will give", color: "#E5484D", rows: owe, total: owe.reduce((s, r) => s + r.outstanding, 0) },
+    { key: "owe", title: "To pay", color: "#E5484D", rows: owe, total: owe.reduce((s, r) => s + r.outstanding, 0) },
     { key: "advance", title: "Advance · you paid extra", color: "#34D399", rows: advance, total: totalAdvance },
   ].filter((group) => group.rows.length > 0);
   return (
@@ -1511,7 +1511,7 @@ function SupplierDueList({
                         adv ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
                       )}
                     >
-                      {adv ? "Advance" : "You'll give"}
+                      {adv ? "Advance" : "To pay"}
                     </span>
                   </div>
                 </div>
