@@ -213,8 +213,8 @@ export function SupplierDuePage() {
         <div className="due-card overflow-hidden !p-0">
           <div className="grid grid-cols-[minmax(0,1fr)_84px_84px] border-b border-[#EEF1F5] bg-ink-900/[0.025] text-[10px] font-bold uppercase tracking-[0.08em] text-ink-400 dark:border-[rgb(var(--color-line))] dark:bg-white/[0.03]">
             <span className="px-3 py-2">Entry</span>
-            <span className="px-3 py-2 text-right">Paid</span>
             <span className="px-3 py-2 text-right">Purchased</span>
+            <span className="px-3 py-2 text-right">Paid</span>
           </div>
           <ol>
             {newestFirst.map((entry) => (
@@ -222,12 +222,12 @@ export function SupplierDuePage() {
                 key={entry.key}
                 entry={entry}
                 link={
-                  entry.kind === "purchase" ? (
+                  entry.kind === "purchase" && entry.purchaseId ? (
                     <Link
-                      to={`/suppliers/${data.id}`}
+                      to={`/suppliers/${data.id}/purchases/${entry.purchaseId}`}
                       state={fromState(location)}
                       className="absolute inset-0 z-[1]"
-                      aria-label={`Open ${data.name}'s purchases`}
+                      aria-label={`Open purchase of ${formatDate(entry.date)}`}
                     />
                   ) : null
                 }
@@ -379,19 +379,19 @@ function SupplierEntryRow({
       <div
         className={clsx(
           "px-3 py-2 text-right text-[13px] font-bold tabular-nums",
-          entry.gave > 0 && "bg-rose-500/[0.05] text-rose-600 dark:bg-rose-500/[0.08] dark:text-rose-400",
-        )}
-      >
-        {entry.gave > 0 ? formatRupees(entry.gave) : ""}
-      </div>
-      <div
-        className={clsx(
-          "px-3 py-2 text-right text-[13px] font-bold tabular-nums",
           entry.got > 0 &&
             "bg-emerald-500/[0.06] text-emerald-600 dark:bg-emerald-500/[0.08] dark:text-emerald-400",
         )}
       >
         {entry.got > 0 ? formatRupees(entry.got) : ""}
+      </div>
+      <div
+        className={clsx(
+          "px-3 py-2 text-right text-[13px] font-bold tabular-nums",
+          entry.gave > 0 && "bg-rose-500/[0.05] text-rose-600 dark:bg-rose-500/[0.08] dark:text-rose-400",
+        )}
+      >
+        {entry.gave > 0 ? formatRupees(entry.gave) : ""}
       </div>
     </li>
   );
