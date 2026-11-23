@@ -597,19 +597,18 @@ export function AnalyticsPage() {
                 aria-label="Summary"
               >
                 <HeroSparkles />
-                <div className="relative">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="pt-0.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#8EA0BC] sm:text-[11px]">
-                      Money collected · {data.periodLabel.toLowerCase()}
-                    </p>
-                    {periodRangeLabel ? (
-                      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 sm:text-[11.5px]">
-                        <CalendarDays className="h-3 w-3 text-[#8EA0BC]" aria-hidden />
-                        {periodRangeLabel}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 font-display text-[clamp(2.25rem,9vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
+                {/* Centred: title, date, amount, change, sentence, three equal boxes. */}
+                <div className="relative flex flex-col items-center text-center">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#8EA0BC] sm:text-[11px]">
+                    Money collected · {data.periodLabel.toLowerCase()}
+                  </p>
+                  {periodRangeLabel ? (
+                    <span className="mt-1.5 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10.5px] font-semibold tabular-nums text-white/90 sm:text-[11.5px]">
+                      <CalendarDays className="h-3 w-3 text-[#8EA0BC]" aria-hidden />
+                      {periodRangeLabel}
+                    </span>
+                  ) : null}
+                  <p className="mt-3 font-display text-[clamp(2.25rem,10vw,3.25rem)] font-bold leading-none tracking-tight tabular-nums">
                     <AnimatedNumber value={summary.collected} format={formatRupees} duration={1.3} />
                   </p>
                   {change && data.vsPrevious.label ? (
@@ -629,24 +628,33 @@ export function AnalyticsPage() {
                       {change.text} {data.vsPrevious.label}
                     </motion.span>
                   ) : null}
-                  <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-[#C4CEDD]">
+                  <p className="mt-3 max-w-sm text-[13.5px] leading-relaxed text-[#C4CEDD]">
                     {summarySentence(data.period, data.periodLabel, summary.collected, summary.bills, profitAmount)}
                   </p>
 
-                  <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="mt-4 grid w-full grid-cols-3 gap-2">
                     {[
-                      { label: "Sales", value: revenueAmount, tone: "text-white" },
+                      { label: "Sales", value: revenueAmount, tone: "text-white", note: "before costs" },
                       {
                         label: "Profit",
                         value: profitAmount,
                         tone: profitAmount >= 0 ? "text-[#5CE0AE]" : "text-orange-300",
-                        note: profitMarginPct != null ? `${profitMarginPct.toFixed(1)}% margin` : null,
+                        note: profitMarginPct != null ? `${profitMarginPct.toFixed(1)}% margin` : "margin —",
                       },
-                      { label: "Bills", value: summary.bills, tone: "text-white", count: true },
+                      {
+                        label: "Bills",
+                        value: summary.bills,
+                        tone: "text-white",
+                        count: true,
+                        note:
+                          summary.bills > 0
+                            ? `avg ${formatRupees(Math.round(revenueAmount / summary.bills))}`
+                            : "no bills yet",
+                      },
                     ].map((tile) => (
                       <div
                         key={tile.label}
-                        className="min-w-0 rounded-xl border border-white/10 bg-white/[0.06] px-2.5 py-2"
+                        className="flex min-w-0 flex-col items-center rounded-xl border border-white/10 bg-white/[0.06] px-2 py-2.5"
                       >
                         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8EA0BC]">
                           {tile.label}
@@ -657,9 +665,7 @@ export function AnalyticsPage() {
                           fit
                           className={clsx("mt-0.5 font-display text-[17px] font-bold tabular-nums", tile.tone)}
                         />
-                        {tile.note ? (
-                          <p className="text-[10px] font-semibold text-white/50">{tile.note}</p>
-                        ) : null}
+                        <p className="mt-0.5 truncate text-[10px] font-semibold text-white/50">{tile.note}</p>
                       </div>
                     ))}
                   </div>

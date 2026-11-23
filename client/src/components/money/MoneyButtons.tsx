@@ -83,7 +83,7 @@ export function MoneyButtons() {
           <motion.button
             key={tile.key}
             type="button"
-            className="money-tile group relative overflow-hidden rounded-2xl border border-[#E7EAF0] bg-white px-2.5 pb-2.5 pt-3 text-left shadow-[0_10px_24px_-16px_rgba(11,31,51,0.45)] dark:border-[rgb(var(--color-line))] dark:bg-surface"
+            className="money-tile group relative flex flex-col items-center overflow-hidden rounded-2xl border border-[#E7EAF0] bg-white px-2 pb-2.5 pt-3 text-center shadow-[0_10px_24px_-16px_rgba(11,31,51,0.45)] dark:border-[rgb(var(--color-line))] dark:bg-surface"
             style={{ "--tile-glow": tile.glow } as React.CSSProperties}
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -101,7 +101,7 @@ export function MoneyButtons() {
               <Icon className="h-[18px] w-[18px]" strokeWidth={2.3} />
             </span>
             <span className="mt-2 block text-[13px] font-bold text-ink-900">{tile.label}</span>
-            <span className="block min-h-[20px] font-display text-[15px] font-bold tabular-nums text-ink-900">
+            <span className="block min-h-[20px] w-full font-display text-[15px] font-bold tabular-nums text-ink-900">
               {tile.value === null ? (
                 <span className="inline-block h-3.5 w-14 animate-pulse rounded bg-ink-900/10 align-middle dark:bg-white/10" />
               ) : (
