@@ -764,8 +764,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  setCashOpening: (amount: number, date?: string | null) =>
-    request<{ data: { balance: number } }>(`/money/book/cash/opening`, {
+  /** Opening balance of a book (₹0 = skipped). */
+  setOpening: (book: "cash" | "online", amount: number, date?: string | null) =>
+    request<{ data: { balance: number } }>(`/money/book/${book}/opening`, {
       method: "PUT",
       body: JSON.stringify({ amount, date }),
     }),

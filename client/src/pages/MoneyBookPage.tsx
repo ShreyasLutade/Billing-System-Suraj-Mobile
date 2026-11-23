@@ -34,7 +34,8 @@ export function MoneyBookPage({ book }: { book: Book }) {
   const [freshId, setFreshId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
-  const needsOpening = book === "cash" && data !== null && data.opening === null;
+  // First time on a book: ask for the money in it now (or skip = ₹0).
+  const needsOpening = data !== null && data.opening === null;
   const showBar = Boolean(data && !needsOpening);
   const bar = useFixedBottomBar(rootRef, barRef, showBar);
 
@@ -76,8 +77,13 @@ export function MoneyBookPage({ book }: { book: Book }) {
     return (
       <>
         <OpeningSetup
+          book={book}
           onSaved={async (amount) => {
-            setBurst({ label: "Cash book started", sublabel: formatRupees(amount) + " in hand", color: "#10B981" });
+            setBurst({
+              label: `${meta.title} started`,
+              sublabel: amount > 0 ? `${formatRupees(amount)} to start` : "Starting from ₹0",
+              color: book === "cash" ? "#10B981" : "#3B82F6",
+            });
             await load();
           }}
         />
@@ -145,7 +151,7 @@ export function MoneyBookPage({ book }: { book: Book }) {
               className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11.5px] font-semibold text-white/80 transition hover:bg-white/15"
               onClick={() => setSheet("opening")}
             >
-              Opening {formatRupees(data.opening.amount)}
+              {data.opening.amount > 0 ? `Opening ${formatRupees(data.opening.amount)}` : "Set opening balance"}
               <Pencil className="h-3 w-3" />
             </button>
           ) : null}
@@ -255,6 +261,7 @@ export function MoneyBookPage({ book }: { book: Book }) {
         {sheet === "opening" && data.opening ? (
           <OpeningSheet
             key="opening"
+            book={book}
             current={data.opening.amount}
             onClose={() => setSheet(null)}
             onSaved={async () => {
@@ -346,8 +353,16 @@ function EntryRow({ entry, fresh, onOpen }: { entry: Entry; fresh: boolean; onOp
   );
 }
 
-/** First time on the Cash book: how much cash is in the drawer right now? */
-function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise<void> }) {
+/** First time on a book: how much is in it right now? (or skip = ₹0) */
+function OpeningSetup({
+  book,
+  onSaved,
+}: {
+  book: Book;
+  onSaved: (amount: number) => void | Promise<void>;
+}) {
+  const meta = BOOK_META[book];
+  const BookIcon = book === "cash" ? Wallet : Smartphone;
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -361,7 +376,7 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
     setSaving(true);
     setError(null);
     try {
-      await api.setCashOpening(round2(start), todayIST());
+      await api.setOpening(book, round2(start), todayIST());
       await onSaved(round2(start));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -376,7 +391,7 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
       </BackLink>
       <motion.section
         className="relative overflow-hidden rounded-[1.5rem] px-5 pb-6 pt-8 text-center text-white shadow-lift"
-        style={{ background: BOOK_META.cash.gradient }}
+        style={{ background: meta.gradient }}
         initial={{ opacity: 0, scale: 0.94, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 200, damping: 22 }}
@@ -384,9 +399,9 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
         <HeroSparkles />
         {/* Wallet with rings pulsing out and coins floating around it */}
         <div className="relative mx-auto mb-5 h-28 w-28">
-          <span className="money-ring" />
-          <span className="money-ring" style={{ animationDelay: "0.9s" }} />
-          <span className="money-ring" style={{ animationDelay: "1.8s" }} />
+          <span className="money-ring" style={{ borderColor: meta.ring }} />
+          <span className="money-ring" style={{ animationDelay: "0.9s", borderColor: meta.ring }} />
+          <span className="money-ring" style={{ animationDelay: "1.8s", borderColor: meta.ring }} />
           {[
             { left: "-14px", top: "8px", delay: "0s", size: 22 },
             { right: "-12px", top: "22px", delay: "0.8s", size: 18 },
@@ -412,14 +427,14 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
           <motion.div
             className="relative grid h-28 w-28 place-items-center rounded-[2rem]"
             style={{
-              background: "linear-gradient(135deg, #34D399, #059669)",
-              boxShadow: "0 20px 40px -12px rgba(16,185,129,.7)",
+              background: meta.startIcon,
+              boxShadow: `0 20px 40px -12px ${meta.startGlow}`,
             }}
             initial={{ rotate: -12, scale: 0.6 }}
             animate={{ rotate: 0, scale: 1 }}
             transition={{ type: "spring", stiffness: 260, damping: 14, delay: 0.15 }}
           >
-            <Wallet className="h-12 w-12" strokeWidth={1.8} />
+            <BookIcon className="h-12 w-12" strokeWidth={1.8} />
           </motion.div>
         </div>
         <motion.h1
@@ -428,7 +443,7 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          Start your cash book
+          {meta.startTitle}
         </motion.h1>
         <motion.p
           className="relative mt-1 text-[14px] text-white/75"
@@ -436,16 +451,18 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          How much cash is in the shop right now?
+          {meta.startQuestion}
         </motion.p>
         <motion.label
           htmlFor="opening-amount"
-          className="relative mx-auto mt-5 flex max-w-[16rem] items-center justify-center gap-1 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur focus-within:border-[#5CE0AE]"
+          className="relative mx-auto mt-5 flex max-w-[16rem] items-center justify-center gap-1 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur focus-within:border-white/60"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
         >
-          <span className="font-display text-3xl font-bold text-[#5CE0AE]">₹</span>
+          <span className="font-display text-3xl font-bold" style={{ color: meta.accent }}>
+            ₹
+          </span>
           <input
             id="opening-amount"
             className="w-full min-w-0 bg-transparent text-center font-display text-3xl font-bold tabular-nums text-white outline-none placeholder:text-white/30"
@@ -465,7 +482,11 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
         {error ? <p className="relative mt-3 text-sm font-semibold text-orange-300">{error}</p> : null}
         <motion.button
           type="button"
-          className="relative mt-5 h-12 w-full max-w-[16rem] rounded-2xl bg-gradient-to-r from-[#34D399] to-[#10B981] text-[15px] font-bold text-[#04291D] shadow-[0_12px_26px_-12px_rgba(52,211,153,.9)] disabled:opacity-60"
+          className={clsx(
+            "relative mt-5 h-12 w-full max-w-[16rem] rounded-2xl bg-gradient-to-r text-[15px] font-bold disabled:opacity-60",
+            meta.startButton,
+          )}
+          style={{ boxShadow: `0 12px 26px -12px ${meta.startGlow}` }}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
@@ -477,15 +498,15 @@ function OpeningSetup({ onSaved }: { onSaved: (amount: number) => void | Promise
         </motion.button>
         <button
           type="button"
-          className="relative mt-3 block w-full text-[13px] font-semibold text-white/60 transition hover:text-white"
+          className="relative mx-auto mt-3 block rounded-full border border-white/15 px-4 py-1.5 text-[13px] font-semibold text-white/75 transition hover:border-white/30 hover:text-white"
           disabled={saving}
           onClick={() => void save(0)}
         >
-          Start from ₹0
+          Skip for now · start at ₹0
         </button>
       </motion.section>
       <p className="mt-3 px-2 text-center text-[12px] text-ink-500">
-        You can change the opening balance later from the top of the book.
+        You can set or change the opening balance later from the top of the book.
       </p>
     </div>
   );
@@ -631,15 +652,17 @@ function EntrySheet({
 }
 
 function OpeningSheet({
+  book,
   current,
   onClose,
   onSaved,
 }: {
+  book: Book;
   current: number;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
-  const [amount, setAmount] = useState(String(current));
+  const [amount, setAmount] = useState(current > 0 ? String(current) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -651,7 +674,7 @@ function OpeningSheet({
     }
     setSaving(true);
     try {
-      await api.setCashOpening(round2(value));
+      await api.setOpening(book, round2(value));
       await onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -661,12 +684,21 @@ function OpeningSheet({
 
   return (
     <Sheet labelledBy="opening-title" busy={saving} onClose={onClose} place="top">
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-300">Cash book</p>
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-300">
+        {BOOK_META[book].title}
+      </p>
       <h2 id="opening-title" className="mb-2.5 font-display text-[17px] font-bold text-ink-900">
         Opening balance
       </h2>
-      <AmountField id="opening-edit" value={amount} tone="got" onChange={(next) => setAmount(next)} />
-      <p className="mt-1.5 text-xs text-ink-500">The cash you had when the book started.</p>
+      <AmountField
+        id="opening-edit"
+        value={amount}
+        tone="got"
+        onChange={(next) => setAmount(next)}
+      />
+      <p className="mt-1.5 text-xs text-ink-500">
+        {book === "cash" ? "The cash you had" : "The online / bank balance you had"} when the book started.
+      </p>
       <ErrorNote error={error} />
       <button
         type="button"

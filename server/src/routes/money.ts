@@ -101,10 +101,11 @@ async function bookBalance(book: Book) {
 moneyRouter.get("/summary", async (_req, res, next) => {
   try {
     const { from, to } = monthRange(currentMonth());
-    const [cash, online, opening, expense] = await Promise.all([
+    const [cash, online, cashOpening, onlineOpening, expense] = await Promise.all([
       bookBalance("CASH"),
       bookBalance("ONLINE"),
       prisma.moneyEntry.findFirst({ where: { book: "CASH", kind: "OPENING" }, select: { id: true } }),
+      prisma.moneyEntry.findFirst({ where: { book: "ONLINE", kind: "OPENING" }, select: { id: true } }),
       prisma.moneyEntry.aggregate({
         where: { book: "EXPENSE", entryDate: { gte: from, lt: to } },
         _sum: { amount: true },
@@ -112,8 +113,8 @@ moneyRouter.get("/summary", async (_req, res, next) => {
     ]);
     res.json({
       data: {
-        cash: { balance: cash, started: Boolean(opening) },
-        online: { balance: online },
+        cash: { balance: cash, started: Boolean(cashOpening) },
+        online: { balance: online, started: Boolean(onlineOpening) },
         expense: { thisMonth: round2(expense._sum.amount ?? 0), month: currentMonth() },
       },
     });
@@ -138,10 +139,13 @@ moneyRouter.get("/book/:book", async (req, res, next) => {
     const opening = rows.find((r) => r.kind === "OPENING") ?? null;
     let balance = 0;
     const ordered = [...(opening ? [opening] : []), ...rows.filter((r) => r.kind !== "OPENING")];
-    const entries = ordered.map((row) => {
-      balance = round2(balance + (row.kind === "OUT" ? -row.amount : row.amount));
-      return { ...serialize(row), balanceAfter: balance };
-    });
+    const entries = ordered
+      .map((row) => {
+        balance = round2(balance + (row.kind === "OUT" ? -row.amount : row.amount));
+        return { ...serialize(row), balanceAfter: balance };
+      })
+      // A skipped opening (₹0) isn't an entry worth showing.
+      .filter((row) => !(row.kind === "OPENING" && row.amount === 0));
     const { from, to } = monthRange(currentMonth());
     const inMonth = rows.filter(
       (r) => r.kind !== "OPENING" && r.entryDate >= from && r.entryDate < to,
@@ -209,12 +213,21 @@ const openingSchema = z.object({
   date: dayField,
 });
 
-/** Cash in hand when the book starts (set once; can be changed later). */
-moneyRouter.put("/book/cash/opening", async (req, res, next) => {
+/**
+ * Money in the book when it starts (Cash: in the drawer; Online: in the
+ * account). Set the first time the book is opened (₹0 = skipped); can be
+ * changed later.
+ */
+moneyRouter.put("/book/:book/opening", async (req, res, next) => {
   try {
+    const book = parseBook(req.params.book);
+    if (!book) {
+      res.status(404).json({ error: "Book not found" });
+      return;
+    }
     const parsed = openingSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Enter the cash you have now" });
+      res.status(400).json({ error: "Enter the amount you have now" });
       return;
     }
     const when = entryDate(parsed.data.date);
@@ -223,7 +236,7 @@ moneyRouter.put("/book/cash/opening", async (req, res, next) => {
       return;
     }
     const existing = await prisma.moneyEntry.findFirst({
-      where: { book: "CASH", kind: "OPENING" },
+      where: { book, kind: "OPENING" },
     });
     const amount = round2(parsed.data.amount);
     if (existing) {
@@ -234,7 +247,7 @@ moneyRouter.put("/book/cash/opening", async (req, res, next) => {
     } else {
       await prisma.moneyEntry.create({
         data: {
-          book: "CASH",
+          book,
           kind: "OPENING",
           amount,
           note: "Opening balance",
@@ -243,7 +256,7 @@ moneyRouter.put("/book/cash/opening", async (req, res, next) => {
         },
       });
     }
-    res.json({ data: { balance: await bookBalance("CASH") } });
+    res.json({ data: { balance: await bookBalance(book) } });
   } catch (error) {
     next(error);
   }

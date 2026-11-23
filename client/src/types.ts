@@ -901,7 +901,7 @@ export type MoneyEntry = {
 
 export type MoneySummary = {
   cash: { balance: number; started: boolean };
-  online: { balance: number };
+  online: { balance: number; started: boolean };
   expense: { thisMonth: number; month: string };
 };
 
