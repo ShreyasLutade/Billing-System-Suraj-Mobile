@@ -26,6 +26,7 @@ import { DuesPage } from "./pages/DuesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { StockPage } from "./pages/StockPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
+import { SupplierDuePage } from "./pages/SupplierDuePage";
 import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
 import { ReplaceProductPage } from "./pages/ReplaceProductPage";
 import { RepairAnalyticsPage } from "./pages/RepairAnalyticsPage";
@@ -132,6 +133,7 @@ export default function App() {
                   <Route path="staff/:id/money" element={<StaffMoneyPage />} />
                   <Route element={<RequireAdmin />}>
                     <Route path="suppliers/:id/statement" element={<SupplierStatementPage />} />
+                    <Route path="dues/suppliers/:id" element={<SupplierDuePage />} />
                     <Route path="bills/replace" element={<ReplaceProductPage />} />
                     {/* Analytics pages zoom in / out of each other. */}
                     <Route path="analytics" element={<AnalyticsMotionLayout />}>

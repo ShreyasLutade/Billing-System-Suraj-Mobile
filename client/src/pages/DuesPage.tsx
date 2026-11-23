@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Phone,
   Search,
+  Truck,
   UserRound,
 } from "lucide-react";
 import { BRAND_NAME_TEXT } from "../components/BrandName";
@@ -28,6 +29,7 @@ import { usePersistedTab } from "../hooks/usePersistedTab";
 import { useSessionState } from "../hooks/useSessionState";
 import { fromState, readFromState, backLabel } from "../lib/navMemory";
 import { api, formatFinanceCompanies, formatINR, round2 } from "../lib/api";
+import { formatRupees } from "../lib/money";
 import {
   financeSlotAmounts,
   financeSlotOptions,
@@ -40,6 +42,7 @@ import {
   type BillSearchScope,
 } from "../lib/billSearch";
 import type {
+  SupplierDueRow,
   DueItem,
   DuesSummary,
   FinanceDueItem,
@@ -73,8 +76,9 @@ const SCOPE_CHIPS: Array<{ value: BillSearchScope; label: string }> = [
 
 function searchPlaceholder(
   scope: BillSearchScope,
-  tab: "customer" | "finance",
+  tab: "customer" | "finance" | "supplier",
 ) {
+  if (tab === "supplier") return "Search supplier name or phone…";
   if (scope === "phone") return "Search by number…";
   if (scope === "imei") return "Search by IMEI…";
   if (scope === "product") return "Search by product…";
@@ -183,7 +187,7 @@ export function DuesPage() {
   const [tab, setTab] = usePersistedTab(
     "tab",
     "dues.tab",
-    ["customer", "finance"] as const,
+    ["customer", "finance", "supplier"] as const,
     "customer",
   );
   const [period, setPeriod] = useSessionState<DuePeriodValue>("dues.period", "all");
@@ -191,6 +195,11 @@ export function DuesPage() {
   const [financeData, setFinanceData] = useState<FinanceDuesSummary | null>(
     null,
   );
+  const [supplierData, setSupplierData] = useState<{
+    totalOwed: number;
+    totalAdvance: number;
+    suppliers: SupplierDueRow[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDue, setSelectedDue] = useState<DueItem | null>(null);
@@ -239,9 +248,29 @@ export function DuesPage() {
     }
   }
 
+  async function loadSupplierDues() {
+    setLoading(true);
+    try {
+      const response = await api.listSupplierDues();
+      setSupplierData(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load supplier dues");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
+    // Supplier dues are admin only.
+    if (tab === "supplier" && !isAdmin) {
+      setTab("customer");
+      return;
+    }
     if (tab === "customer") {
       void loadDues(period);
+    } else if (tab === "supplier") {
+      void loadSupplierDues();
     } else {
       void loadFinanceDues();
     }
@@ -356,7 +385,7 @@ export function DuesPage() {
       />
 
       <div className="tb-toolbar">
-        <div className="tb-tabs" role="tablist" aria-label="Due type">
+        <div className={clsx("tb-tabs", isAdmin && "tb-tabs-3")} role="tablist" aria-label="Due type">
           <button
             type="button"
             role="tab"
@@ -384,6 +413,23 @@ export function DuesPage() {
                 (tab === "finance" ? filteredFinanceDues.length : "—")}
             </span>
           </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "supplier"}
+              className={clsx("tb-tab", tab === "supplier" && "tb-tab-on")}
+              onClick={() => setTab("supplier")}
+            >
+              <Truck className="h-4 w-4 shrink-0" />
+              Supplier
+              <span className="tb-cnt">
+                {supplierData
+                  ? supplierData.suppliers.filter((r) => r.outstanding > 0).length
+                  : "—"}
+              </span>
+            </button>
+          ) : null}
         </div>
 
         <div className="tb-searchrow">
@@ -402,7 +448,7 @@ export function DuesPage() {
             />
           </div>
 
-          <div className="relative shrink-0" ref={filterWrapRef}>
+          <div className={clsx("relative shrink-0", tab === "supplier" && "hidden")} ref={filterWrapRef}>
             <button
               type="button"
               className={clsx(
@@ -513,6 +559,14 @@ export function DuesPage() {
         <div className="mb-2 border border-rose-200 bg-rose-50 px-2 py-1.5 text-sm text-rose-700">
           {error}
         </div>
+      ) : null}
+
+      {tab === "supplier" && supplierData && !loading ? (
+        <SupplierDues
+          data={supplierData}
+          query={query.trim()}
+          onOpen={(id) => navigate(`/dues/suppliers/${id}`, { state: fromState(location) })}
+        />
       ) : null}
 
       {tab === "customer" && data && !loading ? (
@@ -883,5 +937,134 @@ export function DuesPage() {
         ) : null}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** Dues → Supplier: total to pay, then each supplier (who you paid extra last). */
+function SupplierDues({
+  data,
+  query,
+  onOpen,
+}: {
+  data: { totalOwed: number; totalAdvance: number; suppliers: SupplierDueRow[] };
+  query: string;
+  onOpen: (id: string) => void;
+}) {
+  const q = query.toLowerCase();
+  const digits = q.replace(/\D/g, "");
+  const rows = data.suppliers.filter(
+    (row) =>
+      !q ||
+      row.name.toLowerCase().includes(q) ||
+      Boolean(digits && row.phone?.replace(/\D/g, "").includes(digits)),
+  );
+  const owing = data.suppliers.filter((row) => row.outstanding > 0).length;
+  return (
+    <>
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-ember-500/10 to-transparent px-4 py-2.5 ring-1 ring-ember-500/15">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">To pay suppliers</p>
+          <p className="text-sm text-ink-700">
+            {owing} supplier{owing === 1 ? "" : "s"}
+            {data.totalAdvance > 0 ? (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                {" "}
+                · Advance {formatRupees(data.totalAdvance)}
+              </span>
+            ) : null}
+          </p>
+        </div>
+        <p className="font-display text-xl font-semibold tabular-nums text-ember-500">
+          {formatRupees(data.totalOwed)}
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          title={query ? "No matching suppliers" : "Nothing to pay suppliers"}
+          description={
+            query
+              ? "Try another search, or clear the search box."
+              : "Suppliers you owe money to will show here when you add stock."
+          }
+        />
+      ) : (
+        <div className="space-y-2">
+          {rows.map((row) => {
+            const adv = row.outstanding < 0;
+            // Paid so far (payments + returned units) out of everything bought.
+            const paid = adv ? 0 : round2(Math.max(row.totalPurchased - row.outstanding, 0));
+            const share = row.totalPurchased > 0 ? Math.min(paid / row.totalPurchased, 1) : 0;
+            return (
+              <article
+                key={row.id}
+                role="link"
+                tabIndex={0}
+                className="due-card due-card-stripe interactive-card cursor-pointer px-3 py-2.5"
+                style={{ "--due-accent": adv ? "#34D399" : "#FFB020" } as React.CSSProperties}
+                onClick={() => onOpen(row.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpen(row.id);
+                  }
+                }}
+              >
+                {paid > 0 ? (
+                  <div className="due-paid-fill" style={{ width: `${share * 100}%` }} aria-hidden />
+                ) : null}
+                <div className="relative flex items-center gap-2">
+                  <div
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white"
+                    style={{ background: "var(--grad)" }}
+                    aria-hidden
+                  >
+                    <Truck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <h3 className="truncate text-sm font-bold text-ink-900">{row.name}</h3>
+                      {paid > 0 ? (
+                        <span
+                          className="shrink-0 rounded-full bg-emerald-500/15 px-[5px] py-px text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300"
+                          title={`${formatRupees(paid)} paid of ${formatRupees(row.totalPurchased)}`}
+                        >
+                          {formatRupees(paid)} paid
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-xs text-ink-400">
+                      {row.phone ? <span className="tabular-nums">{row.phone} · </span> : null}
+                      {row.purchaseCount} purchase{row.purchaseCount === 1 ? "" : "s"}
+                      {row.lastPurchaseDate
+                        ? ` · last ${format(new Date(row.lastPurchaseDate), "d MMM")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p
+                      className={clsx(
+                        "text-[15px] font-bold tabular-nums tracking-tight",
+                        adv ? "text-emerald-600 dark:text-emerald-400" : "text-ink-900",
+                      )}
+                    >
+                      {formatRupees(Math.abs(row.outstanding))}
+                    </p>
+                    <span
+                      className={clsx(
+                        "mt-0.5 block text-[10px] font-bold uppercase leading-4 tracking-wide",
+                        adv ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+                      )}
+                    >
+                      {adv ? "Advance" : "To pay"}
+                    </span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }

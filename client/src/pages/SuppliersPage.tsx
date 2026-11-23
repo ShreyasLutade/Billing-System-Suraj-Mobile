@@ -11,7 +11,6 @@ import {
   Phone,
   Search,
   Smartphone,
-  X,
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
@@ -23,7 +22,6 @@ import {
   SearchClearButton,
 } from "../components/ui";
 import { LoadMoreSentinel } from "../components/LoadMoreSentinel";
-import { PaySupplierModal } from "../components/PaySupplierModal";
 import { useInfiniteReveal } from "../hooks/useInfiniteReveal";
 import { useSessionState } from "../hooks/useSessionState";
 import { ApiError, api, formatINR, formatStockUnitId } from "../lib/api";
@@ -152,8 +150,6 @@ export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [payOpen, setPayOpen] = useState(false);
-  const [payNotice, setPayNotice] = useState<string | null>(null);
   const [statementBusyId, setStatementBusyId] = useState<string | null>(null);
 
   async function downloadStatement(supplier: Supplier) {
@@ -355,31 +351,16 @@ export function SuppliersPage() {
             <button
               type="button"
               className="btn-primary shrink-0"
-              onClick={() => {
-                setPayNotice(null);
-                setPayOpen(true);
-              }}
+              // Paying suppliers lives on Dues → Supplier now.
+              onClick={() => navigate("/dues?tab=supplier")}
             >
               <IndianRupee className="h-4 w-4" />
-              Pay supplier
+              Pay in Dues
             </button>
           ) : null
         }
       />
 
-      {payNotice ? (
-        <div className="mb-3 flex items-start justify-between gap-3 rounded-[14px] border border-[#BFE9D6] bg-[#E7F8F1] px-4 py-3 text-sm font-medium text-[#0B7A5B] dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-          <span>{payNotice}</span>
-          <button
-            type="button"
-            className="shrink-0 opacity-70 hover:opacity-100"
-            aria-label="Dismiss"
-            onClick={() => setPayNotice(null)}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ) : null}
 
       <div className="tb-toolbar">
         <div className="tb-searchrow">
@@ -713,18 +694,6 @@ export function SuppliersPage() {
         </>
       )}
 
-      {isAdmin ? (
-        <PaySupplierModal
-          open={payOpen}
-          suppliers={suppliers}
-          onClose={() => setPayOpen(false)}
-          onPaid={(message) => {
-            setPayOpen(false);
-            setPayNotice(message);
-            void load();
-          }}
-        />
-      ) : null}
     </div>
   );
 }

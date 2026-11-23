@@ -39,6 +39,8 @@ type Entry = {
   paymentId?: string;
   /** Older payment kept only on a purchase (no payment record): that purchase. */
   legacyPurchaseId?: string;
+  /** Payment rows: cash | online | na. */
+  method?: string;
 };
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -144,7 +146,8 @@ export async function supplierStatementData(supplierId: string) {
 
   let recorded = 0;
   for (const pay of supplier.payments) {
-    recorded += pay.amount;
+    // Only the part used on purchases (advance waits for the next stock).
+    recorded += pay.amount - (pay.unapplied || 0);
     // Paid while entering the purchase (Fully paid / Custom paid).
     const atPurchase = Boolean(pay.purchaseId);
     entries.push({
@@ -165,6 +168,7 @@ export async function supplierStatementData(supplierId: string) {
       debit: pay.amount,
       paidFor: pay.purchaseId ?? undefined,
       paymentId: pay.id,
+      method: pay.method,
     });
   }
 

@@ -827,3 +827,44 @@ export type ExchangeIntake = {
   customerName: string;
   accessories: ExchangeAccessory[];
 };
+
+/** Dues page, Supplier tab: what you owe a supplier (below 0 = advance). */
+export type SupplierDueRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  outstanding: number;
+  advance: number;
+  purchaseCount: number;
+  /** Everything bought from them (for the paid share on the card). */
+  totalPurchased: number;
+  lastPurchaseDate: string | null;
+};
+
+/** A supplier's account: purchases and payments / returns, running balance. */
+export type SupplierLedger = {
+  id: string;
+  name: string;
+  phone: string | null;
+  outstanding: number;
+  advance: number;
+  supplierCredit: number;
+  totalPurchased: number;
+  purchaseCount: number;
+  undoPaymentId: string | null;
+  entries: Array<{
+    key: string;
+    kind: "purchase" | "payment" | "return";
+    date: string;
+    particulars: string;
+    detail: string;
+    qty: number | null;
+    got: number;
+    gave: number;
+    paidNote: string | null;
+    method: string | null;
+    paymentId: string | null;
+    purchaseId: string | null;
+    balanceAfter: number;
+  }>;
+};

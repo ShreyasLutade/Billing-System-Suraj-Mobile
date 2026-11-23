@@ -1,4 +1,6 @@
 import type {
+  SupplierDueRow,
+  SupplierLedger,
   AnalyticsCustomerPayoutsSummary,
   MonthlyTrend,
   AnalyticsExchangesSummary,
@@ -868,6 +870,29 @@ export const api = {
       `/suppliers/${encodeURIComponent(supplierId)}/statement/view`,
     ),
   /** Delete a supplier payment; the balance due goes back up by its amount. */
+  /** Dues page, Supplier tab. */
+  listSupplierDues: () =>
+    request<{
+      data: { totalOwed: number; totalAdvance: number; suppliers: SupplierDueRow[] };
+    }>(`/suppliers/dues`),
+  getSupplierLedger: (id: string) =>
+    request<{ data: SupplierLedger }>(`/suppliers/${encodeURIComponent(id)}/ledger`),
+  /** Pay a supplier from Dues: any amount (more than pending = advance). */
+  paySupplierDue: (
+    id: string,
+    payload: {
+      amount: number;
+      method: "cash" | "online" | "na";
+      paidAt?: string | null;
+      note?: string | null;
+    },
+  ) =>
+    request<{
+      data: { paid: number; advance: number; purchasesCleared: number; outstanding: number };
+    }>(`/suppliers/${encodeURIComponent(id)}/pay`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   deleteSupplierPayment: (
     supplierId: string,
     payment: { paymentId: string } | { purchaseId: string; amount: number },

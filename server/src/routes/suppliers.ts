@@ -10,6 +10,8 @@ import type { SupplierMobileExportCondition } from "../services/supplierStockExp
 import { intakeKindFromNote } from "../services/stockSync";
 import { buildSupplierStatement, supplierStatementData } from "../services/supplierStatement";
 import {
+  applyCreditTracked,
+  readAppliedParts,
   applyPendingReturnCredits,
   settlePendingReturnCredits,
 } from "../services/productReturns";
@@ -30,7 +32,7 @@ function round2(value: number) {
 }
 
 async function supplierLedgerStats(supplierId: string) {
-  const [purchases, stockAvailable, stockSold, stockPurchased, returns] =
+  const [purchases, stockAvailable, stockSold, stockPurchased, returns, advanceSum] =
     await Promise.all([
       prisma.purchase.findMany({
         where: { supplierId },
@@ -54,6 +56,10 @@ async function supplierLedgerStats(supplierId: string) {
         where: { supplierId },
         select: { amount: true, creditApplied: true },
       }),
+      prisma.supplierPayment.aggregate({
+        where: { supplierId, unapplied: { gt: 0 } },
+        _sum: { unapplied: true },
+      }),
     ]);
 
   let totalPurchased = 0;
@@ -72,6 +78,8 @@ async function supplierLedgerStats(supplierId: string) {
   const creditApplied = round2(returns.reduce((s, r) => s + r.creditApplied, 0));
   const creditUnapplied = round2(Math.max(totalReturned - creditApplied, 0));
   const owedOnPurchases = round2(Math.max(totalPurchased - totalPaid, 0));
+  /** Paid more than was pending, not yet used on a purchase. */
+  const advance = round2(advanceSum._sum.unapplied ?? 0);
 
   totalPurchased = round2(totalPurchased);
   return {
@@ -79,11 +87,13 @@ async function supplierLedgerStats(supplierId: string) {
     totalPurchased,
     totalPaid: round2(Math.max(totalPaid - creditApplied, 0)),
     totalReturned,
-    /** Return credit not yet used against a purchase (supplier owes us). */
-    supplierCredit: round2(Math.max(creditUnapplied - owedOnPurchases, 0)),
-    // Negative when the supplier owes us (return credit bigger than what we
-    // owe); it is used up automatically against the next stock we add.
-    outstanding: round2(owedOnPurchases - creditUnapplied),
+    /** Return credit + advance not yet used against a purchase (supplier owes us). */
+    supplierCredit: round2(Math.max(creditUnapplied + advance - owedOnPurchases, 0)),
+    /** Paid more than was pending, waiting for the next stock. */
+    advance,
+    // Negative when the supplier owes us (return credit / advance bigger than
+    // what we owe); it is used up automatically against the next stock we add.
+    outstanding: round2(owedOnPurchases - creditUnapplied - advance),
     stockAvailable,
     stockSold,
     stockPurchased,
@@ -311,6 +321,105 @@ suppliersRouter.post("/", async (req, res, next) => {
   }
 });
 
+/** A supplier's account for the Dues page: balance and every entry. */
+async function supplierDueDetail(supplierId: string) {
+  const data = await supplierStatementData(supplierId);
+  if (!data) return null;
+  const stats = await supplierLedgerStats(supplierId);
+  const latest = await prisma.supplierPayment.findFirst({
+    where: { supplierId },
+    orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, purchaseId: true },
+  });
+  return {
+    id: data.id,
+    name: data.name,
+    phone: data.phone,
+    /** What you still owe (below 0 = advance / credit: they owe you). */
+    outstanding: stats.outstanding,
+    advance: stats.advance,
+    supplierCredit: stats.supplierCredit,
+    totalPurchased: stats.totalPurchased,
+    purchaseCount: stats.purchaseCount,
+    /** The newest payment (not one made while entering a purchase). */
+    undoPaymentId: latest && !latest.purchaseId ? latest.id : null,
+    entries: data.rows.map((e, index) => ({
+      key: `${e.kind}-${e.purchaseId ?? e.paymentId ?? e.legacyPurchaseId ?? index}`,
+      kind: e.kind,
+      date: e.date.toISOString(),
+      particulars: e.particulars,
+      detail: e.detail,
+      qty: e.qty,
+      got: round2(e.credit),
+      gave: round2(e.debit),
+      paidNote: e.paidNote ?? null,
+      method: e.method ?? null,
+      paymentId: e.paymentId ?? null,
+      purchaseId: e.purchaseId ?? null,
+      balanceAfter: e.balance,
+    })),
+  };
+}
+
+/** Admin: suppliers you owe (or who owe you), for the Dues page. */
+suppliersRouter.get("/dues", requireAdmin, async (_req, res, next) => {
+  try {
+    await settlePendingReturnCredits();
+    const suppliers = await prisma.supplier.findMany({
+      where: { isExchange: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, phone: true },
+    });
+    const rows = await Promise.all(
+      suppliers.map(async (supplier) => {
+        const [stats, last] = await Promise.all([
+          supplierLedgerStats(supplier.id),
+          prisma.purchase.findFirst({
+            where: { supplierId: supplier.id },
+            orderBy: { purchaseDate: "desc" },
+            select: { purchaseDate: true },
+          }),
+        ]);
+        return {
+          ...supplier,
+          outstanding: stats.outstanding,
+          advance: stats.advance,
+          purchaseCount: stats.purchaseCount,
+          totalPurchased: stats.totalPurchased,
+          lastPurchaseDate: last?.purchaseDate.toISOString() ?? null,
+        };
+      }),
+    );
+    const open = rows
+      .filter((row) => Math.abs(row.outstanding) > 0.005)
+      .sort((a, b) => b.outstanding - a.outstanding);
+    res.json({
+      data: {
+        totalOwed: round2(open.reduce((sum, r) => sum + Math.max(r.outstanding, 0), 0)),
+        totalAdvance: round2(open.reduce((sum, r) => sum + Math.max(-r.outstanding, 0), 0)),
+        suppliers: open,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Admin: one supplier's account for the Dues page. */
+suppliersRouter.get("/:id/ledger", requireAdmin, async (req, res, next) => {
+  try {
+    await settlePendingReturnCredits(req.params.id);
+    const detail = await supplierDueDetail(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+    res.json({ data: detail });
+  } catch (error) {
+    next(error);
+  }
+});
+
 suppliersRouter.get("/:id", async (req, res, next) => {
   try {
     await settlePendingReturnCredits(req.params.id);
@@ -493,7 +602,7 @@ const paySupplierSchema = z.object({
   /** Omit to clear everything outstanding; otherwise a part payment. */
   amount: z.number().positive().finite().optional(),
   /** How it was paid; older app versions send nothing ("na"). */
-  method: z.enum(["cash", "online"]).optional(),
+  method: z.enum(["cash", "online", "na"]).optional(),
   paidAt: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -501,7 +610,9 @@ const paySupplierSchema = z.object({
       const date = new Date(`${value}T00:00:00.000Z`);
       return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
     }, "Enter a valid payment date")
-    .optional(),
+    .optional()
+    .nullable(),
+  note: z.string().trim().max(200).optional().nullable(),
 });
 
 /**
@@ -581,10 +692,33 @@ suppliersRouter.post("/:id/payments/delete", requireAdmin, async (req, res, next
           where: { id: body.data.paymentId, supplierId },
         });
         if (!payment) return { status: 404, error: "Payment not found" } as const;
-        amountPaise = Math.round(payment.amount * 100);
+        // Only the part used on purchases comes off them; advance just goes.
+        amountPaise = Math.round((payment.amount - (payment.unapplied || 0)) * 100);
         firstPurchaseId = payment.purchaseId;
         label = `${payment.amount} paid ${format(payment.paidAt, "dd MMM yyyy")}`;
         await tx.supplierPayment.delete({ where: { id: payment.id } });
+        if (payment.appliedJson !== null) {
+          // Recorded where it went: put exactly that back.
+          let removedPaise = 0;
+          for (const part of readAppliedParts(payment.appliedJson)) {
+            const purchase = await tx.purchase.findUnique({
+              where: { id: part.p },
+              select: { id: true, paidAmount: true, totalAmount: true, paidAt: true },
+            });
+            if (!purchase) continue;
+            const totalPaise = Math.round((purchase.totalAmount || 0) * 100);
+            const paidPaise = purchase.paidAt
+              ? totalPaise
+              : Math.min(Math.round((purchase.paidAmount || 0) * 100), totalPaise);
+            const take = Math.min(part.a, paidPaise);
+            removedPaise += take;
+            await tx.purchase.update({
+              where: { id: purchase.id },
+              data: { paidAt: null, paidAmount: (paidPaise - take) / 100 },
+            });
+          }
+          return { status: 200, removed: removedPaise / 100, label } as const;
+        }
       } else {
         // An older payment shown on the statement from the purchase itself.
         const purchase = await tx.purchase.findFirst({
@@ -676,57 +810,54 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
         .filter((p) => p.leftPaise > 0);
       const outstandingPaise = open.reduce((sum, p) => sum + p.leftPaise, 0);
 
-      if (outstandingPaise <= 0) {
+      if (requestedPaise === null && outstandingPaise <= 0) {
         return { status: 400, error: "Nothing is outstanding for this supplier" } as const;
       }
-      if (requestedPaise !== null && requestedPaise > outstandingPaise) {
-        return {
-          status: 400,
-          error: `Amount is more than the ₹${(outstandingPaise / 100).toLocaleString("en-IN", {
-            minimumFractionDigits: outstandingPaise % 100 ? 2 : 0,
-            maximumFractionDigits: 2,
-          })} outstanding`,
-        } as const;
+      const todayIst = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+      if (parsed.data.paidAt && parsed.data.paidAt > todayIst) {
+        return { status: 400, error: "The date can't be in the future" } as const;
       }
+      const paidAt =
+        parsed.data.paidAt && parsed.data.paidAt !== todayIst
+          ? new Date(`${parsed.data.paidAt}T12:00:00.000Z`)
+          : new Date();
 
-      let leftToApply = requestedPaise ?? outstandingPaise;
-      let purchasesCleared = 0;
-      const paidAt = parsed.data.paidAt
-        ? new Date(`${parsed.data.paidAt}T12:00:00.000Z`)
-        : new Date();
-      const againstDates: string[] = [];
-      for (const p of open) {
-        if (leftToApply <= 0) break;
-        const apply = Math.min(leftToApply, p.leftPaise);
-        leftToApply -= apply;
-        const newPaidPaise = p.paidPaise + apply;
-        const fullyPaid = newPaidPaise >= p.totalPaise;
-        if (fullyPaid) purchasesCleared += 1;
-        againstDates.push(format(p.purchaseDate, "dd MMM yyyy"));
-        await tx.purchase.update({
-          where: { id: p.id },
-          data: fullyPaid
-            ? { paidAt, paidAmount: p.totalAmount }
-            : { paidAmount: newPaidPaise / 100 },
-        });
-      }
-
-      const paidPaise = (requestedPaise ?? outstandingPaise) - leftToApply;
+      // Oldest unpaid purchases first; anything over what's pending is kept
+      // as advance (used on the next stock from this supplier).
+      const totalPaise = requestedPaise ?? outstandingPaise;
+      const { applied, parts } = await applyCreditTracked(tx, supplier.id, totalPaise);
+      const againstDates = [
+        ...new Set(open.slice(0, parts.length).map((p) => format(p.purchaseDate, "dd MMM yyyy"))),
+      ];
+      const extraPaise = totalPaise - applied;
+      const note =
+        parsed.data.note?.trim() ||
+        [
+          againstDates.length
+            ? `Against purchase${againstDates.length === 1 ? "" : "s"} of ${againstDates.join(", ")}`
+            : null,
+          extraPaise > 0 ? `₹${(extraPaise / 100).toLocaleString("en-IN")} kept as advance` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
       // Dated record of this payment, for the supplier statement.
       await tx.supplierPayment.create({
         data: {
           supplierId: supplier.id,
-          amount: paidPaise / 100,
+          amount: totalPaise / 100,
           method: parsed.data.method ?? "na",
           paidAt,
-          note: `Against purchase${againstDates.length === 1 ? "" : "s"} of ${[...new Set(againstDates)].join(", ")}`,
+          note: note || null,
+          unapplied: extraPaise / 100,
+          appliedJson: JSON.stringify(parts),
         },
       });
       return {
         status: 200,
-        paid: paidPaise / 100,
-        purchasesCleared,
-        outstanding: (outstandingPaise - paidPaise) / 100,
+        paid: totalPaise / 100,
+        advance: extraPaise / 100,
+        purchasesCleared: parts.filter((part) => part.c).length,
+        outstanding: (outstandingPaise - applied) / 100,
       } as const;
     });
 
@@ -737,6 +868,7 @@ suppliersRouter.post("/:id/pay", requireAdmin, async (req, res, next) => {
     res.json({
       data: {
         paid: result.paid,
+        advance: result.advance,
         purchasesCleared: result.purchasesCleared,
         outstanding: result.outstanding,
       },
