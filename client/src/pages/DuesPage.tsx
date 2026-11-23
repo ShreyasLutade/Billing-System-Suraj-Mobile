@@ -266,6 +266,51 @@ function DuesHero({
   );
 }
 
+/**
+ * Thin coloured bar + one-line legend under the hero amount. Always drawn
+ * (empty bar when nothing is pending) so every tab's box is the same height.
+ */
+function HeroBar({
+  segments,
+}: {
+  segments: Array<{ label: string; color: string; amount: number }>;
+}) {
+  const total = segments.reduce((sum, segment) => sum + Math.max(segment.amount, 0), 0);
+  const shown = segments.length ? segments : [{ label: "Nothing pending", color: "#94A3B8", amount: 0 }];
+  return (
+    <>
+      <div className="mt-2 flex h-1 gap-[3px] overflow-hidden rounded-full bg-white/10">
+        {total > 0
+          ? segments.map((segment) =>
+              segment.amount > 0 ? (
+                <span
+                  key={segment.label}
+                  className="h-full"
+                  style={{ width: `${(segment.amount / total) * 100}%`, background: segment.color }}
+                />
+              ) : null,
+            )
+          : null}
+      </div>
+      <OneLineFit
+        className="mt-1.5 flex items-center justify-between gap-2"
+        fitKey={shown.map((segment) => `${segment.label}:${segment.amount}`).join("|")}
+      >
+        {shown.map((segment) => (
+          <span
+            key={segment.label}
+            className="flex shrink-0 items-center gap-[0.4em] font-semibold text-white/70"
+          >
+            <span className="h-[7px] w-[7px] rounded-full" style={{ background: segment.color }} />
+            {segment.label}
+            <b className="font-bold tabular-nums text-white">{formatRupees(segment.amount)}</b>
+          </span>
+        ))}
+      </OneLineFit>
+    </>
+  );
+}
+
 function dueMatchesFinanceCompany(due: FinanceDueItem, company: string) {
   const { amount1, amount2 } = financeSlotAmounts(due);
   const name1 = due.financeCompanyName?.trim() || "";
@@ -525,6 +570,20 @@ export function DuesPage() {
       amount: round2(groupTotals.upcoming + groupTotals.none),
     },
   ];
+  // Finance hero: the two biggest companies, the rest together.
+  const financeHeroSegments = (() => {
+    const sorted = [...financeCompanyTotals]
+      .filter((company) => !financeCompanyFilter || company.name === financeCompanyFilter)
+      .sort((a, b) => b.amount - a.amount);
+    const colors = ["#60A5FA", "#A78BFA"];
+    const top = sorted.slice(0, 2).map((company, index) => ({
+      label: company.name,
+      color: colors[index],
+      amount: company.amount,
+    }));
+    const rest = round2(sorted.slice(2).reduce((sum, company) => sum + company.amount, 0));
+    return rest > 0 ? [...top, { label: "Others", color: "#94A3B8", amount: rest }] : top;
+  })();
   const oldestFinanceDays = filteredFinanceDues.reduce(
     (max, due) => Math.max(max, daysSince(due.billDate)),
     0,
@@ -624,44 +683,7 @@ export function DuesPage() {
             ) : null
           }
         >
-          {data && customerTotal > 0 ? (
-            <>
-              <div className="mt-2 flex h-1 gap-[3px] overflow-hidden rounded-full bg-white/10">
-                {heroSegments.map((segment) =>
-                  segment.amount > 0 ? (
-                    <span
-                      key={segment.label}
-                      className="h-full"
-                      style={{
-                        width: `${(segment.amount / customerTotal) * 100}%`,
-                        background: segment.color,
-                      }}
-                    />
-                  ) : null,
-                )}
-              </div>
-              <OneLineFit
-                className="mt-1.5 flex items-center justify-between gap-2"
-                fitKey={heroSegments.map((segment) => segment.amount).join("|")}
-              >
-                {heroSegments.map((segment) => (
-                  <span
-                    key={segment.label}
-                    className="flex shrink-0 items-center gap-[0.4em] font-semibold text-white/70"
-                  >
-                    <span
-                      className="h-[7px] w-[7px] rounded-full"
-                      style={{ background: segment.color }}
-                    />
-                    {segment.label}
-                    <b className="font-bold tabular-nums text-white">
-                      {formatRupees(segment.amount)}
-                    </b>
-                  </span>
-                ))}
-              </OneLineFit>
-            </>
-          ) : null}
+          <HeroBar segments={heroSegments} />
         </DuesHero>
       ) : tab === "supplier" ? (
         <DuesHero
@@ -672,18 +694,17 @@ export function DuesPage() {
               <>
                 {supplierData.suppliers.filter((r) => r.outstanding > 0).length} supplier
                 {supplierData.suppliers.filter((r) => r.outstanding > 0).length === 1 ? "" : "s"}
-                {supplierData.totalAdvance > 0 ? (
-                  <>
-                    <br />
-                    <span className="text-[#5CE0AE]">
-                      Advance {formatRupees(supplierData.totalAdvance)}
-                    </span>
-                  </>
-                ) : null}
               </>
             ) : null
           }
-        />
+        >
+          <HeroBar
+            segments={[
+              { label: "You'll give", color: "#FF6B6B", amount: supplierData?.totalOwed ?? 0 },
+              { label: "Advance", color: "#34D399", amount: supplierData?.totalAdvance ?? 0 },
+            ]}
+          />
+        </DuesHero>
       ) : (
         <DuesHero
           label={`Finance pending${financeCompanyFilter ? ` · ${financeCompanyFilter}` : ""}`}
@@ -702,14 +723,15 @@ export function DuesPage() {
               </>
             ) : null
           }
-        />
+        >
+          <HeroBar segments={financeHeroSegments} />
+        </DuesHero>
       )}
 
       <div
-        className="dues-seg mb-2"
+        className={clsx("dues-seg mb-2", isAdmin && "dues-seg-3")}
         role="tablist"
         aria-label="Due type"
-        style={isAdmin ? { gridTemplateColumns: "repeat(3, minmax(0, 1fr))" } : undefined}
       >
         <button
           type="button"

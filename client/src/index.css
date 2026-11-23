@@ -2718,3 +2718,29 @@ html.dark .fx-light-teal {
 .due-add-btn:hover svg {
   transform: rotate(90deg);
 }
+
+/* Three tabs (Customer · Finance · Supplier): smaller type and padding so
+   the label and count never touch the edges; icons hide on narrow phones. */
+.dues-seg-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dues-seg-3 .dues-seg-btn {
+  min-width: 0;
+  gap: 5px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.dues-seg-3 .dues-seg-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.dues-seg-3 .dues-seg-cnt {
+  padding: 0 5px;
+  font-size: 10.5px;
+}
+@media (max-width: 400px) {
+  .dues-seg-3 .dues-seg-btn svg {
+    display: none;
+  }
+}
