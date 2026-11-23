@@ -154,11 +154,11 @@ export function AccSegregatePage() {
   const left = total - sorted;
 
   const suggestions = useMemo(() => {
-    const used = new Set((rows ?? []).map((r) => r.model.toLowerCase()));
     const fromShop = new Set<string>();
     for (const p of catalog?.products ?? []) for (const m of p.models) fromShop.add(m.model);
     const all = [...fromShop, ...names, ...COMMON_PHONE_BRANDS].filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i);
-    const free = all.filter((n) => !used.has(n.toLowerCase()));
+    // Models already in the list stay pickable: adding one again makes a separate lot.
+    const free = all.filter((n) => !/ \(\d+\)$/.test(n)); // lots like "iPhone 15 Pro (2)" aren't suggested
     const q = draft.trim().toLowerCase();
     // A model already picked: show it first, then the rest, so it's easy to switch.
     const exact = free.find((n) => n.toLowerCase() === q);
@@ -171,8 +171,12 @@ export function AccSegregatePage() {
     if (!model || !rows) return;
     const qty = Math.min(Math.max(draftQty, 1), Math.max(left, 0));
     if (qty < 1) return void toast("All pieces are split", { tone: "error" });
-    const existing = rows.find((r) => r.model.toLowerCase() === model.toLowerCase());
-    setRows(existing ? rows.map((r) => (r === existing ? { ...r, qty: r.qty + qty } : r)) : [{ id: `${model}-${Date.now()}`, model, qty }, ...rows]);
+    // Same model again = a separate lot ("iPhone 15 Pro (2)"), e.g. kept in another box.
+    const taken = new Set(rows.map((r) => r.model.toLowerCase()));
+    let lot = model;
+    for (let n = 2; taken.has(lot.toLowerCase()); n += 1) lot = `${model} (${n})`;
+    setRows([{ id: `${lot}-${Date.now()}`, model: lot, qty }, ...rows]);
+    if (lot !== model) toast(`Added as ${lot}: a separate lot of ${model}`);
     setDraft("");
     setDraftQty(1);
   }
