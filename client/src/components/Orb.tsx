@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MODE_DRAWS, ThinkingOrb, resolvePreset, scaleRadii, type OrbState } from "thinking-orbs";
+import { MODE_FRAMES, ThinkingOrb, resolvePreset, scaleRadii, type OrbState } from "thinking-orbs";
 import clsx from "clsx";
 
 /** True while <html> has the `dark` class (the app's theme switch). */
@@ -17,12 +17,30 @@ function useHtmlDark() {
 }
 
 /** Which thinking-orbs animation the whole app uses. */
-const ORB_STATE: OrbState = "working";
+const ORB_STATE: OrbState = "searching";
 /** Bolder dots than the stock design so the orbits read on a phone. */
 const DOT_SCALE = 1.4;
+/** Brand gold: deeper on the light cream page, brighter on dark. */
+const GOLD = { light: { r: 224, g: 154, b: 0 }, dark: { r: 255, g: 201, b: 51 } };
+const hex = ({ r, g, b }: { r: number; g: number; b: number }) =>
+  `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 
 /**
- * The app's loader: the thinking-orbs "working" orb (dots on tilted orbits).
+ * Dot colour, same depth shading as the package's tint (near dots full
+ * gold, far ones fading toward the background).
+ */
+function goldInk(white: number, alpha: number, dark: boolean) {
+  const tint = dark ? GOLD.dark : GOLD.light;
+  const w = Math.min(1, Math.max(0, white));
+  // On dark, fade only part way to black so the gold stays bright.
+  const ramp = (c: number) => Math.round(dark ? c * (1 - 0.35 * w) : c + (255 - c) * w);
+  // Dark page: a little more opacity so the far side of the globe still shows.
+  const a = dark ? Math.min(1, alpha * 1.5) : alpha;
+  return `rgba(${ramp(tint.r)},${ramp(tint.g)},${ramp(tint.b)},${a})`;
+}
+
+/**
+ * The app's loader: the thinking-orbs "searching" orb (a scan sweeps a dotted globe).
  *
  * The package only ships 20/32/64px presets, and at 64px the orbit rings
  * shrink to faint specks. Its design is drawn for ~300px, so larger orbs
@@ -30,10 +48,22 @@ const DOT_SCALE = 1.4;
  * same animation, with the rings and moving particles clearly visible.
  */
 export function Orb({ size = 140, className }: { size?: number; className?: string }) {
-  if (size <= 24) {
-    return <ThinkingOrb state={ORB_STATE} size={20} aria-hidden className={clsx("shrink-0", className)} />;
-  }
+  if (size <= 24) return <SmallOrb className={className} />;
   return <LargeOrb size={size} className={className} />;
+}
+
+function SmallOrb({ className }: { className?: string }) {
+  const dark = useHtmlDark();
+  return (
+    <ThinkingOrb
+      state={ORB_STATE}
+      size={20}
+      theme={dark ? "dark" : "light"}
+      color={hex(dark ? GOLD.dark : GOLD.light)}
+      aria-hidden
+      className={clsx("shrink-0", className)}
+    />
+  );
 }
 
 function LargeOrb({ size, className }: { size: number; className?: string }) {
@@ -53,11 +83,25 @@ function LargeOrb({ size, className }: { size: number; className?: string }) {
     const preset = resolvePreset(ORB_STATE, 64);
     const { mode, speed } = preset;
     const opts = scaleRadii(preset.opts, DOT_SCALE);
-    const draw = MODE_DRAWS[mode];
+    const makeFrame = MODE_FRAMES[mode];
     const paint = (seconds: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, size, size);
-      draw(ctx, size, seconds, dark, opts);
+      const frame = makeFrame(size, seconds, opts);
+      for (const line of frame.lines) {
+        ctx.strokeStyle = goldInk(line.white, line.a ?? 1, dark);
+        ctx.lineWidth = line.w;
+        ctx.beginPath();
+        ctx.moveTo(line.x1, line.y1);
+        ctx.lineTo(line.x2, line.y2);
+        ctx.stroke();
+      }
+      for (const dot of frame.dots) {
+        ctx.fillStyle = goldInk(dot.white, dot.a ?? 1, dark);
+        ctx.beginPath();
+        ctx.arc(dot.x, dot.y, Math.max(0.3, dot.r), 0, Math.PI * 2);
+        ctx.fill();
+      }
     };
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
