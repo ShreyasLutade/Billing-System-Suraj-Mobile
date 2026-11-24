@@ -16,6 +16,7 @@ import {
   setAuthToken,
 } from "../lib/api";
 import type { AuthUser } from "../types";
+import { setDemoBrand } from "../lib/brand";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -29,6 +30,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  // Brand everywhere follows the signed-in account (demo shop for the demo login).
+  setDemoBrand(Boolean(user?.demo));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

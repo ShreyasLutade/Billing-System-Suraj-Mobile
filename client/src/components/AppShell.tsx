@@ -15,17 +15,20 @@ import {
   Users,
   Wallet,
   X,
+  Store,
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 import { clearListUiSession } from "../hooks/useSessionState";
+import { brand } from "../lib/brand";
 
 const menuItemClass =
   "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink-700 transition hover:bg-ink-50 hover:text-ink-900 focus-visible:bg-ink-50 focus-visible:outline-none dark:text-ink-100 dark:hover:bg-white/5";
 
 export function AppShell() {
   const { isAdmin, user, logout } = useAuth();
+  const shopBrand = brand();
   const { theme, toggleTheme } = useTheme();
   const mainRef = useRef<HTMLElement | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -138,20 +141,27 @@ export function AppShell() {
             to="/"
             onClick={onMainNavClick}
             className="flex items-center gap-3 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
-            aria-label="Suraj Mobile — New Bill"
+            aria-label={`${shopBrand.name} — New Bill`}
           >
-            <img
-              src="/suraj_mobile_icon.png"
-              alt=""
-              className="h-11 w-11 shrink-0 object-contain"
-            />
+            {shopBrand.icon ? (
+              <img src={shopBrand.icon} alt="" className="h-11 w-11 shrink-0 object-contain" />
+            ) : (
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#FFE100] to-[#FFA800] text-[#1F1600] shadow-[0_8px_16px_-8px_rgba(255,168,0,.9)]">
+                <Store className="h-5 w-5" strokeWidth={2.2} />
+              </span>
+            )}
             <div>
               <p className="font-display text-lg font-semibold tracking-tight text-ink-900">
-                Suraj Mobile
+                {shopBrand.name}
+                {shopBrand.demo ? (
+                  <span className="ml-1.5 rounded-full bg-indigo-500/15 px-1.5 py-px align-middle text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                    Demo
+                  </span>
+                ) : null}
               </p>
               <p className="text-xs text-ink-500">
-                {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·
-                Balaghat
+                {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·{" "}
+                {shopBrand.city}
               </p>
             </div>
           </Link>

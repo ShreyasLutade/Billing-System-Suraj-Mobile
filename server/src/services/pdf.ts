@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { isDemoRequest } from "../lib/tenant";
 import PDFDocument from "pdfkit";
 import type PDFKit from "pdfkit";
 import type { Bill, BillItem } from "@prisma/client";
@@ -23,7 +24,7 @@ const COLORS = {
   white: "#FFFFFF",
 };
 
-const shop = {
+const realShop = {
   name: process.env.SHOP_NAME || "Suraj Mobile",
   tagline:
     process.env.SHOP_TAGLINE || "Deals In - All New & Second Hand Phones",
@@ -34,6 +35,21 @@ const shop = {
   instagram: process.env.SHOP_INSTAGRAM || "@surajmobileofficial",
   gstin: process.env.SHOP_GSTIN || "23FAAPB2709A1ZP",
 };
+
+/** Shown on PDFs made from the demo login (never the real shop's details). */
+const demoShop: typeof realShop = {
+  name: "Demo Mobile Shop",
+  tagline: "New & Second Hand Phones",
+  address: "Main Road, Your City",
+  phone: "9999999999",
+  instagram: "@demomobileshop",
+  gstin: "22AAAAA0000A1Z5",
+};
+
+/** The shop on PDFs: the real one, or the demo shop for the demo login. */
+const shop = new Proxy(realShop, {
+  get: (target, prop) => Reflect.get(isDemoRequest() ? demoShop : target, prop),
+}) as typeof realShop;
 
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 28;
@@ -64,6 +80,8 @@ export function drawShopLogo(
   w: number,
   h: number,
 ) {
+  // The demo shop has no logo (never show the real shop's).
+  if (isDemoRequest()) return;
   const logoFile = fs.existsSync(LOGO_PATH)
     ? LOGO_PATH
     : fs.existsSync(ICON_PATH)
@@ -256,7 +274,10 @@ function drawInstagramIcon(
 }
 
 function drawHeader(doc: PDFKit.PDFDocument) {
-  const logoFile = fs.existsSync(LOGO_PATH)
+  // The demo shop has no logo (never show the real shop's).
+  const logoFile = isDemoRequest()
+    ? null
+    : fs.existsSync(LOGO_PATH)
     ? LOGO_PATH
     : fs.existsSync(ICON_PATH)
       ? ICON_PATH
@@ -1203,7 +1224,7 @@ function drawFooter(doc: PDFKit.PDFDocument) {
     "1. Goods once sold will not be taken back, exchanged or refunded.",
     "2. Warranty & insurance terms are as provided by the company / service centre.",
     "3. Customer has inspected the device at purchase; shop is not responsible thereafter.",
-    "4. Subject to Balaghat jurisdiction.",
+    `4. Subject to ${isDemoRequest() ? "local" : "Balaghat"} jurisdiction.`,
   ];
   let ty = y + 12;
   doc.fillColor(COLORS.muted).font(FONT.regular).fontSize(6.5);

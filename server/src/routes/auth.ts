@@ -11,6 +11,7 @@ import {
   type Role,
 } from "../middleware/auth";
 import { sendPlainEmail } from "../services/reportEmail";
+import { isDemoRequest } from "../lib/tenant";
 import {
   deletePasswordResetOtps,
   findLatestPasswordResetOtp,
@@ -39,6 +40,8 @@ function publicUser(user: {
     phone: user.phone,
     name: user.name,
     role: user.role as Role,
+    // The demo database's users are demo users.
+    ...(isDemoRequest() ? { demo: true } : {}),
   };
 }
 

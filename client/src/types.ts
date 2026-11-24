@@ -834,6 +834,8 @@ export type AuthUser = {
   phone: string;
   name: string;
   role: "ADMIN" | "STAFF";
+  /** Signed in with the demo number: separate demo data. */
+  demo?: boolean;
 };
 
 /** A login as the Manage users page sees it (admin only). */

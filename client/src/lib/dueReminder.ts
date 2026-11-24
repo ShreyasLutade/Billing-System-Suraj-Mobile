@@ -1,8 +1,6 @@
 import type { DueItem } from "../types";
 import { formatRupees } from "./dueStatus";
-
-const SHOP_NAME = "Suraj Mobile";
-const SHOP_PHONE = "9516533556";
+import { brand } from "./brand";
 
 /** Bill phone → WhatsApp number with country code (India), or null. */
 export function whatsappNumber(phone: string) {
@@ -24,10 +22,11 @@ export function dueReminderMessage(due: ReminderDue) {
     ? `${products[0]}${products.length > 1 ? ` + ${products.length - 1} more` : ""}`
     : null;
 
+  const { name: SHOP_NAME, phone: SHOP_PHONE, city } = brand();
   return [
     `Namaste ${due.customerName} ji,`,
     "",
-    `This is a gentle reminder from *${SHOP_NAME}*, Balaghat, about your pending payment.`,
+    `This is a gentle reminder from *${SHOP_NAME}*, ${city}, about your pending payment.`,
     "",
     product ? `Product: ${product}` : null,
     `Pending amount: *${formatRupees(due.dueAmount)}*`,

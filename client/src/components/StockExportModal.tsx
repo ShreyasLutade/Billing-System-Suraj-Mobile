@@ -11,6 +11,7 @@ import {
 import { api } from "../lib/api";
 import { canSharePdf, savePdfBlob, sharePdfBlob } from "../lib/sharePdf";
 import { isShareAbort } from "../lib/shareInvoice";
+import { brand } from "../lib/brand";
 
 type Condition = "NEW" | "USED";
 
@@ -69,7 +70,7 @@ export function StockExportModal({ onClose }: { onClose: () => void }) {
         blob,
         filename,
         `${label} in stock`,
-        `${label} in stock — Suraj Mobile`,
+        `${label} in stock — ${brand().name}`,
       );
     } catch (err) {
       // Dismissing the share sheet isn't a failure.

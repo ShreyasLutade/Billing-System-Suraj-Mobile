@@ -1,3 +1,4 @@
+import { brand } from "./brand";
 import { api } from "./api";
 
 /** Opens the native share sheet with the invoice PDF (WhatsApp, etc.). */
@@ -24,7 +25,7 @@ export async function shareInvoicePdf(
 
   const withFile: ShareData = {
     title: `Invoice ${label}`,
-    text: `Invoice ${label} — Suraj Mobile`,
+    text: `Invoice ${label} — ${brand().name}`,
     files: [file],
   };
 

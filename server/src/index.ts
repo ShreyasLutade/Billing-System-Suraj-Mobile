@@ -11,6 +11,8 @@ import {
 } from "./routes/financeCompanies";
 import { duesRouter } from "./routes/dues";
 import { authRouter, seedUsers } from "./routes/auth";
+import { tenantMiddleware } from "./middleware/tenant";
+import { prepareDemoDatabase } from "./services/demoDatabase";
 import { reportsRouter, reportsCronRouter } from "./routes/reports";
 import { mobileCatalogRouter } from "./routes/mobileCatalog";
 import { stockRouter } from "./routes/stock";
@@ -70,6 +72,8 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+// Demo login → demo database; everyone else → the shop's real one.
+app.use(tenantMiddleware);
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -156,6 +160,16 @@ if (serveClient) {
 async function start() {
   await seedFinanceCompanies();
   await seedUsers();
+  // Demo database (separate file) in the background; demo logins wait for it.
+  void prepareDemoDatabase(async () => {
+    await seedFinanceCompanies();
+    try {
+      await ensurePasswordResetOtpTable();
+    } catch {
+      // not needed for the demo
+    }
+    await ensurePhoneModelsSeeded(prisma);
+  });
   try {
     await ensurePasswordResetOtpTable();
   } catch (error) {

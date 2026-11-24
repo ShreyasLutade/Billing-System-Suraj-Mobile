@@ -8,6 +8,8 @@ export type AuthUser = {
   phone: string;
   name: string;
   role: Role;
+  /** Signed in with the demo number: uses the demo database. */
+  demo?: boolean;
 };
 
 declare global {
@@ -28,6 +30,7 @@ export function signToken(user: AuthUser) {
       phone: user.phone,
       name: user.name,
       role: user.role,
+      ...(user.demo ? { demo: true } : {}),
     },
     JWT_SECRET,
     { expiresIn: "7d" },
@@ -45,13 +48,14 @@ export function verifyToken(token: string): AuthUser | null {
       phone: String(payload.phone),
       name: String(payload.name || ""),
       role,
+      ...(payload.demo === true ? { demo: true } : {}),
     };
   } catch {
     return null;
   }
 }
 
-function extractToken(req: Request): string | null {
+export function extractToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (header?.startsWith("Bearer ")) {
     return header.slice(7).trim();
