@@ -3,10 +3,10 @@ import {
   ArchiveRestore,
   DatabaseBackup,
   Download,
-  Loader2,
   Mail,
   Upload,
 } from "lucide-react";
+import { Orb } from "../components/Orb";
 import { BackLink, PageHeader } from "../components/ui";
 import { ApiError, api } from "../lib/api";
 
@@ -320,7 +320,7 @@ export function BackupPage() {
         >
           {restartSeconds !== null ? (
             <span className="inline-flex items-center gap-2">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              <Orb size={20} />
               <span>
                 {message} <span className="tabular-nums">{restartSeconds}s</span>
                 <span className="mt-0.5 block text-xs opacity-80">

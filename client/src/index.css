@@ -2853,25 +2853,7 @@ html.dark .money-tile::after {
   }
 }
 
-/* Loader: a yellow gradient ring spinning with a soft glow (LoadingBlock). */
-.loader-ring {
-  width: 56px;
-  height: 56px;
-  border-radius: 9999px;
-  background: conic-gradient(from 0deg, transparent 0deg, #ffe100 120deg, #ffa800 260deg, transparent 360deg);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
-  filter: drop-shadow(0 0 10px rgba(255, 168, 0, 0.55));
-  animation: loader-spin 0.9s linear infinite;
-}
-html.dark .loader-ring {
-  filter: drop-shadow(0 0 12px rgba(255, 201, 60, 0.6));
-}
-@keyframes loader-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+/* Loader text dots ("Loading..."); the orb itself is thinking-orbs (components/Orb). */
 .loader-dots {
   display: inline-flex;
   gap: 3px;
@@ -2906,9 +2888,6 @@ html.dark .loader-ring {
   animation: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  .loader-ring {
-    animation-duration: 2.4s;
-  }
   .loader-dots i {
     animation: none;
     opacity: 0.6;

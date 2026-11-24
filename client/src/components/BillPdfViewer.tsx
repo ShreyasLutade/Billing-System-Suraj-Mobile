@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
+import { Orb } from "./Orb";
 import { api } from "../lib/api";
 
 type Props = {
@@ -227,7 +228,7 @@ export function BillPdfViewer({ billId, invoiceNumber, onClose }: Props) {
         >
           {status === "loading" ? (
             <div className="flex h-full min-h-[200px] items-center justify-center gap-2 text-sm text-ink-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Orb size={20} />
               Loading bill…
             </div>
           ) : null}

@@ -6,12 +6,12 @@ import {
   ChevronDown,
   Download,
   IndianRupee,
-  Loader2,
   Phone,
   Search,
   Smartphone,
   Truck,
 } from "lucide-react";
+import { Orb } from "../components/Orb";
 import clsx from "clsx";
 import { useAuth } from "../auth/AuthContext";
 import { ImeiScanFieldButton } from "../components/BarcodeImeiScanner";
@@ -625,7 +625,7 @@ export function SuppliersPage() {
                               }}
                             >
                               {statementBusyId === s.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Orb size={20} />
                               ) : (
                                 <Download className="h-4 w-4" />
                               )}

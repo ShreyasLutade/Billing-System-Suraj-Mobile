@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { Orb } from "./Orb";
 import type { Ref } from "react";
 
 export function LoadMoreSentinel({
@@ -30,7 +30,7 @@ export function LoadMoreSentinel({
     >
       {loadingMore ? (
         <>
-          <LoaderCircle className="h-4 w-4 animate-spin text-ink-400" />
+          <Orb size={20} />
           {label}
         </>
       ) : hasMore ? (

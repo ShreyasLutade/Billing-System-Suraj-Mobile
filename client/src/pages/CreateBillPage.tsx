@@ -10,7 +10,6 @@ import {
   Info,
   ListOrdered,
   Lock,
-  Loader2,
   Plus,
   RefreshCw,
   Share2,
@@ -18,6 +17,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+import { Orb } from "../components/Orb";
 import { useAuth } from "../auth/AuthContext";
 import { AddMobileModal } from "../components/AddMobileModal";
 import {
@@ -3701,7 +3701,7 @@ export function CreateBillPage() {
             >
               <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-lift">
                 <div className="flex flex-col items-center text-center">
-                  <Loader2 className="h-9 w-9 animate-spin text-tide-600" />
+                  <Orb size={64} />
                   <h2
                     id="stock-imei-lookup-title"
                     className="mt-4 font-display text-lg font-semibold text-ink-900"

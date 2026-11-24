@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { ArrowLeft, X } from "lucide-react";
 import { useLayoutEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { meltLoader } from "./LoaderReveal";
+import { Orb } from "./Orb";
 
 export function BackLink({
   to,
@@ -182,7 +183,7 @@ export function EmptyState({
 
 export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  // When the data arrives the ring fades and the content rises in (meltLoader).
+  // When the data arrives the orb fades and the content rises in (meltLoader).
   useLayoutEffect(() => {
     const el = ref.current;
     const shownAt = performance.now();
@@ -197,9 +198,9 @@ export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className="loader-wrap flex min-h-[42vh] w-full flex-col items-center justify-center gap-4 py-10"
+      className="loader-wrap flex min-h-[42vh] w-full flex-col items-center justify-center gap-3 py-10"
     >
-      <span className="loader-ring" aria-hidden />
+      <Orb size={64} />
       <span className="text-[13.5px] font-semibold text-ink-500">
         {label.replace(/…$/, "")}
         <span className="loader-dots" aria-hidden>

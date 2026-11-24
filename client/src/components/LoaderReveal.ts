@@ -19,6 +19,15 @@ export function meltLoader(el: HTMLElement | null) {
   ghost.removeAttribute("role");
   ghost.setAttribute("aria-hidden", "true");
   ghost.classList.add("skel-ghost");
+  // Canvases (the orb) clone empty: copy the current frame into the ghost.
+  const from = el.querySelectorAll("canvas");
+  ghost.querySelectorAll("canvas").forEach((canvas, index) => {
+    try {
+      canvas.getContext("2d")?.drawImage(from[index], 0, 0);
+    } catch {
+      // nothing to copy
+    }
+  });
   Object.assign(ghost.style, {
     position: "fixed",
     left: `${rect.left}px`,
