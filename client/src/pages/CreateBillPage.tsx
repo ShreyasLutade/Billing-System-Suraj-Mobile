@@ -3701,7 +3701,7 @@ export function CreateBillPage() {
             >
               <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-lift">
                 <div className="flex flex-col items-center text-center">
-                  <Orb size={64} />
+                  <Orb size={110} />
                   <h2
                     id="stock-imei-lookup-title"
                     className="mt-4 font-display text-lg font-semibold text-ink-900"

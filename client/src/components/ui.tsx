@@ -200,7 +200,7 @@ export function LoadingBlock({ label = "Loading…" }: { label?: string }) {
       aria-busy="true"
       className="loader-wrap flex min-h-[42vh] w-full flex-col items-center justify-center gap-3 py-10"
     >
-      <Orb size={64} />
+      <Orb size={140} />
       <span className="text-[13.5px] font-semibold text-ink-500">
         {label.replace(/…$/, "")}
         <span className="loader-dots" aria-hidden>
