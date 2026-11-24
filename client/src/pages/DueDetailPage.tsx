@@ -787,7 +787,7 @@ export function Sheet({
         exit={{ opacity: 0, y: top ? -12 : 24, scale: top ? 0.98 : 1 }}
         transition={{ type: "spring", stiffness: 420, damping: 36 }}
         className={clsx(
-          "w-full max-w-md overflow-y-auto overscroll-contain border border-white/70 bg-white shadow-lift dark:border-white/10 dark:bg-surface-elevated sm:rounded-3xl sm:border-b sm:px-5 sm:pb-5 sm:pt-5",
+          "w-full max-w-md overflow-y-auto overflow-x-hidden overscroll-contain border border-white/70 bg-white shadow-lift dark:border-white/10 dark:bg-surface-elevated sm:rounded-3xl sm:border-b sm:px-5 sm:pb-5 sm:pt-5",
           top
             ? "max-h-[calc(100dvh-6rem)] rounded-3xl px-4 pb-4 pt-3.5"
             : "max-h-full rounded-t-[28px] border-b-0 px-4 pt-2",

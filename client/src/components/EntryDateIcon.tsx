@@ -44,7 +44,7 @@ export function EntryDateIcon({
   return (
     <label
       className={clsx(
-        "relative inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-xl transition",
+        "relative inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-xl transition",
         custom ? "px-2.5" : "w-10",
         custom
           ? tone === "gave"
@@ -60,7 +60,8 @@ export function EntryDateIcon({
       ) : null}
       <input
         type="date"
-        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        // iPhone draws date inputs wider than their box; keep it inside the icon.
+        className="absolute inset-0 h-full w-full min-w-0 max-w-full cursor-pointer appearance-none opacity-0"
         aria-label={`${prefix} date: ${label(current)}`}
         max={today}
         value={current}
