@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 :root {
+  /* Squircle corners: radius multiplier, bigger only where corner-shape works. */
+  --rs: 1;
+}
+
+@supports (corner-shape: squircle) {
+  :root {
+    --rs: 1.5;
+  }
+}
+
+:root {
   color-scheme: light;
   --color-ink-950: 7 17 28;
   --color-ink-900: 11 31 51;
@@ -886,7 +897,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--rs, 1));
+  corner-shape: squircle;
   border: 1px solid var(--login-line);
   background: var(--login-field);
   color: var(--login-ink);
@@ -1060,7 +1072,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 .login-phone {
   position: relative;
   width: 100%;
-  border-radius: 32px;
+  border-radius: calc(32px * var(--rs, 1));
+  corner-shape: squircle;
   padding: 12px;
   background: linear-gradient(160deg, #20344b, #16283c);
   box-shadow:
@@ -1077,13 +1090,15 @@ html.dark .login-page-forgot .login-form-pane h2 {
   transform: translateX(-50%);
   width: 58px;
   height: 5px;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--rs, 1));
+  corner-shape: squircle;
   background: rgba(255, 255, 255, 0.15);
 }
 
 .login-screen {
   background: #fff;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--rs, 1));
+  corner-shape: squircle;
   padding: 16px 15px 15px;
   color: var(--login-ink);
 }
@@ -1158,7 +1173,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 .login-rc-bar {
   display: flex;
   height: 8px;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--rs, 1));
+  corner-shape: squircle;
   overflow: hidden;
   margin-top: 10px;
 }
@@ -1180,7 +1196,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 3.5px 7px;
-  border-radius: 5px;
+  border-radius: calc(5px * var(--rs, 1));
+  corner-shape: squircle;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -1189,7 +1206,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 .login-rc-dot {
   width: 5px;
   height: 5px;
-  border-radius: 2px;
+  border-radius: calc(2px * var(--rs, 1));
+  corner-shape: squircle;
 }
 
 .login-paid {
@@ -1203,7 +1221,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   font-weight: 700;
   letter-spacing: 0.1em;
   padding: 6px 10px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--rs, 1));
+  corner-shape: squircle;
   box-shadow: 0 8px 18px rgba(18, 184, 134, 0.5);
 }
 
@@ -1215,7 +1234,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--rs, 1));
+  corner-shape: squircle;
   padding: 11px 14px;
   display: flex;
   align-items: center;
@@ -1226,7 +1246,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 .login-chip-ic {
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--rs, 1));
+  corner-shape: squircle;
   background: rgba(18, 184, 134, 0.2);
   color: #5ce0ae;
   display: grid;
@@ -1275,7 +1296,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 .login-fi {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--rs, 1));
+  corner-shape: squircle;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.06);
   display: grid;
@@ -1440,7 +1462,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   color: var(--login-ink);
   background: var(--login-field);
   border: 1.5px solid var(--login-line);
-  border-radius: 13px;
+  border-radius: calc(13px * var(--rs, 1));
+  corner-shape: squircle;
   padding: 15px 48px 15px 42px;
   outline: none;
   transition: 0.16s;
@@ -1469,7 +1492,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   background: transparent;
   color: var(--login-muted);
   cursor: pointer;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--rs, 1));
+  corner-shape: squircle;
   display: grid;
   place-items: center;
   transition: 0.15s;
@@ -1502,7 +1526,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   align-items: center;
   gap: 9px;
   margin: -4px 0 16px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--rs, 1));
+  corner-shape: squircle;
   border: 1px solid #f7c9cb;
   background: var(--login-loss-soft);
   padding: 11px 13px;
@@ -1532,7 +1557,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   font-size: 15.5px;
   color: #fff;
   padding: 15px;
-  border-radius: 13px;
+  border-radius: calc(13px * var(--rs, 1));
+  corner-shape: squircle;
   cursor: pointer;
   margin-top: 4px;
   background: linear-gradient(135deg, #16273c, #0e1626);
@@ -1755,7 +1781,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
     width: 76px;
     height: 76px;
     margin-left: -38px;
-    border-radius: 22px;
+    border-radius: calc(22px * var(--rs, 1));
+    corner-shape: squircle;
     background: #fff;
     box-shadow:
       0 14px 30px -10px rgba(16, 25, 40, 0.4),
@@ -1780,7 +1807,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
     height: auto;
     margin-top: -26px;
     background: #fff;
-    border-radius: 28px 28px 0 0;
+    border-radius: calc(28px * var(--rs, 1)) calc(28px * var(--rs, 1)) 0 0;
+    corner-shape: squircle;
   }
 
   .login-brand {
@@ -1797,7 +1825,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
     min-height: 100%;
     margin: 0;
     padding: 64px 26px max(36px, env(safe-area-inset-bottom, 0px) + 20px);
-    border-radius: 28px 28px 0 0;
+    border-radius: calc(28px * var(--rs, 1)) calc(28px * var(--rs, 1)) 0 0;
+    corner-shape: squircle;
     background: #fff;
     box-shadow: none;
     overflow: visible;
@@ -1829,7 +1858,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
 
   .login-inp input {
     font-size: 15px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--rs, 1));
+    corner-shape: squircle;
     padding: 15px 48px 15px 44px;
     background: var(--login-field);
   }
@@ -1844,7 +1874,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
     right: 8px;
     width: 40px;
     height: 40px;
-    border-radius: 11px;
+    border-radius: calc(11px * var(--rs, 1));
+    corner-shape: squircle;
   }
 
   .login-eye svg {
@@ -1855,7 +1886,8 @@ html.dark .login-page-forgot .login-form-pane h2 {
   .login-btn {
     font-size: 16px;
     padding: 16px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--rs, 1));
+    corner-shape: squircle;
     margin-top: 4px;
     box-shadow: 0 14px 28px -8px rgba(14, 22, 38, 0.65);
   }
@@ -2193,7 +2225,8 @@ html.dark .login-btn {
 .dues-hero {
   position: relative;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--rs, 1));
+  corner-shape: squircle;
   padding: 10px 13px;
   color: #fff;
   background: linear-gradient(135deg, #0b1f33 0%, #17385a 100%);
@@ -2224,7 +2257,8 @@ html.dark .dues-hero {
   grid-template-columns: 1fr 1fr;
   gap: 3px;
   padding: 3px;
-  border-radius: 13px;
+  border-radius: calc(13px * var(--rs, 1));
+  corner-shape: squircle;
   border: 1px solid #e7eaf0;
   background: #fff;
   box-shadow: 0 6px 18px rgba(11, 31, 51, 0.05);
@@ -2239,7 +2273,8 @@ html.dark .dues-seg {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--rs, 1));
+  corner-shape: squircle;
   font-size: 13px;
   font-weight: 600;
   color: #4a657a;
@@ -2296,7 +2331,8 @@ html.dark .due-btn-dark:not(:disabled):hover {
 .due-card {
   position: relative;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--rs, 1));
+  corner-shape: squircle;
   border: 1px solid #e7eaf0;
   background: #fff;
   box-shadow: 0 6px 16px -8px rgba(11, 31, 51, 0.14);
@@ -2319,7 +2355,8 @@ html.dark .due-card.due-card-overdue {
   top: 12px;
   bottom: 12px;
   width: 3px;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 calc(4px * var(--rs, 1)) calc(4px * var(--rs, 1)) 0;
+  corner-shape: squircle;
   background: var(--due-accent, #c9d0db);
   z-index: 1;
 }

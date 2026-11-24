@@ -1,4 +1,59 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
+
+/**
+ * Apple-style continuous ("squircle") corners.
+ * Every rounded-* class keeps its normal radius in browsers without
+ * `corner-shape`; where it is supported the corner becomes a squircle and
+ * the radius grows by --rs (1.5, set in index.css) so it reads like iOS.
+ * Circles and pills (rounded-full, 50%) stay perfectly round.
+ */
+const RADIUS_PROPS = {
+  rounded: ["border-radius"],
+  "rounded-s": ["border-start-start-radius", "border-end-start-radius"],
+  "rounded-e": ["border-start-end-radius", "border-end-end-radius"],
+  "rounded-t": ["border-top-left-radius", "border-top-right-radius"],
+  "rounded-r": ["border-top-right-radius", "border-bottom-right-radius"],
+  "rounded-b": ["border-bottom-right-radius", "border-bottom-left-radius"],
+  "rounded-l": ["border-top-left-radius", "border-bottom-left-radius"],
+  "rounded-ss": ["border-start-start-radius"],
+  "rounded-se": ["border-start-end-radius"],
+  "rounded-ee": ["border-end-end-radius"],
+  "rounded-es": ["border-end-start-radius"],
+  "rounded-tl": ["border-top-left-radius"],
+  "rounded-tr": ["border-top-right-radius"],
+  "rounded-br": ["border-bottom-right-radius"],
+  "rounded-bl": ["border-bottom-left-radius"],
+};
+
+/** Plain positive length that is not a circle/pill radius. */
+function squircleable(value) {
+  const m = /^(\d*\.?\d+)(px|rem|em)$/.exec(String(value).trim());
+  if (!m) return false;
+  const n = parseFloat(m[1]);
+  return n > 0 && !(m[2] === "px" && n >= 999);
+}
+
+const squircleCorners = plugin(({ matchUtilities, theme }) => {
+  matchUtilities(
+    Object.fromEntries(
+      Object.entries(RADIUS_PROPS).map(([name, props]) => [
+        name,
+        (value) => {
+          if (!squircleable(value)) {
+            return Object.fromEntries(props.map((prop) => [prop, value]));
+          }
+          const scaled = `calc(${value} * var(--rs, 1))`;
+          return {
+            ...Object.fromEntries(props.map((prop) => [prop, scaled])),
+            "corner-shape": "squircle",
+          };
+        },
+      ]),
+    ),
+    { values: theme("borderRadius") },
+  );
+});
 
 export default {
   darkMode: "class",
@@ -61,5 +116,6 @@ export default {
       },
     },
   },
-  plugins: [],
+  corePlugins: { borderRadius: false },
+  plugins: [squircleCorners],
 } satisfies Config;
