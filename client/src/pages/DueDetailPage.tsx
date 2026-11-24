@@ -768,7 +768,7 @@ export function Sheet({
       className={clsx(
         "fixed inset-x-0 top-0 z-50 flex h-[100dvh] justify-center bg-ink-950/45 sm:items-center sm:p-4",
         top
-          ? "items-start px-3 pt-[calc(env(safe-area-inset-top)+4.75rem)]"
+          ? "items-start px-3 pt-[calc(env(safe-area-inset-top)+3.75rem)] sm:pt-[calc(env(safe-area-inset-top)+4.75rem)]"
           : "items-end",
       )}
       style={top ? undefined : viewport}

@@ -133,25 +133,25 @@ export function AppShell() {
       <header className="fixed inset-x-0 top-0 z-40 border-b border-ink-100 bg-white pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/85">
         <div
           className={clsx(
-            "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6",
+            "mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2 sm:px-6 sm:py-3",
             "pr-16 sm:pr-20",
           )}
         >
           <Link
             to="/"
             onClick={onMainNavClick}
-            className="flex items-center gap-3 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
+            className="flex items-center gap-2.5 rounded-2xl outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-tide-400"
             aria-label={`${shopBrand.name} — New Bill`}
           >
             {shopBrand.icon ? (
-              <img src={shopBrand.icon} alt="" className="h-11 w-11 shrink-0 object-contain" />
+              <img src={shopBrand.icon} alt="" className="h-9 w-9 shrink-0 object-contain sm:h-11 sm:w-11" />
             ) : (
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#FFE100] to-[#FFA800] text-[#1F1600] shadow-[0_8px_16px_-8px_rgba(255,168,0,.9)]">
-                <Store className="h-5 w-5" strokeWidth={2.2} />
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br sm:h-11 sm:w-11 sm:rounded-2xl from-[#FFE100] to-[#FFA800] text-[#1F1600] shadow-[0_8px_16px_-8px_rgba(255,168,0,.9)]">
+                <Store className="h-[18px] w-[18px]" strokeWidth={2.2} />
               </span>
             )}
             <div>
-              <p className="font-display text-lg font-semibold tracking-tight text-ink-900">
+              <p className="font-display text-base font-semibold leading-tight tracking-tight text-ink-900 sm:text-lg">
                 {shopBrand.name}
                 {shopBrand.demo ? (
                   <span className="ml-1.5 rounded-full bg-indigo-500/15 px-1.5 py-px align-middle text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
@@ -159,7 +159,7 @@ export function AppShell() {
                   </span>
                 ) : null}
               </p>
-              <p className="text-xs text-ink-500">
+              <p className="text-[11.5px] leading-tight text-ink-500 sm:text-xs">
                 {user?.name || (user?.role === "ADMIN" ? "Admin" : "Staff")} ·{" "}
                 {shopBrand.city}
               </p>
@@ -197,7 +197,7 @@ export function AppShell() {
           <button
             type="button"
             className={clsx(
-              "grid h-11 w-11 place-items-center rounded-full bg-ink-900 font-display text-base font-semibold text-white shadow-soft ring-offset-2 transition hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:bg-tide-400 dark:text-ink-50 dark:ring-offset-surface",
+              "grid h-9 w-9 place-items-center rounded-full bg-ink-900 font-display text-[15px] sm:h-11 sm:w-11 sm:text-base font-semibold text-white shadow-soft ring-offset-2 transition hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tide-400 dark:bg-tide-400 dark:text-ink-50 dark:ring-offset-surface",
               accountMenuOpen && "ring-2 ring-tide-400",
             )}
             aria-haspopup="menu"
@@ -318,10 +318,10 @@ export function AppShell() {
         ref={mainRef}
         className={clsx(
           "relative mx-auto min-h-0 flex-1 w-full max-w-6xl overflow-y-auto overscroll-y-contain scroll-pt-28 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:scroll-pt-32 sm:pb-8",
-          // Header is ~69px tall: leave a small gap under it (+2rem for the Offline strip).
+          // Header is ~53px tall on phones (~69px from sm): small gap under it (+2rem for the Offline strip).
           isOnline
-            ? "pt-[calc(5.25rem+env(safe-area-inset-top))] sm:pt-[calc(5.75rem+env(safe-area-inset-top))]"
-            : "pt-[calc(7.25rem+env(safe-area-inset-top))] sm:pt-[calc(7.75rem+env(safe-area-inset-top))]",
+            ? "pt-[calc(4.25rem+env(safe-area-inset-top))] sm:pt-[calc(5.75rem+env(safe-area-inset-top))]"
+            : "pt-[calc(6.25rem+env(safe-area-inset-top))] sm:pt-[calc(7.75rem+env(safe-area-inset-top))]",
         )}
       >
         <motion.div
@@ -333,7 +333,7 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
+      <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-40 border-t border-white/60 bg-white/80 px-3 pt-1.5 pb-[calc(0.25rem+env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:hidden">
         <div
           className={clsx(
             "mx-auto grid max-w-lg gap-1",
@@ -356,7 +356,7 @@ export function AppShell() {
               onClick={onMainNavClick}
               className={({ isActive }) =>
                 clsx(
-                  "flex flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-[11px] font-semibold",
+                  "flex flex-col items-center gap-0.5 rounded-2xl px-1.5 py-1.5 text-[11px] font-semibold",
                   isActive
                     ? "bg-ink-900 text-white dark:bg-tide-400 dark:text-ink-50"
                     : "text-ink-500",
