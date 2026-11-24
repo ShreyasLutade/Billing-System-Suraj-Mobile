@@ -4259,3 +4259,27 @@ html.dark .due-paid-fill::after {
   padding-top: 0.55rem;
   padding-bottom: 0.55rem;
 }
+
+/* Squircle corners everywhere (smooth iOS-style rounded squares).
+   Browsers without corner-shape keep the normal rounded corners. */
+@supports (corner-shape: squircle) {
+  *,
+  *::before,
+  *::after {
+    corner-shape: squircle;
+  }
+
+  /* Real circles and pills stay round */
+  .rounded-full,
+  .acc-mini-switch,
+  .acc-mini-switch i,
+  .acc-dot,
+  .fab-glass,
+  .babu-scroll-top,
+  [role="switch"],
+  [role="switch"] *,
+  input[type="radio"],
+  input[type="checkbox"] {
+    corner-shape: round;
+  }
+}
