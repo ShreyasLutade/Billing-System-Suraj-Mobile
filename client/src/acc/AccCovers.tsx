@@ -120,8 +120,8 @@ function coverPiles(products: AccProduct[]): Pile[] {
 
 /* ---------------- Segregate one cover product ---------------- */
 
-/** One lot on the split page; `orig` = its saved name (for renames). */
-type Row = { id: string; orig?: string; model: string; qty: number };
+/** One lot on the split page; `orig` = its saved name (for renames); `box` = box chosen here (applied on Save; "" = no box). */
+type Row = { id: string; orig?: string; model: string; qty: number; box?: string };
 
 export function AccSegregatePage() {
   const { id } = useParams();
@@ -130,6 +130,10 @@ export function AccSegregatePage() {
   const product = catalog?.products.find((p) => p.id === id) ?? null;
   const names = usePhoneNames();
   const [rows, setRows] = useState<Row[] | null>(null);
+  const boxes = useBoxes();
+  const where = useMemo(() => locationMap(boxes), [boxes]);
+  /** Row whose box is being picked. */
+  const [boxFor, setBoxFor] = useState<Row | null>(null);
   const [draft, setDraft] = useState("");
   const [draftQty, setDraftQty] = useState(1);
   /** Model suggestion list: a tap only puts the cursor in the box (keyboard opens);
@@ -217,6 +221,26 @@ export function AccSegregatePage() {
   const setQty = (rid: string, qty: number) =>
     setRows((cur) => (cur ?? []).map((r) => (r.id === rid ? { ...r, qty: Math.max(0, Math.min(qty, r.qty + Math.max(left, 0))) } : r)));
 
+  /** Order the lots are saved in, and each row's lot number ("first Y30" = 0…). */
+  function savedOrder(list: Row[]) {
+    const order = [...list.filter((r) => r.orig), ...list.filter((r) => !r.orig)].filter((r) => r.orig || r.qty > 0);
+    const seen = new Map<string, number>();
+    const lotOf = new Map<string, number>();
+    for (const r of order) {
+      const n = seen.get(r.model) ?? 0;
+      seen.set(r.model, n + 1);
+      lotOf.set(r.id, n);
+    }
+    return { order, lotOf };
+  }
+
+  /** Box codes a row is in now (saved lots only). */
+  function boxesOf(r: Row) {
+    if (!product || !r.orig || r.orig !== r.model) return [];
+    const lot = savedOrder(rows ?? []).lotOf.get(r.id) ?? 0;
+    return where.get(`${product.id}|${r.model}|${lot}`) ?? [];
+  }
+
   async function save() {
     if (!product || !rows || busy) return;
     if (left < 0) return void toast(`Only ${total} pieces in stock`, { tone: "error" });
@@ -236,6 +260,26 @@ export function AccSegregatePage() {
         renames,
       );
       patchCatalogProduct(data);
+      // Boxes chosen on this page: the lot goes into that box (out of any other).
+      const { lotOf } = savedOrder(rows);
+      const moves = rows.filter((r) => r.box !== undefined && r.qty > 0);
+      if (moves.length) {
+        let current = boxCache ?? (await accApi.boxes()).data;
+        for (const r of moves) {
+          const lot = lotOf.get(r.id) ?? 0;
+          for (const b of current) {
+            for (const i of b.items) {
+              if (i.productId === product.id && i.model === r.model && (i.lot ?? 0) === lot && b.id !== r.box) {
+                current = (await accApi.removeFromBox(i.id)).data;
+              }
+            }
+          }
+          if (r.box && !current.find((b) => b.id === r.box)?.items.some((i) => i.productId === product.id && i.model === r.model && (i.lot ?? 0) === lot)) {
+            current = (await accApi.placeInBox(r.box, product.id, r.model, lot)).data;
+          }
+        }
+        setBoxes(current);
+      }
       toast(`Saved · ${sorted} split, ${left} left as ${product.name}`);
       navigate(-1);
     } catch (err) {
@@ -429,6 +473,22 @@ export function AccSegregatePage() {
                 <>
                   <Stepper value={r.qty} onChange={(v) => setQty(r.id, v)} max={r.qty + Math.max(left, 0)} min={0} />
                   <span className="acc-seg-acts">
+                    {(() => {
+                      const chosen = r.box !== undefined ? (r.box ? boxes?.find((b) => b.id === r.box)?.code ?? "Box" : "") : null;
+                      const now = chosen ?? boxesOf(r).join(", ");
+                      return (
+                        <button
+                          type="button"
+                          className={clsx("acc-seg-box", now && "is-set", r.box !== undefined && "is-changed")}
+                          onClick={() => setBoxFor(r)}
+                          aria-label={`Box for ${r.model}`}
+                          title="Choose the box"
+                        >
+                          <Boxes />
+                          <span>{now || "Box"}</span>
+                        </button>
+                      );
+                    })()}
                     <button type="button" className="acc-seg-edit" onClick={() => startRename(r)} aria-label={`Rename ${r.model}`}>
                       <PencilLine />
                     </button>
@@ -452,6 +512,56 @@ export function AccSegregatePage() {
           </li>
         ) : null}
       </ul>
+
+      <Sheet
+        open={Boolean(boxFor)}
+        onClose={() => setBoxFor(null)}
+        title={boxFor ? `Box for ${boxFor.model}` : ""}
+        subtitle={boxFor ? `${boxFor.qty} pcs · tap a box, then Save` : ""}
+      >
+        {boxFor ? (
+          <div className="acc-seg-boxpick">
+            {[...new Set((boxes ?? []).map((b) => b.grid))].map((grid) => (
+              <section key={grid}>
+                <p className="acc-fill-label">{grid === "Single" ? "Single boxes" : grid}</p>
+                <div className="acc-seg-boxgrid">
+                  {(boxes ?? [])
+                    .filter((b) => b.grid === grid)
+                    .map((b) => {
+                      const picked = boxFor.box !== undefined ? boxFor.box === b.id : boxesOf(boxFor).includes(b.code);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className={clsx(picked && "is-on", b.items.length > 0 && "is-used")}
+                          onClick={() => {
+                            setRows((cur) => (cur ?? []).map((x) => (x.id === boxFor.id ? { ...x, box: b.id } : x)));
+                            setBoxFor(null);
+                          }}
+                        >
+                          <b>{b.code}</b>
+                          <small>{b.items.length ? `${b.items.length} in` : "Empty"}</small>
+                        </button>
+                      );
+                    })}
+                </div>
+              </section>
+            ))}
+            {boxesOf(boxFor).length || boxFor.box ? (
+              <button
+                type="button"
+                className="acc-btn is-block"
+                onClick={() => {
+                  setRows((cur) => (cur ?? []).map((x) => (x.id === boxFor.id ? { ...x, box: "" } : x)));
+                  setBoxFor(null);
+                }}
+              >
+                <X /> No box
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </Sheet>
 
       <div className={clsx("acc-seg-save", navH > 0 && "is-docked")} style={navH > 0 ? { bottom: navH } : undefined}>
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || left < 0}>
