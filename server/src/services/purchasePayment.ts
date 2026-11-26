@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { format } from "date-fns";
+import { applyPendingAdvances, readAppliedParts } from "./productReturns";
 
 type Tx = Prisma.TransactionClient;
 
@@ -82,59 +84,191 @@ export async function recordPaymentAtPurchase(
 
 /**
  * Change a purchase's total after a unit's price is edited or a unit is
- * removed, keeping any payment made at purchase consistent:
- * - paid in full at purchase stays paid in full at the new total;
- * - a payment can never be more than the purchase total (the excess comes
- *   off the at-purchase payment);
- * - a purchase cleared by several payments goes back to part paid if its
- *   total goes up.
+ * removed. The money already paid stays what it was, so the change shows
+ * in what is owed:
+ * - total goes up: the difference is due again (or comes out of advance);
+ * - total goes down below what was paid: the extra is kept as advance
+ *   (used on the next stock from this supplier).
+ * The one exception is "Fully paid" chosen while entering the purchase: that
+ * paid whatever the bill was, so it stays paid in full at the new total.
  */
 export async function setPurchaseTotal(tx: Tx, purchaseId: string, newTotal: number) {
   const purchase = await tx.purchase.findUnique({
     where: { id: purchaseId },
     select: {
+      id: true,
+      supplierId: true,
       totalAmount: true,
       paidAt: true,
       paidAmount: true,
-      payments: { select: { id: true, amount: true } },
+      purchaseDate: true,
+      updatedAt: true,
+      payments: {
+        select: { id: true, amount: true, unapplied: true, note: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!purchase) return;
-  const atPurchase = purchase.payments[0];
   const newPaise = toPaise(newTotal);
   const total = newPaise / 100;
-  if (!atPurchase) {
-    await tx.purchase.update({ where: { id: purchaseId }, data: { totalAmount: total } });
-    return;
-  }
-
   const oldPaise = toPaise(purchase.totalAmount);
   const paidPaise = purchase.paidAt
     ? oldPaise
     : Math.min(toPaise(purchase.paidAmount), oldPaise);
-  const atPaise = toPaise(atPurchase.amount);
+  const atPurchase = purchase.payments[0];
 
-  let paymentPaise = atPaise;
-  let data: Prisma.PurchaseUpdateInput;
-  if (purchase.paidAt && atPaise >= paidPaise) {
-    paymentPaise = newPaise;
-    data = { totalAmount: total, paidAmount: total };
-  } else if (paidPaise >= newPaise) {
-    paymentPaise = Math.max(atPaise - (paidPaise - newPaise), 0);
-    data = { totalAmount: total, paidAmount: total, paidAt: purchase.paidAt ?? new Date() };
-  } else {
-    data = { totalAmount: total, paidAmount: paidPaise / 100, paidAt: null };
+  // "Fully paid" at purchase: the payment follows the bill.
+  if (
+    atPurchase &&
+    purchase.paidAt &&
+    atPurchase.note === atPurchaseNote(true) &&
+    toPaise(atPurchase.amount) >= paidPaise
+  ) {
+    await tx.purchase.update({
+      where: { id: purchase.id },
+      data: { totalAmount: total, paidAmount: total },
+    });
+    if (newPaise <= 0) {
+      await tx.supplierPayment.delete({ where: { id: atPurchase.id } });
+    } else if (newPaise !== toPaise(atPurchase.amount)) {
+      await tx.supplierPayment.update({
+        where: { id: atPurchase.id },
+        data: { amount: total },
+      });
+    }
+    return;
   }
 
-  await tx.purchase.update({ where: { id: purchaseId }, data });
-  if (paymentPaise <= 0) {
-    await tx.supplierPayment.delete({ where: { id: atPurchase.id } });
-  } else if (paymentPaise !== atPaise) {
-    await tx.supplierPayment.update({
-      where: { id: atPurchase.id },
+  if (newPaise >= paidPaise) {
+    // Same money paid against a bigger (or equal) bill.
+    const full = paidPaise > 0 && paidPaise >= newPaise;
+    await tx.purchase.update({
+      where: { id: purchase.id },
       data: {
-        amount: paymentPaise / 100,
-        note: atPurchaseNote(paymentPaise >= newPaise),
+        totalAmount: total,
+        paidAmount: paidPaise / 100,
+        paidAt: full ? (purchase.paidAt ?? new Date()) : null,
+      },
+    });
+    if (atPurchase) {
+      const note = atPurchaseNote(full);
+      if (atPurchase.note !== note && atPurchase.note?.endsWith("at purchase")) {
+        await tx.supplierPayment.update({ where: { id: atPurchase.id }, data: { note } });
+      }
+    }
+  } else {
+    // Paid more than the new bill: the purchase is paid, the rest is advance.
+    await tx.purchase.update({
+      where: { id: purchase.id },
+      data: { totalAmount: total, paidAmount: total, paidAt: purchase.paidAt ?? new Date() },
+    });
+    await keepExtraAsAdvance(tx, purchase, paidPaise - newPaise);
+  }
+  // Advance waiting with this supplier pays a bill that went up.
+  await applyPendingAdvances(tx, purchase.supplierId);
+}
+
+/**
+ * `extraPaise` that was paid on a purchase is no longer needed there (its
+ * total went down): keep it as advance on the payments that paid it.
+ */
+async function keepExtraAsAdvance(
+  tx: Tx,
+  purchase: {
+    id: string;
+    supplierId: string;
+    paidAt: Date | null;
+    updatedAt: Date;
+    purchaseDate: Date;
+    payments: Array<{ id: string; amount: number; unapplied: number }>;
+  },
+  extraPaise: number,
+) {
+  let left = extraPaise;
+  /** Take up to `cap` paise of the extra onto this payment's advance. */
+  const take = (pay: { amount: number; unapplied: number }, cap = Number.POSITIVE_INFINITY) => {
+    const room = toPaise(pay.amount) - toPaise(pay.unapplied);
+    const move = Math.max(Math.min(left, room, cap), 0);
+    left -= move;
+    return move;
+  };
+
+  // 1. Paid while entering this purchase.
+  for (const pay of purchase.payments) {
+    if (left <= 0) break;
+    const move = take(pay);
+    if (move > 0) {
+      await tx.supplierPayment.update({
+        where: { id: pay.id },
+        data: { unapplied: (toPaise(pay.unapplied) + move) / 100 },
+      });
+    }
+  }
+
+  // 2. Dues-page payments that went to this purchase (latest first); their
+  //    record of where the money went is reduced so Undo stays right.
+  if (left > 0) {
+    const pays = await tx.supplierPayment.findMany({
+      where: { supplierId: purchase.supplierId, appliedJson: { contains: purchase.id } },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true, amount: true, unapplied: true, appliedJson: true },
+    });
+    for (const pay of pays) {
+      if (left <= 0) break;
+      const parts = readAppliedParts(pay.appliedJson);
+      let moved = 0;
+      for (const part of parts) {
+        if (part.p !== purchase.id || left <= 0) continue;
+        const move = take(pay, part.a);
+        if (move <= 0) continue;
+        part.a -= move;
+        part.c = false;
+        moved += move;
+        pay.unapplied = (toPaise(pay.unapplied) + move) / 100;
+      }
+      if (moved > 0) {
+        await tx.supplierPayment.update({
+          where: { id: pay.id },
+          data: {
+            unapplied: pay.unapplied,
+            appliedJson: JSON.stringify(parts.filter((part) => part.a > 0)),
+          },
+        });
+      }
+    }
+  }
+
+  // 3. Older payments ("Mark paid"): any of this supplier's payments.
+  if (left > 0) {
+    const pays = await tx.supplierPayment.findMany({
+      where: { supplierId: purchase.supplierId, purchaseId: null },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true, amount: true, unapplied: true },
+    });
+    for (const pay of pays) {
+      if (left <= 0) break;
+      const move = take(pay);
+      if (move > 0) {
+        await tx.supplierPayment.update({
+          where: { id: pay.id },
+          data: { unapplied: (toPaise(pay.unapplied) + move) / 100 },
+        });
+      }
+    }
+  }
+
+  // 4. Paid before payments were recorded at all: record the advance.
+  if (left > 0) {
+    await tx.supplierPayment.create({
+      data: {
+        supplierId: purchase.supplierId,
+        amount: left / 100,
+        unapplied: left / 100,
+        method: "na",
+        paidAt: purchase.paidAt ?? purchase.updatedAt,
+        note: `Advance · price lowered on purchase of ${format(purchase.purchaseDate, "dd MMM yyyy")}`,
+        appliedJson: "[]",
       },
     });
   }
