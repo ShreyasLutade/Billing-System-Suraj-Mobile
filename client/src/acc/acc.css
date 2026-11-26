@@ -12575,3 +12575,20 @@ html.dark .acc {
   color: var(--a-muted);
   font-size: 13px;
 }
+
+/* "Ctrl S" hint on the Save bill button (laptops only) */
+.acc .acc-kbd-hint {
+  display: none;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+  font: 600 11px/1.5 "Inter", sans-serif;
+  opacity: 0.85;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .acc .acc-kbd-hint {
+    display: inline-block;
+  }
+}

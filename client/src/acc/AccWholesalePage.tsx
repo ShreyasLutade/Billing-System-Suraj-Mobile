@@ -359,7 +359,21 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
     );
   }
 
-  async function save(allowOutOfStock = false) {
+  // Laptop: Ctrl+S / ⌘S saves the bill from anywhere on the page.
+  const saveRef = useRef<(allowOutOfStock?: boolean, quick?: boolean) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault(); // not the browser's "Save page"
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        void saveRef.current(false, true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  async function save(allowOutOfStock = false, quick = false) {
     if (busy) return;
     if (!completePhone(draft.customerInput.phone)) {
       toast("Enter the customer's 10-digit mobile number", { tone: "error" });
@@ -391,9 +405,15 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
       toast("Payment is more than the bill total", { tone: "error" });
       return;
     }
-    if (needsDueDate && !draft.dueDate) {
+    // Ctrl+S with a due but no date: due in 7 days (shown in the toast).
+    const dueDate = draft.dueDate || (quick && needsDueDate ? todayInput(7) : "");
+    if (needsDueDate && !dueDate) {
       toast("Add the due date for the pending amount", { tone: "error" });
       return;
+    }
+    if (quick && needsDueDate && !draft.dueDate) {
+      set({ dueDate });
+      toast(`Due date set to ${shortDate(dueDate)}`);
     }
     setBusy(true);
     try {
@@ -407,7 +427,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         transportCharge,
         cashAmount: cashPaid,
         onlineAmount: onlinePaid,
-        dueDate: due > 0 ? draft.dueDate : undefined,
+        dueDate: due > 0 ? dueDate : undefined,
         note: draft.note,
         allowOutOfStock,
         ...(!editId && draft.billDateOn && draft.billDate ? { billDate: draft.billDate } : {}),
@@ -469,6 +489,9 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
       setSavedAction(null);
     }
   }
+
+  // Ctrl+S: the latest save; nothing while the "bill saved" screen is open.
+  saveRef.current = saved ? async () => undefined : save;
 
   if (editId && !original) {
     return (
@@ -811,6 +834,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
           {busy ? <Loader2 className="acc-spin" /> : <Check />}
           {editing ? "Update bill" : "Save bill"} {inr(total)}
+          <kbd className="acc-kbd-hint">Ctrl S</kbd>
         </button>
       </div>
 
