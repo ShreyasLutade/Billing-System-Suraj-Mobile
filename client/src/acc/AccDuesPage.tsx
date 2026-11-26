@@ -6,6 +6,7 @@ import { DangerConfirmModal } from "../components/RemoveConfirmModals";
 import {
   FileDown,
   CalendarDays,
+  Check,
   FilePlus2,
   Loader2,
   MapPin,
@@ -789,6 +790,16 @@ export function AccCustomerPage() {
           }}
           onCancel={() => setEditing(false)}
         />
+        {isAdmin ? (
+          <DueAmountEditor
+            customerId={data.id}
+            balance={data.balance}
+            onSaved={() => {
+              setEditing(false);
+              void load();
+            }}
+          />
+        ) : null}
       </Sheet>
 
 
@@ -811,5 +822,52 @@ export function AccCustomerPage() {
         ) : null}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** Edit customer (admin): change the due amount; the difference goes in the statement. */
+function DueAmountEditor({ customerId, balance, onSaved }: { customerId: string; balance: number; onSaved: () => void }) {
+  const [value, setValue] = useState(String(balance));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setValue(String(balance)), [balance]);
+  const n = Number(value);
+  const valid = value.trim() !== "" && Number.isFinite(n);
+  const diff = valid ? Math.round((n - balance) * 100) / 100 : 0;
+
+  async function save() {
+    if (!valid || !diff || busy) return;
+    setBusy(true);
+    try {
+      await accApi.setCustomerBalance(customerId, n);
+      toast(`Due amount changed to ${inr(n)}`);
+      onSaved();
+    } catch (err) {
+      toast(errorText(err), { tone: "error" });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="acc-due-edit">
+      <label className="acc-field">
+        <span>Due amount</span>
+        <span className="acc-rupee-input">
+          <b>₹</b>
+          <input type="number" inputMode="decimal" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Due amount" />
+        </span>
+      </label>
+      <small className="acc-field-hint">
+        {!diff
+          ? `Now ${inr(balance)}. Change it to correct the due.`
+          : diff < 0
+            ? `${inr(-diff)} less: saved as written off (shown in the statement).`
+            : `${inr(diff)} more: added as an old due entry (shown in the statement).`}
+      </small>
+      {diff ? (
+        <button type="button" className="acc-btn is-primary is-block" disabled={busy} onClick={() => void save()}>
+          {busy ? <Loader2 className="acc-spin" /> : <Check />} Update due to {inr(n)}
+        </button>
+      ) : null}
+    </section>
   );
 }

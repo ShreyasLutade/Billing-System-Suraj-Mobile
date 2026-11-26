@@ -12559,3 +12559,12 @@ html.dark .acc {
   color: var(--a-muted);
   font-size: 10.5px;
 }
+
+/* Edit customer: due amount */
+.acc-due-edit {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--a-line);
+}

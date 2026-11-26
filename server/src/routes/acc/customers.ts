@@ -720,6 +720,52 @@ accCustomersRouter.post("/customers/opening-due", async (req, res, next) => {
  * them, so they leave Dues. Stock is not put back (the goods were given);
  * product history keeps the sale lines, marked as deleted.
  */
+/**
+ * Edit the due amount (admin): bills stay as they are; the difference is
+ * recorded so the statement explains it. Lower = written off (DISCOUNT
+ * payment); higher = an old-due entry for the extra amount.
+ */
+accCustomersRouter.post("/customers/:id/balance", requireAdmin, async (req, res, next) => {
+  try {
+    const parsed = z
+      .object({ setTo: z.coerce.number().min(-100_000_000).max(100_000_000), note: z.string().trim().max(200).default("") })
+      .safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const customer = await prisma.accCustomer.findUnique({ where: { id: req.params.id } });
+    if (!customer) return void res.status(404).json({ error: "Customer not found" });
+    const current = round2((await customerBalances([customer.id])).get(customer.id)?.balance ?? 0);
+    const diff = round2(parsed.data.setTo - current);
+    const by = req.user?.name || null;
+    const note = parsed.data.note || `Due amount changed from ${current} to ${round2(parsed.data.setTo)}`;
+    if (diff < 0) {
+      await prisma.accPayment.create({ data: { customerId: customer.id, amount: -diff, method: "DISCOUNT", note, createdByName: by } });
+    } else if (diff > 0) {
+      await prisma.$transaction(async (tx) => {
+        const row = await tx.accCounter.upsert({ where: { key: "OPENING" }, create: { key: "OPENING", value: 1 }, update: { value: { increment: 1 } } });
+        await tx.accSale.create({
+          data: {
+            number: `OD-${String(row.value).padStart(4, "0")}`,
+            kind: "WHOLESALE",
+            isOpening: true,
+            customerId: customer.id,
+            subtotal: diff,
+            total: diff,
+            costTotal: diff,
+            dueAmount: diff,
+            note,
+            createdByUserId: req.user?.id || null,
+            createdByName: by,
+            items: { create: [{ name: "Due amount added (correction)", qty: 1, rate: diff, amount: diff }] },
+          },
+        });
+      });
+    }
+    res.json({ data: { before: current, after: round2(current + diff) } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 accCustomersRouter.delete("/customers/:id", requireAdmin, async (req, res, next) => {
   try {
     const customer = await prisma.accCustomer.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });

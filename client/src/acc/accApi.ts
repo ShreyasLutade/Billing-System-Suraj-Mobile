@@ -446,6 +446,8 @@ export const accApi = {
     apiRequest<{ data: AccCustomerRow[] }>(`/acc/customers${qs(q)}`),
   customer: (id: string) => apiRequest<{ data: AccCustomerDetail }>(`/acc/customers/${id}`),
   createCustomer: (body: AccCustomerInput) => post<{ id: string }>("/acc/customers", body),
+  /** Admin: set the due amount; the difference is written off or added as an old due. */
+  setCustomerBalance: (id: string, setTo: number) => post<{ before: number; after: number }>(`/acc/customers/${id}/balance`, { setTo }),
   updateCustomer: (id: string, body: AccCustomerInput) => put<{ id: string }>(`/acc/customers/${id}`, body),
   receivePayment: (id: string, body: { amount: number; method: string; paidAt?: string; note?: string }) =>
     post<{ balance: number }>(`/acc/customers/${id}/payments`, body),
