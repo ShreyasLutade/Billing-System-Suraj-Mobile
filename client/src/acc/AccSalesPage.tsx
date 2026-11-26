@@ -71,7 +71,7 @@ export function AccSalesPage() {
       : ({ today: "Today", yesterday: "Yesterday", week: "This week", month: "This month", last30: "30 days", all: "All time" } as const)[period.period];
   const searchPlaceholder =
     searchScope === "customer"
-      ? "Search customer name or phone…"
+      ? "Search shop, customer or phone…"
       : searchScope === "product"
         ? "Search product name…"
         : searchScope === "bill"
@@ -189,7 +189,8 @@ export function AccSalesPage() {
                         <button type="button" className="acc-row-main" onClick={() => navigate(`/acc/sales/${sale.id}`)}>
                           <span className="acc-kind is-w">W</span>
                           <span className="acc-row-text">
-                            <strong>{sale.customerName}</strong>
+                            {/* Shop name first; the person's name only when there's no shop. */}
+                            <strong>{sale.customerShop || sale.customerName}</strong>
                             <small>
                               {sale.number} · {new Date(sale.saleDate).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })} ·{" "}
                               {sale.items.reduce((a, i) => a + i.qty, 0)} pcs
@@ -337,7 +338,8 @@ export function SaleSheet({
     >
       {sale.customerName ? (
         <p className="acc-sale-cust">
-          {sale.customerId ? <Link to={`/acc/dues/${sale.customerId}`}>{sale.customerName}</Link> : sale.customerName}
+          {sale.customerId ? <Link to={`/acc/dues/${sale.customerId}`}>{sale.customerShop || sale.customerName}</Link> : sale.customerName}
+          {sale.customerShop && sale.customerName ? ` · ${sale.customerName}` : ""}
           {sale.customerPhone ? ` · ${sale.customerPhone}` : ""}
           {sale.groupName ? ` · ${sale.groupName}` : ""}
         </p>

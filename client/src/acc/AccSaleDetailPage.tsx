@@ -205,12 +205,12 @@ export function AccSaleDetailPage() {
           }}
         >
           <span className="acc-avatar is-big" style={{ ["--g" as string]: "#5d73b6" }}>
-            {sale.customerName.slice(0, 1).toUpperCase()}
+            {(sale.customerShop || sale.customerName).slice(0, 1).toUpperCase()}
           </span>
           <span className="acc-bv-customer-text">
             <small>Customer</small>
-            <strong>{sale.customerName}</strong>
-            <span>{[sale.customerShop, customer?.city, phone].filter(Boolean).join(" · ")}</span>
+            <strong>{sale.customerShop || sale.customerName}</strong>
+            <span>{[sale.customerShop ? sale.customerName : "", customer?.city, phone].filter(Boolean).join(" · ")}</span>
             {sale.groupName ? <em className="acc-bv-group">{sale.groupName}</em> : null}
           </span>
           {customer ? (

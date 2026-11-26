@@ -301,6 +301,7 @@ function salesWhere(query: Record<string, unknown>) {
     { customerName: { contains: q } },
     { customerPhone: { contains: q } },
     { customer: { name: { contains: q } } },
+    { customer: { shopName: { contains: q } } },
     { customer: { phone: { contains: q } } },
   ];
   const search =
