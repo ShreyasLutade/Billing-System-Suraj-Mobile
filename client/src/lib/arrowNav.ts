@@ -148,6 +148,7 @@ function onKeyDown(event: KeyboardEvent) {
 
   if (event.key === "Enter") {
     if (!active || active === document.body) return;
+    if (enterToNextField(event, active)) return;
     const native = active.matches('a[href], button, input, select, textarea, summary');
     if (active instanceof HTMLSelectElement) {
       event.preventDefault();
@@ -198,6 +199,38 @@ function onKeyDown(event: KeyboardEvent) {
   if (!next) return; // nothing that way: let the page scroll as usual
   event.preventDefault();
   focusEl(next);
+}
+
+const FIELD = 'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not(:disabled):not([readonly]), select:not(:disabled), textarea:not(:disabled)';
+const TYPING = new Set(["text", "tel", "email", "number", "password", "url", "date", "time", "datetime-local", "month", ""]);
+
+/**
+ * Enter in a text box: jump to the next box on the same screen (same form,
+ * else the same popup or page). The last box of a form keeps Enter's normal
+ * job (log in, save…). Boxes with their own Enter handling are left alone.
+ */
+function enterToNextField(event: KeyboardEvent, active: HTMLElement) {
+  if (event.shiftKey) return false;
+  const isSelect = active instanceof HTMLSelectElement; // Enter moves on; Space opens the list
+  if (!isSelect && !(active instanceof HTMLInputElement)) return false;
+  if (!isSelect && !TYPING.has((active as HTMLInputElement).type.toLowerCase())) return false;
+  if (reactProp(active, "onKeyDown")) return false; // its own Enter (suggestions, add…)
+  const form = (active as HTMLInputElement | HTMLSelectElement).form;
+  const scopeEl: ParentNode = form ?? active.closest('[role="dialog"], [aria-modal="true"]') ?? document;
+  const fields = Array.from(scopeEl.querySelectorAll<HTMLElement>(FIELD)).filter((el) => isVisible(el));
+  const next = fields[fields.indexOf(active) + 1];
+  if (!next) return isSelect ? (event.preventDefault(), true) : false; // last box: let the form submit as usual
+  event.preventDefault();
+  next.focus();
+  if (next instanceof HTMLInputElement && TYPING.has(next.type) && next.type !== "date" && next.type !== "number") {
+    try {
+      next.select();
+    } catch {
+      /* some types can't be selected */
+    }
+  }
+  next.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  return true;
 }
 
 /** A popup on screen: a dialog, or a full-screen layer over the page. */
