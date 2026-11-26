@@ -637,6 +637,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
                           onChange={(e) => updateLine(line.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
                           onBlur={() => line.qty < 1 && updateLine(line.key, { qty: 1 })}
                           onFocus={(e) => e.target.select()}
+                          enterKeyHint="next"
                           aria-label={`${line.name} quantity`}
                         />
                         <button type="button" onClick={() => updateLine(line.key, { qty: line.qty + 1 })} aria-label="Increase quantity">
@@ -663,6 +664,13 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
                         value={line.rate || ""}
                         onChange={(e) => updateLine(line.key, { rate: Number(e.target.value) || 0 })}
                         onFocus={(e) => e.target.select()}
+                        onKeyDown={(e) => {
+                          // Rate done: back to the item search for the next item.
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          document.querySelector<HTMLInputElement>(".acc-wholesale-items input:not([data-line-quantity]):not([data-line-rate])")?.focus();
+                        }}
+                        enterKeyHint="next"
                         aria-label={`${line.name} rate per piece`}
                       />
                     </label>
