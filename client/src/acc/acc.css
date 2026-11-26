@@ -12568,3 +12568,10 @@ html.dark .acc {
   padding-top: 14px;
   border-top: 1px dashed var(--a-line);
 }
+
+.acc .acc-seg-list.is-compact > li.acc-seg-more {
+  justify-content: center;
+  gap: 6px;
+  color: var(--a-muted);
+  font-size: 13px;
+}

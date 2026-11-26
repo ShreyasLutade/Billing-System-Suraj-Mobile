@@ -438,7 +438,8 @@ const modelRows = z
       qty: z.coerce.number().int().min(0).max(1_000_000),
     }),
   )
-  .max(300);
+  // Big covers (e.g. Mix cover) can have thousands of phone models.
+  .max(20_000, "Too many phone models in one save (20,000 max)");
 
 /** Tidy the typed names. The same model may come more than once (separate lots). */
 function cleanModels(rows: z.infer<typeof modelRows>) {
@@ -462,11 +463,11 @@ async function replaceModels(
   rows: Array<{ model: string; qty: number }>,
 ) {
   await tx.accProductModel.deleteMany({ where: { productId } });
-  // Kept in the order entered (createdAt one ms apart).
+  // Kept in the order entered (createdAt one ms apart). One insert per 500 rows,
+  // so even thousands of models save in well under a second.
   const base = Date.now();
-  for (const [i, row] of rows.entries()) {
-    await tx.accProductModel.create({ data: { productId, model: row.model, qty: row.qty, createdAt: new Date(base + i) } });
-  }
+  const data = rows.map((row, i) => ({ productId, model: row.model, qty: row.qty, createdAt: new Date(base + i) }));
+  for (let i = 0; i < data.length; i += 500) await tx.accProductModel.createMany({ data: data.slice(i, i + 500) });
 }
 
 /** Split a product's stock by phone model (for the record only). */
@@ -476,7 +477,7 @@ accCatalogRouter.put("/products/:id/models", async (req, res, next) => {
       .object({
         models: modelRows,
         /** Models renamed on the split page: their box places follow the new name. */
-        renames: z.array(z.object({ from: z.string().max(80), to: z.string().trim().min(1).max(80) })).max(500).default([]),
+        renames: z.array(z.object({ from: z.string().max(80), to: z.string().trim().min(1).max(80) })).max(20_000).default([]),
       })
       .safeParse(req.body);
     if (!parsed.success) return badRequest(res, parsed.error);
@@ -501,7 +502,7 @@ accCatalogRouter.put("/products/:id/models", async (req, res, next) => {
         }
       }
       return tx.accProduct.findUniqueOrThrow({ where: { id: current.id }, include: productInclude });
-    });
+    }, { timeout: 30_000, maxWait: 10_000 }); // big splits / counts can take a few seconds
     res.json({ data: serializeProduct(product) });
   } catch (error) {
     if ((error as { status?: number }).status === 400) {
@@ -577,7 +578,7 @@ accCatalogRouter.post("/stock-check", async (req, res, next) => {
         );
       }
       return { changed, products: out };
-    });
+    }, { timeout: 30_000, maxWait: 10_000 }); // big splits / counts can take a few seconds
     res.json({
       data: {
         checked: result.products.length,

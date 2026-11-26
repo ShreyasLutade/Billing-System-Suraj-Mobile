@@ -114,7 +114,7 @@ accBoxesRouter.post("/boxes/:id/items/bulk", async (req, res, next) => {
         items: z
           .array(z.object({ productId: z.string().min(1), model: z.string().trim().max(60).default(""), lot: z.coerce.number().int().min(0).max(999).default(0) }))
           .min(1)
-          .max(500),
+          .max(20_000),
       })
       .safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: "Choose the covers" });

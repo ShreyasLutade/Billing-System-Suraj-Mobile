@@ -435,7 +435,7 @@ const purchaseSchema = z.object({
         .refine((i) => Boolean(i.productId) !== Boolean(i.newProduct), "Each item needs a product"),
     )
     .min(1, "Add at least one item")
-    .max(300),
+    .max(5_000, "Too many items in one purchase (5,000 max)"),
 });
 
 accSuppliersRouter.post("/purchases", async (req, res, next) => {

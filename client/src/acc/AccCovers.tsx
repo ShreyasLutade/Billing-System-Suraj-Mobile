@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
@@ -204,10 +204,21 @@ export function AccSegregatePage() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
 
-  function startRename(r: Row) {
+  // Big covers: show 150 rows, then more as the list is scrolled (no button).
+  const [shown, setShown] = useState(150);
+  const moreRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((e) => e[0]?.isIntersecting && setShown((n) => n + 300), { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown, rows?.length]);
+
+  const startRename = useCallback((r: Row) => {
     setRenaming(r.id);
     setNewName(r.model);
-  }
+  }, []);
 
   function finishRename() {
     if (!renaming || !rows) return;
@@ -218,8 +229,19 @@ export function AccSegregatePage() {
     setRenaming(null);
   }
 
-  const setQty = (rid: string, qty: number) =>
-    setRows((cur) => (cur ?? []).map((r) => (r.id === rid ? { ...r, qty: Math.max(0, Math.min(qty, r.qty + Math.max(left, 0))) } : r)));
+  // Stable callbacks so a − / + tap re-renders one row, not thousands.
+  const totalRef = useRef(0);
+  totalRef.current = total;
+  const setQty = useCallback((rid: string, qty: number) => {
+    setRows((cur) => {
+      const list = cur ?? [];
+      const others = list.reduce((a, r) => (r.id === rid ? a : a + r.qty), 0);
+      const room = Math.max(totalRef.current - others, 0);
+      return list.map((r) => (r.id === rid ? { ...r, qty: Math.max(0, Math.min(qty, room)) } : r));
+    });
+  }, []);
+  const removeRow = useCallback((rid: string) => setRows((cur) => (cur ?? []).filter((x) => x.id !== rid)), []);
+  const openBox = useCallback((r: Row) => setBoxFor(r), []);
 
   /** Order the lots are saved in, and each row's lot number ("first Y30" = 0…). */
   function savedOrder(list: Row[]) {
@@ -234,12 +256,23 @@ export function AccSegregatePage() {
     return { order, lotOf };
   }
 
+  // Each row's lot number, worked out once per change (not once per row).
+  const lotMap = useMemo(() => savedOrder(rows ?? []).lotOf, [rows]);
   /** Box codes a row is in now (saved lots only). */
   function boxesOf(r: Row) {
     if (!product || !r.orig || r.orig !== r.model) return [];
-    const lot = savedOrder(rows ?? []).lotOf.get(r.id) ?? 0;
-    return where.get(`${product.id}|${r.model}|${lot}`) ?? [];
+    return where.get(`${product.id}|${r.model}|${lotMap.get(r.id) ?? 0}`) ?? [];
   }
+  /** What each row's Box button says ("A1", "Box"…). */
+  const boxLabels = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const r of rows ?? []) {
+      const chosen = r.box !== undefined ? (r.box ? boxes?.find((b) => b.id === r.box)?.code ?? "Box" : "") : null;
+      out.set(r.id, chosen ?? boxesOf(r).join(", "));
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, boxes, where, lotMap, product?.id]);
 
   async function save() {
     if (!product || !rows || busy) return;
@@ -438,69 +471,50 @@ export function AccSegregatePage() {
       </section>
 
       <ul className="acc-seg-list is-compact">
-        <AnimatePresence initial={false}>
-          {rows.map((r) => (
-            <motion.li key={r.id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 40 }}>
-              {renaming === r.id ? (
-                <span className="acc-seg-rename">
-                  <input
-                    data-keep-case
-                    autoFocus
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        finishRename();
-                      } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        setRenaming(null);
-                      }
-                    }}
-                    aria-label={`New name for ${r.model}`}
-                  />
-                  <button type="button" className="acc-seg-ok" onClick={finishRename} aria-label="Save name">
-                    <Check />
-                  </button>
-                </span>
-              ) : (
-                <span className="acc-seg-model">
-                  <strong>{r.model}</strong>
-                </span>
-              )}
-              {renaming === r.id ? null : (
-                <>
-                  <Stepper value={r.qty} onChange={(v) => setQty(r.id, v)} max={r.qty + Math.max(left, 0)} min={0} />
-                  <span className="acc-seg-acts">
-                    {(() => {
-                      const chosen = r.box !== undefined ? (r.box ? boxes?.find((b) => b.id === r.box)?.code ?? "Box" : "") : null;
-                      const now = chosen ?? boxesOf(r).join(", ");
-                      return (
-                        <button
-                          type="button"
-                          className={clsx("acc-seg-box", now && "is-set", r.box !== undefined && "is-changed")}
-                          onClick={() => setBoxFor(r)}
-                          aria-label={`Box for ${r.model}`}
-                          title="Choose the box"
-                        >
-                          <Boxes />
-                          <span>{now || "Box"}</span>
-                        </button>
-                      );
-                    })()}
-                    <button type="button" className="acc-seg-edit" onClick={() => startRename(r)} aria-label={`Rename ${r.model}`}>
-                      <PencilLine />
-                    </button>
-                    <button type="button" className="acc-seg-del" onClick={() => setRows(rows.filter((x) => x.id !== r.id))} aria-label={`Remove ${r.model}`}>
-                      <Trash2 />
-                    </button>
-                  </span>
-                </>
-              )}
-            </motion.li>
-          ))}
-        </AnimatePresence>
+        {rows.slice(0, shown).map((r) =>
+          renaming === r.id ? (
+            <li key={r.id}>
+              <span className="acc-seg-rename">
+                <input
+                  data-keep-case
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      finishRename();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setRenaming(null);
+                    }
+                  }}
+                  aria-label={`New name for ${r.model}`}
+                />
+                <button type="button" className="acc-seg-ok" onClick={finishRename} aria-label="Save name">
+                  <Check />
+                </button>
+              </span>
+            </li>
+          ) : (
+            <SegRow
+              key={r.id}
+              row={r}
+              canAdd={left > 0}
+              boxLabel={boxLabels.get(r.id) ?? ""}
+              onQty={setQty}
+              onBox={openBox}
+              onRename={startRename}
+              onRemove={removeRow}
+            />
+          ),
+        )}
+        {rows.length > shown ? (
+          <li className="acc-seg-more" ref={moreRef}>
+            <Loader2 className="acc-spin" /> {rows.length - shown} more models…
+          </li>
+        ) : null}
         {left > 0 ? (
           <li className="is-rest">
             <span className="acc-seg-model">
@@ -571,6 +585,54 @@ export function AccSegregatePage() {
     </div>
   );
 }
+
+/** One lot row on the split page (memoised: only the row that changes re-renders). */
+const SegRow = memo(function SegRow({
+  row,
+  canAdd,
+  boxLabel,
+  onQty,
+  onBox,
+  onRename,
+  onRemove,
+}: {
+  row: Row;
+  /** Pieces left to split (only flips at 0, so other rows don't re-render). */
+  canAdd: boolean;
+  boxLabel: string;
+  onQty: (id: string, qty: number) => void;
+  onBox: (row: Row) => void;
+  onRename: (row: Row) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <li>
+      <span className="acc-seg-model">
+        <strong>{row.model}</strong>
+      </span>
+      {/* The page clamps to the pieces really left; here only + on/off matters. */}
+      <Stepper value={row.qty} onChange={(v) => onQty(row.id, v)} max={canAdd ? row.qty + 1_000_000 : row.qty} min={0} />
+      <span className="acc-seg-acts">
+        <button
+          type="button"
+          className={clsx("acc-seg-box", boxLabel && "is-set", row.box !== undefined && "is-changed")}
+          onClick={() => onBox(row)}
+          aria-label={`Box for ${row.model}`}
+          title="Choose the box"
+        >
+          <Boxes />
+          <span>{boxLabel || "Box"}</span>
+        </button>
+        <button type="button" className="acc-seg-edit" onClick={() => onRename(row)} aria-label={`Rename ${row.model}`}>
+          <PencilLine />
+        </button>
+        <button type="button" className="acc-seg-del" onClick={() => onRemove(row.id)} aria-label={`Remove ${row.model}`}>
+          <Trash2 />
+        </button>
+      </span>
+    </li>
+  );
+});
 
 /** Height of the phone's bottom tab bar (0 when hidden, e.g. laptop or keyboard open). */
 function useBottomNavHeight() {
