@@ -528,6 +528,13 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
               value={draft.billDate || todayInput()}
               max={todayInput()}
               onChange={(e) => set({ billDate: e.target.value })}
+              onKeyDown={(e) => {
+                // Enter: on to the next box (Shop name).
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                document.querySelector<HTMLInputElement>(".acc-shop-field input, .acc-wholesale-page .acc-form input")?.focus();
+              }}
+              enterKeyHint="next"
               aria-label="Bill date"
             />
           ) : null}
@@ -1220,7 +1227,20 @@ export function CustomerForm({
   }
 
   return (
-    <form className="acc-form" onSubmit={hideActions ? (event) => event.preventDefault() : submit}>
+    <form
+      className="acc-form"
+      onSubmit={hideActions ? (event) => event.preventDefault() : submit}
+      onKeyDown={(event) => {
+        // Bill page: Enter moves to the next box (last one → item search).
+        if (!hideActions || event.key !== "Enter" || event.defaultPrevented) return;
+        const target = event.target as HTMLElement;
+        if (target.tagName !== "INPUT") return;
+        event.preventDefault();
+        const inputs = Array.from(event.currentTarget.querySelectorAll<HTMLInputElement>("input:not([type=hidden]):not(:disabled)"));
+        const next = inputs[inputs.indexOf(target as HTMLInputElement) + 1];
+        (next ?? document.querySelector<HTMLInputElement>(".acc-wholesale-items input"))?.focus();
+      }}
+    >
       <div className="acc-form-grid">
         {shopSearch ? shopField : null}
         <label className="acc-field">
