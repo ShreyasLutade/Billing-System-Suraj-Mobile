@@ -492,7 +492,7 @@ export const accApi = {
       sellingPrice?: number;
       wholesalePrice?: number;
     }>;
-  }) => post<{ id: string }>("/acc/purchases", body),
+  }) => post<{ id: string; productIds?: string[] }>("/acc/purchases", body),
 
   analytics: (q: PeriodQuery) => apiRequest<{ data: AccAnalytics }>(`/acc/analytics${qs(q)}`),
 

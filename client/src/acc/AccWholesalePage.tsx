@@ -125,6 +125,8 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
   const [saved, setSaved] = useState<AccSale | null>(null);
   const [savedAction, setSavedAction] = useState<"download" | null>(null);
   const [itemQuery, setItemQuery] = useState("");
+  /** "Add … to stock" from the item search: the name typed. */
+  const [quickStock, setQuickStock] = useState<string | null>(null);
   const refId = useRef(newRef());
   const customerInput = useRef<HTMLInputElement>(null);
   const itemSearchInput = useRef<HTMLInputElement>(null);
@@ -602,6 +604,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
               placeholder="Search product name, brand or model…"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && results.length) addProduct(results[0]);
+                else if (e.key === "Enter" && itemQuery.trim()) setQuickStock(itemQuery.trim());
               }}
             />
             <SearchClearButton visible={Boolean(itemQuery)} onClear={() => setItemQuery("")} />
@@ -622,6 +625,11 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
                 </li>
               ))}
               {!results.length ? <li className="acc-hint acc-no-results">No item in stock matches “{itemQuery.trim()}”.</li> : null}
+              <li>
+                <button type="button" className="acc-add-to-stock" onClick={() => setQuickStock(itemQuery.trim())}>
+                  <Plus /> Add “{itemQuery.trim()}” to stock
+                </button>
+              </li>
             </ul>
           ) : null}
         </div>
@@ -844,6 +852,20 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         </button>
       </div>
 
+      <QuickStockSheet
+        name={quickStock}
+        onClose={() => setQuickStock(null)}
+        onAdded={(product, qty, rate) => {
+          setQuickStock(null);
+          setItemQuery("");
+          const key = newRef();
+          pendingLineFocus.current = key;
+          setDraft((d) => ({
+            ...d,
+            lines: [...d.lines, { key, productId: product.id, name: product.name, qty, rate, stockQty: product.stockQty }],
+          }));
+        }}
+      />
       <Sheet
         open={Boolean(saved)}
         onClose={() => setSaved(null)}
@@ -1338,4 +1360,138 @@ function quickDueDate(groups: AccGroup[], groupId: string | null | undefined) {
   if (weekday == null) return todayInput(7);
   const ahead = (weekday - new Date().getDay() + 7) % 7 || 7;
   return todayInput(ahead);
+}
+
+/**
+ * "Add … to stock" from the bill: a new product (name as typed) with its
+ * quantity and prices; saved as stock, then put on the bill.
+ */
+function QuickStockSheet({
+  name,
+  onClose,
+  onAdded,
+}: {
+  name: string | null;
+  onClose: () => void;
+  onAdded: (product: AccProduct, qty: number, rate: number) => void;
+}) {
+  const { catalog } = useAccCatalog();
+  const categories = catalog?.categories ?? [];
+  const [form, setForm] = useState({ name: "", brand: "", categoryId: "", qty: "", cost: "", sell: "", wholesale: "", supplierId: "" });
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
+  const [busy, setBusy] = useState(false);
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  useEffect(() => {
+    if (name === null) return;
+    setForm({ name, brand: "", categoryId: "", qty: "1", cost: "", sell: "", wholesale: "", supplierId: "" });
+    setBusy(false);
+    accApi
+      .suppliers()
+      .then(({ data }) => setSuppliers(data.map((x) => ({ id: x.id, name: x.name }))))
+      .catch(() => undefined);
+  }, [name]);
+
+  async function save() {
+    if (busy) return;
+    const qty = Math.floor(Number(form.qty));
+    const cost = Number(form.cost);
+    const sell = Number(form.sell);
+    const wholesale = Number(form.wholesale) || 0;
+    if (form.name.trim().length < 2) return void toast("Enter the product name", { tone: "error" });
+    if (!form.categoryId) return void toast("Choose a category", { tone: "error" });
+    if (!(qty >= 1)) return void toast("Enter the quantity", { tone: "error" });
+    if (!(cost > 0)) return void toast("Enter the cost price", { tone: "error" });
+    if (!(sell > 0)) return void toast("Enter the selling price", { tone: "error" });
+    setBusy(true);
+    try {
+      const { data } = await accApi.createPurchase({
+        ...(form.supplierId ? { supplierId: form.supplierId, paidNow: 0 } : { opening: true, paidNow: 0 }),
+        items: [
+          {
+            newProduct: { categoryId: form.categoryId, name: form.name.trim(), brand: form.brand.trim() || "Local", wholesalePrice: wholesale },
+            qty,
+            unitCost: cost,
+            sellingPrice: sell,
+          },
+        ],
+      });
+      await refreshCatalog();
+      const id = data.productIds?.[0];
+      const fresh = (await accApi.catalog()).data.products.find((p) => p.id === id);
+      if (!fresh) throw new Error("Saved to stock, but couldn't add it to the bill. Search it again.");
+      toast(`${fresh.name} added to stock · ${qty} pcs`);
+      // On a wholesale bill the wholesale rate is used when given, else the selling price.
+      onAdded(fresh, qty, wholesale || sell);
+    } catch (err) {
+      toast(errorText(err), { tone: "error" });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet
+      open={name !== null}
+      onClose={() => !busy && onClose()}
+      title="Add to stock"
+      subtitle="Saved in stock and added to this bill"
+      footer={
+        <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy}>
+          {busy ? <Loader2 className="acc-spin" /> : <Check />} Save & add to bill
+        </button>
+      }
+    >
+      <div className="acc-quick-stock">
+        <label className="acc-field">
+          <span>Product name *</span>
+          <input value={form.name} onChange={(e) => set({ name: e.target.value })} autoComplete="off" />
+        </label>
+        <div className="acc-form-grid">
+          <label className="acc-field">
+            <span>Category *</span>
+            <select value={form.categoryId} onChange={(e) => set({ categoryId: e.target.value })}>
+              <option value="">Choose…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="acc-field">
+            <span>Brand</span>
+            <input value={form.brand} onChange={(e) => set({ brand: e.target.value })} placeholder="Local" autoComplete="off" />
+          </label>
+          <label className="acc-field">
+            <span>Quantity *</span>
+            <input type="number" inputMode="numeric" min={1} value={form.qty} onChange={(e) => set({ qty: e.target.value })} />
+          </label>
+          <label className="acc-field">
+            <span>Cost price / pc ₹ *</span>
+            <input type="number" inputMode="decimal" min={0} value={form.cost} onChange={(e) => set({ cost: e.target.value })} />
+          </label>
+          <label className="acc-field">
+            <span>Selling price ₹ *</span>
+            <input type="number" inputMode="decimal" min={0} value={form.sell} onChange={(e) => set({ sell: e.target.value })} />
+          </label>
+          <label className="acc-field">
+            <span>Wholesale price ₹</span>
+            <input type="number" inputMode="decimal" min={0} value={form.wholesale} onChange={(e) => set({ wholesale: e.target.value })} placeholder="Used on this bill" />
+          </label>
+        </div>
+        <label className="acc-field">
+          <span>Supplier</span>
+          <select value={form.supplierId} onChange={(e) => set({ supplierId: e.target.value })}>
+            <option value="">No supplier (old stock)</option>
+            {suppliers.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+          <small className="acc-field-hint">With a supplier, the cost is added to their To pay.</small>
+        </label>
+      </div>
+    </Sheet>
+  );
 }

@@ -12658,3 +12658,31 @@ html.dark .acc {
   width: 16px;
   height: 16px;
 }
+
+/* Bill item search: "Add … to stock" at the end of the list */
+.acc .acc-add-to-stock {
+  justify-content: flex-start !important;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 0;
+  border-top: 1px dashed var(--a-line);
+  background: color-mix(in srgb, #16a34a 8%, var(--a-card));
+  color: #15803d;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc .acc-add-to-stock svg {
+  width: 16px;
+  height: 16px;
+}
+
+.acc-quick-stock {
+  display: grid;
+  gap: 12px;
+}

@@ -546,7 +546,8 @@ accSuppliersRouter.post("/purchases", async (req, res, next) => {
           },
         });
       }
-      return created;
+      // productIds: so a bill can add the product it just created.
+      return { ...created, productIds: items.map((i) => i.productId) };
     });
     res.status(201).json({ data: purchase });
   } catch (error) {
