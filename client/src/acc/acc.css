@@ -12686,3 +12686,25 @@ html.dark .acc {
   display: grid;
   gap: 12px;
 }
+
+/* Item search list: one-line "no match", scrollable, ↑ ↓ highlight */
+.acc .acc-item-results .acc-no-results {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc .acc-item-results {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.acc .acc-item-results button.is-active {
+  background: color-mix(in srgb, var(--a-accent) 13%, var(--a-card));
+  box-shadow: inset 3px 0 0 var(--a-accent);
+}
+
+.acc .acc-add-to-stock.is-active {
+  background: color-mix(in srgb, #16a34a 18%, var(--a-card));
+  box-shadow: inset 3px 0 0 #16a34a;
+}

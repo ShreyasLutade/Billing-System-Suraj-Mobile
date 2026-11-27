@@ -125,6 +125,8 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
   const [saved, setSaved] = useState<AccSale | null>(null);
   const [savedAction, setSavedAction] = useState<"download" | null>(null);
   const [itemQuery, setItemQuery] = useState("");
+  /** Item search: option picked with ↑ ↓ (results, then "Add to stock" last). */
+  const [itemHi, setItemHi] = useState(-1);
   /** "Add … to stock" from the item search: the name typed. */
   const [quickStock, setQuickStock] = useState<string | null>(null);
   const refId = useRef(newRef());
@@ -600,20 +602,45 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
               ref={itemSearchInput}
               type="search"
               value={itemQuery}
-              onChange={(e) => setItemQuery(e.target.value)}
+              onChange={(e) => {
+                setItemQuery(e.target.value);
+                setItemHi(-1);
+              }}
               placeholder="Search product name, brand or model…"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && results.length) addProduct(results[0]);
-                else if (e.key === "Enter" && itemQuery.trim()) setQuickStock(itemQuery.trim());
+                const count = tokens.length ? results.length + 1 : 0; // + "Add to stock"
+                if ((e.key === "ArrowDown" || e.key === "ArrowUp") && count) {
+                  e.preventDefault();
+                  setItemHi((cur) => (e.key === "ArrowDown" ? (cur + 1) % count : cur <= 0 ? count - 1 : cur - 1));
+                  return;
+                }
+                if (e.key === "Escape" && itemQuery) {
+                  e.preventDefault();
+                  setItemQuery("");
+                  setItemHi(-1);
+                  return;
+                }
+                if (e.key !== "Enter" || !itemQuery.trim()) return;
+                e.preventDefault();
+                const pick = itemHi >= 0 ? itemHi : 0;
+                if (pick < results.length) addProduct(results[pick]);
+                else setQuickStock(itemQuery.trim());
+                setItemHi(-1);
               }}
             />
             <SearchClearButton visible={Boolean(itemQuery)} onClear={() => setItemQuery("")} />
           </label>
           {tokens.length ? (
             <ul className="acc-results acc-dropdown acc-item-results">
-              {results.map((p) => (
+              {results.map((p, i) => (
                 <li key={p.id}>
-                  <button type="button" onClick={() => addProduct(p)}>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className={clsx(itemHi === i && "is-active")}
+                    ref={itemHi === i ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                    onClick={() => addProduct(p)}
+                  >
                     <span>
                       <strong>{p.name}</strong>
                       <small>
@@ -626,7 +653,13 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
               ))}
               {!results.length ? <li className="acc-hint acc-no-results">No item in stock matches “{itemQuery.trim()}”.</li> : null}
               <li>
-                <button type="button" className="acc-add-to-stock" onClick={() => setQuickStock(itemQuery.trim())}>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className={clsx("acc-add-to-stock", itemHi === results.length && "is-active")}
+                  ref={itemHi === results.length ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                  onClick={() => setQuickStock(itemQuery.trim())}
+                >
                   <Plus /> Add “{itemQuery.trim()}” to stock
                 </button>
               </li>
@@ -1251,6 +1284,7 @@ export function CustomerForm({
                 type="button"
                 tabIndex={-1}
                 className={clsx(i === shopHi && "is-active")}
+                ref={i === shopHi ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                 onPointerDown={(e) => {
                   e.preventDefault();
                   pickShop(c);
