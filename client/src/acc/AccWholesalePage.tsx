@@ -192,6 +192,9 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
           transportCharge: sale.transportCharge ? String(sale.transportCharge) : "",
           dueDate: sale.dueDate ? istDay(sale.dueDate) : "",
           note: sale.note,
+          // Editing: the bill's own date, shown and changeable.
+          billDateOn: true,
+          billDate: istDay(sale.saleDate),
         });
       } catch (error) {
         if (alive) setEditError(errorText(error));
@@ -430,7 +433,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         dueDate: due > 0 ? dueDate : undefined,
         note: draft.note,
         allowOutOfStock,
-        ...(!editId && draft.billDateOn && draft.billDate ? { billDate: draft.billDate } : {}),
+        ...(draft.billDateOn && draft.billDate ? { billDate: draft.billDate } : {}),
       };
       if (editId) {
         await accApi.updateSale(editId, body);
@@ -526,23 +529,26 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
         ) : null}
       </div>
 
-      {!editing ? (
+      {/* Bill date: Custom date on a new bill; always shown when editing. */}
         <div className={clsx("acc-billdate", draft.billDateOn && "is-on")}>
           <button
             type="button"
             role="switch"
             aria-checked={Boolean(draft.billDateOn)}
             className="acc-billdate-toggle"
-            onClick={() => set({ billDateOn: !draft.billDateOn, billDate: draft.billDate || todayInput() })}
+            // Editing a bill: the date box is always shown.
+            onClick={() => !editing && set({ billDateOn: !draft.billDateOn, billDate: draft.billDate || todayInput() })}
           >
             <CalendarDays aria-hidden />
             <span>
-              <b>Custom date</b>
+              <b>{editing ? "Bill date" : "Custom date"}</b>
               <small>{draft.billDateOn && draft.billDate ? `Bill dated ${shortDate(draft.billDate)}` : "Bill is dated today"}</small>
             </span>
-            <span className={clsx("acc-mini-switch", draft.billDateOn && "is-on")} aria-hidden>
-              <i />
-            </span>
+            {!editing ? (
+              <span className={clsx("acc-mini-switch", draft.billDateOn && "is-on")} aria-hidden>
+                <i />
+              </span>
+            ) : null}
           </button>
           {draft.billDateOn ? (
             <input
@@ -562,7 +568,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
             />
           ) : null}
         </div>
-      ) : null}
+
 
       {/* Customer */}
       <CustomerChooser

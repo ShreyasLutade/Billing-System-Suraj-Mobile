@@ -689,6 +689,10 @@ accSalesRouter.put("/sales/:id", async (req, res, next) => {
           dueAmount: due,
           dueDate: due > 0 && input.dueDate ? new Date(`${input.dueDate}T18:00:00+05:30`) : null,
           note: input.note,
+          // Bill date changed on the edit page: noon (IST) of that day; same day keeps its time.
+          ...(input.billDate && input.billDate <= istDateString() && input.billDate !== istDateString(sale.saleDate)
+            ? { saleDate: new Date(`${input.billDate}T12:00:00+05:30`) }
+            : {}),
           editedAt: new Date(),
           editedByName: by,
           items: { create: lines },
