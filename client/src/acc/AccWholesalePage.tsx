@@ -8,10 +8,11 @@ import {
   accApi,
   type AccCustomerInput,
   type AccCustomerRow,
+  type AccGroup,
   type AccProduct,
   type AccSale,
 } from "./accApi";
-import { GroupPicker } from "./AccGroups";
+import { GroupPicker, useGroups } from "./AccGroups";
 import { Sheet, StockBadge, completePhone, errorText, inr, newRef, plural, refreshCatalog, shortDate, toast, todayInput, useAccCatalog } from "./shared";
 
 /**
@@ -359,6 +360,7 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
     );
   }
 
+  const groups = useGroups();
   // Laptop: Ctrl+S / ⌘S saves the bill from anywhere on the page.
   const saveRef = useRef<(allowOutOfStock?: boolean, quick?: boolean) => Promise<void>>(async () => undefined);
   useEffect(() => {
@@ -405,8 +407,9 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
       toast("Payment is more than the bill total", { tone: "error" });
       return;
     }
-    // Ctrl+S with a due but no date: due in 7 days (shown in the toast).
-    const dueDate = draft.dueDate || (quick && needsDueDate ? todayInput(7) : "");
+    // Ctrl+S with a due but no date: the next collection day of the customer's
+    // main group (Settings › Customer groups › Day), else 7 days.
+    const dueDate = draft.dueDate || (quick && needsDueDate ? quickDueDate(groups, draft.customerInput.groupId) : "");
     if (needsDueDate && !dueDate) {
       toast("Add the due date for the pending amount", { tone: "error" });
       return;
@@ -1323,3 +1326,13 @@ export function CustomerForm({
 }
 
 export { GROUP_COLORS };
+
+/** Due date for a Ctrl+S bill: next collection day of the group's main group (not today), else 7 days. */
+function quickDueDate(groups: AccGroup[], groupId: string | null | undefined) {
+  const g = groups.find((x) => x.id === groupId);
+  const main = g?.parentId ? groups.find((x) => x.id === g.parentId) : g;
+  const weekday = main?.dueWeekday ?? null;
+  if (weekday == null) return todayInput(7);
+  const ahead = (weekday - new Date().getDay() + 7) % 7 || 7;
+  return todayInput(ahead);
+}

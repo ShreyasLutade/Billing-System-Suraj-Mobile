@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { DangerConfirmModal } from "../components/RemoveConfirmModals";
-import { Check, ChevronDown, ChevronRight, FolderTree, Loader2, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, ChevronRight, FolderTree, Loader2, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { accApi, type AccGroup } from "./accApi";
 import { Sheet, errorText, plural, toast } from "./shared";
 
@@ -49,6 +49,8 @@ export function useGroups() {
 }
 
 export type GroupNode = AccGroup & { subs: AccGroup[] };
+
+export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** Colour for a new main group: the palette colour used least so far. */
 function nextColor(mains: AccGroup[]) {
@@ -260,6 +262,8 @@ export function GroupTreeManager() {
   const [subDraft, setSubDraft] = useState("");
   const [editing, setEditing] = useState<AccGroup | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Main group whose collection day is being picked. */
+  const [dayFor, setDayFor] = useState<AccGroup | null>(null);
   /** Group waiting for the delete confirmation (with its sub group count). */
   const [removing, setRemoving] = useState<{ group: AccGroup; subs: number; customers: number } | null>(null);
 
@@ -348,6 +352,16 @@ export function GroupTreeManager() {
                     <ChevronRight className="acc-gt-chev" />
                   </button>
                   <span className="acc-gt-tools">
+                    <button
+                      type="button"
+                      className={clsx("acc-gt-day", m.dueWeekday != null && "is-set")}
+                      onClick={() => setDayFor(m)}
+                      aria-label={`Collection day for ${m.name}`}
+                      title="Collection day (Ctrl+S due date)"
+                    >
+                      <CalendarDays />
+                      {m.dueWeekday != null ? WEEKDAYS[m.dueWeekday].slice(0, 3) : "Day"}
+                    </button>
                     <button type="button" className="acc-gt-tool" onClick={() => setEditing(m)} aria-label={`Edit ${m.name}`} title="Edit name">
                       <Pencil />
                     </button>
@@ -434,6 +448,38 @@ export function GroupTreeManager() {
           />
         ) : null}
       </AnimatePresence>
+      <Sheet
+        open={Boolean(dayFor)}
+        onClose={() => setDayFor(null)}
+        title={dayFor ? `Collection day · ${dayFor.name}` : ""}
+        subtitle="Ctrl+S on a wholesale bill sets the due date to the next one"
+      >
+        {dayFor ? (
+          <div className="acc-gt-days">
+            {WEEKDAYS.map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                className={clsx(dayFor.dueWeekday === i && "is-on")}
+                disabled={busy}
+                onClick={() => void run(() => accApi.setGroupDay(dayFor.id, i), `${dayFor.name}: due on ${d}`).then(() => setDayFor(null))}
+              >
+                {d}
+              </button>
+            ))}
+            {dayFor.dueWeekday != null ? (
+              <button
+                type="button"
+                className="is-none"
+                disabled={busy}
+                onClick={() => void run(() => accApi.setGroupDay(dayFor.id, null), `${dayFor.name}: no collection day`).then(() => setDayFor(null))}
+              >
+                <X /> No day (7 days)
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </Sheet>
     </div>
   );
 }

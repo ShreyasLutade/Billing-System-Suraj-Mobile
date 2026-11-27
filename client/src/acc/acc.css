@@ -12592,3 +12592,69 @@ html.dark .acc {
     display: inline-block;
   }
 }
+
+/* Customer groups: collection Day button + weekday picker */
+.acc .acc-gt-day {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px dashed var(--a-line);
+  border-radius: 9px;
+  background: none;
+  color: var(--a-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.acc .acc-gt-day svg {
+  width: 14px;
+  height: 14px;
+}
+
+.acc .acc-gt-day.is-set {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--g, var(--a-accent)) 45%, var(--a-line));
+  background: color-mix(in srgb, var(--g, var(--a-accent)) 12%, var(--a-card));
+  color: color-mix(in srgb, var(--g, var(--a-accent)) 80%, var(--a-ink));
+}
+
+.acc-gt-days {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acc .acc-gt-days button {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-field);
+  color: var(--a-ink);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.acc .acc-gt-days button.is-on {
+  border-color: var(--a-accent);
+  background: color-mix(in srgb, var(--a-accent) 14%, var(--a-card));
+  color: var(--a-accent);
+}
+
+.acc .acc-gt-days button.is-none {
+  grid-column: 1 / -1;
+  background: var(--a-card);
+  color: var(--a-muted);
+}
+
+.acc .acc-gt-days button svg {
+  width: 16px;
+  height: 16px;
+}

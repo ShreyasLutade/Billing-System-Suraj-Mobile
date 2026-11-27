@@ -115,7 +115,8 @@ export type AccSalesSummary = {
 };
 
 /** Customer group; a sub group has parentId (its main group). */
-export type AccGroup = { id: string; name: string; color: string; parentId: string | null; customerCount: number };
+/** dueWeekday: main group collection day, 0 = Sunday … 6 = Saturday. */
+export type AccGroup = { id: string; name: string; color: string; parentId: string | null; dueWeekday?: number | null; customerCount: number };
 
 export type AccAging = { d0_30: number; d31_60: number; d61_90: number; d90p: number };
 
@@ -437,6 +438,7 @@ export const accApi = {
     post<{ deleted: boolean; stockReturned: boolean }>(`/acc/sales/${id}/delete`, { returnStock }),
 
   groups: () => apiRequest<{ data: AccGroup[] }>("/acc/groups"),
+  setGroupDay: (id: string, weekday: number | null) => put<AccGroup>(`/acc/groups/${id}/day`, { weekday }),
   createGroup: (body: { name: string; color: string; parentId?: string | null }) => post<AccGroup>("/acc/groups", body),
   updateGroup: (id: string, body: { name: string; color: string; parentId?: string | null }) =>
     put<AccGroup>(`/acc/groups/${id}`, body),

@@ -593,6 +593,8 @@ model AccCustomerGroup {
   /// Set on a sub group: its main group (two levels only). Deleting a
   /// main group deletes its sub groups; customers keep no group.
   parentId  String?
+  /// Main group's collection day (0 = Sunday … 6 = Saturday): Ctrl+S dues fall on the next one
+  dueWeekday Int?
   createdAt DateTime @default(now())
   parent    AccCustomerGroup?  @relation("GroupTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  AccCustomerGroup[] @relation("GroupTree")

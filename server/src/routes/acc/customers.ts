@@ -74,6 +74,7 @@ accCustomersRouter.get("/groups", async (_req, res, next) => {
         name: g.name,
         color: g.color,
         parentId: g.parentId,
+        dueWeekday: g.dueWeekday,
         customerCount: g._count.customers,
       })),
     });
@@ -121,6 +122,18 @@ accCustomersRouter.post("/groups", async (req, res, next) => {
       res.status(409).json({ error: "A group with this name already exists" });
       return;
     }
+    next(error);
+  }
+});
+
+/** A main group's collection day (or none): dues saved with Ctrl+S fall on the next one. */
+accCustomersRouter.put("/groups/:id/day", async (req, res, next) => {
+  try {
+    const parsed = z.object({ weekday: z.number().int().min(0).max(6).nullable() }).safeParse(req.body);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const group = await prisma.accCustomerGroup.update({ where: { id: req.params.id }, data: { dueWeekday: parsed.data.weekday } });
+    res.json({ data: group });
+  } catch (error) {
     next(error);
   }
 });
