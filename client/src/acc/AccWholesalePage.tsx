@@ -253,14 +253,11 @@ export function AccWholesalePage({ editId }: { editId?: string } = {}) {
   }, [products, itemQuery, original]);
 
   function addProduct(p: AccProduct) {
-    const existingLine = draft.lines.find((line) => line.productId === p.id);
-    const lineKey = existingLine?.key || newRef();
+    // The same item picked again gets its own line (e.g. 10 pcs at ₹60 and 5 at ₹70),
+    // never added into the earlier line.
+    const lineKey = newRef();
     pendingLineFocus.current = lineKey;
     setDraft((d) => {
-      const existing = d.lines.find((l) => l.productId === p.id);
-      if (existing) {
-        return { ...d, lines: d.lines.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l)) };
-      }
       return {
         ...d,
         lines: [

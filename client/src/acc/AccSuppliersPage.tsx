@@ -704,6 +704,20 @@ export function AccStockInPage() {
     });
   }
 
+  // Laptop: Ctrl+S / ⌘S saves the stock. Nothing paid chosen = Pay later (amount stays due to the supplier).
+  const saveRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   async function save() {
     if (busy) return;
     const problem = oldStock
@@ -808,6 +822,8 @@ export function AccStockInPage() {
       setBusy(false);
     }
   }
+
+  saveRef.current = save;
 
   return (
     <div className="acc-page acc-add-stock">
@@ -986,6 +1002,7 @@ export function AccStockInPage() {
             ) : null}
             <button type="button" className="acc-btn is-primary is-big is-block" onClick={() => void save()} disabled={busy || !enteredLines.length}>
               {busy ? <Loader2 className="acc-spin" /> : <Check />} Save stock{toGodown ? " to godown" : ""} · {inr(total)}
+              <kbd className="acc-kbd-hint">Ctrl S</kbd>
             </button>
           </section>
         </aside>
